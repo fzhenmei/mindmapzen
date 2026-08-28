@@ -20,3 +20,6 @@ src-tauri/target/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# Superpowers SDD 工作区（台账/简报/审查包，属会话级产物）
+.superpowers/
