@@ -22,11 +22,14 @@ const base = (d: ReactNode, size = 16) => (
 )
 
 export const IconArrowLeft = ({ size }: IconProps) => base(<path d="M10 3 5 8l5 5" />, size)
+/** 保存（经典软盘，验收修复 2）：外轮廓（右上斜切+圆角）+ 底部门 + 顶部标签槽，
+ *  24→16 缩放（÷1.5）自 lucide save，几何已核（圆角圆心均落在角内 3.3/11.7 网格上） */
 export const IconSave = ({ size }: IconProps) =>
   base(
     <>
-      <rect x="3" y="3" width="10" height="10" rx="2" />
-      <path d="M5.5 8.5l1.8 1.8L11 6.5" />
+      <path d="M12.7 14H3.3A2.3 2.3 0 0 1 1 11.7V3.3A2.3 2.3 0 0 1 3.3 1h7L15 5.6v6.1a2.3 2.3 0 0 1-2.3 2.3z" />
+      <path d="M11.3 14V8.7H4.7V14" />
+      <path d="M4.7 2v3.3h5.3" />
     </>,
     size,
   )

@@ -49,7 +49,10 @@ html, body { overflow: hidden; }
   box-shadow: var(--shadow-2); }
 /* display 收敛至 [open]（终审修复 1）：基础态不覆盖 UA 的 dialog:not([open]){display:none}，
    消除 DOM 插入到 showModal 之间无遮罩的流内闪现；flex 布局与 gap 随之移入 [open] 态 */
-.zen-dialog[open] { display: flex; flex-direction: column; gap: 12px; }
+/* 居中（验收修复 3）：全局 * { margin: 0 } 覆盖了 UA 的 dialog:modal { margin: auto }，
+   导致纵向贴顶——fixed + inset:0 + margin:auto + 高度收敛恢复双轴居中；宽度仍由基础态 360px/90vw 提供 */
+.zen-dialog[open] { display: flex; flex-direction: column; gap: 12px;
+  position: fixed; inset: 0; margin: auto; height: fit-content; }
 /* 遮罩为 ::backdrop 专属暗色（纸墨/夜墨双主题通用字面值，Task 1 裁定可接受） */
 .zen-dialog::backdrop { background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
 .zen-dialog h3 { font-size: 18px; font-weight: 600; }
