@@ -1,4 +1,4 @@
-import type { FsAdapter, MapInfo, Sidecar } from '../types/files'
+import type { FsAdapter, LayoutKind, MapInfo, Sidecar } from '../types/files'
 import { writeSidecar } from './sidecar'
 
 const INVALID = /[\\/:*?"<>|]/
@@ -29,14 +29,19 @@ export async function listMaps(fs: FsAdapter, wsDir: string): Promise<MapInfo[]>
   }))
 }
 
-export async function createMap(fs: FsAdapter, wsDir: string, name: string): Promise<MapInfo> {
+export async function createMap(
+  fs: FsAdapter,
+  wsDir: string,
+  name: string,
+  layout: LayoutKind = 'mindmap',
+): Promise<MapInfo> {
   const trimmed = name.trim()
   if (trimmed === '') throw new Error('名称不能为空')
   if (INVALID.test(trimmed)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
   const mdPath = joinPath(wsDir, trimmed + '.md')
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
   await fs.writeTextFileAtomic(mdPath, '# 根主题\n')
-  await writeSidecar(fs, mdPath, DEFAULT_SIDECAR)
+  await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
   return { name: trimmed, mdPath, modifiedAt: await fs.statModified(mdPath) }
 }
 

@@ -1,5 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
+/* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在文件库列表内（验收轮三） */
+html, body { overflow: hidden; }
 .app { height: 100%; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
 
 /* 文件库 */
@@ -53,4 +55,5 @@ html, body, #root { height: 100%; }
   padding: 6px 16px; font-size: 13px; }
 .ignored-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px;
   color: #7a5c2e; font-size: 12px; }
-.canvas-host { flex: 1; min-height: 0; position: relative; }
+.canvas-host { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.library { height: 100%; overflow-y: auto; }

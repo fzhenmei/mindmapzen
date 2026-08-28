@@ -1,11 +1,27 @@
 // src/types/files.ts —— 文件系统抽象与工作区文件公共类型
 export interface MapInfo { name: string; mdPath: string; modifiedAt: number }
-export interface AppConfig { workspaceDir: string | null; lastOpened: string | null }
-export const DEFAULT_CONFIG: AppConfig = { workspaceDir: null, lastOpened: null }
+
+/** 语义布局三态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用） */
+export type LayoutKind = 'mindmap' | 'logic' | 'org'
+
+const LAYOUT_KINDS = new Set<LayoutKind>(['mindmap', 'logic', 'org'])
+
+/** 宽容解析配置中的布局偏好：非法/缺失返回 null */
+export function parseLayoutKind(v: unknown): LayoutKind | null {
+  return LAYOUT_KINDS.has(v as LayoutKind) ? (v as LayoutKind) : null
+}
+
+export interface AppConfig {
+  workspaceDir: string | null
+  lastOpened: string | null
+  /** 用户偏好的默认布局（新建导图与无 sidecar 导图的初始布局）；null = 未设置（按 mindmap） */
+  preferredLayout: LayoutKind | null
+}
+export const DEFAULT_CONFIG: AppConfig = { workspaceDir: null, lastOpened: null, preferredLayout: null }
 export interface Sidecar {
   version: 1
   theme: string
-  layout: 'mindmap' | 'logic' | 'org'
+  layout: LayoutKind
   collapsed: string[]
   offsets: Record<string, { dx: number; dy: number }>
   canvas: { x: number; y: number; zoom: number }

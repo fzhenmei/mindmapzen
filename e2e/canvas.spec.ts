@@ -17,7 +17,9 @@ test('窗口尺寸变化画布跟随重算', async ({ page }) => {
     .poll(async () => parseInt((await svg.getAttribute('width')) ?? '0', 10))
     .toBeGreaterThan(widthBefore)
 
-  // 居中按钮：视图复位不报错且按钮存在可点（复位效果属视觉，人工清单覆盖）
-  await expect(page.getByTestId('btn-center')).toBeEnabled()
-  await page.getByTestId('btn-center').click()
+  // 视图工具组：缩放/根居中/适配存在可点不报错（视觉效果属人工清单）
+  for (const id of ['btn-zoom-out', 'btn-zoom-in', 'btn-center-root', 'btn-fit']) {
+    await expect(page.getByTestId(id)).toBeEnabled()
+    await page.getByTestId(id).click()
+  }
 })

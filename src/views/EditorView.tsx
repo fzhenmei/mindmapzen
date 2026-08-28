@@ -12,6 +12,7 @@ import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
+import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { Sidecar } from '../types/files'
 import type { RegisterCloseGuard } from '../types/ports'
@@ -205,8 +206,9 @@ export default function EditorView({
         if (cancelled) return
         ignoredRef.current = r.ignoredBlocks
         setIgnored(r.ignoredBlocks)
-        // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）
-        const initial = sc?.layout ?? 'mindmap'
+        // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）；
+        // 无 sidecar（如外部放入的 .md）回退用户偏好布局（验收轮三：记住默认视图）
+        const initial = sc?.layout ?? useAppStore.getState().preferredLayout
         setInitialLayout(initial)
         setLayout(initial)
         layoutRef.current = initial
@@ -325,6 +327,8 @@ export default function EditorView({
     layoutRef.current = kind
     setLayout(kind)
     void persistLayoutSidecar()
+    // 记住偏好：用户选择过的布局成为新建/导入/无 sidecar 导图的默认（验收轮三）
+    void useAppStore.getState().setPreferredLayout(kind)
   }
 
   if (state === 'loading') return <div className="editor-loading">正在打开…</div>
@@ -384,11 +388,35 @@ export default function EditorView({
         </button>
         <button
           type="button"
-          data-testid="btn-center"
-          title="视图复位：缩放回 100% 并让导图回到画布中心"
-          onClick={() => mmRef.current?.view.reset()}
+          data-testid="btn-zoom-out"
+          title="缩小（Ctrl+滚轮也可缩放）"
+          onClick={() => mmRef.current?.view.narrow()}
         >
-          居中
+          −
+        </button>
+        <button
+          type="button"
+          data-testid="btn-zoom-in"
+          title="放大（Ctrl+滚轮也可缩放）"
+          onClick={() => mmRef.current?.view.enlarge()}
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          data-testid="btn-center-root"
+          title="根居中：保持当前缩放，把根节点移回画布中心"
+          onClick={() => mmRef.current && centerRoot(mmRef.current)}
+        >
+          根居中
+        </button>
+        <button
+          type="button"
+          data-testid="btn-fit"
+          title="适配整图：自动缩放使整棵导图完整可见并居中"
+          onClick={() => mmRef.current && fitView(mmRef.current)}
+        >
+          适配
         </button>
         <fieldset className="layout-switch" aria-label="布局切换">
           {(

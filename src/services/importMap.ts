@@ -1,4 +1,4 @@
-import type { FsAdapter, MapInfo, Sidecar } from '../types/files'
+import type { FsAdapter, LayoutKind, MapInfo, Sidecar } from '../types/files'
 import type { ZenNode } from '../types/tree'
 import { serialize } from './mdTree'
 import { writeSidecar } from './sidecar'
@@ -23,6 +23,7 @@ export async function commitImport(
   wsDir: string,
   name: string,
   tree: ZenNode,
+  layout: LayoutKind = 'mindmap',
 ): Promise<MapInfo> {
   const stamp = () => {
     const d = new Date()
@@ -39,6 +40,6 @@ export async function commitImport(
     mdPath = joinPath(wsDir, finalName + '.md')
   }
   await fs.writeTextFileAtomic(mdPath, serialize(tree))
-  await writeSidecar(fs, mdPath, DEFAULT_SIDECAR)
+  await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
   return { name: finalName, mdPath, modifiedAt: await fs.statModified(mdPath) }
 }
