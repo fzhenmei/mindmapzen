@@ -25,6 +25,12 @@ test('无工作区时显示引导并可选择', async () => {
   expect(await screen.findByTestId('map-item')).toBeInTheDocument()
 })
 
+test('空态引导文案', async () => {
+  await useAppStore.getState().setWorkspace('/ws-empty')
+  render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickMdFile} />)
+  expect(await screen.findByTestId('library-empty')).toHaveTextContent('空白的纸')
+})
+
 test('已有工作区时列出导图并可打开', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)

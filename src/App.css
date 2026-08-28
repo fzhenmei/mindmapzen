@@ -1,22 +1,45 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
-/* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在文件库列表内（验收轮三） */
+/* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在文件库卡片网格内（验收轮三） */
 html, body { overflow: hidden; }
 .app { height: 100%; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
 
-/* 文件库 */
-.library { height: 100%; overflow-y: auto; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
+/* 文件库（M4 卡片化）：滚动只发生在 .map-grid 内，库页自身不滚（页面级 overflow hidden） */
+.library { height: 100%; display: flex; flex-direction: column; padding: 24px 32px; gap: 20px; background: var(--paper); }
 .library-header { display: flex; align-items: center; gap: 12px; }
-.library-header h1 { font-size: 18px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-header h1 { font-size: 22px; font-weight: 600; margin-right: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 页首按钮层级（M4）：新建/导入为主操作（accent 实心），选择工作区为次要（描边静默） */
+.btn-primary { padding: 6px 14px; border: 1px solid var(--accent); border-radius: var(--radius-s);
+  background: var(--accent); color: var(--paper); font: inherit; cursor: pointer;
+  transition: background var(--dur-1), border-color var(--dur-1); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.library-header button:not(.btn-primary):not(.theme-toggle) { padding: 6px 14px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-s); background: var(--surface);
+  color: var(--ink); font: inherit; cursor: pointer;
+  transition: border-color var(--dur-1), color var(--dur-1); }
+.library-header button:not(.btn-primary):not(.theme-toggle):hover { border-color: var(--accent); color: var(--accent); }
 /* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
 .hint { color: var(--ink-2); padding: 24px; text-align: center; }
-.map-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
-.map-list li { display: flex; align-items: center; gap: 8px; }
-.map-item { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding: 10px 14px; border: 1px solid var(--hairline); border-radius: var(--radius-s); background: var(--surface); cursor: pointer; text-align: left; }
-.map-item:hover { border-color: var(--accent); }
-.map-name { font-size: 15px; }
-.map-time { color: var(--ink-2); font-size: 12px; font-family: var(--font-mono); white-space: nowrap; }
+.map-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px; align-content: start; padding: 4px 4px 24px; }
+.map-card { position: relative; }
+.map-card-main { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-m);
+  cursor: pointer; text-align: left; box-shadow: var(--shadow-1); transition: border-color var(--dur-1), transform var(--dur-1); }
+.map-card-main:hover { border-color: var(--accent); transform: translateY(-1px); }
+.map-name { font-size: 15px; font-weight: 500; color: var(--ink); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge-md { font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--accent-soft);
+  padding: 1px 6px; border-radius: var(--radius-s); }
+.map-time { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.map-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity var(--dur-1); }
+.map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { opacity: 1; }
+.map-card-actions button { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.map-card-actions button:hover { color: var(--accent); background: var(--accent-soft); }
+/* 空态：朱砂印章对勾 + 引导文案 */
+.library-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--ink-2); }
 .error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
   border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
 
