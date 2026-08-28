@@ -39,6 +39,7 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
       '/ws/测试图.md',
     ),
   )
-  expect(md).toContain('# 根主题')
-  expect(md).toContain('分支一')
+  // 精确断言（M4 强化）：钉死完整序列化形态，杜绝 toContain 兜底。
+  // 实际值经 __zenE2e.readFile 运行校对后写死（与 copy-import 整图断言同构，子节点名不同）
+  expect(md).toBe('# 根主题\n\n## 分支一\n')
 })
