@@ -877,3 +877,18 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
     await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
   })
 })
+
+// ---- 复制按钮 data-scope（M4 新增 E2E 信号：随选中态在 full/branch 间切换）----
+
+test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
+  ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'branch'))
+  // 陈旧 uid 兜底：复制未命中时清除选中态（缓期项清偿）
+  ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
+})

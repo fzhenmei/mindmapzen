@@ -6,7 +6,7 @@ import type { IgnoredBlock } from '../types/tree'
 export default function IgnoredBlocksBanner({ blocks }: Readonly<{ blocks: IgnoredBlock[] }>) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="ignored-banner" data-testid="ignored-banner">
+    <div className="zen-banner" data-testid="ignored-banner">
       <span>{blocks.length} 个内容块未映射（保存时将丢弃）</span>
       <button type="button" data-testid="ignored-toggle" onClick={() => setOpen(!open)}>
         {open ? '收起' : '查看详情'}

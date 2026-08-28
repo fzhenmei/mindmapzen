@@ -1,11 +1,12 @@
 import { useAppStore } from '../store/appStore'
+import { IconTheme } from './icons'
 import type { ThemePref } from '../types/files'
 
 // 循环切换：auto → light → dark → auto
 const ORDER = ['auto', 'light', 'dark'] as const
 const LABEL: Record<ThemePref, string> = { auto: '主题：跟随系统', light: '主题：纸（亮）', dark: '主题：夜墨（暗）' }
 
-/** 主题三态切换（testid btn-theme；文字占位，Task 4 换图标，testid/语义不变） */
+/** 主题三态切换（testid btn-theme；M4 起换 IconTheme 图标，testid/aria-label/三态循环不变） */
 export default function ThemeToggle() {
   const themePref = useAppStore((s) => s.themePref)
   return (
@@ -20,7 +21,7 @@ export default function ThemeToggle() {
         void useAppStore.getState().setThemePref(next)
       }}
     >
-      {themePref === 'auto' ? '半' : themePref === 'light' ? '亮' : '暗'}
+      <IconTheme />
     </button>
   )
 }

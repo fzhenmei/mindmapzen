@@ -5,13 +5,10 @@ html, body { overflow: hidden; }
 .app { height: 100%; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
 
 /* 文件库 */
-.library { height: 100%; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
+.library { height: 100%; overflow-y: auto; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
 .library-header { display: flex; align-items: center; gap: 12px; }
 .library-header h1 { font-size: 18px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 主题三态切换（M4）：页首常驻小按钮，文字占位（Task 4 换图标，尺寸不变） */
-.theme-toggle { min-width: 34px; height: 28px; padding: 0 8px; border: 1px solid var(--hairline); border-radius: var(--radius-s);
-  background: var(--surface); color: var(--ink-2); font-size: 13px; cursor: pointer; }
-.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+/* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
 .hint { color: var(--ink-2); padding: 24px; text-align: center; }
 .map-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .map-list li { display: flex; align-items: center; gap: 8px; }
@@ -35,30 +32,46 @@ html, body { overflow: hidden; }
 .ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: 12px; }
 
 /* 编辑器 */
-.editor { height: 100%; display: flex; flex-direction: column; }
+.editor { position: relative; height: 100%; background: var(--paper); }
 .editor-loading, .editor-error { height: 100%; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 24px; }
 .editor-error h2 { font-size: 18px; }
 .error-detail { color: var(--seal); }
 .raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--paper);
   border: 1px solid var(--hairline); border-radius: var(--radius-s); padding: 12px; white-space: pre-wrap; font-size: 12px; }
-.editor-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid var(--hairline); }
-.editor-title { font-size: 15px; margin-right: auto; }
-.dirty-badge { color: var(--seal); margin-left: 4px; }
-.editor-toolbar button.copied { color: var(--accent); }
-/* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，重置默认边框 */
-.layout-switch { display: inline-flex; gap: 4px; border: 1px solid var(--hairline); border-radius: var(--radius-s);
-  padding: 2px; min-width: 0; }
-.layout-switch button { padding: 4px 10px; font-size: 13px; border: none; border-radius: var(--radius-s);
-  background: transparent; color: var(--ink-2); cursor: pointer; }
-.layout-switch button:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.canvas-host { position: absolute; inset: 0; overflow: hidden; }
+/* 浮动砚栏（spec §4.4 UI 隐身）：静置淡化，悬停/聚焦浮现 */
+.zen-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
+  display: flex; align-items: center; gap: 2px; padding: 6px 10px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline); border-radius: var(--radius-pill); box-shadow: var(--shadow-2);
+  opacity: 0.35; transition: opacity var(--dur-2) ease-out; }
+.zen-bar:hover, .zen-bar:focus-within { opacity: 1; }
+.zen-bar button { display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: var(--radius-s);
+  background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
+.zen-bar button:hover { background: var(--accent-soft); color: var(--accent); }
+.zen-bar button.copied { color: var(--accent); }
+.zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 4px; }
+/* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，去边框并入砚栏图标组 */
+.layout-switch { display: inline-flex; gap: 2px; border: none; padding: 0; margin: 0; min-width: 0; }
 .layout-switch button.active { background: var(--accent-soft); color: var(--accent); }
-.ignored-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  background: color-mix(in srgb, var(--seal) 8%, var(--paper)); color: var(--ink);
-  border-bottom: 1px solid color-mix(in srgb, var(--seal) 25%, var(--paper));
-  padding: 6px 16px; font-size: 13px; }
-.ignored-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px;
-  color: var(--ink-2); font-size: 12px; }
-.canvas-host { flex: 1; min-height: 0; position: relative; overflow: hidden; }
-.library { height: 100%; overflow-y: auto; }
+/* 左下题签 + 朱砂脏印 */
+.editor-caption { position: absolute; left: 16px; bottom: 12px; z-index: 5; display: flex; align-items: center;
+  gap: 8px; color: var(--ink-2); font-size: 13px; pointer-events: none; }
+.caption-name { font-family: var(--font-mono); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seal-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--seal); display: inline-block; }
+/* 右下主题圆钮；文件库页首同款 */
+.theme-fab { position: absolute; right: 16px; bottom: 12px; z-index: 5; }
+.theme-fab button, .library .theme-toggle { width: 30px; height: 30px; border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline); background: var(--surface); color: var(--ink-2); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; }
+.theme-fab button:hover, .library .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于砚栏下方 */
+.zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 70vw;
+  background: color-mix(in srgb, var(--seal) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--seal) 25%, var(--surface));
+  border-radius: var(--radius-m); box-shadow: var(--shadow-1); padding: 8px 14px; font-size: 13px; }
+.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .zen-bar { transition: none; } }

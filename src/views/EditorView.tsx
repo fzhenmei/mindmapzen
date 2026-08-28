@@ -20,6 +20,19 @@ import type { RegisterCloseGuard } from '../types/ports'
 import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
+import ThemeToggle from '../components/ThemeToggle'
+import {
+  IconArrowLeft,
+  IconCopy,
+  IconCrosshair,
+  IconFrame,
+  IconLayoutBoth,
+  IconLayoutDown,
+  IconLayoutRight,
+  IconMinus,
+  IconPlus,
+  IconSave,
+} from '../components/icons'
 
 interface Props {
   mdPath: string
@@ -74,20 +87,20 @@ export default function EditorView({
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
-  /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图 */
-  const buildCopyText = (): string | null => {
-    const mm = mmRef.current
-    if (!mm) return null
-    const full = mm.getData()
-    const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
-    return serialize(engineTreeToZen(active ?? full).tree)
-  }
-
+  /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
+   *  陈旧 uid 兜底（M4 缓期项清偿）：选中 uid 未命中渲染树（如撤销删除了该节点）时，
+   *  清除选中态回退整图复制——按钮 data-scope/title 随之回整图，不留幽灵选中 */
   const doCopy = async (): Promise<void> => {
     try {
-      const text = buildCopyText()
-      if (text === null) return
-      await writeClipboard(text)
+      const mm = mmRef.current
+      if (!mm) return
+      const full = mm.getData()
+      const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
+      if (activeUidRef.current && !active) {
+        activeUidRef.current = null
+        setActiveUid(null)
+      }
+      await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
       setCopied(true)
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
       copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
@@ -350,98 +363,6 @@ export default function EditorView({
 
   return (
     <div className="editor">
-      <header className="editor-toolbar">
-        <button
-          type="button"
-          data-testid="btn-back"
-          onClick={async () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-            const ok = await explicitSave()
-            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
-            await backToLibrary()
-          }}
-        >
-          ← 返回
-        </button>
-        <span className="editor-title">
-          {name}
-          {dirty && (
-            <span data-testid="dirty-badge" title="有未保存修改">
-              ●
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          data-testid="btn-copy"
-          className={copied ? 'copied' : undefined}
-          title={
-            activeUid
-              ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
-              : '复制整图为 Markdown（Ctrl+Shift+C）'
-          }
-          onClick={() => void doCopy()}
-          disabled={state !== 'ready'}
-        >
-          {copied ? '✓ 已复制' : '复制 MD'}
-        </button>
-        <button type="button" data-testid="btn-save" onClick={() => void explicitSave()}>
-          保存
-        </button>
-        <button
-          type="button"
-          data-testid="btn-zoom-out"
-          title="缩小（Ctrl+滚轮也可缩放）"
-          onClick={() => mmRef.current?.view.narrow()}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          data-testid="btn-zoom-in"
-          title="放大（Ctrl+滚轮也可缩放）"
-          onClick={() => mmRef.current?.view.enlarge()}
-        >
-          ＋
-        </button>
-        <button
-          type="button"
-          data-testid="btn-center-root"
-          title="根居中：保持当前缩放，把根节点移回画布中心"
-          onClick={() => mmRef.current && centerRoot(mmRef.current)}
-        >
-          根居中
-        </button>
-        <button
-          type="button"
-          data-testid="btn-fit"
-          title="适配整图：自动缩放使整棵导图完整可见并居中"
-          onClick={() => mmRef.current && fitView(mmRef.current)}
-        >
-          适配
-        </button>
-        <fieldset className="layout-switch" aria-label="布局切换">
-          {(
-            [
-              ['mindmap', '思维导图'],
-              ['logic', '逻辑图'],
-              ['org', '组织结构图'],
-            ] as const
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              data-testid={`layout-${kind}`}
-              className={layout === kind ? 'active' : ''}
-              aria-pressed={layout === kind}
-              onClick={() => switchLayout(kind)}
-            >
-              {label}
-            </button>
-          ))}
-        </fieldset>
-      </header>
-      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
       <div className="canvas-host">
         {engineTree && (
           <MindMapCanvas
@@ -459,6 +380,110 @@ export default function EditorView({
           />
         )}
       </div>
+      {/* 浮动砚栏：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
+      <header className="zen-bar" data-testid="zen-bar">
+        <button
+          type="button"
+          data-testid="btn-back"
+          title="返回文件库"
+          onClick={async () => {
+            if (timerRef.current) clearTimeout(timerRef.current)
+            const ok = await explicitSave()
+            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
+            await backToLibrary()
+          }}
+        >
+          <IconArrowLeft />
+        </button>
+        <span className="zen-bar-sep" />
+        <button
+          type="button"
+          data-testid="btn-copy"
+          className={copied ? 'copied' : undefined}
+          data-scope={activeUid ? 'branch' : 'full'}
+          title={
+            activeUid
+              ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
+              : '复制整图为 Markdown（Ctrl+Shift+C）'
+          }
+          onClick={() => void doCopy()}
+        >
+          {copied ? '✓' : <IconCopy />}
+        </button>
+        <button
+          type="button"
+          data-testid="btn-save"
+          title="保存（Ctrl+S）"
+          onClick={() => void explicitSave()}
+        >
+          <IconSave />
+        </button>
+        <span className="zen-bar-sep" />
+        <button
+          type="button"
+          data-testid="btn-zoom-out"
+          title="缩小（Ctrl+滚轮）"
+          onClick={() => mmRef.current?.view.narrow()}
+        >
+          <IconMinus />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-zoom-in"
+          title="放大（Ctrl+滚轮）"
+          onClick={() => mmRef.current?.view.enlarge()}
+        >
+          <IconPlus />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-center-root"
+          title="根居中：保持缩放回根"
+          onClick={() => mmRef.current && centerRoot(mmRef.current)}
+        >
+          <IconCrosshair />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-fit"
+          title="适配整图"
+          onClick={() => mmRef.current && fitView(mmRef.current)}
+        >
+          <IconFrame />
+        </button>
+        <span className="zen-bar-sep" />
+        <fieldset className="layout-switch" aria-label="布局切换">
+          {(
+            [
+              ['mindmap', '思维导图（右向）', <IconLayoutRight key="r" />],
+              ['logic', '逻辑图（左右）', <IconLayoutBoth key="b" />],
+              ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
+            ] as const
+          ).map(([kind, label, icon]) => (
+            <button
+              key={kind}
+              type="button"
+              data-testid={`layout-${kind}`}
+              className={layout === kind ? 'active' : ''}
+              aria-pressed={layout === kind}
+              title={label}
+              onClick={() => switchLayout(kind)}
+            >
+              {icon}
+            </button>
+          ))}
+        </fieldset>
+      </header>
+      {/* 左下题签 + 朱砂脏印；右下主题钮 */}
+      <div className="editor-caption">
+        <span className="caption-name">{name}</span>
+        {dirty && <span data-testid="dirty-badge" className="seal-dot" title="有未保存修改" />}
+      </div>
+      <div className="theme-fab">
+        <ThemeToggle />
+      </div>
+      {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
+      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
       {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
       {confirmingIgnored && (
         <div className="dialog-mask" role="dialog" aria-label="保存确认">
