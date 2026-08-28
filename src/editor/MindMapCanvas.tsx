@@ -41,5 +41,14 @@ export default function MindMapCanvas({ tree, onReady, onDataChange }: Readonly<
     if (handled) e.preventDefault()
   }
 
-  return <div ref={containerRef} onKeyDown={onKeyDown} style={{ width: '100%', height: '100%' }} />
+  // role+tabIndex：使画布容器可聚焦（键盘操作前提），并满足可访问性对非原生交互元素的要求
+  return (
+    <div
+      ref={containerRef}
+      role="application"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      style={{ width: '100%', height: '100%' }}
+    />
+  )
 }
