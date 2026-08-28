@@ -78,15 +78,23 @@ export default function EditorView({
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
-  const [stamp, setStamp] = useState<'saved' | 'copied' | null>(null) // 印记：显式保存/复制成功后闪现 1.2s
+  const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
   const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
   // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
   const ignoredRef = useRef<IgnoredBlock[]>([])
   const ignoredConfirmedRef = useRef(false) // 本会话确认过一次即不再弹（spec §3.5）
+  const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
+
+  /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
+   *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
+  const flashStamp = (kind: 'saved' | 'copied'): void => {
+    stampSeqRef.current += 1
+    setStamp({ kind, seq: stampSeqRef.current })
+  }
 
   /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
    *  陈旧 uid 兜底（M4 缓期项清偿）：选中 uid 未命中渲染树（如撤销删除了该节点）时，
@@ -102,7 +110,7 @@ export default function EditorView({
         setActiveUid(null)
       }
       await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
-      setStamp('copied')
+      flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
     }
@@ -194,7 +202,7 @@ export default function EditorView({
   const saveAndStamp = async (): Promise<boolean> => {
     const wasDirty = dirtyRef.current
     const ok = await saveNow()
-    if (ok && wasDirty) setStamp('saved')
+    if (ok && wasDirty) flashStamp('saved')
     return ok
   }
 
@@ -480,8 +488,9 @@ export default function EditorView({
           ))}
         </fieldset>
       </header>
-      {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记） */}
-      {stamp && <SaveStamp kind={stamp} />}
+      {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
+          key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
+      {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
       {/* 左下题签 + 朱砂脏印；右下主题钮 */}
       <div className="editor-caption">
         <span className="caption-name">{name}</span>

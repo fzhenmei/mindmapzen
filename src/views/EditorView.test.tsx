@@ -357,6 +357,78 @@ test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）
   expect(screen.getByTestId('btn-copy')).not.toHaveTextContent('✓')
 })
 
+test('同会话到期卸载后再次保存可再次盖印（回归：stamp state 不得残留）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {})
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument() // 到期已受控卸载
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    })
+    expect(screen.getByTestId('dirty-badge')).toBeInTheDocument() // 再次弄脏
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {})
+    // 二次盖印：若旧 stamp state 残留且同值 setStamp bail-out，印记将永不重现
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前消失）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-copy'))
+    await act(async () => {})
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+    act(() => {
+      vi.advanceTimersByTime(600) // 首枚计时过半（未到期）
+    })
+    expect(screen.getByTestId('save-stamp')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-copy')) // 窗口内第二次：seq 自增重挂载、计时重新起算
+    await act(async () => {})
+    act(() => {
+      vi.advanceTimersByTime(700) // 距首枚 1300ms 已越其 1200ms：若未重置，印记将已消失
+    })
+    expect(screen.getByTestId('save-stamp')).toBeInTheDocument() // 距第二枚仅 700ms：仍在显示
+    act(() => {
+      vi.advanceTimersByTime(600) // 距第二枚 1300ms，越过其 1200ms
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 // ---- 多行粘贴执行（拆子节点，spec §3.6）----
 // 单行粘贴不拦截是引擎侧行为（MindMapCanvas onPaste 放行），此处只验证 applyMultilinePaste
 // 对收到的 raw 的执行语义。
