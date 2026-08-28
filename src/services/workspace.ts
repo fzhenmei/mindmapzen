@@ -64,7 +64,7 @@ export async function deleteMap(fs: FsAdapter, wsDir: string, name: string): Pro
   if (await fs.exists(sidecar)) await fs.remove(sidecar)
 }
 
-function joinPath(dir: string, name: string): string {
+export function joinPath(dir: string, name: string): string {
   let base = dir
   while (base.endsWith('/')) base = base.slice(0, -1)
   return base + '/' + name

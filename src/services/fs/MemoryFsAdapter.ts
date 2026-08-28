@@ -2,6 +2,9 @@ import type { FsAdapter } from '../../types/files'
 
 interface Entry { contents: string; modifiedAt: number }
 
+// 与 TauriFsAdapter 同语义的唯一临时名（写 tmp → rename），测试替身须忠实模拟并发防撞行为
+let tmpSeq = 0
+
 /** 测试用内存文件系统：目录由路径隐式推导 */
 export class MemoryFsAdapter implements FsAdapter {
   private readonly files = new Map<string, Entry>()
@@ -14,8 +17,9 @@ export class MemoryFsAdapter implements FsAdapter {
   }
 
   async writeTextFileAtomic(p: string, contents: string): Promise<void> {
-    this.files.delete(p + '.tmp')
-    this.files.set(p, { contents, modifiedAt: Date.now() })
+    const tmp = `${p}.tmp-${++tmpSeq}`
+    this.files.set(tmp, { contents, modifiedAt: Date.now() })
+    await this.rename(tmp, p)
   }
 
   async readDir(p: string): Promise<string[]> {

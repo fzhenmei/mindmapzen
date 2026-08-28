@@ -193,3 +193,13 @@ export function engineTreeToZen(
     collapsed: [...own, ...subs.flatMap((s) => s.collapsed)],
   }
 }
+
+/** 深度优先按引擎节点 uid 定位子树；未命中返回 null（复制范围解析用） */
+export function findSubtreeByUid(root: EngineNode, uid: string): EngineNode | null {
+  if (root.data.uid === uid) return root
+  for (const child of root.children ?? []) {
+    const hit = findSubtreeByUid(child, uid)
+    if (hit) return hit
+  }
+  return null
+}
