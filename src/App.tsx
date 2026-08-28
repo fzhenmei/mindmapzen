@@ -6,7 +6,11 @@ import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
 
+// E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
+const E2E = new URLSearchParams(window.location.search).has('e2e')
+
 const pickDirectory = async (): Promise<string | null> => {
+  if (E2E) return null
   const dir = await open({ directory: true, multiple: false })
   return typeof dir === 'string' ? dir : null
 }
@@ -16,6 +20,11 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
+        // E2E 模式：跳过 Tauri 适配器/路径注入（harness 已完成），直接初始化
+        if (E2E) {
+          await init()
+          return
+        }
         setAdapter(tauriFsAdapter)
         // 动态 import：jsdom 测试环境不触达 Tauri 路径 API
         const { appDataDir, join } = await import('@tauri-apps/api/path')
