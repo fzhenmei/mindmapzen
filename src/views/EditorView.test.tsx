@@ -35,7 +35,7 @@ beforeEach(async () => {
 
 test('打开文档渲染画布并显示名称', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
 })
 
 test('解析失败显示错误面板与原文', async () => {
@@ -56,10 +56,10 @@ test('读取失败显示错误面板并可纯文本打开', async () => {
 
 test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
-  await waitFor(() => expect(screen.getByTestId('dirty-badge')).toBeInTheDocument())
+  await screen.findByTestId('dirty-badge')
   fireEvent.keyDown(window, { key: 's', ctrlKey: true })
   await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
@@ -68,10 +68,33 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
 
 test('返回文件库前冲刷未保存修改', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
   fireEvent.click(screen.getByTestId('btn-back'))
   await waitFor(() => expect(useAppStore.getState().route).toBe('library'))
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+})
+
+test('保存失败时提示错误且脏标记保留（数据不静默丢失）', async () => {
+  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} />)
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  // 让原子写第一次调用抛错一次（随后恢复，模拟瞬时磁盘故障）
+  const original = fs.writeTextFileAtomic.bind(fs)
+  let thrown = false
+  fs.writeTextFileAtomic = async (p: string, contents: string) => {
+    if (!thrown) {
+      thrown = true
+      throw new Error('磁盘已满（模拟）')
+    }
+    return original(p, contents)
+  }
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  expect(useAppStore.getState().error).toContain('磁盘已满')
+  expect(useAppStore.getState().dirty).toBe(true)
+  expect(screen.getByTestId('dirty-badge')).toBeInTheDocument()
 })

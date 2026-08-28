@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import NameDialog from '../components/NameDialog'
+import type { MapInfo } from '../types/files'
 
 interface Props {
   pickDirectory: () => Promise<string | null>
@@ -11,6 +12,13 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
   const { workspaceDir, maps, error } = useAppStore()
   const store = useAppStore.getState()
   const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | null>(null)
+  // 重命名/删除对话框当前操作的导图（由所在行的按钮选定，而非 maps[0]）
+  const [target, setTarget] = useState<MapInfo | null>(null)
+
+  const closeDialog = () => {
+    setDialog(null)
+    setTarget(null)
+  }
 
   const chooseWorkspace = async () => {
     const dir = await pickDirectory()
@@ -40,12 +48,23 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
             <button
               type="button"
               data-testid="btn-rename"
-              onClick={() => setDialog('rename')}
+              onClick={() => {
+                setTarget(m)
+                setDialog('rename')
+              }}
               title="重命名"
             >
               重命名
             </button>
-            <button type="button" data-testid="btn-delete" onClick={() => setDialog('delete')} title="删除">
+            <button
+              type="button"
+              data-testid="btn-delete"
+              onClick={() => {
+                setTarget(m)
+                setDialog('delete')
+              }}
+              title="删除"
+            >
               删除
             </button>
           </li>
@@ -81,16 +100,16 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
           }}
         />
       )}
-      {dialog === 'rename' && maps[0] && (
+      {dialog === 'rename' && target && (
         <NameDialog
           title="重命名导图"
-          initial={maps[0].name}
+          initial={target.name}
           confirmText="重命名"
-          onCancel={() => setDialog(null)}
+          onCancel={closeDialog}
           onConfirm={async (name) => {
-            setDialog(null)
+            closeDialog()
             try {
-              await renameMap(store.adapter, workspaceDir!, maps[0]!.name, name)
+              await renameMap(store.adapter, workspaceDir!, target.name, name)
               await store.refreshMaps()
               store.setError(null)
             } catch (e) {
@@ -99,21 +118,21 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
           }}
         />
       )}
-      {dialog === 'delete' && maps[0] && (
+      {dialog === 'delete' && target && (
         <div className="dialog-mask" role="dialog" aria-label="删除确认">
           <div className="dialog">
-            <h3>删除「{maps[0].name}」？</h3>
+            <h3>删除「{target.name}」？</h3>
             <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
             <div className="dialog-actions">
-              <button type="button" onClick={() => setDialog(null)}>
+              <button type="button" onClick={closeDialog}>
                 取消
               </button>
               <button
                 type="button"
                 data-testid="btn-delete-confirm"
                 onClick={async () => {
-                  setDialog(null)
-                  await deleteMap(store.adapter, workspaceDir!, maps[0]!.name)
+                  closeDialog()
+                  await deleteMap(store.adapter, workspaceDir!, target.name)
                   await store.refreshMaps()
                 }}
               >

@@ -38,7 +38,10 @@ export default function App() {
   }, [])
 
   if (route === 'editor' && currentMdPath) {
-    return <EditorView mdPath={currentMdPath} openInEditor={(p) => void openPath(p)} />
+    // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）
+    return (
+      <EditorView key={currentMdPath} mdPath={currentMdPath} openInEditor={(p) => void openPath(p)} />
+    )
   }
   return <LibraryView pickDirectory={pickDirectory} />
 }

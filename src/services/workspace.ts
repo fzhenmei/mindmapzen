@@ -43,7 +43,15 @@ export async function createMap(fs: FsAdapter, wsDir: string, name: string): Pro
 export async function renameMap(fs: FsAdapter, wsDir: string, oldName: string, newName: string): Promise<void> {
   const trimmed = newName.trim()
   if (trimmed === '' || INVALID.test(trimmed)) throw new Error(String.raw`新名称非法（为空或包含 \ / : * ? " < > |）`)
-  await fs.rename(joinPath(wsDir, oldName + '.md'), joinPath(wsDir, trimmed + '.md'))
+  // 改成原名视作无操作，避免误报「已存在同名导图」
+  if (trimmed === oldName) return
+  const oldMdPath = joinPath(wsDir, oldName + '.md')
+  const newMdPath = joinPath(wsDir, trimmed + '.md')
+  // 源缺失时给出中文错误，避免适配器底层英文异常外泄
+  if (!(await fs.exists(oldMdPath))) throw new Error(`源导图不存在：${oldName}`)
+  // 撞名预检：rename 是替换语义，直接改名会静默覆盖既有导图（且绕过回收站）
+  if (await fs.exists(newMdPath)) throw new Error(`已存在同名导图：${trimmed}`)
+  await fs.rename(oldMdPath, newMdPath)
   const oldSidecar = joinPath(wsDir, oldName + '.zen.json')
   if (await fs.exists(oldSidecar)) {
     await fs.rename(oldSidecar, joinPath(wsDir, trimmed + '.zen.json'))

@@ -14,7 +14,7 @@ interface Props {
 const AUTOSAVE_MS = 5000
 
 export default function EditorView({ mdPath, openInEditor }: Readonly<Props>) {
-  const { adapter, markDirty, clearDirty, backToLibrary } = useAppStore()
+  const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
   const mmRef = useRef<MindMapHandle | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -28,15 +28,22 @@ export default function EditorView({ mdPath, openInEditor }: Readonly<Props>) {
   const saveNow = async (): Promise<void> => {
     const mm = mmRef.current
     if (!mm || !dirtyRef.current) return
-    const { tree, collapsed } = engineTreeToZen(mm.getData())
-    const sidecar: Sidecar = {
-      version: 1, theme: 'default', layout: 'mindmap',
-      collapsed, offsets: {}, canvas: { x: 0, y: 0, zoom: 1 },
+    try {
+      const { tree, collapsed } = engineTreeToZen(mm.getData())
+      const sidecar: Sidecar = {
+        version: 1, theme: 'default', layout: 'mindmap',
+        collapsed, offsets: {}, canvas: { x: 0, y: 0, zoom: 1 },
+      }
+      await adapter.writeTextFileAtomic(mdPath, serialize(tree))
+      await writeSidecar(adapter, mdPath, sidecar)
+      dirtyRef.current = false
+      clearDirty()
+    } catch (e) {
+      // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试
+      dirtyRef.current = true
+      markDirty()
+      setError('保存失败：' + String(e))
     }
-    await adapter.writeTextFileAtomic(mdPath, serialize(tree))
-    await writeSidecar(adapter, mdPath, sidecar)
-    dirtyRef.current = false
-    clearDirty()
   }
 
   useEffect(() => {

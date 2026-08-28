@@ -45,6 +45,26 @@ describe('workspace', () => {
     expect(await fs.exists('/ws/b.zen.json')).toBe(true)
   })
 
+  test('renameMap 撞名时抛中文错误且不覆盖既有导图', async () => {
+    await createMap(fs, '/ws', 'a')
+    await createMap(fs, '/ws', 'b')
+    await fs.writeTextFileAtomic('/ws/b.md', '# b 的内容\n')
+    await expect(renameMap(fs, '/ws', 'a', 'b')).rejects.toThrow('已存在同名导图：b')
+    // b 内容未被覆盖，a 也原样保留
+    expect(await fs.readTextFile('/ws/b.md')).toBe('# b 的内容\n')
+    expect(await fs.exists('/ws/a.md')).toBe(true)
+  })
+
+  test('renameMap 源 .md 缺失时抛中文错误（不外泄适配器英文异常）', async () => {
+    await expect(renameMap(fs, '/ws', '不存在', 'c')).rejects.toThrow('源导图不存在：不存在')
+  })
+
+  test('renameMap 改成原名为无操作，不误报撞名', async () => {
+    await createMap(fs, '/ws', 'a')
+    await renameMap(fs, '/ws', 'a', 'a')
+    expect(await fs.exists('/ws/a.md')).toBe(true)
+  })
+
   test('deleteMap 两个文件一起删除', async () => {
     await createMap(fs, '/ws', 'a')
     await fs.writeTextFileAtomic('/ws/a.zen.json', '{}')

@@ -8,8 +8,17 @@ function escapeItemText(text: string): string {
   return /^([-+*]\s|\d+[.)]\s|[#>]|\\+(?=[-+*#>]|\d+[.)]))/.test(text) ? '\\' + text : text
 }
 
+/** 节点文本含换行时序列化必然产出结构损坏的 md（静默丢内容），宁可当场报错拦截 */
+function assertNoNewline(node: ZenNode): void {
+  if (node.text.includes('\n') || node.text.includes('\r')) {
+    throw new Error(`节点文本包含换行，暂不支持多行文本：${node.text.slice(0, 20)}…`)
+  }
+  for (const child of node.children) assertNoNewline(child)
+}
+
 /** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表 */
 export function serialize(tree: ZenNode): string {
+  assertNoNewline(tree)
   const lines: string[] = []
 
   function emitHeading(node: ZenNode, depth: number): void {

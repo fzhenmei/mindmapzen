@@ -29,4 +29,16 @@ describe('serialize', () => {
     const tree = n('根', [n('A'), n('B', [n('B1')])])
     expect(serialize(tree)).toBe(serialize(tree))
   })
+
+  test('节点文本含 \\n 或 \\r 时抛中文错误拒绝序列化（拒绝静默产出损坏 md）', () => {
+    expect(() => serialize(n('根', [n('第一行\n第二行')]))).toThrow(
+      '节点文本包含换行，暂不支持多行文本：第一行\n第二行…',
+    )
+    expect(() => serialize(n('根', [n('子', [n('a\rb')])]))).toThrow('节点文本包含换行')
+  })
+
+  test('不含换行的正常树仍可序列化', () => {
+    const tree = n('根', [n('A', [n('A1')])])
+    expect(serialize(tree)).toBe('# 根\n\n## A\n\n### A1\n')
+  })
 })

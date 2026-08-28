@@ -48,3 +48,22 @@ test('删除需二次确认', async () => {
   await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(0))
   expect(fs.removeLog).toEqual(['/ws/想法A.md'])
 })
+
+test('多导图时删除按钮作用于所在行（第二行），而非首行', async () => {
+  // 想法B 后写入，listMaps 按 mtime 降序（同毫秒并列按 readDir 顺序）→ B 在第一行、A 在第二行
+  await fs.writeTextFileAtomic('/ws/想法B.md', '# B\n')
+  await useAppStore.getState().setWorkspace('/ws')
+  render(<LibraryView pickDirectory={pickDirectory} />)
+  const rows = await screen.findAllByTestId('map-item')
+  expect(rows).toHaveLength(2)
+  expect(rows[0]).toHaveTextContent('想法B')
+  expect(rows[1]).toHaveTextContent('想法A')
+  // 第二行（想法A）的删除按钮：确认框必须显示该行导图名
+  fireEvent.click(screen.getAllByTestId('btn-delete')[1]!)
+  expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+  await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1))
+  // 只删了第二行自己的导图想法A，首行想法B 未被误删
+  expect(fs.removeLog).toEqual(['/ws/想法A.md'])
+  expect(await fs.exists('/ws/想法B.md')).toBe(true)
+})
