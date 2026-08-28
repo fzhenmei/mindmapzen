@@ -37,6 +37,7 @@ vi.mock('../editor/MindMapCanvas', () => ({
       getData: () => fakeTree,
       execCommand: vi.fn(),
       setLayout: vi.fn(),
+      setTheme: vi.fn(),
       resize: vi.fn(),
       el: null,
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
@@ -285,6 +286,149 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
   await waitFor(() => expect(writes).toHaveLength(1))
 })
 
+// ---- 印记（Task 7：显式保存成功朱砂印 / 复制成功墨青印，替代按钮内 ✓ 文案）----
+
+test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  // 只 fake setTimeout/clearTimeout 控印记的 1.2s 消失；fake 定时器下 RTL 的 waitFor 会挂起，
+  // 故后续用 act 同步推进 + 同步查询（同自动保存静默用例模式）
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {}) // 排空落盘微任务：印记随保存成功渲染
+    expect(useAppStore.getState().dirty).toBe(false)
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+    expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-seal')
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('干净状态下保存为 no-op：不盖印记（无用户可感知的写盘）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：文档干净
+  fireEvent.click(screen.getByTestId('btn-save'))
+  await act(async () => {})
+  expect(useAppStore.getState().dirty).toBe(false)
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+})
+
+test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await act(async () => {}) // 排空剪贴板微任务
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+  expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
+  expect(screen.getByTestId('btn-copy')).not.toHaveTextContent('✓')
+})
+
+test('同会话到期卸载后再次保存可再次盖印（回归：stamp state 不得残留）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {})
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument() // 到期已受控卸载
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    })
+    expect(screen.getByTestId('dirty-badge')).toBeInTheDocument() // 再次弄脏
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {})
+    // 二次盖印：若旧 stamp state 残留且同值 setStamp bail-out，印记将永不重现
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前消失）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-copy'))
+    await act(async () => {})
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+    act(() => {
+      vi.advanceTimersByTime(600) // 首枚计时过半（未到期）
+    })
+    expect(screen.getByTestId('save-stamp')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-copy')) // 窗口内第二次：seq 自增重挂载、计时重新起算
+    await act(async () => {})
+    act(() => {
+      vi.advanceTimersByTime(700) // 距首枚 1300ms 已越其 1200ms：若未重置，印记将已消失
+    })
+    expect(screen.getByTestId('save-stamp')).toBeInTheDocument() // 距第二枚仅 700ms：仍在显示
+    act(() => {
+      vi.advanceTimersByTime(600) // 距第二枚 1300ms，越过其 1200ms
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 // ---- 多行粘贴执行（拆子节点，spec §3.6）----
 // 单行粘贴不拦截是引擎侧行为（MindMapCanvas onPaste 放行），此处只验证 applyMultilinePaste
 // 对收到的 raw 的执行语义。
@@ -418,7 +562,7 @@ test('关闭守卫：dirty 时拦截关闭并弹出三态对话框', async () =>
   const guard = makeGuardStub()
   const { prevented } = await renderDirtyAndClose(guard)
   expect(prevented).toBe(true)
-  expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '关闭确认')
+  expect(screen.getByTestId('closeguard-dialog')).toHaveAttribute('aria-label', '「a」有未保存的修改')
   expect(screen.getByText(/「a」有未保存的修改/)).toBeInTheDocument()
   expect(screen.getByTestId('closeguard-save')).toBeInTheDocument()
   expect(screen.getByTestId('closeguard-discard')).toBeInTheDocument()
@@ -488,7 +632,7 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：未修改
   expect(guard.fireClose()).toBe(false)
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('closeguard-dialog')).not.toBeInTheDocument()
   expect(exitApp).not.toHaveBeenCalled()
 })
 
@@ -738,9 +882,17 @@ test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5
     expect(useAppStore.getState().dirty).toBe(false) // 已自动保存
     expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
     expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument() // 未弹确认
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument() // 印记只属于显式保存
   } finally {
     vi.useRealTimers()
   }
+})
+
+test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', async () => {
+  await renderIgnoredMap()
+  fireEvent.click(screen.getByTestId('ignored-toggle'))
+  expect(screen.getByTestId('ignored-list')).toHaveTextContent('段落：一段说明')
+  expect(screen.getByTestId('ignored-list')).not.toHaveTextContent('paragraph')
 })
 
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
@@ -830,13 +982,17 @@ test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不�
   await act(async () => {}) // 排空 fire-and-forget 落盘微任务
   const sc = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
   expect(sc.layout).toBe('org')
-  expect(writes).toEqual(['/ws/a.zen.json']) // 仅 sidecar，.md 未动
+  expect(writes).toContain('/ws/a.zen.json') // sidecar 即时落盘
+  // a4e2a51 起切换还会异步写 /cfg.json（偏好持久化，预期行为），故仅断言写路径不含 .md
+  expect(writes.some((p) => p.endsWith('.md'))).toBe(false)
   expect(useAppStore.getState().dirty).toBe(false) // 依旧不置脏
 })
 
 test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静默）', async () => {
-  fs.writeTextFileAtomic = vi.fn(async () => {
-    throw new Error('磁盘占用')
+  // 抛错限定 sidecar 路径：切换还会 fire-and-forget 写 /cfg.json（偏好持久化，预期行为），
+  // 若全路径抛错，该写入的未捕获拒绝会被 vitest 记为未处理错误（非零退出）
+  fs.writeTextFileAtomic = vi.fn(async (p: string) => {
+    if (p.endsWith('.zen.json')) throw new Error('磁盘占用')
   })
   render(
     <EditorView
@@ -871,4 +1027,19 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
     fireEvent.click(screen.getByTestId('layout-org'))
     await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
   })
+})
+
+// ---- 复制按钮 data-scope（M4 新增 E2E 信号：随选中态在 full/branch 间切换）----
+
+test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
+  ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'branch'))
+  // 陈旧 uid 兜底：复制未命中时清除选中态（缓期项清偿）
+  ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
 })

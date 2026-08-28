@@ -141,3 +141,48 @@
 - `render()` 经 `setTimeout(..., 0)` 去抖（`Render.js:553-559`），同步连续多条 `execCommand` 的数据变更先落 `renderTree`，实际只触发最后一次渲染
 - 渲染间节点实例按 uid 经 `nodeCache` 复用（`Render.js:574-576, 590-599`），未消失的节点实例在重渲染后保持有效；引擎自身 Command 撤销/重做同样持久化命令参数里的节点实例。`SET_NODE_TEXT` 后紧接 `INSERT_CHILD_NODE`（appointNodes 传同一实例）安全
 - 补充：`INSERT_CHILD_NODE(openEdit=false, ...)` 在默认 `createNewNodeBehavior` 下 `focusNewNode=true`（`Render.js:756-764`），插入后会清空旧激活列表并激活新节点——`node_active` 随之发出新节点 uid，复制/粘贴的 activeUidRef 语义不受破坏。另存在 `INSERT_MULTI_CHILD_NODE`（`Render.js:263-266`，一次命令批量插子节点、单条历史），后续如需"整批一条撤销"可切换
+
+## M4 核验（Task 3，主题系统）
+
+对 M4 主题接线四项假设逐条核验（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3）。**结论先行：第 2 项假设不成立——主题键集中不存在 `activeBorderColor`/`activeBorderWidth`，选中态真实键名为 `hoverRectColor`（+`hoverRectRadius`），engineThemes 的对象已按真实键名落地；其余三项成立，其中 curve 布局支持范围比注释声明更宽（organizationStructure 实际已实现 curve 分支）。**
+
+### (9) root/second/node 完整键集 —— 成立，以 default.js:73-196 为准
+
+- `root`（`src/theme/default.js:73-113`）：`shape`、`fillColor`、`fontFamily`、`color`、`fontSize`、`fontWeight`、`fontStyle`、`borderColor`、`borderWidth`、`borderDasharray`、`borderRadius`、`textDecoration`、`gradientStyle`、`startColor`、`endColor`、`startDir`、`endDir`、`lineMarkerDir`、`hoverRectColor`、`hoverRectRadius`、`textAlign`、`imgPlacement`、`tagPlacement`
+- `second`（`default.js:115-141`）：同 root 另加 `marginX`/`marginY`
+- `node`（`default.js:143-169`）：同 second（三级及以下）
+- `generalization`（`default.js:171-196`）：同 second（本项目不用概要节点，主题不覆盖）
+- 顶层样式（连线/背景等，`default.js:2-71`）：`paddingX`/`paddingY`（:3-4，仅顶层有默认值）、`lineWidth`、`lineColor`、`lineStyle`（:25）、`rootLineKeepSameInCurve`（:27）、`backgroundColor`（:61）等
+- 主题合并 `mergeTheme`（`src/utils/index.js:1679-1685`）：deepmerge 深合并，主题只需给出覆盖键，缺省键回落 default——引擎 `defineTheme` 内部即用它合并（见下）
+
+### (10) 选中态键 `activeBorderColor`/`activeBorderWidth` **不存在** —— 假设修正为 `hoverRectColor`
+
+- 全 `src/theme` 目录 grep `activeBorderColor|activeBorderWidth` 零命中；default.js 各层级键集中无任何 `active*` 前缀键
+- 真实机制：hover 与激活共用同一个外框矩形 `smm-hover-node`（`src/core/render/node/nodeLayout.js:185-193` 创建，类名见 :190），样式在 `Style.hoverNode()`（`src/core/render/node/Style.js:343-351`）：
+
+  ```js
+  const hoverRectColor = this.merge('hoverRectColor') || this.ctx.mindMap.opt.hoverRectColor
+  const hoverRectRadius = this.merge('hoverRectRadius')
+  node.radius(hoverRectRadius).fill('none').stroke({ color: hoverRectColor })
+  ```
+
+- 显隐与浓淡由引擎内置 CSS 控制（`src/constants/constant.js:225-246`）：hover 态 opacity .6 / stroke-width 1，`.smm-node.active` 态 opacity 1 / stroke-width 2——即**选中态与 hover 同色，只是更浓更粗，主题层无法也无需区分两者**
+- 回退链：主题各层级默认 `hoverRectColor: ''`（default.js:94/136/164，空串为 falsy）→ 回落实例选项 `opt.hoverRectColor`（`src/constants/defaultOptions.js:164`，默认 `rgb(94, 200, 248)` 亮蓝色，非本仓色板）。**故 zen 主题必须在 root/second/node 各层显式设置 `hoverRectColor`**——`Style.merge`（`Style.js:75-113`，层级键优先于顶层，:100-105）下，只设顶层会被各层默认空串拦截而失效
+- **修正落地**：engineThemes.ts 的 root/second/node 用 `hoverRectColor: '#B5453C'`（纸墨）/ `'#C96A5F'`（夜墨）+ `hoverRectRadius: 6` 取代简报的 `activeBorderColor`/`activeBorderWidth`
+
+### (11) `defineTheme` 纯静态注册、jsdom 安全 —— 成立（一个细节偏差）
+
+- 实现 `index.js:836-841`：`MindMap.defineTheme(name, config)` 仅把 `mergeTheme(defaultTheme, config)` 写入模块级主题注册表（`src/theme/index.js`，初始仅 `{ default }`），不触 DOM、不依赖实例——jsdom 中直接 import 并调用安全
+- 细节偏差：同名主题已存在时它 **return 一个 Error 对象而非 throw**（`index.js:837-839`），且该返回值无人消费——重复注册会静默无效。`registerZenThemes` 的模块级布尔守卫因此仍是必要语义（幂等不靠引擎报错），测试「可重复调用不抛」成立
+- 消费侧：构造 opt `theme` 经 `initTheme`（`index.js:368-376`）取 `theme[this.opt.theme] || theme.default`——**未注册主题名静默回退默认主题**，故注册必须先于实例构造；`MindMapCanvas` 模块顶层（usePlugin 之后）调用 `registerZenThemes()` 满足时序
+- `setTheme`（`index.js:379-386`）：`execCommand('CLEAR_ACTIVE_NODE')` 清选中 → `opt.theme = theme` → `render(null, CHANGE_THEME)` → `emit('view_theme_change', theme)`。不重建实例、不重挂载，M4 接线选它做运行中切换
+
+### (12) `lineStyle: 'curve'` 布局支持范围 —— 注释与实现不一致，实际更宽
+
+- `default.js:25` 注释：curve「仅支持 logicalStructure、mindMap、verticalTimeline 三种结构」——与简报假设（curve 支持 logicalStructure/mindMap，organizationStructure 用 straight）同源
+- 但安装版本实现：四个布局的 `renderLine` 均有 curve 分支，**含 `OrganizationStructure.js:157-168`（`renderLineCurve` 定义于 :168）**。即注释为滞后文档，本仓三种布局（logicalStructure/mindMap/organizationStructure）下 curve 均实际生效；organizationStructure 的曲线为竖向贝塞尔
+- `rootLineKeepSameInCurve`（`default.js:26-27`）注释限定 logicalStructure/mindMap；organizationStructure 根节点连线形状无该开关语义，置 true 无害
+
+### d.ts 影响
+
+新增静态方法 `defineTheme(name: string, config: Record<string, unknown>): void` 与实例方法 `setTheme(name: string): void`（返回 Error 对象的细节不进类型——守卫保证不会走到该分支），构造 opts 显式补 `theme?: string` 注释键。

@@ -11,6 +11,7 @@ import { readSidecar, writeSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
+import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -19,6 +20,21 @@ import type { RegisterCloseGuard } from '../types/ports'
 import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
+import SaveStamp from '../components/SaveStamp'
+import ZenDialog from '../components/ZenDialog'
+import ThemeToggle from '../components/ThemeToggle'
+import {
+  IconArrowLeft,
+  IconCopy,
+  IconCrosshair,
+  IconFrame,
+  IconLayoutBoth,
+  IconLayoutDown,
+  IconLayoutRight,
+  IconMinus,
+  IconPlus,
+  IconSave,
+} from '../components/icons'
 
 interface Props {
   mdPath: string
@@ -42,6 +58,7 @@ export default function EditorView({
 }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
+  const resolvedTheme = useAppStore((s) => s.resolvedTheme)
   const mmRef = useRef<MindMapHandle | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirtyRef = useRef(false)
@@ -51,7 +68,6 @@ export default function EditorView({
   const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
   // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
   // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
@@ -62,33 +78,39 @@ export default function EditorView({
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
-  const [copied, setCopied] = useState(false)
+  const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
   const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
   // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
   const ignoredRef = useRef<IgnoredBlock[]>([])
   const ignoredConfirmedRef = useRef(false) // 本会话确认过一次即不再弹（spec §3.5）
+  const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
-  /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图 */
-  const buildCopyText = (): string | null => {
-    const mm = mmRef.current
-    if (!mm) return null
-    const full = mm.getData()
-    const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
-    return serialize(engineTreeToZen(active ?? full).tree)
+  /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
+   *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
+  const flashStamp = (kind: 'saved' | 'copied'): void => {
+    stampSeqRef.current += 1
+    setStamp({ kind, seq: stampSeqRef.current })
   }
 
+  /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
+   *  陈旧 uid 兜底（M4 缓期项清偿）：选中 uid 未命中渲染树（如撤销删除了该节点）时，
+   *  清除选中态回退整图复制——按钮 data-scope/title 随之回整图，不留幽灵选中 */
   const doCopy = async (): Promise<void> => {
     try {
-      const text = buildCopyText()
-      if (text === null) return
-      await writeClipboard(text)
-      setCopied(true)
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
+      const mm = mmRef.current
+      if (!mm) return
+      const full = mm.getData()
+      const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
+      if (activeUidRef.current && !active) {
+        activeUidRef.current = null
+        setActiveUid(null)
+      }
+      await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
+      flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
     }
@@ -175,10 +197,19 @@ export default function EditorView({
     return run
   }
 
+  /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」——
+   *  干净状态下保存是 no-op（无用户可感知的写盘），不印记 */
+  const saveAndStamp = async (): Promise<boolean> => {
+    const wasDirty = dirtyRef.current
+    const ok = await saveNow()
+    if (ok && wasDirty) flashStamp('saved')
+    return ok
+  }
+
   /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
-   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接调 saveNow。
+   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接落盘。
    *  自动保存（5s 防抖定时器）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃——
-   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）。 */
+   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）；印记亦只属于显式保存。 */
   const explicitSave = async (): Promise<boolean> => {
     if (ignoredRef.current.length > 0 && !ignoredConfirmedRef.current) {
       // 等待用户裁决期间暂停自动保存，防止确认悬而未决时被定时器静默落盘丢弃
@@ -186,7 +217,7 @@ export default function EditorView({
       setConfirmingIgnored(true)
       return false
     }
-    return saveNow()
+    return saveAndStamp()
   }
 
   useEffect(() => {
@@ -290,7 +321,6 @@ export default function EditorView({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
       if (dirtyRef.current) void saveNow() // unmount 冲刷（含返回文件库）
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount 冲刷，saveNow 依赖 refs
@@ -348,104 +378,13 @@ export default function EditorView({
 
   return (
     <div className="editor">
-      <header className="editor-toolbar">
-        <button
-          type="button"
-          data-testid="btn-back"
-          onClick={async () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-            const ok = await explicitSave()
-            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
-            await backToLibrary()
-          }}
-        >
-          ← 返回
-        </button>
-        <span className="editor-title">
-          {name}
-          {dirty && (
-            <span data-testid="dirty-badge" title="有未保存修改">
-              ●
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          data-testid="btn-copy"
-          className={copied ? 'copied' : undefined}
-          title={
-            activeUid
-              ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
-              : '复制整图为 Markdown（Ctrl+Shift+C）'
-          }
-          onClick={() => void doCopy()}
-          disabled={state !== 'ready'}
-        >
-          {copied ? '✓ 已复制' : '复制 MD'}
-        </button>
-        <button type="button" data-testid="btn-save" onClick={() => void explicitSave()}>
-          保存
-        </button>
-        <button
-          type="button"
-          data-testid="btn-zoom-out"
-          title="缩小（Ctrl+滚轮也可缩放）"
-          onClick={() => mmRef.current?.view.narrow()}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          data-testid="btn-zoom-in"
-          title="放大（Ctrl+滚轮也可缩放）"
-          onClick={() => mmRef.current?.view.enlarge()}
-        >
-          ＋
-        </button>
-        <button
-          type="button"
-          data-testid="btn-center-root"
-          title="根居中：保持当前缩放，把根节点移回画布中心"
-          onClick={() => mmRef.current && centerRoot(mmRef.current)}
-        >
-          根居中
-        </button>
-        <button
-          type="button"
-          data-testid="btn-fit"
-          title="适配整图：自动缩放使整棵导图完整可见并居中"
-          onClick={() => mmRef.current && fitView(mmRef.current)}
-        >
-          适配
-        </button>
-        <fieldset className="layout-switch" aria-label="布局切换">
-          {(
-            [
-              ['mindmap', '思维导图'],
-              ['logic', '逻辑图'],
-              ['org', '组织结构图'],
-            ] as const
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              data-testid={`layout-${kind}`}
-              className={layout === kind ? 'active' : ''}
-              aria-pressed={layout === kind}
-              onClick={() => switchLayout(kind)}
-            >
-              {label}
-            </button>
-          ))}
-        </fieldset>
-      </header>
-      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
       <div className="canvas-host">
         {engineTree && (
           <MindMapCanvas
             key={mdPath}
             tree={engineTree}
             layout={layoutToEngine(initialLayout)}
+            theme={engineThemeName(resolvedTheme)}
             onReady={(mm) => (mmRef.current = mm)}
             onDataChange={onDataChange}
             onActiveChange={(uid) => {
@@ -456,17 +395,122 @@ export default function EditorView({
           />
         )}
       </div>
+      {/* 浮动砚栏：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
+      <header className="zen-bar" data-testid="zen-bar">
+        <button
+          type="button"
+          data-testid="btn-back"
+          title="返回文件库"
+          onClick={async () => {
+            if (timerRef.current) clearTimeout(timerRef.current)
+            const ok = await explicitSave()
+            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
+            await backToLibrary()
+          }}
+        >
+          <IconArrowLeft />
+        </button>
+        <span className="zen-bar-sep" />
+        <button
+          type="button"
+          data-testid="btn-copy"
+          data-scope={activeUid ? 'branch' : 'full'}
+          title={
+            activeUid
+              ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
+              : '复制整图为 Markdown（Ctrl+Shift+C）'
+          }
+          onClick={() => void doCopy()}
+        >
+          <IconCopy />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-save"
+          title="保存（Ctrl+S）"
+          onClick={() => void explicitSave()}
+        >
+          <IconSave />
+        </button>
+        <span className="zen-bar-sep" />
+        <button
+          type="button"
+          data-testid="btn-zoom-out"
+          title="缩小（Ctrl+滚轮）"
+          onClick={() => mmRef.current?.view.narrow()}
+        >
+          <IconMinus />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-zoom-in"
+          title="放大（Ctrl+滚轮）"
+          onClick={() => mmRef.current?.view.enlarge()}
+        >
+          <IconPlus />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-center-root"
+          title="根居中：保持缩放回根"
+          onClick={() => mmRef.current && centerRoot(mmRef.current)}
+        >
+          <IconCrosshair />
+        </button>
+        <button
+          type="button"
+          data-testid="btn-fit"
+          title="适配整图"
+          onClick={() => mmRef.current && fitView(mmRef.current)}
+        >
+          <IconFrame />
+        </button>
+        <span className="zen-bar-sep" />
+        <fieldset className="layout-switch" aria-label="布局切换">
+          {(
+            [
+              ['mindmap', '思维导图（右向）', <IconLayoutRight key="r" />],
+              ['logic', '逻辑图（左右）', <IconLayoutBoth key="b" />],
+              ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
+            ] as const
+          ).map(([kind, label, icon]) => (
+            <button
+              key={kind}
+              type="button"
+              data-testid={`layout-${kind}`}
+              className={layout === kind ? 'active' : ''}
+              aria-pressed={layout === kind}
+              title={label}
+              onClick={() => switchLayout(kind)}
+            >
+              {icon}
+            </button>
+          ))}
+        </fieldset>
+      </header>
+      {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
+          key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
+      {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
+      {/* 左下题签 + 朱砂脏印；右下主题钮 */}
+      <div className="editor-caption">
+        <span className="caption-name">{name}</span>
+        {dirty && <span data-testid="dirty-badge" className="seal-dot" title="有未保存修改" />}
+      </div>
+      <div className="theme-fab">
+        <ThemeToggle />
+      </div>
+      {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
+      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于
+          confirmingIgnored（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
       {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
-      {confirmingIgnored && (
-        <div className="dialog-mask" role="dialog" aria-label="保存确认">
-          <div className="dialog">
-            <h3>保存将丢弃 {ignored.length} 个未映射的内容块</h3>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                data-testid="ignored-confirm-cancel"
-                onClick={() => setConfirmingIgnored(false)}
-              >
+      {confirmingIgnored && !guarding && (
+        <ZenDialog
+          title={`保存将丢弃 ${ignored.length} 个未映射的内容块`}
+          onClose={() => setConfirmingIgnored(false)}
+          actions={
+            <>
+              <button type="button" data-testid="ignored-confirm-cancel" onClick={() => setConfirmingIgnored(false)}>
                 取消
               </button>
               <button
@@ -475,14 +519,14 @@ export default function EditorView({
                 onClick={() => {
                   setConfirmingIgnored(false)
                   ignoredConfirmedRef.current = true // 本会话确认过即不再弹（spec §3.5）
-                  void saveNow() // 仅落盘：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
+                  void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
                 }}
               >
                 继续保存
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
       )}
     </div>
   )

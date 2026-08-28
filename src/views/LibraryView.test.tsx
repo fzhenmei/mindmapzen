@@ -25,6 +25,12 @@ test('无工作区时显示引导并可选择', async () => {
   expect(await screen.findByTestId('map-item')).toBeInTheDocument()
 })
 
+test('空态引导文案', async () => {
+  await useAppStore.getState().setWorkspace('/ws-empty')
+  render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickMdFile} />)
+  expect(await screen.findByTestId('library-empty')).toHaveTextContent('空白的纸')
+})
+
 test('已有工作区时列出导图并可打开', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)
@@ -77,6 +83,7 @@ test('导入：有忽略块先预览，确认后入库并打开', async () => {
   render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickImport} />)
   fireEvent.click(screen.getByTestId('btn-import'))
   expect(await screen.findByTestId('import-preview')).toHaveTextContent('1 个内容块未映射')
+  expect(screen.getByTestId('import-preview')).toHaveTextContent('段落：一段会被忽略的说明')
   fireEvent.click(screen.getByTestId('import-cancel'))
   expect(await fs.exists('/ws/外部.md')).toBe(false) // 取消不入库
   fireEvent.click(screen.getByTestId('btn-import'))

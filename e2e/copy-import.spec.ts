@@ -16,11 +16,9 @@ test('复制 md：整图与选中子树', async ({ page }) => {
   await page.getByRole('application').click({ position: { x: 15, y: 15 } })
   await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
   // 适配：引擎 node_active 事件经 setTimeout(0) 异步发出（Render.js emitNodeActiveEvent），
-  // 按键若先于其到达会以旧激活态复制。以复制按钮 title 为激活态可观测信号做同步
-  await expect(page.getByTestId('btn-copy')).toHaveAttribute(
-    'title',
-    '复制整图为 Markdown（Ctrl+Shift+C）',
-  )
+  // 按键若先于其到达会以旧激活态复制。以复制按钮 data-scope 为激活态可观测信号做同步
+  // （M4 迁移：脱离 title 文案依赖，data-scope 随选中态在 full/branch 间切换）
+  await expect(page.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
   // 无选中（点空白已清除激活）→ Ctrl+Shift+C 复制整图。
   // 整图用精确断言（较简报加强）：同时钉死「单次 Tab 只插一个子节点」——
   // 画布键盘监听曾与引擎原生 KeyCommand 双份执行 Tab 导致双插入，此处防回归
@@ -33,12 +31,9 @@ test('复制 md：整图与选中子树', async ({ page }) => {
       ),
     )
     .toBe('# 根主题\n\n## 分支甲\n')
-  // 选中「分支甲」后复制 → 子树从 H1 重计
+  // 选中「分支甲」后复制 → 子树从 H1 重计（data-scope='branch' 确认选中态已同步）
   await page.getByText('分支甲').first().click()
-  await expect(page.getByTestId('btn-copy')).toHaveAttribute(
-    'title',
-    '复制选中分支为 Markdown（Ctrl+Shift+C）',
-  )
+  await expect(page.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'branch')
   await page.keyboard.press('Control+Shift+C')
   await expect
     .poll(() =>

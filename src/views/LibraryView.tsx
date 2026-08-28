@@ -3,7 +3,11 @@ import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { parse } from '../services/mdTree'
+import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
+import ZenDialog from '../components/ZenDialog'
+import ThemeToggle from '../components/ThemeToggle'
+import { IconPencil, IconTrash } from '../components/icons'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -82,45 +86,64 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         <p className="hint">请选择导图工作区：所有导图将以 .md 文件保存在该文件夹，可直接交给 AI 或其他工具使用。</p>
       )
     if (maps.length === 0)
-      return <p className="hint">工作区还没有导图，点击右上角「新建导图」开始。</p>
+      return (
+        <div className="library-empty" data-testid="library-empty">
+          <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
+            <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+            <path
+              d="M17 25l5 5 10-12"
+              stroke="var(--paper)"
+              strokeWidth="3"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <p>空白的纸。新建一张导图，让想法落成 .md。</p>
+        </div>
+      )
     return (
-      <ul className="map-list">
+      <div className="map-grid">
         {maps.map((m) => (
-          <li key={m.mdPath}>
+          <div key={m.mdPath} className="map-card">
             <button
               type="button"
               data-testid="map-item"
-              className="map-item"
+              className="map-card-main"
               onClick={() => store.openMap(m.mdPath)}
+              title={`打开「${m.name}」`}
             >
               <span className="map-name">{m.name}</span>
+              <span className="badge-md">.md</span>
               <span className="map-time">{new Date(m.modifiedAt).toLocaleString('zh-CN')}</span>
             </button>
-            <button
-              type="button"
-              data-testid="btn-rename"
-              onClick={() => {
-                setTarget(m)
-                setDialog('rename')
-              }}
-              title="重命名"
-            >
-              重命名
-            </button>
-            <button
-              type="button"
-              data-testid="btn-delete"
-              onClick={() => {
-                setTarget(m)
-                setDialog('delete')
-              }}
-              title="删除"
-            >
-              删除
-            </button>
-          </li>
+            <div className="map-card-actions">
+              <button
+                type="button"
+                data-testid="btn-rename"
+                title="重命名"
+                onClick={() => {
+                  setTarget(m)
+                  setDialog('rename')
+                }}
+              >
+                <IconPencil />
+              </button>
+              <button
+                type="button"
+                data-testid="btn-delete"
+                title="删除"
+                onClick={() => {
+                  setTarget(m)
+                  setDialog('delete')
+                }}
+              >
+                <IconTrash />
+              </button>
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
     )
   }
 
@@ -132,15 +155,27 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           选择工作区
         </button>
         {workspaceDir && (
-          <button type="button" data-testid="btn-import" onClick={() => void startImport()}>
+          <button
+            type="button"
+            data-testid="btn-import"
+            className="btn-primary"
+            onClick={() => void startImport()}
+          >
             导入 .md
           </button>
         )}
         {workspaceDir && (
-          <button type="button" data-testid="btn-new" onClick={() => setDialog('new')}>
+          <button
+            type="button"
+            data-testid="btn-new"
+            className="btn-primary"
+            onClick={() => setDialog('new')}
+          >
             新建导图
           </button>
         )}
+        {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
+        <ThemeToggle />
       </header>
       {error && <div className="error-banner">{error}</div>}
       {renderBody()}
@@ -174,12 +209,14 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——dialog（新建/重命名/删除）
+          与 importPreview 互不并存：原生 dialog 为 modal，弹出期间背景不可点，两条入口天然互斥 */}
       {dialog === 'delete' && target && (
-        <div className="dialog-mask" role="dialog" aria-label="删除确认">
-          <div className="dialog">
-            <h3>删除「{target.name}」？</h3>
-            <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
-            <div className="dialog-actions">
+        <ZenDialog
+          title={`删除「${target.name}」？`}
+          onClose={closeDialog}
+          actions={
+            <>
               <button type="button" onClick={closeDialog}>
                 取消
               </button>
@@ -198,40 +235,37 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
               >
                 删除
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
+        </ZenDialog>
       )}
       {importPreview && (
-        <div className="dialog-mask" role="dialog" aria-label="导入预览">
-          <div className="dialog" data-testid="import-preview">
-            <h3>导入「{importPreview.name}」</h3>
-            <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
-            <ul className="ignored-preview-list">
-              {importPreview.blocks.map((b) => (
-                <li key={`${b.type}:${b.excerpt}`}>
-                  {b.type}：{b.excerpt}
-                </li>
-              ))}
-            </ul>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                data-testid="import-cancel"
-                onClick={() => setImportPreview(null)}
-              >
+        <ZenDialog
+          testid="import-preview"
+          title={`导入「${importPreview.name}」`}
+          onClose={() => setImportPreview(null)}
+          actions={
+            <>
+              <button type="button" data-testid="import-cancel" onClick={() => setImportPreview(null)}>
                 取消
               </button>
-              <button
-                type="button"
-                data-testid="import-confirm"
-                onClick={() => void confirmImport()}
-              >
+              <button type="button" data-testid="import-confirm" onClick={() => void confirmImport()}>
                 导入
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
+          <ul className="ignored-preview-list">
+            {importPreview.blocks.map((b) => (
+              <li key={`${b.type}:${b.excerpt}`}>
+                {describeIgnoredType(b.type)}：{b.excerpt}
+              </li>
+            ))}
+          </ul>
+        </ZenDialog>
       )}
     </div>
   )

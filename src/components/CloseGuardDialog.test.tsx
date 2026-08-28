@@ -4,7 +4,7 @@ import CloseGuardDialog from './CloseGuardDialog'
 test('三态对话框展示导图名，三键各自回调', () => {
   const onChoice = vi.fn()
   render(<CloseGuardDialog mapName="想法" onChoice={onChoice} />)
-  expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '关闭确认')
+  expect(screen.getByTestId('closeguard-dialog')).toHaveAttribute('aria-label', '「想法」有未保存的修改')
   expect(screen.getByText(/「想法」有未保存的修改/)).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('closeguard-save'))
   expect(onChoice).toHaveBeenCalledWith('save')

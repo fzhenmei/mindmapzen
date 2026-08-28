@@ -9,7 +9,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light' })
 })
 
 describe('appStore', () => {
@@ -74,5 +74,21 @@ describe('preferredLayout（验收轮三）', () => {
     await useAppStore.getState().createAndOpen('偏好图')
     const sc = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/ws/偏好图.zen.json'))
     expect(sc.layout).toBe('logic')
+  })
+})
+
+describe('theme（M4 禅意视觉）', () => {
+  test('setThemePref 持久化并应用 document 主题', async () => {
+    await useAppStore.getState().setThemePref('dark')
+    expect(useAppStore.getState().themePref).toBe('dark')
+    expect(useAppStore.getState().resolvedTheme).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.theme).toBe('dark')
+  })
+  test('init 读配置的显式主题', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'light' }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().themePref).toBe('light')
   })
 })

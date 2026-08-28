@@ -1,59 +1,119 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; }
-/* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在文件库列表内（验收轮三） */
+/* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在文件库卡片网格内（验收轮三） */
 html, body { overflow: hidden; }
-.app { height: 100%; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+.app { height: 100%; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
 
-/* 文件库 */
-.library { height: 100%; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
+/* 文件库（M4 卡片化）：滚动只发生在 .map-grid 内，库页自身不滚（页面级 overflow hidden） */
+.library { height: 100%; display: flex; flex-direction: column; padding: 24px 32px; gap: 20px; background: var(--paper); }
 .library-header { display: flex; align-items: center; gap: 12px; }
-.library-header h1 { font-size: 18px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hint { color: #666; padding: 24px; text-align: center; }
-.map-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
-.map-list li { display: flex; align-items: center; gap: 8px; }
-.map-item { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; cursor: pointer; text-align: left; }
-.map-item:hover { border-color: #888; }
-.map-name { font-size: 15px; }
-.map-time { color: #999; font-size: 12px; white-space: nowrap; }
-.error-banner { background: #fde8e8; color: #a33; border: 1px solid #f5b8b8;
-  border-radius: 6px; padding: 8px 12px; white-space: pre-wrap; }
+.library-header h1 { font-size: 22px; font-weight: 600; margin-right: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 页首按钮层级（M4）：新建/导入为主操作（accent 实心），选择工作区为次要（描边静默） */
+.btn-primary { padding: 6px 14px; border: 1px solid var(--accent); border-radius: var(--radius-s);
+  background: var(--accent); color: var(--paper); font: inherit; cursor: pointer;
+  transition: background var(--dur-1), border-color var(--dur-1); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.library-header button:not(.btn-primary):not(.theme-toggle) { padding: 6px 14px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-s); background: var(--surface);
+  color: var(--ink); font: inherit; cursor: pointer;
+  transition: border-color var(--dur-1), color var(--dur-1); }
+.library-header button:not(.btn-primary):not(.theme-toggle):hover { border-color: var(--accent); color: var(--accent); }
+/* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
+.hint { color: var(--ink-2); padding: 24px; text-align: center; }
+.map-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px; align-content: start; padding: 4px 4px 24px; }
+.map-card { position: relative; }
+.map-card-main { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-m);
+  cursor: pointer; text-align: left; box-shadow: var(--shadow-1); transition: border-color var(--dur-1), transform var(--dur-1); }
+.map-card-main:hover { border-color: var(--accent); transform: translateY(-1px); }
+.map-name { font-size: 15px; font-weight: 500; color: var(--ink); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge-md { font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--accent-soft);
+  padding: 1px 6px; border-radius: var(--radius-s); }
+.map-time { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.map-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity var(--dur-1); }
+.map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { opacity: 1; }
+.map-card-actions button { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.map-card-actions button:hover { color: var(--accent); background: var(--accent-soft); }
+/* 空态：朱砂印章对勾 + 引导文案 */
+.library-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--ink-2); }
+.error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
+  border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
 
-/* 对话框 */
-.dialog-mask { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
-  display: flex; align-items: center; justify-content: center; }
-.dialog { background: #fff; border-radius: 8px; padding: 20px 24px; width: 360px;
-  display: flex; flex-direction: column; gap: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2); }
-.dialog h3 { font-size: 16px; }
-.dialog input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* 对话框（ZenDialog 统一外壳：原生 <dialog> + ::backdrop，M4） */
+.zen-dialog { border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: 24px;
+  width: 360px; max-width: 90vw; background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow-2); }
+/* display 收敛至 [open]（终审修复 1）：基础态不覆盖 UA 的 dialog:not([open]){display:none}，
+   消除 DOM 插入到 showModal 之间无遮罩的流内闪现；flex 布局与 gap 随之移入 [open] 态 */
+.zen-dialog[open] { display: flex; flex-direction: column; gap: 12px; }
+/* 遮罩为 ::backdrop 专属暗色（纸墨/夜墨双主题通用字面值，Task 1 裁定可接受） */
+.zen-dialog::backdrop { background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
+.zen-dialog h3 { font-size: 18px; font-weight: 600; }
+.zen-dialog-body { font-size: 13px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
+.zen-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.zen-dialog-actions button { padding: 6px 14px; border-radius: var(--radius-s);
+  border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); cursor: pointer; }
+.zen-dialog input { padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-s); font: inherit; background: var(--paper); color: var(--ink); }
 /* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
-.ignored-preview-list { padding-left: 20px; color: #7a5c2e; font-size: 12px; }
+.ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: 12px; }
 
 /* 编辑器 */
-.editor { height: 100%; display: flex; flex-direction: column; }
+.editor { position: relative; height: 100%; background: var(--paper); }
 .editor-loading, .editor-error { height: 100%; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px; padding: 24px; }
 .editor-error h2 { font-size: 18px; }
-.error-detail { color: #a33; }
-.raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: #f6f6f6;
-  border: 1px solid #ddd; border-radius: 6px; padding: 12px; white-space: pre-wrap; font-size: 12px; }
-.editor-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
-  border-bottom: 1px solid #e5e5e5; }
-.editor-title { font-size: 15px; margin-right: auto; }
-.dirty-badge { color: #e6a23c; margin-left: 4px; }
-.editor-toolbar button.copied { color: #2e9e5b; }
-/* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，重置默认边框 */
-.layout-switch { display: inline-flex; gap: 4px; border: 1px solid #ddd; border-radius: 6px;
-  padding: 2px; min-width: 0; }
-.layout-switch button { padding: 4px 10px; font-size: 13px; border: none; border-radius: 4px;
-  background: transparent; color: #555; cursor: pointer; }
-.layout-switch button:hover { background: #f0f0f0; }
-.layout-switch button.active { background: #e6f4ff; color: #0b57d0; }
-.ignored-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  background: #fff7e6; color: #8a6d3b; border-bottom: 1px solid #f0dcc0;
-  padding: 6px 16px; font-size: 13px; }
-.ignored-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px;
-  color: #7a5c2e; font-size: 12px; }
-.canvas-host { flex: 1; min-height: 0; position: relative; overflow: hidden; }
-.library { height: 100%; overflow-y: auto; }
+.error-detail { color: var(--seal); }
+.raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--paper);
+  border: 1px solid var(--hairline); border-radius: var(--radius-s); padding: 12px; white-space: pre-wrap; font-size: 12px; }
+.canvas-host { position: absolute; inset: 0; overflow: hidden; }
+/* 浮动砚栏（spec §4.4 UI 隐身）：静置淡化，悬停/聚焦浮现 */
+.zen-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
+  display: flex; align-items: center; gap: 2px; padding: 6px 10px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline); border-radius: var(--radius-pill); box-shadow: var(--shadow-2);
+  opacity: 0.35; transition: opacity var(--dur-2) ease-out; }
+.zen-bar:hover, .zen-bar:focus-within { opacity: 1; }
+.zen-bar button { display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: var(--radius-s);
+  background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
+.zen-bar button:hover { background: var(--accent-soft); color: var(--accent); }
+.zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 4px; }
+/* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，去边框并入砚栏图标组 */
+.layout-switch { display: inline-flex; gap: 2px; border: none; padding: 0; margin: 0; min-width: 0; }
+.layout-switch button.active { background: var(--accent-soft); color: var(--accent); }
+/* 左下题签 + 朱砂脏印 */
+.editor-caption { position: absolute; left: 16px; bottom: 12px; z-index: 5; display: flex; align-items: center;
+  gap: 8px; color: var(--ink-2); font-size: 13px; pointer-events: none; }
+.caption-name { font-family: var(--font-mono); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seal-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--seal); display: inline-block; }
+/* 印记（Task 7）：保存成功朱砂印 / 已复制墨青印，右上角 250ms 缩放定影，1.2s 后由组件卸载。
+   top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞 */
+.save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: 4px 10px;
+  font-size: 13px; border-radius: var(--radius-s); animation: stamp-in var(--dur-2) ease-out; }
+.stamp-seal { color: var(--seal); border: 1.5px solid var(--seal); border-radius: 4px; transform: rotate(-3deg); }
+.stamp-ink { color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; }
+@keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
+/* 右下主题圆钮；文件库页首同款 */
+.theme-fab { position: absolute; right: 16px; bottom: 12px; z-index: 5; }
+.theme-fab button, .library .theme-toggle { width: 30px; height: 30px; border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline); background: var(--surface); color: var(--ink-2); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; }
+.theme-fab button:hover, .library .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于砚栏下方 */
+.zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 70vw;
+  background: color-mix(in srgb, var(--seal) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--seal) 25%, var(--surface));
+  border-radius: var(--radius-m); box-shadow: var(--shadow-1); padding: 8px 14px; font-size: 13px; }
+.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
+/* 全局动效豁免（终审修复 2，Global Constraints）：reduce 下所有过渡/悬停位移关闭，收敛为单一 @media 块 */
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary, .library-header button, .map-card-main, .map-card-actions,
+  .zen-bar, .zen-bar button, .save-stamp { transition: none; }
+  .map-card-main:hover { transform: none; }
+  .save-stamp { animation: none; }
+}
