@@ -1,0 +1,41 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+.app { height: 100%; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+
+/* 文件库 */
+.library { height: 100%; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
+.library-header { display: flex; align-items: center; gap: 12px; }
+.library-header h1 { font-size: 18px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint { color: #666; padding: 24px; text-align: center; }
+.map-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.map-list li { display: flex; align-items: center; gap: 8px; }
+.map-item { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; cursor: pointer; text-align: left; }
+.map-item:hover { border-color: #888; }
+.map-name { font-size: 15px; }
+.map-time { color: #999; font-size: 12px; white-space: nowrap; }
+.error-banner { background: #fde8e8; color: #a33; border: 1px solid #f5b8b8;
+  border-radius: 6px; padding: 8px 12px; white-space: pre-wrap; }
+
+/* 对话框 */
+.dialog-mask { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center; }
+.dialog { background: #fff; border-radius: 8px; padding: 20px 24px; width: 360px;
+  display: flex; flex-direction: column; gap: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2); }
+.dialog h3 { font-size: 16px; }
+.dialog input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 编辑器 */
+.editor { height: 100%; display: flex; flex-direction: column; }
+.editor-loading, .editor-error { height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px; padding: 24px; }
+.editor-error h2 { font-size: 18px; }
+.error-detail { color: #a33; }
+.raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: #f6f6f6;
+  border: 1px solid #ddd; border-radius: 6px; padding: 12px; white-space: pre-wrap; font-size: 12px; }
+.editor-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+  border-bottom: 1px solid #e5e5e5; }
+.editor-title { font-size: 15px; margin-right: auto; }
+.dirty-badge { color: #e6a23c; margin-left: 4px; }
+.canvas-host { flex: 1; min-height: 0; position: relative; }

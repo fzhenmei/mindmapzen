@@ -1,0 +1,54 @@
+import { useEffect, useRef } from 'react'
+import MindMap from 'simple-mind-map'
+import type { EngineNode, MindMapHandle } from '../types/engine'
+import { handleEngineKeyDown } from './engineKeyboard'
+
+interface Props {
+  tree: EngineNode
+  onReady: (mm: MindMapHandle) => void
+  onDataChange: () => void
+}
+
+/** 引擎画布封装：挂载建实例、卸载销毁；父组件用 key={mdPath} 切换文档。
+ *  本组件不做单元测试（引擎依赖真实 DOM 布局），由 E2E 与手工清单覆盖。 */
+export default function MindMapCanvas({ tree, onReady, onDataChange }: Readonly<Props>) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mmRef = useRef<MindMapHandle | null>(null)
+  // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
+  const cbRef = useRef({ onReady, onDataChange })
+  cbRef.current = { onReady, onDataChange }
+
+  useEffect(() => {
+    const mm = new MindMap({ el: containerRef.current!, data: tree })
+    mmRef.current = mm
+    const changed = () => cbRef.current.onDataChange()
+    mm.on('data_change', changed)
+    cbRef.current.onReady(mm)
+    return () => {
+      mm.off('data_change', changed)
+      mm.destroy()
+      mmRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时初始化，文档切换由父组件 key 重挂载实现
+  }, [])
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handled = handleEngineKeyDown(
+      (cmd) => mmRef.current?.execCommand(cmd),
+      e.target as HTMLElement | null,
+      e.key,
+    )
+    if (handled) e.preventDefault()
+  }
+
+  // role+tabIndex：使画布容器可聚焦（键盘操作前提），并满足可访问性对非原生交互元素的要求
+  return (
+    <div
+      ref={containerRef}
+      role="application"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      style={{ width: '100%', height: '100%' }}
+    />
+  )
+}
