@@ -132,3 +132,21 @@ test('边界：文本首尾空白属 markdown 不显著空白，roundtrip 会被
     ignoredBlocks: [],
   })
 })
+
+test('回归：列表层裸标记文本 roundtrip 恒等', () => {
+  // 钉死边界（2026-08-28 实测复核）：裸 `-`/`+`/`*`/`1.`/`1)` 无尾随内容时不构成
+  // 嵌套列表（如 `- -` 中内层 `-` 为段落文本），remark 按普通文本还原，无需转义；
+  // `1. x`/`1) x`（有序标记带内容）与 `#x` 则必须转义（escapeItemText），否则被解析为结构。
+  // 其中 `1) x` 曾为真实缺口：escape 原只覆盖 `.` 型（\d+\.\s），与 parse 侧 `\d+[.)]`
+  // 不对称，已统一为 `\d+[.)]` 后纳入本用例恒等断言。
+  const deepLeaf = (text: string): ZenNode => {
+    let node: ZenNode = { text, children: [] }
+    for (const t of ['f', 'e', 'd', 'c', 'b', 'a', 'r']) node = { text: t, children: [node] }
+    return node
+  }
+  for (const text of ['-', '+', '*', '1.', '1)', '1) x', '1. x', '#x']) {
+    const tree = deepLeaf(text)
+    const r = parse(serialize(tree))
+    expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
+  }
+})

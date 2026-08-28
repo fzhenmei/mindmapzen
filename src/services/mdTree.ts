@@ -4,7 +4,7 @@ import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 
 /** 列表项文本若以列表标记/标题/引用/前导反斜杠+标记开头，加 \ 前缀防止被解析为结构 */
 function escapeItemText(text: string): string {
-  return /^([-+*]\s|\d+\.\s|[#>]|\\+(?=[-+*#>]|\d+\.))/.test(text) ? '\\' + text : text
+  return /^([-+*]\s|\d+[.)]\s|[#>]|\\+(?=[-+*#>]|\d+[.)]))/.test(text) ? '\\' + text : text
 }
 
 /** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表 */
@@ -74,7 +74,7 @@ function listItemText(md: string, item: MNode): string {
     sourceLine(md, para)
       .replace(/^\s*(?:[-+*]|\d+[.)])\s*/, '')
       // 前导反斜杠连串 + 标记：剥掉恰好一个 \（与 escapeItemText 的补 \ 互逆）
-      .replace(/^(\\+)(?=[-+*#>]|\d+\.)/, (_, backslashes: string) => backslashes.slice(1))
+      .replace(/^(\\+)(?=[-+*#>]|\d+[.)])/, (_, backslashes: string) => backslashes.slice(1))
   )
 }
 
