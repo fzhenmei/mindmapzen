@@ -110,22 +110,24 @@ export default function EditorView({
     }
   }
 
+  /** 完整 Sidecar 构造（writeOnce 与布局切换即时落盘共用同一形状；layout 取当前切换值） */
+  const buildSidecar = (collapsed: string[]): Sidecar => ({
+    version: 1,
+    theme: 'default',
+    layout: layoutRef.current,
+    collapsed,
+    offsets: {},
+    canvas: { x: 0, y: 0, zoom: 1 },
+  })
+
   /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功） */
   const writeOnce = async (): Promise<boolean> => {
     const mm = mmRef.current
     if (!mm || !dirtyRef.current) return true
     try {
       const { tree, collapsed } = engineTreeToZen(mm.getData())
-      const sidecar: Sidecar = {
-        version: 1,
-        theme: 'default',
-        layout: layoutRef.current,
-        collapsed,
-        offsets: {},
-        canvas: { x: 0, y: 0, zoom: 1 },
-      }
       await adapter.writeTextFileAtomic(mdPath, serialize(tree))
-      await writeSidecar(adapter, mdPath, sidecar)
+      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
       dirtyRef.current = false
       clearDirty()
       return true
@@ -281,12 +283,27 @@ export default function EditorView({
     timerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_MS)
   }
 
-  /** 布局切换（spec §3.7）：引擎 setLayout 即时重排，不置脏、不自动保存——
-   *  sidecar 随下次保存落盘（无修改时纯偏好切换不产生写盘） */
+  /** sidecar-only 即时落盘（审查裁定）：collapsed 取引擎当前树，构造与 writeOnce 相同；
+   *  仅写 sidecar，不写 .md、不动脏标记；失败提示横幅（fire-and-forget，不重试不阻塞） */
+  const persistLayoutSidecar = async (): Promise<void> => {
+    const mm = mmRef.current
+    if (!mm) return
+    try {
+      const { collapsed } = engineTreeToZen(mm.getData())
+      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+    } catch (e) {
+      setError('保存布局失败：' + String(e))
+    }
+  }
+
+  /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。
+   *  但布局偏好本身须即时落 sidecar：否则用户切换后不再编辑，writeOnce 的 !dirty 早退
+   *  使偏好永不落盘，"重开恢复"变成有条件的（元数据即时落盘不违背"不置脏不自动保存"） */
   const switchLayout = (kind: LayoutKind) => {
     mmRef.current?.setLayout(layoutToEngine(kind))
     layoutRef.current = kind
     setLayout(kind)
+    void persistLayoutSidecar()
   }
 
   if (state === 'loading') return <div className="editor-loading">正在打开…</div>

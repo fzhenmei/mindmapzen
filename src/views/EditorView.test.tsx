@@ -674,3 +674,51 @@ test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', as
   expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByTestId('layout-mindmap')).toHaveAttribute('aria-pressed', 'false')
 })
+
+test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不写 .md 不置脏', async () => {
+  // 审查裁定：writeOnce 的 !dirty 早退会使偏好永不落盘，切换须即时持久化 sidecar
+  const writes: string[] = []
+  const original = fs.writeTextFileAtomic.bind(fs)
+  fs.writeTextFileAtomic = async (p, contents) => {
+    writes.push(p)
+    return original(p, contents)
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 不触发 __emitChange：文档干净（writeOnce 早退路径），偏好仍须落盘
+  fireEvent.click(screen.getByTestId('layout-org'))
+  await act(async () => {}) // 排空 fire-and-forget 落盘微任务
+  const sc = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
+  expect(sc.layout).toBe('org')
+  expect(writes).toEqual(['/ws/a.zen.json']) // 仅 sidecar，.md 未动
+  expect(useAppStore.getState().dirty).toBe(false) // 依旧不置脏
+})
+
+test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静默）', async () => {
+  fs.writeTextFileAtomic = vi.fn(async () => {
+    throw new Error('磁盘占用')
+  })
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('layout-org'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存布局失败'))
+  expect(useAppStore.getState().error).toContain('磁盘占用')
+})
