@@ -532,10 +532,21 @@ test('有忽略块时：显式保存先确认，确认后写盘且本会话不�
   await waitFor(() => expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument())
 })
 
-test('Ctrl+S 同样先确认（快捷键监听只绑定一次，仍须感知忽略块）', async () => {
+test('Ctrl+S 同样先确认，确认后本会话二次不弹（快捷键监听只绑定一次）', async () => {
   await renderIgnoredMap()
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
   fireEvent.keyDown(window, { key: 's', ctrlKey: true })
   expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('ignored-confirm-save'))
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
+  // 回归锁定：确认状态须能被只绑定一次的快捷键闭包读到——若 ignoredConfirmedRef
+  // 被单独改回 state（按钮 handler 每次渲染取新闭包检不出），此处将再次弹确认
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await act(async () => {}) // 排空微任务：误弹的确认将在此后的同步查询中暴露
+  expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument()
 })
 
 test('有修改时取消确认：不写盘、脏保留（数据不静默丢弃）', async () => {
