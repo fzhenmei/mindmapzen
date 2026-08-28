@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import './styles/tokens.css'
 import './App.css'
 
 // E2E 模式（?e2e=1）：先装内存 FS harness 再挂载应用（index.html 为 module 脚本，顶层 await 可用）
