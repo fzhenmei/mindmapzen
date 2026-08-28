@@ -4,6 +4,7 @@ import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { parse } from '../services/mdTree'
 import NameDialog from '../components/NameDialog'
+import ZenDialog from '../components/ZenDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import { IconPencil, IconTrash } from '../components/icons'
 import type { MapInfo } from '../types/files'
@@ -207,12 +208,14 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——dialog（新建/重命名/删除）
+          与 importPreview 互不并存：原生 dialog 为 modal，弹出期间背景不可点，两条入口天然互斥 */}
       {dialog === 'delete' && target && (
-        <div className="dialog-mask" role="dialog" aria-label="删除确认">
-          <div className="dialog">
-            <h3>删除「{target.name}」？</h3>
-            <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
-            <div className="dialog-actions">
+        <ZenDialog
+          title={`删除「${target.name}」？`}
+          onClose={closeDialog}
+          actions={
+            <>
               <button type="button" onClick={closeDialog}>
                 取消
               </button>
@@ -231,40 +234,38 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
               >
                 删除
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
+        </ZenDialog>
       )}
       {importPreview && (
-        <div className="dialog-mask" role="dialog" aria-label="导入预览">
-          <div className="dialog" data-testid="import-preview">
-            <h3>导入「{importPreview.name}」</h3>
-            <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
-            <ul className="ignored-preview-list">
-              {importPreview.blocks.map((b) => (
-                <li key={`${b.type}:${b.excerpt}`}>
-                  {b.type}：{b.excerpt}
-                </li>
-              ))}
-            </ul>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                data-testid="import-cancel"
-                onClick={() => setImportPreview(null)}
-              >
+        <ZenDialog
+          testid="import-preview"
+          title={`导入「${importPreview.name}」`}
+          onClose={() => setImportPreview(null)}
+          actions={
+            <>
+              <button type="button" data-testid="import-cancel" onClick={() => setImportPreview(null)}>
                 取消
               </button>
-              <button
-                type="button"
-                data-testid="import-confirm"
-                onClick={() => void confirmImport()}
-              >
+              <button type="button" data-testid="import-confirm" onClick={() => void confirmImport()}>
                 导入
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
+          {/* 忽略块类型文案：Task 7 提供 describeIgnoredType 前沿用 type 原文 */}
+          <ul className="ignored-preview-list">
+            {importPreview.blocks.map((b) => (
+              <li key={`${b.type}:${b.excerpt}`}>
+                {b.type}：{b.excerpt}
+              </li>
+            ))}
+          </ul>
+        </ZenDialog>
       )}
     </div>
   )

@@ -20,6 +20,7 @@ import type { RegisterCloseGuard } from '../types/ports'
 import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
+import ZenDialog from '../components/ZenDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import {
   IconArrowLeft,
@@ -484,17 +485,16 @@ export default function EditorView({
       </div>
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于
+          confirmingIgnored（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
       {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
-      {confirmingIgnored && (
-        <div className="dialog-mask" role="dialog" aria-label="保存确认">
-          <div className="dialog">
-            <h3>保存将丢弃 {ignored.length} 个未映射的内容块</h3>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                data-testid="ignored-confirm-cancel"
-                onClick={() => setConfirmingIgnored(false)}
-              >
+      {confirmingIgnored && !guarding && (
+        <ZenDialog
+          title={`保存将丢弃 ${ignored.length} 个未映射的内容块`}
+          onClose={() => setConfirmingIgnored(false)}
+          actions={
+            <>
+              <button type="button" data-testid="ignored-confirm-cancel" onClick={() => setConfirmingIgnored(false)}>
                 取消
               </button>
               <button
@@ -508,9 +508,9 @@ export default function EditorView({
               >
                 继续保存
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
       )}
     </div>
   )

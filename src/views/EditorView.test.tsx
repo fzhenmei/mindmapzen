@@ -419,7 +419,7 @@ test('关闭守卫：dirty 时拦截关闭并弹出三态对话框', async () =>
   const guard = makeGuardStub()
   const { prevented } = await renderDirtyAndClose(guard)
   expect(prevented).toBe(true)
-  expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '关闭确认')
+  expect(screen.getByTestId('closeguard-dialog')).toHaveAttribute('aria-label', '「a」有未保存的修改')
   expect(screen.getByText(/「a」有未保存的修改/)).toBeInTheDocument()
   expect(screen.getByTestId('closeguard-save')).toBeInTheDocument()
   expect(screen.getByTestId('closeguard-discard')).toBeInTheDocument()
@@ -489,7 +489,7 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：未修改
   expect(guard.fireClose()).toBe(false)
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('closeguard-dialog')).not.toBeInTheDocument()
   expect(exitApp).not.toHaveBeenCalled()
 })
 
