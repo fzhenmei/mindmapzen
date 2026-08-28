@@ -4,6 +4,7 @@ import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import type { MindMapHandle } from '../types/engine'
+import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
 // fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）
@@ -50,6 +51,10 @@ vi.mock('../editor/MindMapCanvas', () => ({
 let fs: MemoryFsAdapter
 const openInEditor = vi.fn()
 
+// 既有用例的守卫桩：注册即弃（jsdom 无窗口关闭事件源），仅满足新 prop 契约
+const noopRegister: RegisterCloseGuard = () => () => {}
+const noopExitApp = () => {}
+
 beforeEach(async () => {
   fs = new MemoryFsAdapter()
   await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 新分支\n')
@@ -65,13 +70,29 @@ beforeEach(async () => {
 })
 
 test('打开文档渲染画布并显示名称', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
 })
 
 test('解析失败显示错误面板与原文', async () => {
   await fs.writeTextFileAtomic('/ws/bad.md', '## 没有一级标题\n')
-  render(<EditorView mdPath="/ws/bad.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/bad.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   expect(await screen.findByText(/未找到根标题/)).toBeInTheDocument()
   expect(screen.getByText(/没有一级标题/)).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-raw-edit'))
@@ -80,7 +101,13 @@ test('解析失败显示错误面板与原文', async () => {
 
 test('读取失败显示错误面板并可纯文本打开', async () => {
   render(
-    <EditorView mdPath="/ws/missing.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />,
+    <EditorView
+      mdPath="/ws/missing.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
   )
   expect(await screen.findByText(/无法读取文件/)).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-raw-edit'))
@@ -88,7 +115,15 @@ test('读取失败显示错误面板并可纯文本打开', async () => {
 })
 
 test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
@@ -100,7 +135,15 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
 })
 
 test('返回文件库前冲刷未保存修改', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
@@ -110,7 +153,15 @@ test('返回文件库前冲刷未保存修改', async () => {
 })
 
 test('保存失败时提示错误且脏标记保留（数据不静默丢失）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
@@ -137,7 +188,15 @@ test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
   fs.writeTextFileAtomic = vi.fn(async () => {
     throw new Error('磁盘占用')
   })
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
@@ -158,6 +217,8 @@ test('复制整图：无选中时写入完整 md', async () => {
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
     />,
   )
   await screen.findByTestId('fake-canvas')
@@ -176,6 +237,8 @@ test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async ()
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
     />,
   )
   await screen.findByTestId('fake-canvas')
@@ -199,6 +262,8 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
     />,
   )
   await screen.findByTestId('fake-canvas')
@@ -212,7 +277,15 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
 // 对收到的 raw 的执行语义。
 
 test('多行粘贴拆子节点：首行替换被编辑节点文本，其余行逐个插入子节点', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   // 先报选中再 ready：选中上报会触发重渲染、假画布工厂重跑并重赋 fakeHandle，
   // ready 放最后才能保证断言与 mmRef 持有同一实例
@@ -244,7 +317,15 @@ test('多行粘贴拆子节点：首行替换被编辑节点文本，其余行�
 })
 
 test('多行粘贴拆分后无有效行（纯空白）不执行命令', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   act(() => {
     ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(
@@ -257,7 +338,15 @@ test('多行粘贴拆分后无有效行（纯空白）不执行命令', async ()
 })
 
 test('多行粘贴 uid 未命中渲染树时静默放弃（无命令执行）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
   await screen.findByTestId('fake-canvas')
   act(() => {
     ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(
@@ -267,4 +356,144 @@ test('多行粘贴 uid 未命中渲染树时静默放弃（无命令执行）', 
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   ;(globalThis as unknown as Record<string, (raw: string) => void>).__emitPaste!('a\nb')
   expect(fakeHandle.execCommand).not.toHaveBeenCalled()
+})
+
+// ---- 关闭守卫（三态：保存 / 放弃 / 取消，spec §4 关闭拦截）----
+
+/** 守卫测试脚手架：注册桩捕获 handler；fireClose 模拟窗口关闭请求，返回是否被拦截 */
+const makeGuardStub = () => {
+  let handler: ((e: CloseGuardEvent) => void) | null = null
+  const register: RegisterCloseGuard = (h) => {
+    handler = h
+    return () => {
+      handler = null
+    }
+  }
+  return {
+    register,
+    fireClose: () => {
+      let prevented = false
+      act(() => {
+        handler?.({ preventClose: () => (prevented = true) })
+      })
+      return prevented
+    },
+  }
+}
+
+/** 渲染到 dirty 状态并模拟一次窗口关闭：返回 [是否被拦截, exitApp spy] */
+const renderDirtyAndClose = async (guard: ReturnType<typeof makeGuardStub>) => {
+  const exitApp = vi.fn()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={guard.register}
+      exitApp={exitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  const prevented = guard.fireClose()
+  return { prevented, exitApp }
+}
+
+test('关闭守卫：dirty 时拦截关闭并弹出三态对话框', async () => {
+  const guard = makeGuardStub()
+  const { prevented } = await renderDirtyAndClose(guard)
+  expect(prevented).toBe(true)
+  expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '关闭确认')
+  expect(screen.getByText(/「a」有未保存的修改/)).toBeInTheDocument()
+  expect(screen.getByTestId('closeguard-save')).toBeInTheDocument()
+  expect(screen.getByTestId('closeguard-discard')).toBeInTheDocument()
+  expect(screen.getByTestId('closeguard-cancel')).toBeInTheDocument()
+})
+
+test('关闭守卫：保存并关闭 → 落盘成功后 exitApp', async () => {
+  // 预置旧内容：与假画布数据（# 根 / ## 新分支）不同，证明确实落了新盘
+  await fs.writeTextFileAtomic('/ws/a.md', '# 旧根\n\n## 旧分支\n')
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-save'))
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+  expect(useAppStore.getState().dirty).toBe(false)
+  await waitFor(() => expect(screen.queryByTestId('closeguard-save')).not.toBeInTheDocument())
+})
+
+test('关闭守卫：取消 → 关闭对话框不退出，再次关闭仍拦截', async () => {
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-cancel'))
+  await waitFor(() => expect(screen.queryByTestId('closeguard-cancel')).not.toBeInTheDocument())
+  expect(exitApp).not.toHaveBeenCalled()
+  // 仍脏：第二次关闭请求依旧拦截并再次弹窗
+  expect(guard.fireClose()).toBe(true)
+  expect(await screen.findByTestId('closeguard-save')).toBeInTheDocument()
+})
+
+test('关闭守卫：放弃修改 → 不落盘直接退出', async () => {
+  await fs.writeTextFileAtomic('/ws/a.md', '# 旧根\n\n## 旧分支\n')
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-discard'))
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 旧根\n\n## 旧分支\n') // 未保存
+})
+
+test('关闭守卫：保存失败 → 收起对话框留在应用（不静默退出）', async () => {
+  fs.writeTextFileAtomic = vi.fn(async () => {
+    throw new Error('磁盘占用')
+  })
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-save'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  expect(useAppStore.getState().dirty).toBe(true) // 数据未落盘不能丢
+  expect(exitApp).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.queryByTestId('closeguard-save')).not.toBeInTheDocument())
+})
+
+test('关闭守卫：干净状态（未修改）不拦截、无对话框', async () => {
+  const guard = makeGuardStub()
+  const exitApp = vi.fn()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={guard.register}
+      exitApp={exitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：未修改
+  expect(guard.fireClose()).toBe(false)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(exitApp).not.toHaveBeenCalled()
+})
+
+test('关闭守卫：对话框内连点保存不提前退出（落盘完成才退出且只退一次）', async () => {
+  // 门闸：落盘挂起模拟慢盘；第二次点击走 saveNow 在途合并会立即返回 true，
+  // 若无防重入将绕过等待直接 exitApp —— 落盘未完成即销毁窗口（数据丢失风险）
+  let releaseWrite!: () => void
+  const gate = new Promise<void>((r) => (releaseWrite = r))
+  const original = fs.writeTextFileAtomic.bind(fs)
+  fs.writeTextFileAtomic = async (p: string, contents: string) => {
+    await gate
+    return original(p, contents)
+  }
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-save'))
+  fireEvent.click(screen.getByTestId('closeguard-save')) // 第一次保存仍在途
+  await act(async () => {}) // 排空微任务：提前退出路径若存在此处即暴露
+  expect(exitApp).not.toHaveBeenCalled() // 落盘未完成不得退出
+  releaseWrite()
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n') // 落盘完成
+  expect(exitApp).toHaveBeenCalledTimes(1) // 也只有这一次
 })

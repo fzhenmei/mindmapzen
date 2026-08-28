@@ -6,6 +6,7 @@ import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
+import type { RegisterCloseGuard } from './types/ports'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -14,6 +15,40 @@ const pickDirectory = async (): Promise<string | null> => {
   if (E2E) return null
   const dir = await open({ directory: true, multiple: false })
   return typeof dir === 'string' ? dir : null
+}
+
+/** 生产关闭守卫：Tauri onCloseRequested → handler。动态 import 不阻塞渲染；
+ *  异步竞态处理：注册完成前被清理（done 已置）则放弃/立即撤销，清理函数幂等（done 标记）。
+ *  非 Tauri 环境（e2e web 模式）getCurrentWindow 抛错 → 静默不注册（无关闭事件源）。 */
+const registerCloseGuard: RegisterCloseGuard = (handler) => {
+  let unref: (() => void) | null = null
+  let done = false
+  void (async () => {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      if (done) return // 清理先到：放弃挂载
+      // 端口事件名为 preventClose（Tauri 原生为 preventDefault，此处适配）
+      unref = await getCurrentWindow().onCloseRequested((e) =>
+        handler({ preventClose: () => e.preventDefault() }),
+      )
+      if (done) unref() // 挂载完成前已被清理：立即撤销
+    } catch {
+      // 非 Tauri 环境：无窗口关闭事件源
+    }
+  })()
+  return () => {
+    if (done) return
+    done = true
+    unref?.()
+  }
+}
+
+/** 生产退出端口：强制销毁窗口（守卫已 preventClose，close() 会被再次拦截） */
+const exitApp = (): void => {
+  void (async () => {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    await getCurrentWindow().destroy()
+  })()
 }
 
 export default function App() {
@@ -46,6 +81,8 @@ export default function App() {
         mdPath={currentMdPath}
         openInEditor={(p) => void openPath(p)}
         writeClipboard={writeClipboardViaTauri}
+        registerCloseGuard={registerCloseGuard}
+        exitApp={exitApp}
       />
     )
   }

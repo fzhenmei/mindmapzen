@@ -14,17 +14,29 @@ import MindMapCanvas from '../editor/MindMapCanvas'
 import type { LayoutKind } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { Sidecar } from '../types/files'
+import type { RegisterCloseGuard } from '../types/ports'
+import CloseGuardDialog from '../components/CloseGuardDialog'
 
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
   /** 剪贴板写入端口：生产为 Tauri 插件实现，测试注入内存实现 */
   writeClipboard: WriteClipboard
+  /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
+  registerCloseGuard: RegisterCloseGuard
+  /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
+  exitApp: () => void
 }
 
 const AUTOSAVE_MS = 5000
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard }: Readonly<Props>) {
+export default function EditorView({
+  mdPath,
+  openInEditor,
+  writeClipboard,
+  registerCloseGuard,
+  exitApp,
+}: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
   const mmRef = useRef<MindMapHandle | null>(null)
@@ -35,11 +47,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
   const layoutRef = useRef<LayoutKind>('mindmap') // 本阶段先默认，后续接 sidecar/切换的真实值
   const activeUidRef = useRef<string | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const guardSavingRef = useRef(false) // 守卫保存防重入（见 onGuardChoice）
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [copied, setCopied] = useState(false)
+  const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -180,6 +194,42 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
     // eslint-disable-next-line react-hooks/exhaustive-deps -- saveNow/doCopy 闭包依赖 refs，无需重绑
   }, [])
 
+  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭
+  useEffect(() => {
+    const unregister = registerCloseGuard((e) => {
+      if (!dirtyRef.current) return
+      e.preventClose()
+      setGuarding(true)
+    })
+    return unregister
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载期注册一次，端口经 props 注入且稳定
+  }, [])
+
+  /** 三态选择：取消→收起；放弃→清脏直退；保存→落盘成功才退（失败留在应用，横幅已提示）。
+   *  guardSavingRef 防重入：saveNow 在途合并会立即返回 true，连点保存若不加防将绕过等待提前 exitApp（落盘未完成即销毁窗口）。 */
+  const onGuardChoice = async (c: 'save' | 'discard' | 'cancel'): Promise<void> => {
+    if (c === 'cancel') {
+      setGuarding(false)
+      return
+    }
+    if (c === 'discard') {
+      dirtyRef.current = false
+      setGuarding(false)
+      exitApp()
+      return
+    }
+    if (guardSavingRef.current) return
+    guardSavingRef.current = true
+    const ok = await saveNow()
+    guardSavingRef.current = false
+    if (!ok) {
+      setGuarding(false)
+      return
+    }
+    setGuarding(false)
+    exitApp()
+  }
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -267,6 +317,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
           />
         )}
       </div>
+      {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
     </div>
   )
 }
