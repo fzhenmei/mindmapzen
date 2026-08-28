@@ -13,10 +13,14 @@ MindMap.usePlugin(Drag)
 // （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）
 registerZenThemes()
 
+// 改变折叠态的引擎命令（与引擎 Render.js 注册的四个展开类命令对齐）：命令完成即改变需持久化的数据
+const EXPAND_COMMANDS = new Set(['SET_NODE_EXPAND', 'EXPAND_ALL', 'UNEXPAND_ALL', 'UNEXPAND_TO_LEVEL'])
+
 interface Props {
   tree: EngineNode
   onReady: (mm: MindMapHandle) => void
-  onDataChange: () => void
+  /** 引擎数据变化回调；data 为引擎随事件附带的整树快照（无载荷的调用视为必有变化，见下） */
+  onDataChange: (data?: EngineNode) => void
   onActiveChange?: (uid: string | null) => void
   onEditorPaste?: (rawText: string) => void
   layout?: string
@@ -49,8 +53,18 @@ export default function MindMapCanvas({
       ...(theme ? { theme } : {}),
     })
     mmRef.current = mm
-    const changed = () => cbRef.current.onDataChange()
+    // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
+    // 无载荷的调用（下方展开命令同步上报）视为必有变化
+    const changed = (...args: unknown[]) => cbRef.current.onDataChange(args[0] as EngineNode | undefined)
     mm.on('data_change', changed)
+    // 展开/收起即时上报（验收修复 4）：引擎 data_change 经 addHistory 尾随节流（默认 100ms）延迟发出，
+    // 期间宿主 dirty 尚未置位——干净图上折叠后立即 Ctrl+S/返回文件库会被 writeOnce 的 !dirty 早退吞掉，
+    // 折叠静默丢失（sidecar 仍 collapsed:[]）。SET_NODE_EXPAND 命令完成即同步上报，不再依赖节流事件；
+    // 白名单外不转发（SET_NODE_DATA 会被悬停/激活等非持久化交互高频触发，误报脏）
+    const syncExpand = (name: unknown) => {
+      if (typeof name === 'string' && EXPAND_COMMANDS.has(name)) cbRef.current.onDataChange()
+    }
+    mm.on('afterExecCommand', syncExpand)
     // 选中态上报：引擎无 node_active_clear，取消选中同样经 node_active 发出（首参为 null），
     // 见 docs/notes/engine-api.md「M3 核验」(1)。uid 取节点实例的 .uid（引擎无 getUid 方法，防御式保留）
     const onActive = (...args: unknown[]) => {
@@ -102,6 +116,7 @@ export default function MindMapCanvas({
       window.removeEventListener('paste', onPaste)
       mm.off('node_active', onActive)
       mm.off('data_change', changed)
+      mm.off('afterExecCommand', syncExpand)
       mm.destroy()
       mmRef.current = null
     }

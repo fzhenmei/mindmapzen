@@ -66,6 +66,7 @@ export default function EditorView({
   const pendingRef = useRef(false)
   const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true)) // 当前串行保存轮（在途合并调用方等待它的最终结局）
   const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
+  const lastSavedDataRef = useRef<string | null>(null) // 最近一次成功落盘的引擎整树快照（JSON），供 data_change 同值去重
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
   const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
@@ -153,9 +154,12 @@ export default function EditorView({
     if (!mm || !dirtyRef.current) return true
     try {
       const rev = dataRevRef.current
-      const { tree, collapsed } = engineTreeToZen(mm.getData())
+      const snapshot = mm.getData()
+      const { tree, collapsed } = engineTreeToZen(snapshot)
       await adapter.writeTextFileAtomic(mdPath, serialize(tree))
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+      // 记录落盘快照：引擎节流补发的同值 data_change 到达时据此免置脏（见 onDataChange）
+      lastSavedDataRef.current = JSON.stringify(snapshot)
       if (dataRevRef.current !== rev) {
         // 写盘窗口内有新编辑：保脏，置补存让串行循环用新快照再来一轮
         pendingRef.current = true
@@ -326,7 +330,18 @@ export default function EditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount 冲刷，saveNow 依赖 refs
   }, [])
 
-  const onDataChange = () => {
+  /** 引擎数据变化（data_change 携带整树快照；无载荷调用来自展开命令同步上报，视为必有变化）。
+   *  同值去重（验收修复 4）：引擎 data_change 经 addHistory 尾随节流延迟 ~100ms 补发，快照可能
+   *  在此间已被显式保存落盘——与 lastSavedDataRef 一致的事件不置脏，否则保存成功的图会在
+   *  ~100ms 后重新亮起未保存圆点并触发一轮冗余自动保存 */
+  const onDataChange = (data?: EngineNode) => {
+    if (
+      data !== undefined &&
+      lastSavedDataRef.current !== null &&
+      JSON.stringify(data) === lastSavedDataRef.current
+    ) {
+      return
+    }
     dirtyRef.current = true
     dataRevRef.current++
     // 写盘在途时的新编辑不在在途快照内：标记补存，让当前轮写完再补一轮（否则无人再触发落盘）
