@@ -46,16 +46,17 @@ html, body { overflow: hidden; }
 /* 对话框（ZenDialog 统一外壳：原生 <dialog> + ::backdrop，M4） */
 .zen-dialog { border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: 24px;
   width: 360px; max-width: 90vw; background: var(--surface); color: var(--ink);
-  box-shadow: var(--shadow-2); display: flex; flex-direction: column; gap: 12px; }
-.zen-dialog[open] { display: flex; }
+  box-shadow: var(--shadow-2); }
+/* display 收敛至 [open]（终审修复 1）：基础态不覆盖 UA 的 dialog:not([open]){display:none}，
+   消除 DOM 插入到 showModal 之间无遮罩的流内闪现；flex 布局与 gap 随之移入 [open] 态 */
+.zen-dialog[open] { display: flex; flex-direction: column; gap: 12px; }
 /* 遮罩为 ::backdrop 专属暗色（纸墨/夜墨双主题通用字面值，Task 1 裁定可接受） */
 .zen-dialog::backdrop { background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
 .zen-dialog h3 { font-size: 18px; font-weight: 600; }
 .zen-dialog-body { font-size: 13px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .zen-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.zen-dialog-actions button, .dialog-actions button { padding: 6px 14px; border-radius: var(--radius-s);
+.zen-dialog-actions button { padding: 6px 14px; border-radius: var(--radius-s);
   border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); cursor: pointer; }
-.zen-dialog-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--paper); }
 .zen-dialog input { padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-s); font: inherit; background: var(--paper); color: var(--ink); }
 /* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
 .ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: 12px; }
@@ -97,7 +98,6 @@ html, body { overflow: hidden; }
 .stamp-seal { color: var(--seal); border: 1.5px solid var(--seal); border-radius: 4px; transform: rotate(-3deg); }
 .stamp-ink { color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; }
 @keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .save-stamp { animation: none; } }
 /* 右下主题圆钮；文件库页首同款 */
 .theme-fab { position: absolute; right: 16px; bottom: 12px; z-index: 5; }
 .theme-fab button, .library .theme-toggle { width: 30px; height: 30px; border-radius: var(--radius-pill);
@@ -110,4 +110,10 @@ html, body { overflow: hidden; }
   background: color-mix(in srgb, var(--seal) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--seal) 25%, var(--surface));
   border-radius: var(--radius-m); box-shadow: var(--shadow-1); padding: 8px 14px; font-size: 13px; }
 .zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
-@media (prefers-reduced-motion: reduce) { .zen-bar { transition: none; } }
+/* 全局动效豁免（终审修复 2，Global Constraints）：reduce 下所有过渡/悬停位移关闭，收敛为单一 @media 块 */
+@media (prefers-reduced-motion: reduce) {
+  .btn-primary, .library-header button, .map-card-main, .map-card-actions,
+  .zen-bar, .zen-bar button, .save-stamp { transition: none; }
+  .map-card-main:hover { transform: none; }
+  .save-stamp { animation: none; }
+}
