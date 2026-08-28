@@ -15,7 +15,22 @@ describe('配置读写', () => {
   })
   test('保存后可读回', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md' })
-    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md' })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null })
+    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null })
+  })
+})
+
+describe('preferredLayout（验收轮三：记住默认布局）', () => {
+  test('合法值往返', async () => {
+    const fs = new MemoryFsAdapter()
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, preferredLayout: 'logic' })
+    expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('logic')
+  })
+  test('非法值与缺失回退 null', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: null, preferredLayout: 'bogus' }))
+    expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBeNull()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: null }))
+    expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBeNull()
   })
 })

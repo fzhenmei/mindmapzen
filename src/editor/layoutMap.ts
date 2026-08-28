@@ -1,4 +1,6 @@
-export type LayoutKind = 'mindmap' | 'logic' | 'org'
+import type { LayoutKind } from '../types/files'
+
+export type { LayoutKind }
 
 /** 语义布局 → 引擎布局名（simple-mind-map `CONSTANTS.LAYOUT`，小驼峰，见 docs/notes/engine-api.md「M3 核验」(5)）。
  *  未知名引擎会静默回退右向布局，故这里显式收敛非法值。 */

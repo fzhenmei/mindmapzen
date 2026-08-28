@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FsAdapter, MapInfo } from '../types/files'
+import type { FsAdapter, LayoutKind, MapInfo } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 
@@ -12,12 +12,15 @@ interface AppState {
   error: string | null
   configPath: string
   adapter: FsAdapter
+  /** 用户偏好的默认布局（init 自配置；切换布局时更新并持久化） */
+  preferredLayout: LayoutKind
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
   refreshMaps: () => Promise<void>
   createAndOpen: (name: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
+  setPreferredLayout: (kind: LayoutKind) => Promise<void>
   markDirty: () => void
   clearDirty: () => void
   backToLibrary: () => Promise<void>
@@ -33,12 +36,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   configPath: '/cfg.json',
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
+  preferredLayout: 'mindmap',
 
   setAdapter: (fs) => set({ adapter: fs }),
 
   init: async () => {
     const { adapter, configPath } = get()
     const cfg = await loadConfig(adapter, configPath)
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap' })
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir })
       await get().refreshMaps()
@@ -53,7 +58,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWorkspace: async (dir) => {
     const { adapter, configPath } = get()
     set({ workspaceDir: dir })
-    await saveConfig(adapter, configPath, { workspaceDir: dir, lastOpened: get().currentMdPath })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, workspaceDir: dir, lastOpened: get().currentMdPath })
     await get().refreshMaps()
   },
 
@@ -64,14 +70,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createAndOpen: async (name) => {
-    const { adapter, workspaceDir } = get()
+    const { adapter, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
     try {
-      const info = await createMap(adapter, workspaceDir, name)
+      const info = await createMap(adapter, workspaceDir, name, preferredLayout)
       set({ currentMdPath: info.mdPath, route: 'editor', error: null })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
     }
+  },
+
+  /** 记住用户偏好的默认布局（新建/导入/无 sidecar 导图的初始布局），持久化到应用配置 */
+  setPreferredLayout: async (kind) => {
+    const { adapter, configPath } = get()
+    set({ preferredLayout: kind })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, preferredLayout: kind })
   },
 
   openMap: async (mdPath) => {

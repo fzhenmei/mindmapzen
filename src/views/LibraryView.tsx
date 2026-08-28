@@ -57,7 +57,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         setImportPreview({ name: picked.name, tree: r.tree, blocks: r.ignoredBlocks })
         return
       }
-      const info = await commitImport(store.adapter, workspaceDir, picked.name, r.tree)
+      const info = await commitImport(store.adapter, workspaceDir, picked.name, r.tree, store.preferredLayout)
       await store.openMap(info.mdPath)
     } catch (e) {
       store.setError('导入失败：' + String(e))
@@ -69,7 +69,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     if (pending === null || !workspaceDir) return
     setImportPreview(null)
     try {
-      const info = await commitImport(store.adapter, workspaceDir, pending.name, pending.tree)
+      const info = await commitImport(store.adapter, workspaceDir, pending.name, pending.tree, store.preferredLayout)
       await store.openMap(info.mdPath)
     } catch (e) {
       store.setError('导入失败：' + String(e))

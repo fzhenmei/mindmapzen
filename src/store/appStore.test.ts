@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest'
+import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
@@ -57,5 +58,21 @@ describe('appStore', () => {
     expect(s.route).toBe('library')
     expect(s.dirty).toBe(false)
     expect(s.currentMdPath).toBeNull()
+  })
+})
+
+describe('preferredLayout（验收轮三）', () => {
+  test('setPreferredLayout 更新状态并持久化', async () => {
+    useAppStore.getState().setPreferredLayout('org')
+    await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.preferredLayout).toBe('org')
+  })
+  test('createAndOpen 用偏好布局建 sidecar', async () => {
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().setPreferredLayout('logic')
+    await useAppStore.getState().createAndOpen('偏好图')
+    const sc = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/ws/偏好图.zen.json'))
+    expect(sc.layout).toBe('logic')
   })
 })

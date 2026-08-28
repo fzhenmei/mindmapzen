@@ -38,7 +38,8 @@ vi.mock('../editor/MindMapCanvas', () => ({
       execCommand: vi.fn(),
       setLayout: vi.fn(),
       resize: vi.fn(),
-      view: { reset: vi.fn() },
+      el: null,
+      view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
       destroy: vi.fn(),
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
@@ -744,12 +745,17 @@ test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5
 
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
 
-test('居中按钮：视图复位（缩放 1:1 回中心）', async () => {
+test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 viewOps 单测覆盖）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
   await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
-  fireEvent.click(screen.getByTestId('btn-center'))
-  expect(fakeHandle.view.reset).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByTestId('btn-zoom-out'))
+  expect(fakeHandle.view.narrow).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByTestId('btn-zoom-in'))
+  expect(fakeHandle.view.enlarge).toHaveBeenCalledTimes(1)
+  // 假画布 renderer 无 root：根居中/适配走守卫早退，不崩溃即可（数学见 viewOps.test）
+  fireEvent.click(screen.getByTestId('btn-center-root'))
+  fireEvent.click(screen.getByTestId('btn-fit'))
 })
 
 test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', async () => {
@@ -846,4 +852,23 @@ test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静
   fireEvent.click(screen.getByTestId('layout-org'))
   await waitFor(() => expect(useAppStore.getState().error).toContain('保存布局失败'))
   expect(useAppStore.getState().error).toContain('磁盘占用')
+})
+
+describe('偏好布局（验收轮三：记住默认视图）', () => {
+  test('无 sidecar 的导图按偏好布局打开', async () => {
+    await fs.writeTextFileAtomic('/ws/bare.md', '# 裸图\n') // 无 .zen.json
+    useAppStore.setState({ preferredLayout: 'logic' })
+    render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('切换布局会记住偏好', async () => {
+    useAppStore.setState({ preferredLayout: 'mindmap' })
+    render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    fireEvent.click(screen.getByTestId('layout-org'))
+    await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
+  })
 })

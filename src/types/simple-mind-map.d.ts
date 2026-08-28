@@ -1,7 +1,7 @@
 // 引擎无官方 TS 类型（package.json 的 types 字段指向不存在的 ./types/index.d.ts），
 // 声明我们用到的 API；多余成员经索引签名访问。假设核验见 docs/notes/engine-api.md。
 declare module 'simple-mind-map' {
-  import type { EngineNode, EngineRenderer, MindMapHandle } from './engine'
+  import type { EngineNode, EngineRenderer, EngineView, MindMapHandle } from './engine'
   export default class MindMap implements MindMapHandle {
     constructor(opts: {
       el: HTMLElement
@@ -20,8 +20,10 @@ declare module 'simple-mind-map' {
     setLayout(name: string): void
     /** 容器尺寸变化后重算画布（引擎 index.js:325）：无自动监听，宿主须在窗口 resize 时调用 */
     resize(): void
-    /** 视图复位（引擎 View.js reset()）：缩放回 1:1 并回到中心 */
-    view: { reset(): void }
+    /** 视图变换与复位（引擎 View.js）：x/y/scale 可直接赋值，改后调 transform() 生效 */
+    view: EngineView
+    /** 画布容器元素（destroy 后为 null） */
+    el: HTMLElement | null
     destroy(): void
     /** 引擎构造时同步创建（index.js:136 new Render）；节点实例定位与编辑框控制走这里 */
     renderer: EngineRenderer;
