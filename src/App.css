@@ -25,6 +25,8 @@ html, body, #root { height: 100%; }
 .dialog h3 { font-size: 16px; }
 .dialog input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
+.ignored-preview-list { padding-left: 20px; color: #7a5c2e; font-size: 12px; }
 
 /* 编辑器 */
 .editor { height: 100%; display: flex; flex-direction: column; }

@@ -17,6 +17,20 @@ const pickDirectory = async (): Promise<string | null> => {
   return typeof dir === 'string' ? dir : null
 }
 
+/** 生产导入文件选择：Tauri 对话框单选 .md + adapter 读取。
+ *  E2E web 模式无 Tauri 对话框：占位返回 null（后续任务接入 harness 桩）。 */
+const pickMdFile = async (): Promise<{ name: string; text: string } | null> => {
+  if (E2E) return null
+  const picked = await open({
+    multiple: false,
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  })
+  if (typeof picked !== 'string') return null
+  const name = picked.split(/[\\/]/).pop()!.replace(/\.md$/, '')
+  const text = await useAppStore.getState().adapter.readTextFile(picked)
+  return { name, text }
+}
+
 /** 生产关闭守卫：Tauri onCloseRequested → handler。动态 import 不阻塞渲染；
  *  异步竞态处理：注册完成前被清理（done 已置）则放弃/立即撤销，清理函数幂等（done 标记）。
  *  非 Tauri 环境（e2e web 模式）getCurrentWindow 抛错 → 静默不注册（无关闭事件源）。 */
@@ -86,5 +100,5 @@ export default function App() {
       />
     )
   }
-  return <LibraryView pickDirectory={pickDirectory} />
+  return <LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />
 }
