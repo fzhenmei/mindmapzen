@@ -18,6 +18,10 @@ declare module 'simple-mind-map' {
     execCommand(cmd: string, ...args: unknown[]): void
     /** 运行中切换布局（引擎 index.js:436）：CONSTANTS.LAYOUT 小驼峰值，即时重排不重建实例 */
     setLayout(name: string): void
+    /** 容器尺寸变化后重算画布（引擎 index.js:325）：无自动监听，宿主须在窗口 resize 时调用 */
+    resize(): void
+    /** 视图复位（引擎 View.js reset()）：缩放回 1:1 并回到中心 */
+    view: { reset(): void }
     destroy(): void
     /** 引擎构造时同步创建（index.js:136 new Render）；节点实例定位与编辑框控制走这里 */
     renderer: EngineRenderer;
