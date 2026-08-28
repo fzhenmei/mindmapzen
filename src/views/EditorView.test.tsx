@@ -830,13 +830,17 @@ test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不�
   await act(async () => {}) // 排空 fire-and-forget 落盘微任务
   const sc = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
   expect(sc.layout).toBe('org')
-  expect(writes).toEqual(['/ws/a.zen.json']) // 仅 sidecar，.md 未动
+  expect(writes).toContain('/ws/a.zen.json') // sidecar 即时落盘
+  // a4e2a51 起切换还会异步写 /cfg.json（偏好持久化，预期行为），故仅断言写路径不含 .md
+  expect(writes.some((p) => p.endsWith('.md'))).toBe(false)
   expect(useAppStore.getState().dirty).toBe(false) // 依旧不置脏
 })
 
 test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静默）', async () => {
-  fs.writeTextFileAtomic = vi.fn(async () => {
-    throw new Error('磁盘占用')
+  // 抛错限定 sidecar 路径：切换还会 fire-and-forget 写 /cfg.json（偏好持久化，预期行为），
+  // 若全路径抛错，该写入的未捕获拒绝会被 vitest 记为未处理错误（非零退出）
+  fs.writeTextFileAtomic = vi.fn(async (p: string) => {
+    if (p.endsWith('.zen.json')) throw new Error('磁盘占用')
   })
   render(
     <EditorView
