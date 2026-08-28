@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
-import { writeClipboardViaTauri } from './services/clipboard'
+import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
 import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -18,9 +18,17 @@ const pickDirectory = async (): Promise<string | null> => {
 }
 
 /** 生产导入文件选择：Tauri 对话框单选 .md + adapter 读取。
- *  E2E web 模式无 Tauri 对话框：占位返回 null（后续任务接入 harness 桩）。 */
+ *  E2E web 模式无 Tauri 对话框：读取 harness 预置桩（固定内置样例）。 */
 const pickMdFile = async (): Promise<{ name: string; text: string } | null> => {
-  if (E2E) return null
+  if (E2E) {
+    return (
+      (
+        window as unknown as {
+          __zenE2e?: { pickMdFile(): Promise<{ name: string; text: string } | null> }
+        }
+      ).__zenE2e?.pickMdFile() ?? null
+    )
+  }
   const picked = await open({
     multiple: false,
     filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -65,6 +73,15 @@ const exitApp = (): void => {
   })()
 }
 
+/** 剪贴板端口：E2E web 模式无 Tauri 剪贴板 → 记录到 harness 桩（__zenE2e.lastCopied），生产走 Tauri */
+const writeClipboard: WriteClipboard = E2E
+  ? async (text) => {
+      ;(
+        (window as unknown as Record<string, unknown>).__zenE2e as { lastCopied: string | null }
+      ).lastCopied = text
+    }
+  : writeClipboardViaTauri
+
 export default function App() {
   const { route, currentMdPath, setAdapter, init } = useAppStore()
   useEffect(() => {
@@ -94,7 +111,7 @@ export default function App() {
         key={currentMdPath}
         mdPath={currentMdPath}
         openInEditor={(p) => void openPath(p)}
-        writeClipboard={writeClipboardViaTauri}
+        writeClipboard={writeClipboard}
         registerCloseGuard={registerCloseGuard}
         exitApp={exitApp}
       />

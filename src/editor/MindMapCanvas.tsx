@@ -54,9 +54,16 @@ export default function MindMapCanvas({
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；
     // 引擎编辑框（contenteditable）与按钮等交互元素内不拦截，保证正常输入与 Tab 导航
+    // defaultPrevented 守卫：引擎 KeyCommand 已在 window 上原生注册 Tab/Enter/Del 快捷键
+    // （注册先于本监听，命中即 preventDefault），此处仅作其未响应场景（如焦点落在非 body
+    // 元素）的兜底，否则同一次按键会双份 execCommand（Tab 插两个子节点，E2E 复制用例发现）
     const onKeydown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
       const t = e.target
-      if (t instanceof Element && t.closest('input, textarea, select, button, a, [contenteditable="true"]')) {
+      if (
+        t instanceof Element &&
+        t.closest('input, textarea, select, button, a, [contenteditable="true"]')
+      ) {
         return
       }
       const handled = handleEngineKeyDown((cmd) => mmRef.current?.execCommand(cmd), null, e.key)
