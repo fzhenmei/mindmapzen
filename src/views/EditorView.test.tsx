@@ -132,6 +132,21 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
   expect(screen.getByTestId('dirty-badge')).toBeInTheDocument()
 })
 
+test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
+  // 原子写持续失败（模拟磁盘故障）：文件内容已在 beforeEach 写入，读取不受影响
+  fs.writeTextFileAtomic = vi.fn(async () => {
+    throw new Error('磁盘占用')
+  })
+  render(<EditorView mdPath="/ws/a.md" openInEditor={openInEditor} writeClipboard={vi.fn()} />)
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.click(screen.getByTestId('btn-back'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  expect(useAppStore.getState().route).toBe('editor') // 未离开
+  expect(useAppStore.getState().dirty).toBe(true)
+})
+
 // ---- 复制 md（整图 / 选中子树）----
 
 test('复制整图：无选中时写入完整 md', async () => {

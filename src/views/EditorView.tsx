@@ -11,6 +11,7 @@ import { readSidecar, writeSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
+import type { LayoutKind } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { Sidecar } from '../types/files'
 
@@ -29,6 +30,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
   const mmRef = useRef<MindMapHandle | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirtyRef = useRef(false)
+  const savingRef = useRef(false)
+  const pendingRef = useRef(false)
+  const layoutRef = useRef<LayoutKind>('mindmap') // 本阶段先默认，后续接 sidecar/切换的真实值
   const activeUidRef = useRef<string | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -80,15 +84,16 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
     }
   }
 
-  const saveNow = async (): Promise<void> => {
+  /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功） */
+  const writeOnce = async (): Promise<boolean> => {
     const mm = mmRef.current
-    if (!mm || !dirtyRef.current) return
+    if (!mm || !dirtyRef.current) return true
     try {
       const { tree, collapsed } = engineTreeToZen(mm.getData())
       const sidecar: Sidecar = {
         version: 1,
         theme: 'default',
-        layout: 'mindmap',
+        layout: layoutRef.current,
         collapsed,
         offsets: {},
         canvas: { x: 0, y: 0, zoom: 1 },
@@ -97,11 +102,31 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
       await writeSidecar(adapter, mdPath, sidecar)
       dirtyRef.current = false
       clearDirty()
+      return true
     } catch (e) {
       // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试
       dirtyRef.current = true
       markDirty()
       setError('保存失败：' + String(e))
+      return false
+    }
+  }
+
+  /** 串行化保存：在途时新请求只标记补存；循环直到一轮内无新变更（spec §3.4） */
+  const saveNow = async (): Promise<boolean> => {
+    if (savingRef.current) {
+      pendingRef.current = true
+      return true
+    }
+    savingRef.current = true
+    try {
+      while (true) {
+        pendingRef.current = false
+        if (!(await writeOnce())) return false
+        if (!pendingRef.current) return true
+      }
+    } finally {
+      savingRef.current = false
     }
   }
 
@@ -194,7 +219,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard }: Rea
           data-testid="btn-back"
           onClick={async () => {
             if (timerRef.current) clearTimeout(timerRef.current)
-            await saveNow()
+            const ok = await saveNow()
+            if (!ok) return // 保存失败留在编辑器（spec §3.4）
             await backToLibrary()
           }}
         >
