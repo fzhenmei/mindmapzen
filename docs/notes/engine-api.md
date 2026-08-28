@@ -121,3 +121,23 @@
 ### d.ts 影响
 
 本次接线仅新增 `on/off('node_active', ...)`（已有泛型 `on/off` 声明覆盖）与构造 opt `layout`（opts 已有索引签名 `[k: string]: unknown` 覆盖），`src/types/simple-mind-map.d.ts` 无需新增成员；仅把构造 opts 里 `layout` 提为显式键并保留索引签名，便于类型提示。
+
+## M3 核验补（Task 4，多行粘贴执行的节点实例定位）
+
+### (6) `mindMap.renderer.findNodeByUid(uid)` **存在** —— 成立
+
+- 实现 `Render.js:2093-2115`：`this.root` 为空时返回 `undefined`；否则 `walk` 渲染树按 `node.getData('uid') === uid` 匹配（含概要节点 `_generalizationList`），命中返回**节点实例**，未命中返回 `null`。官方插件 `Demonstrate.js:320` / `Cooperate.js:202` / `Search.js:138` 均用它做 uid → 实例定位，即引擎支持的官方途径
+- 挂载链：`index.js:136` `this.renderer = new Render({...})`（构造时同步可用）、`Render.js:105` `this.textEdit = new TextEdit(this)`。据此在 `MindMapHandle`（src/types/engine.ts）新增可选成员 `renderer?: EngineRenderer`（`findNodeByUid` + `textEdit.hideEditTextBox`），并在 `simple-mind-map.d.ts` 显式声明 `renderer: EngineRenderer`（类的索引签名成员类型 `unknown` 不能满足可选接口成员，须显式声明）
+
+### (7) 关键时序坑：`INSERT_CHILD_NODE` 会隐式关闭编辑框并**用旧框文本回写节点** —— 必须先关框
+
+- `Render.js:903`：`insertChildNode` 首行即调 `this.textEdit.hideEditTextBox()`
+- `TextEdit.js:475-504`：`hideEditTextBox()` 读取编辑框 DOM 当前内容 `getEditText()`，随后 `this.mindMap.execCommand('SET_NODE_TEXT', currentNode, text)`（:492）提交。若先 `SET_NODE_TEXT(node, lines[0])` 再插入子节点，编辑框仍显示粘贴前旧文本，这次隐式提交会**覆盖首行**（用户视角=粘贴拆分失败只剩子节点）
+- 正确顺序（EditorView.applyMultilinePaste 采用）：`renderer.textEdit.hideEditTextBox()` → `SET_NODE_TEXT` → 循环 `INSERT_CHILD_NODE`。`hideEditTextBox` 在编辑框未打开时早退（:479-481），无条件调用无害
+- `SET_NODE_TEXT` 实现走 `setNodeDataRender`（`Render.js:1750-1757` → `1987-1994`）：`execCommand('SET_NODE_DATA', ...)` + `node.reRender()`，变更入历史并触发 `data_change`（自动保存链路正常）
+
+### (8) 持有节点实例跨多条连续命令的安全性 —— 成立
+
+- `render()` 经 `setTimeout(..., 0)` 去抖（`Render.js:553-559`），同步连续多条 `execCommand` 的数据变更先落 `renderTree`，实际只触发最后一次渲染
+- 渲染间节点实例按 uid 经 `nodeCache` 复用（`Render.js:574-576, 590-599`），未消失的节点实例在重渲染后保持有效；引擎自身 Command 撤销/重做同样持久化命令参数里的节点实例。`SET_NODE_TEXT` 后紧接 `INSERT_CHILD_NODE`（appointNodes 传同一实例）安全
+- 补充：`INSERT_CHILD_NODE(openEdit=false, ...)` 在默认 `createNewNodeBehavior` 下 `focusNewNode=true`（`Render.js:756-764`），插入后会清空旧激活列表并激活新节点——`node_active` 随之发出新节点 uid，复制/粘贴的 activeUidRef 语义不受破坏。另存在 `INSERT_MULTI_CHILD_NODE`（`Render.js:263-266`，一次命令批量插子节点、单条历史），后续如需"整批一条撤销"可切换

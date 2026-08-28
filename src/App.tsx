@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
+import { writeClipboardViaTauri } from './services/clipboard'
 import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -40,7 +41,12 @@ export default function App() {
   if (route === 'editor' && currentMdPath) {
     // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）
     return (
-      <EditorView key={currentMdPath} mdPath={currentMdPath} openInEditor={(p) => void openPath(p)} />
+      <EditorView
+        key={currentMdPath}
+        mdPath={currentMdPath}
+        openInEditor={(p) => void openPath(p)}
+        writeClipboard={writeClipboardViaTauri}
+      />
     )
   }
   return <LibraryView pickDirectory={pickDirectory} />

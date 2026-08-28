@@ -38,4 +38,5 @@ html, body, #root { height: 100%; }
   border-bottom: 1px solid #e5e5e5; }
 .editor-title { font-size: 15px; margin-right: auto; }
 .dirty-badge { color: #e6a23c; margin-left: 4px; }
+.editor-toolbar button.copied { color: #2e9e5b; }
 .canvas-host { flex: 1; min-height: 0; position: relative; }
