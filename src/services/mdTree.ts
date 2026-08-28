@@ -1,6 +1,7 @@
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
+import type { EngineNode } from '../types/engine'
 
 /** 列表项文本若以列表标记/标题/引用/前导反斜杠+标记开头，加 \ 前缀防止被解析为结构 */
 function escapeItemText(text: string): string {
@@ -155,4 +156,31 @@ export function parse(md: string): ParseResult {
   }
   if (state.root === null) return { ok: false, error: NO_ROOT_ERROR }
   return { ok: true, tree: state.root, ignoredBlocks: state.ignored }
+}
+
+/** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false */
+export function zenToEngineTree(
+  tree: ZenNode,
+  collapsed: ReadonlySet<string> = new Set(),
+  parentPath = '',
+): EngineNode {
+  const path = parentPath === '' ? '/' + tree.text : parentPath + '/' + tree.text
+  return {
+    data: { text: tree.text, expand: !collapsed.has(path) },
+    children: tree.children.map((c) => zenToEngineTree(c, collapsed, path)),
+  }
+}
+
+/** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠） */
+export function engineTreeToZen(
+  root: EngineNode,
+  parentPath = '',
+): { tree: ZenNode; collapsed: string[] } {
+  const path = parentPath === '' ? '/' + root.data.text : parentPath + '/' + root.data.text
+  const own = root.data.expand === false ? [path] : []
+  const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
+  return {
+    tree: { text: root.data.text, children: subs.map((s) => s.tree) },
+    collapsed: [...own, ...subs.flatMap((s) => s.collapsed)],
+  }
 }
