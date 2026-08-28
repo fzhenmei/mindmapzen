@@ -65,11 +65,16 @@ const registerCloseGuard: RegisterCloseGuard = (handler) => {
   }
 }
 
-/** 生产退出端口：强制销毁窗口（守卫已 preventClose，close() 会被再次拦截） */
+/** 生产退出端口：强制销毁窗口（守卫已 preventClose，close() 会被再次拦截）。
+ *  失败必须浮出：destroy 权限缺失/运行时异常若被静默吞掉，守卫会留下"已放弃但窗口还在"的僵尸态 */
 const exitApp = (): void => {
   void (async () => {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    await getCurrentWindow().destroy()
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      await getCurrentWindow().destroy()
+    } catch (e) {
+      useAppStore.getState().setError('退出失败：' + String(e))
+    }
   })()
 }
 
