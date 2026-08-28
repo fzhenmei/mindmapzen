@@ -1,4 +1,4 @@
-import { exists, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 import type { FsAdapter } from '../../types/files'
 
@@ -27,5 +27,9 @@ export const tauriFsAdapter: FsAdapter = {
   },
   async exists(p) {
     return exists(p)
+  },
+  async ensureDir(p) {
+    // recursive 建目录；已存在视为成功
+    await mkdir(p, { recursive: true })
   },
 }

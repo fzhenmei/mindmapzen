@@ -8,16 +8,34 @@
     "opener:default",
     "opener:allow-open-path",
     "clipboard-manager:allow-write-text",
+    "fs:default",
     {
-      "identifier": "fs:default",
+      "identifier": "fs:allow-read-text-file",
       "allow": [{ "path": "**" }]
     },
-    "fs:allow-read-text-file",
-    "fs:allow-write-text-file",
-    "fs:allow-read-dir",
-    "fs:allow-stat",
-    "fs:allow-rename",
-    "fs:allow-exists",
-    "fs:allow-remove"
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-rename",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }

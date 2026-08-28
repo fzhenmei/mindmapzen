@@ -44,4 +44,8 @@ describe('MemoryFsAdapter', () => {
     const t1 = await fs.statModified('/ws/a.md')
     expect(t1).toBeGreaterThan(0)
   })
+
+  test('ensureDir 解析成功且无副作用', async () => {
+    await expect(fs.ensureDir()).resolves.toBeUndefined()
+  })
 })

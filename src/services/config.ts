@@ -15,5 +15,8 @@ export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig
 }
 
 export async function saveConfig(fs: FsAdapter, path: string, cfg: AppConfig): Promise<void> {
+  // appDataDir 只返回路径不建目录：先递归创建父目录再写（否则首启写配置 NotFound）
+  const parent = path.replace(/[\\/][^\\/]*$/, '')
+  await fs.ensureDir(parent)
   await fs.writeTextFileAtomic(path, JSON.stringify(cfg, null, 2))
 }

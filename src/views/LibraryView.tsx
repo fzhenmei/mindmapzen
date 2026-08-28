@@ -21,8 +21,12 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
   }
 
   const chooseWorkspace = async () => {
-    const dir = await pickDirectory()
-    if (dir) await store.setWorkspace(dir)
+    try {
+      const dir = await pickDirectory()
+      if (dir) await store.setWorkspace(dir)
+    } catch (e) {
+      store.setError('设置工作区失败：' + String(e))
+    }
   }
 
   const renderBody = () => {
@@ -132,8 +136,12 @@ export default function LibraryView({ pickDirectory }: Readonly<Props>) {
                 data-testid="btn-delete-confirm"
                 onClick={async () => {
                   closeDialog()
-                  await deleteMap(store.adapter, workspaceDir!, target.name)
-                  await store.refreshMaps()
+                  try {
+                    await deleteMap(store.adapter, workspaceDir!, target.name)
+                    await store.refreshMaps()
+                  } catch (e) {
+                    store.setError('删除失败：' + String(e))
+                  }
                 }}
               >
                 删除
