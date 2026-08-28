@@ -3,7 +3,13 @@
 declare module 'simple-mind-map' {
   import type { EngineNode, MindMapHandle } from './engine'
   export default class MindMap implements MindMapHandle {
-    constructor(opts: { el: HTMLElement; data?: EngineNode; [k: string]: unknown })
+    constructor(opts: {
+      el: HTMLElement
+      data?: EngineNode
+      /** 引擎布局名（CONSTANTS.LAYOUT 小驼峰值，见 src/editor/layoutMap.ts；未知名引擎静默回退右向） */
+      layout?: string
+      [k: string]: unknown
+    })
     static usePlugin(plugin: unknown, opt?: unknown): void
     on(event: string, cb: (...args: unknown[]) => void): void
     off(event: string, cb: (...args: unknown[]) => void): void

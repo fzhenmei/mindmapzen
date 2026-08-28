@@ -76,3 +76,48 @@
 ## d.ts 充要性说明
 
 安装包 `package.json` 的 `"types": "./types/index.d.ts"` 指向的 `types/` 目录**在发布包中不存在**，故 TypeScript 无包内类型可用；本项目 `src/types/simple-mind-map.d.ts` 的 ambient 模块声明是必需的，且与包内类型无合并冲突。
+
+## M3 核验（Task 3，选中态/粘贴/布局）
+
+对 M3 五项假设逐条核验（路径相对 `node_modules/simple-mind-map`）。**结论先行：1/3/4/5 项假设需修正后采用，第 2 项不成立（不阻断）；`node_active_clear` 事件不存在、布局常量为小驼峰，是两处与本仓假设差异最大的点。**
+
+### (1) 选中事件 `node_active` 存在；`node_active_clear` **不存在** —— 部分成立
+
+- 唯一触发点：`src/core/render/Render.js:456-467` `emitNodeActiveEvent(node = null, activeNodeList = [...this.activeNodeList])`，第 465 行 `this.mindMap.emit('node_active', node, activeNodeList)`。注意两点：① 有 `setTimeout(..., 0)` 异步去抖（463-466）；② 先用 `checkNodeListIsEqual` 比对上次激活列表，无变化不触发（457-461）
+- 负载形态：`(node, activeNodeList)`——第一参是「本次触发激活/取消的节点实例」，可为 `null`；第二参是当前全部激活节点的数组。节点点击路径见 `src/core/render/node/MindMapNode.js:383-391`（Ctrl 多选时 `emitNodeActiveEvent(isActive ? null : this)`）
+- 取消选中：引擎**没有** `node_active_clear` 事件（全源码 grep 仅 `node_active` 一处 emit）。清空走命令 `CLEAR_ACTIVE_NODE`（`Render.js:309` 注册）→ `clearActiveNode()`（`Render.js:638-644`）→ `emitNodeActiveEvent(null, [])`，即**同样以 `node_active`（第一参为 null）对外通知**。画布空白处点击即此路径（`Render.js:150-152` `draw_click` → `clearActiveNodeListOnDrawClick` → `Render.js:488`）
+- uid 提取路径：节点实例上 `this.uid = opt.uid`（`MindMapNode.js:26`），**引擎没有 `getUid()` 方法**（全源码 grep `getUid` 仅命中 utils 的 `_findParentUid`）。组件里 `node?.getUid ? node.getUid() : node?.uid` 的防御式写法仍可用（恒走 `.uid` 分支），语义等价于 `node?.uid`
+- **接线结论**：只订阅 `node_active` 一个事件即可覆盖选中与取消两种情况（node 参数非空→uid，为 null→null）；`node_active_clear` 订阅移除
+- 残余风险备忘：`Render.js` 多处直接调 `clearActiveNodeList()`（如 850/887/959 行插入/删除节点后）**不 emit**，激活列表会静默清空——组件侧 uid 可能变陈旧；M3 复制功能已有「uid 未命中→整树复制」兜底，可容忍
+
+### (2) ESC 清空选中 —— **不成立（引擎无 ESC 处理）**
+
+- 全源码 grep `Escape` 仅命中 `htmlEscape`（大小写敏感的键名匹配为零），`KeyCommand.js` 与 `Render.js` 的快捷键注册表（`Render.js:384-452`：Tab/Insert/Enter/Delete/方向键/Ctrl 系列）均无 Escape
+- 取消选中的引擎内置途径只有画布空白点击/右键（`draw_click`/`contextmenu`）。按控制器约定：此项仅记录，不为 ESC 添加引擎外清空调用；`onActiveChange(null)` 只依赖 `node_active` 的 null 负载
+
+### (3) `INSERT_CHILD_NODE` / `INSERT_NODE` 不接受裸文本参数 —— 假设修正
+
+- `src/core/render/Render.js:786-791`：`insertNode(openEdit = true, appointNodes = [], appointData = null, appointChildren = [])`
+- `Render.js:893-898`：`insertChildNode(openEdit = true, appointNodes = [], appointData = null, appointChildren = [])`
+- 文本经由第三参 `appointData` 传入：构造新节点 data 时 `...(appointData || {})` 展开（`Render.js:837-842` / `945-950`），即 `execCommand('INSERT_CHILD_NODE', openEdit, appointNodes, { text: '...' })`（可带 `uid` 等字段一并覆盖）。两个命令在无激活节点且未指定 `appointNodes` 时静默返回（793-795 / 899-901）
+- 批量插入另有 `insertMultiChildNode(appointNodes, childList)`（`Render.js:970` 起，childList 为 `[{ data: { text }, children }]` 数组）——Task 4 粘贴拆子节点可直接用它，一次命令完成整批
+
+### (4) `SET_NODE_TEXT` 按节点实例传参 —— 成立
+
+- 注册：`Render.js:326-327`；实现 `Render.js:1750-1757` `setNodeText(node, text, richText, resetRichText)`——第一参是**节点实例**而非 uid。持有 uid 的调用方需先经 `findSubtreeByUid`/渲染树定位节点（本项目 Task 2 已备 `findSubtreeByUid`，作用于 data 树；如需节点实例可再经 `mm.renderer.findNodeByUid` 类接口，M3 不使用）
+
+### (5) 布局常量为小驼峰，简报三处猜测值**全部错误** —— 假设修正
+
+- `src/constants/constant.js:9-24` `LAYOUT`：`LOGICAL_STRUCTURE: 'logicalStructure'`（:10）、`MIND_MAP: 'mindMap'`（:12）、`ORGANIZATION_STRUCTURE: 'organizationStructure'`（:13）。简报猜测的 `'logical_structure'` / `'mind_map'` / `'organization_chart'`（下划线风格）在引擎中均不存在
+- 布局注册表 `Render.js:46-72` `layouts` 的键即上述常量字符串；构造 opt `layout` 默认值 `logicalStructure`（`src/constants/defaultOptions.js:15`），由 `Render.setLayout`（`Render.js:124-135`）消费：`layouts[layout] || this.mindMap[layout]`，未知名**静默回退** `logicalStructure`（130-133）——所以错误布局名不会报错、只会"看起来还是右向布局"，layoutMap 必须写死真实常量
+- **`layoutMap.ts` 最终映射**（三值互异，非法值回退右向）：
+
+  | LayoutKind | 含义 | 引擎布局名（实际） | 简报猜测（弃用） |
+  |---|---|---|---|
+  | `mindmap` | 右向思维导图 | `'logicalStructure'` | `'logical_structure'` |
+  | `logic` | 左右逻辑图（根居中发散） | `'mindMap'` | `'mind_map'` |
+  | `org` | 组织结构图（向下） | `'organizationStructure'` | `'organization_chart'` |
+
+### d.ts 影响
+
+本次接线仅新增 `on/off('node_active', ...)`（已有泛型 `on/off` 声明覆盖）与构造 opt `layout`（opts 已有索引签名 `[k: string]: unknown` 覆盖），`src/types/simple-mind-map.d.ts` 无需新增成员；仅把构造 opts 里 `layout` 提为显式键并保留索引签名，便于类型提示。
