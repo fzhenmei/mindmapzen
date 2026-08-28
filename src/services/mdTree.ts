@@ -2,9 +2,9 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 
-/** 列表项文本若以列表标记/标题/引用开头，加 \ 前缀防止被解析为结构 */
+/** 列表项文本若以列表标记/标题/引用/前导反斜杠+标记开头，加 \ 前缀防止被解析为结构 */
 function escapeItemText(text: string): string {
-  return /^([-+*]\s|\d+\.\s|[#>])/.test(text) ? '\\' + text : text
+  return /^([-+*]\s|\d+\.\s|[#>]|\\+(?=[-+*#>]|\d+\.))/.test(text) ? '\\' + text : text
 }
 
 /** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表 */
@@ -37,12 +37,24 @@ export function serialize(tree: ZenNode): string {
   return lines.join('\n') + '\n'
 }
 
-interface MPosition { start: { line: number; column: number }; end: { line: number; column: number } }
-interface MNode { type: string; depth?: number; children?: MNode[]; position?: MPosition }
+interface MPosition {
+  start: { line: number; column: number }
+  end: { line: number; column: number }
+}
+interface MNode {
+  type: string
+  depth?: number
+  children?: MNode[]
+  position?: MPosition
+}
 
 function nodeText(n: MNode): string {
   if (!n.children) return ''
-  return n.children.map((c) => (c.type === 'text' ? String((c as unknown as { value: string }).value) : nodeText(c))).join('')
+  return n.children
+    .map((c) =>
+      c.type === 'text' ? String((c as unknown as { value: string }).value) : nodeText(c),
+    )
+    .join('')
 }
 
 /** 取节点起始行源码原文（保留行内标记） */
@@ -58,26 +70,35 @@ function headingText(md: string, node: MNode): string {
 function listItemText(md: string, item: MNode): string {
   const para = item.children?.find((c) => c.type === 'paragraph')
   if (!para?.position) return ''
-  return sourceLine(md, para)
-    .replace(/^\s*(?:[-+*]|\d+[.)])\s*/, '')
-    .replace(/^\\(?=[-+*#>]|\d+\.)/, '')
+  return (
+    sourceLine(md, para)
+      .replace(/^\s*(?:[-+*]|\d+[.)])\s*/, '')
+      // 前导反斜杠连串 + 标记：剥掉恰好一个 \（与 escapeItemText 的补 \ 互逆）
+      .replace(/^(\\+)(?=[-+*#>]|\d+\.)/, (_, backslashes: string) => backslashes.slice(1))
+  )
 }
 
-/** 列表块挂到最近标题下（嵌套列表递进一层），列表项内非列表内容收进 ignored */
+/** 列表块挂到最近标题下（嵌套列表递进一层），列表项首段落即其文本不计入 ignored，其余非列表内容收进 ignored */
 function visitList(md: string, list: MNode, parentNode: ZenNode, ignored: IgnoredBlock[]): void {
   for (const item of list.children ?? []) {
     if (item.type !== 'listItem') continue
+    const para = item.children?.find((c) => c.type === 'paragraph')
     const node: ZenNode = { text: listItemText(md, item), children: [] }
     parentNode.children.push(node)
     for (const sub of item.children ?? []) {
       if (sub.type === 'list') visitList(md, sub, node, ignored)
-      else ignored.push({ type: sub.type, excerpt: nodeText(sub).slice(0, 50) })
+      else if (sub !== para) ignored.push({ type: sub.type, excerpt: nodeText(sub).slice(0, 50) })
     }
   }
 }
 
 /** 标题挂到 outline 栈顶最近较浅标题下（多余 H1 按 d=1 弹栈至根，成为根的一级子节点） */
-function attachHeading(md: string, block: MNode, depth: number, stack: { depth: number; node: ZenNode }[]): void {
+function attachHeading(
+  md: string,
+  block: MNode,
+  depth: number,
+  stack: { depth: number; node: ZenNode }[],
+): void {
   while (stack.length > 1 && (stack.at(-1)?.depth ?? 0) >= depth) stack.pop()
   const node: ZenNode = { text: headingText(md, block), children: [] }
   stack.at(-1)?.node.children.push(node)
@@ -113,7 +134,8 @@ function visitBlock(md: string, block: MNode, state: OutlineState): string | nul
     return null
   }
   const top = state.stack.at(-1)
-  if (top === undefined) state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
+  if (top === undefined)
+    state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
   else visitList(md, block, top.node, state.ignored)
   return null
 }
