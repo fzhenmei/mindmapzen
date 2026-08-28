@@ -7,6 +7,7 @@ import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
 import type { RegisterCloseGuard } from './types/ports'
+import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -107,6 +108,18 @@ export default function App() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅启动时执行
+  }, [])
+
+  // auto 模式下跟随系统切换（显式亮/暗不受影响）；E2E web 模式 matchMedia 同样可用，无冲突
+  useEffect(() => {
+    const stop = watchSystemTheme(() => {
+      const { themePref } = useAppStore.getState()
+      if (themePref !== 'auto') return
+      const resolved = resolveTheme('auto')
+      useAppStore.setState({ resolvedTheme: resolved })
+      applyDocumentTheme(resolved)
+    })
+    return stop
   }, [])
 
   if (route === 'editor' && currentMdPath) {

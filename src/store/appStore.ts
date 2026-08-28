@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import type { FsAdapter, LayoutKind, MapInfo } from '../types/files'
+import type { FsAdapter, LayoutKind, MapInfo, ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
+import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
 
 interface AppState {
   route: 'library' | 'editor'
@@ -14,6 +15,10 @@ interface AppState {
   adapter: FsAdapter
   /** 用户偏好的默认布局（init 自配置；切换布局时更新并持久化） */
   preferredLayout: LayoutKind
+  /** 主题三态偏好（auto/亮/暗；init 自配置，切换时持久化） */
+  themePref: ThemePref
+  /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
+  resolvedTheme: ResolvedTheme
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -21,6 +26,7 @@ interface AppState {
   createAndOpen: (name: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
+  setThemePref: (p: ThemePref) => Promise<void>
   markDirty: () => void
   clearDirty: () => void
   backToLibrary: () => Promise<void>
@@ -37,13 +43,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   configPath: '/cfg.json',
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
   preferredLayout: 'mindmap',
+  themePref: 'auto',
+  resolvedTheme: 'light',
 
   setAdapter: (fs) => set({ adapter: fs }),
 
   init: async () => {
     const { adapter, configPath } = get()
     const cfg = await loadConfig(adapter, configPath)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap' })
+    // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
+    const themePref = cfg.theme ?? 'auto'
+    const resolved = resolveTheme(themePref)
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved })
+    applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir })
       await get().refreshMaps()
@@ -86,6 +98,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ preferredLayout: kind })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, preferredLayout: kind })
+  },
+
+  /** 主题三态偏好：即时更新状态并应用到 document，load-merge-save 持久化到应用配置 */
+  setThemePref: async (pref) => {
+    const { adapter, configPath } = get()
+    const resolved = resolveTheme(pref)
+    set({ themePref: pref, resolvedTheme: resolved })
+    applyDocumentTheme(resolved)
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, theme: pref })
   },
 
   openMap: async (mdPath) => {

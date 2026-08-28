@@ -4,6 +4,7 @@ import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { parse } from '../services/mdTree'
 import NameDialog from '../components/NameDialog'
+import ThemeToggle from '../components/ThemeToggle'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -141,6 +142,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             新建导图
           </button>
         )}
+        {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
+        <ThemeToggle />
       </header>
       {error && <div className="error-banner">{error}</div>}
       {renderBody()}

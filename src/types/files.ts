@@ -11,13 +11,25 @@ export function parseLayoutKind(v: unknown): LayoutKind | null {
   return LAYOUT_KINDS.has(v as LayoutKind) ? (v as LayoutKind) : null
 }
 
+/** 应用主题三态偏好（auto = 跟随系统） */
+export type ThemePref = 'auto' | 'light' | 'dark'
+
+const THEME_PREFS = new Set<ThemePref>(['auto', 'light', 'dark'])
+
+/** 宽容解析配置中的主题偏好：非法/缺失回退 auto（旧配置无 theme 字段按 auto 兼容） */
+export function parseThemePref(v: unknown): ThemePref {
+  return THEME_PREFS.has(v as ThemePref) ? (v as ThemePref) : 'auto'
+}
+
 export interface AppConfig {
   workspaceDir: string | null
   lastOpened: string | null
   /** 用户偏好的默认布局（新建导图与无 sidecar 导图的初始布局）；null = 未设置（按 mindmap） */
   preferredLayout: LayoutKind | null
+  /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
+  theme: ThemePref
 }
-export const DEFAULT_CONFIG: AppConfig = { workspaceDir: null, lastOpened: null, preferredLayout: null }
+export const DEFAULT_CONFIG: AppConfig = { workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto' }
 export interface Sidecar {
   version: 1
   theme: string

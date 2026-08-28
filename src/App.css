@@ -8,6 +8,10 @@ html, body { overflow: hidden; }
 .library { height: 100%; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
 .library-header { display: flex; align-items: center; gap: 12px; }
 .library-header h1 { font-size: 18px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 主题三态切换（M4）：页首常驻小按钮，文字占位（Task 4 换图标，尺寸不变） */
+.theme-toggle { min-width: 34px; height: 28px; padding: 0 8px; border: 1px solid var(--hairline); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--ink-2); font-size: 13px; cursor: pointer; }
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .hint { color: var(--ink-2); padding: 24px; text-align: center; }
 .map-list { list-style: none; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .map-list li { display: flex; align-items: center; gap: 8px; }
