@@ -41,6 +41,13 @@ html, body, #root { height: 100%; }
 .editor-title { font-size: 15px; margin-right: auto; }
 .dirty-badge { color: #e6a23c; margin-left: 4px; }
 .editor-toolbar button.copied { color: #2e9e5b; }
+/* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，重置默认边框 */
+.layout-switch { display: inline-flex; gap: 4px; border: 1px solid #ddd; border-radius: 6px;
+  padding: 2px; min-width: 0; }
+.layout-switch button { padding: 4px 10px; font-size: 13px; border: none; border-radius: 4px;
+  background: transparent; color: #555; cursor: pointer; }
+.layout-switch button:hover { background: #f0f0f0; }
+.layout-switch button.active { background: #e6f4ff; color: #0b57d0; }
 .ignored-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   background: #fff7e6; color: #8a6d3b; border-bottom: 1px solid #f0dcc0;
   padding: 6px 16px; font-size: 13px; }

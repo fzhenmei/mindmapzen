@@ -16,6 +16,8 @@ declare module 'simple-mind-map' {
     getData(): EngineNode
     setData(data: EngineNode): void
     execCommand(cmd: string, ...args: unknown[]): void
+    /** 运行中切换布局（引擎 index.js:436）：CONSTANTS.LAYOUT 小驼峰值，即时重排不重建实例 */
+    setLayout(name: string): void
     destroy(): void
     /** 引擎构造时同步创建（index.js:136 new Render）；节点实例定位与编辑框控制走这里 */
     renderer: EngineRenderer;

@@ -14,6 +14,8 @@ export interface EngineRenderer {
 export interface MindMapHandle {
   getData(): EngineNode
   execCommand(cmd: string, ...args: unknown[]): void
+  /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */
+  setLayout(name: string): void
   destroy(): void
   renderer?: EngineRenderer
 }

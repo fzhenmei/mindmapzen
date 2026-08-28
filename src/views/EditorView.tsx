@@ -11,7 +11,7 @@ import { readSidecar, writeSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
-import type { LayoutKind } from '../editor/layoutMap'
+import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { Sidecar } from '../types/files'
 import type { RegisterCloseGuard } from '../types/ports'
@@ -46,10 +46,15 @@ export default function EditorView({
   const dirtyRef = useRef(false)
   const savingRef = useRef(false)
   const pendingRef = useRef(false)
-  const layoutRef = useRef<LayoutKind>('mindmap') // 本阶段先默认，后续接 sidecar/切换的真实值
+  const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const guardSavingRef = useRef(false) // 守卫保存防重入（见 onGuardChoice）
+  // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
+  // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
+  // 故二者分开：switchLayout 只更新 layout/layoutRef，不动 initialLayout
+  const [layout, setLayout] = useState<LayoutKind>('mindmap')
+  const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
@@ -182,6 +187,11 @@ export default function EditorView({
         if (cancelled) return
         ignoredRef.current = r.ignoredBlocks
         setIgnored(r.ignoredBlocks)
+        // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）
+        const initial = sc?.layout ?? 'mindmap'
+        setInitialLayout(initial)
+        setLayout(initial)
+        layoutRef.current = initial
         setEngineTree(zenToEngineTree(r.tree, new Set(sc?.collapsed ?? [])))
         setState('ready')
       } catch (e) {
@@ -271,6 +281,14 @@ export default function EditorView({
     timerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_MS)
   }
 
+  /** 布局切换（spec §3.7）：引擎 setLayout 即时重排，不置脏、不自动保存——
+   *  sidecar 随下次保存落盘（无修改时纯偏好切换不产生写盘） */
+  const switchLayout = (kind: LayoutKind) => {
+    mmRef.current?.setLayout(layoutToEngine(kind))
+    layoutRef.current = kind
+    setLayout(kind)
+  }
+
   if (state === 'loading') return <div className="editor-loading">正在打开…</div>
 
   if (state === 'error' && errorInfo) {
@@ -326,6 +344,26 @@ export default function EditorView({
         <button type="button" data-testid="btn-save" onClick={() => void explicitSave()}>
           保存
         </button>
+        <fieldset className="layout-switch" aria-label="布局切换">
+          {(
+            [
+              ['mindmap', '思维导图'],
+              ['logic', '逻辑图'],
+              ['org', '组织结构图'],
+            ] as const
+          ).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              data-testid={`layout-${kind}`}
+              className={layout === kind ? 'active' : ''}
+              aria-pressed={layout === kind}
+              onClick={() => switchLayout(kind)}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
       </header>
       {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
       <div className="canvas-host">
@@ -333,6 +371,7 @@ export default function EditorView({
           <MindMapCanvas
             key={mdPath}
             tree={engineTree}
+            layout={layoutToEngine(initialLayout)}
             onReady={(mm) => (mmRef.current = mm)}
             onDataChange={onDataChange}
             onActiveChange={(uid) => {

@@ -3,6 +3,7 @@ import { beforeEach, vi } from 'vitest'
 import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { layoutToEngine } from '../editor/layoutMap'
 import type { MindMapHandle } from '../types/engine'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
@@ -17,11 +18,13 @@ vi.mock('../editor/MindMapCanvas', () => ({
     onDataChange,
     onActiveChange,
     onEditorPaste,
+    layout,
   }: {
     onReady: (h: MindMapHandle) => void
     onDataChange: () => void
     onActiveChange?: (uid: string | null) => void
     onEditorPaste?: (rawText: string) => void
+    layout?: string
   }) => {
     fakeHandle = {
       // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）
@@ -30,6 +33,7 @@ vi.mock('../editor/MindMapCanvas', () => ({
         children: [{ data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] }],
       }),
       execCommand: vi.fn(),
+      setLayout: vi.fn(),
       destroy: vi.fn(),
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
@@ -44,6 +48,8 @@ vi.mock('../editor/MindMapCanvas', () => ({
       onActiveChange?.(uid)
     ;(globalThis as unknown as Record<string, unknown>).__emitPaste = (raw: string) =>
       onEditorPaste?.(raw)
+    // 挂载期 layout prop（引擎构造参数，Task 3）：记录供「打开恢复布局」用例断言
+    ;(globalThis as unknown as Record<string, unknown>).__lastLayoutProp = layout
     return <div data-testid="fake-canvas" />
   },
 }))
@@ -617,4 +623,54 @@ test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5
   } finally {
     vi.useRealTimers()
   }
+})
+
+// ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
+
+test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle // ready 时刻实例即 mmRef 所持：后续重渲染 mock 会重建 fakeHandle，断言须用旧引用
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.click(screen.getByTestId('layout-org'))
+  expect(useAppStore.getState().dirty).toBe(true) // 来自前面的 __emitChange，与切换无关
+  expect(handle.setLayout).toHaveBeenCalledWith(layoutToEngine('org'))
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  const sc = JSON.parse(
+    await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/ws/a.zen.json'),
+  )
+  expect(sc.layout).toBe('org')
+})
+
+test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', async () => {
+  await fs.writeTextFileAtomic(
+    '/ws/b.zen.json',
+    JSON.stringify({ version: 1, layout: 'logic', collapsed: [] }),
+  )
+  await fs.writeTextFileAtomic('/ws/b.md', '# 根\n\n## 新分支\n')
+  render(
+    <EditorView
+      mdPath="/ws/b.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  expect((globalThis as unknown as Record<string, unknown>).__lastLayoutProp).toBe(
+    layoutToEngine('logic'),
+  )
+  expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByTestId('layout-mindmap')).toHaveAttribute('aria-pressed', 'false')
 })
