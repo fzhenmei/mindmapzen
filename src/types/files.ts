@@ -18,4 +18,5 @@ export interface FsAdapter {
   rename(a: string, b: string): Promise<void>       // 目标存在则替换
   remove(p: string): Promise<void>                  // Tauri 实现移入回收站
   exists(p: string): Promise<boolean>
+  ensureDir(p: string): Promise<void>               // 递归建目录，已存在则成功
 }

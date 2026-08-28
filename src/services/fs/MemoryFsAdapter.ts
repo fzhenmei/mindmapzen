@@ -4,7 +4,7 @@ interface Entry { contents: string; modifiedAt: number }
 
 /** 测试用内存文件系统：目录由路径隐式推导 */
 export class MemoryFsAdapter implements FsAdapter {
-  private files = new Map<string, Entry>()
+  private readonly files = new Map<string, Entry>()
   readonly removeLog: string[] = []
 
   async readTextFile(p: string): Promise<string> {
@@ -19,7 +19,9 @@ export class MemoryFsAdapter implements FsAdapter {
   }
 
   async readDir(p: string): Promise<string[]> {
-    const prefix = p.replace(/\/+$/, '') + '/'
+    let base = p
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    const prefix = base + '/'
     const names = new Set<string>()
     for (const key of this.files.keys()) {
       if (key.startsWith(prefix)) names.add(key.slice(prefix.length).split('/')[0]!)
@@ -45,5 +47,9 @@ export class MemoryFsAdapter implements FsAdapter {
 
   async exists(p: string): Promise<boolean> {
     return this.files.has(p)
+  }
+
+  async ensureDir(): Promise<void> {
+    // 内存实现目录由路径隐式推导，无需建目录（接口参数可省略）
   }
 }
