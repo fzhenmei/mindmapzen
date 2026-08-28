@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './theme'
+import { applyDocumentTheme, nextVisibleTheme, resolveTheme, watchSystemTheme } from './theme'
 
 const media = (dark: boolean) => ({ matches: dark, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList
 
@@ -25,5 +25,20 @@ describe('theme 服务', () => {
     stop()
     expect(m.removeEventListener).toHaveBeenCalled()
     spy.mockRestore()
+  })
+  test('nextVisibleTheme（系统亮）：单击必换可见主题', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue(media(false))
+    // auto(解析 light) → 跳过视觉相同的 light 直达 dark
+    expect(nextVisibleTheme('auto')).toBe('dark')
+    expect(nextVisibleTheme('light')).toBe('dark')
+    // dark → auto（解析回 light，一次可见变化）
+    expect(nextVisibleTheme('dark')).toBe('auto')
+  })
+  test('nextVisibleTheme（系统暗）：单击必换可见主题', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue(media(true))
+    // auto(解析 dark) → 跳过视觉相同的 dark 直达 light
+    expect(nextVisibleTheme('auto')).toBe('light')
+    expect(nextVisibleTheme('light')).toBe('auto')
+    expect(nextVisibleTheme('dark')).toBe('light')
   })
 })
