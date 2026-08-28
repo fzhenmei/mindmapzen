@@ -46,10 +46,12 @@ export default function EditorView({
   const dirtyRef = useRef(false)
   const savingRef = useRef(false)
   const pendingRef = useRef(false)
+  const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true)) // 当前串行保存轮（在途合并调用方等待它的最终结局）
+  const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const guardSavingRef = useRef(false) // 守卫保存防重入（见 onGuardChoice）
+  const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
   // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
   // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
   // 故二者分开：switchLayout 只更新 layout/layoutRef，不动 initialLayout
@@ -120,14 +122,22 @@ export default function EditorView({
     canvas: { x: 0, y: 0, zoom: 1 },
   })
 
-  /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功） */
+  /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功）。
+   *  清脏以修订号为门闩：快照前记 dataRevRef，写盘窗口内若落新编辑（修订号变）则本轮快照
+   *  不含该编辑——此时不能清脏（否则该编辑不在任何快照里且无人再补存，静默丢失），保脏并置补存。 */
   const writeOnce = async (): Promise<boolean> => {
     const mm = mmRef.current
     if (!mm || !dirtyRef.current) return true
     try {
+      const rev = dataRevRef.current
       const { tree, collapsed } = engineTreeToZen(mm.getData())
       await adapter.writeTextFileAtomic(mdPath, serialize(tree))
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+      if (dataRevRef.current !== rev) {
+        // 写盘窗口内有新编辑：保脏，置补存让串行循环用新快照再来一轮
+        pendingRef.current = true
+        return true
+      }
       dirtyRef.current = false
       clearDirty()
       return true
@@ -140,22 +150,28 @@ export default function EditorView({
     }
   }
 
-  /** 串行化保存：在途时新请求只标记补存；循环直到一轮内无新变更（spec §3.4） */
+  /** 串行化保存：在途时新请求只标记补存，并等待当前轮的最终结局（其循环会消化补存标记）。
+   *  合并分支必须返回当前轮 promise 而非立即 true——否则守卫保存/返回文件库会在补存轮
+   *  真正落盘前退出（窗口销毁/引擎销毁，补存轮可能永不执行）。 */
   const saveNow = async (): Promise<boolean> => {
     if (savingRef.current) {
       pendingRef.current = true
-      return true
+      return saveChainRef.current
     }
-    savingRef.current = true
-    try {
-      while (true) {
-        pendingRef.current = false
-        if (!(await writeOnce())) return false
-        if (!pendingRef.current) return true
+    const run = (async () => {
+      savingRef.current = true
+      try {
+        while (true) {
+          pendingRef.current = false
+          if (!(await writeOnce())) return false
+          if (!pendingRef.current) return true
+        }
+      } finally {
+        savingRef.current = false
       }
-    } finally {
-      savingRef.current = false
-    }
+    })()
+    saveChainRef.current = run
+    return run
   }
 
   /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
@@ -241,10 +257,12 @@ export default function EditorView({
   }, [])
 
   /** 三态选择：取消→收起；放弃→清脏直退；保存→走 explicitSave 落盘成功才退。
-   *  guardSavingRef 防重入：saveNow 在途合并会立即返回 true，连点保存若不加防将绕过等待提前 exitApp（落盘未完成即销毁窗口）。
+   *  guardSavingRef 防误触：保存一旦在途，三态（含取消/放弃）一律挡下——收框会与在途落盘竞态，
+   *  放弃清脏直退更会在写盘未完成时销毁窗口（数据丢失）；连点保存同理绕过等待提前 exitApp。
    *  explicitSave 返回 false 的两种情形同路处理（收起守卫对话框留在应用）：保存失败（横幅已提示）；
    *  忽略块确认挂起——由确认对话框接管，确认后仅落盘不退出，用户需再次关闭窗口（不静默退出/丢弃，spec §3.5 细化）。 */
   const onGuardChoice = async (c: 'save' | 'discard' | 'cancel'): Promise<void> => {
+    if (guardSavingRef.current) return // 保存动作在途：本轮对话框冻结，任何选择都不生效
     if (c === 'cancel') {
       setGuarding(false)
       return
@@ -255,7 +273,6 @@ export default function EditorView({
       exitApp()
       return
     }
-    if (guardSavingRef.current) return
     guardSavingRef.current = true
     const ok = await explicitSave()
     guardSavingRef.current = false
@@ -278,6 +295,9 @@ export default function EditorView({
 
   const onDataChange = () => {
     dirtyRef.current = true
+    dataRevRef.current++
+    // 写盘在途时的新编辑不在在途快照内：标记补存，让当前轮写完再补一轮（否则无人再触发落盘）
+    if (savingRef.current) pendingRef.current = true
     markDirty()
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_MS)

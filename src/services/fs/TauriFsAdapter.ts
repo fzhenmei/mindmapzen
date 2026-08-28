@@ -2,12 +2,16 @@ import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } fro
 import { invoke } from '@tauri-apps/api/core'
 import type { FsAdapter } from '../../types/files'
 
+// 临时名自增序号：内容保存与布局 sidecar 即时落盘可能并发写同一目标文件，
+// 固定 .tmp 会在 rename 上互抢（覆盖/误失败），唯一临时名保证互不干扰
+let tmpSeq = 0
+
 export const tauriFsAdapter: FsAdapter = {
   async readTextFile(p) {
     return readTextFile(p)
   },
   async writeTextFileAtomic(p, contents) {
-    const tmp = p + '.tmp'
+    const tmp = `${p}.tmp-${++tmpSeq}`
     await writeTextFile(tmp, contents)
     await rename(tmp, p)
   },

@@ -4,13 +4,20 @@ import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
-import type { MindMapHandle } from '../types/engine'
+import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
 // fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）
 const fakeRootNode = { uid: 'root-uid' }
 const fakeChildNode = { uid: 'child-uid' }
+// getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）。
+// 模块级可变：写盘窗口用例改写它模拟「落了新编辑」（getData 每次取当前值，跨重渲染可见）
+const defaultFakeTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [{ data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] }],
+})
+let fakeTree: EngineNode = defaultFakeTree()
 let fakeHandle: MindMapHandle
 vi.mock('../editor/MindMapCanvas', () => ({
   default: ({
@@ -27,11 +34,7 @@ vi.mock('../editor/MindMapCanvas', () => ({
     layout?: string
   }) => {
     fakeHandle = {
-      // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）
-      getData: () => ({
-        data: { text: '根', expand: true, uid: 'root-uid' },
-        children: [{ data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] }],
-      }),
+      getData: () => fakeTree,
       execCommand: vi.fn(),
       setLayout: vi.fn(),
       destroy: vi.fn(),
@@ -63,6 +66,7 @@ const noopExitApp = () => {}
 
 beforeEach(async () => {
   fs = new MemoryFsAdapter()
+  fakeTree = defaultFakeTree()
   await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 新分支\n')
   useAppStore.getState().setAdapter(fs)
   useAppStore.setState({
@@ -502,6 +506,114 @@ test('关闭守卫：对话框内连点保存不提前退出（落盘完成才�
   await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n') // 落盘完成
   expect(exitApp).toHaveBeenCalledTimes(1) // 也只有这一次
+})
+
+// ---- 写盘窗口与在途保存（终审修复回归：C1 保脏 / I1 保存链可等待 / I3 守卫防误触）----
+
+/** 门闸桩：writeTextFileAtomic 全部经 gate 挂起，releaseWrite() 后（含补存轮）即刻放行 */
+const hangWritesOnGate = () => {
+  let releaseWrite!: () => void
+  const gate = new Promise<void>((r) => (releaseWrite = r))
+  const original = fs.writeTextFileAtomic.bind(fs)
+  fs.writeTextFileAtomic = async (p: string, contents: string) => {
+    await gate
+    return original(p, contents)
+  }
+  return releaseWrite
+}
+
+test('写盘窗口内的新编辑不丢：清脏被修订号拦下并补存一轮（C1）', async () => {
+  const releaseWrite = hangWritesOnGate()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // 第一轮快照已取（旧内容），写盘挂起在途
+  // 写盘窗口内落一次新编辑：改写引擎数据并上报变更（该编辑不在在途快照内）
+  act(() => {
+    fakeTree.children![0]!.data.text = '写盘窗口内的新分支'
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  })
+  releaseWrite() // 在途写盘完成（落的是旧快照）；盲目清脏将使新编辑不在任何快照里且无人补存
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false)) // 补存轮完成后脏才清
+  expect(await fs.readTextFile('/ws/a.md')).toContain('## 写盘窗口内的新分支') // 新编辑已落盘
+  expect(await fs.readTextFile('/ws/a.md')).not.toContain('## 新分支\n') // 且非旧快照内容
+})
+
+test('在途保存时点返回：等待补存轮落盘完成才回文件库（I1）', async () => {
+  const releaseWrite = hangWritesOnGate()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // 第一轮保存挂起在途
+  fireEvent.click(screen.getByTestId('btn-back')) // 在途合并：须等待当前轮消化补存标记后导航
+  await act(async () => {}) // 排空微任务：合并分支若提前返回 true 将在此导航离开
+  expect(useAppStore.getState().route).toBe('editor') // 落盘未完成不得离开
+  releaseWrite()
+  await waitFor(() => expect(useAppStore.getState().route).toBe('library')) // 落盘完成才回库
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+})
+
+test('在途保存时守卫保存：等待当前轮落盘完成才退出（I1）', async () => {
+  const releaseWrite = hangWritesOnGate()
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // 先制造一轮在途保存
+  expect(guard.fireClose()).toBe(true) // 在途时请求关闭 → 拦截弹框
+  fireEvent.click(screen.getByTestId('closeguard-save')) // 守卫保存走合并分支
+  await act(async () => {}) // 排空微任务：合并分支若提前返回 true 将立即 exitApp
+  expect(exitApp).not.toHaveBeenCalled() // 补存未落盘不得退出
+  releaseWrite()
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1)) // 落盘完成才退出
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+})
+
+test('保存在途点取消被挡下：不收框不退出，落盘完成后按保存路径退出（I3）', async () => {
+  const releaseWrite = hangWritesOnGate()
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-save')) // 保存挂起在途
+  fireEvent.click(screen.getByTestId('closeguard-cancel')) // 在途点取消：须被挡下（否则收框与在途落盘竞态）
+  await act(async () => {}) // 排空微任务：误收/误退将在此暴露
+  expect(screen.getByTestId('closeguard-cancel')).toBeInTheDocument() // 对话框仍在：取消未生效
+  expect(exitApp).not.toHaveBeenCalled() // 仍在应用内：未提前退出
+  releaseWrite()
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1)) // 在途保存完成后按原意图退出
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+})
+
+test('保存在途点放弃被挡下：不清脏不退出，落盘完成后才退出（I3）', async () => {
+  await fs.writeTextFileAtomic('/ws/a.md', '# 旧根\n\n## 旧分支\n') // 用旧内容反证最终落的是新盘
+  const releaseWrite = hangWritesOnGate()
+  const guard = makeGuardStub()
+  const { exitApp } = await renderDirtyAndClose(guard)
+  fireEvent.click(screen.getByTestId('closeguard-save')) // 保存挂起在途
+  fireEvent.click(screen.getByTestId('closeguard-discard')) // 在途点放弃：须被挡下（否则清脏直退、在途写盘作废）
+  await act(async () => {})
+  expect(screen.getByTestId('closeguard-discard')).toBeInTheDocument() // 对话框仍在
+  expect(exitApp).not.toHaveBeenCalled() // 未因放弃立即退出
+  releaseWrite()
+  await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n') // 落的是保存的新内容而非放弃
 })
 
 // ---- 忽略块横幅与显式保存确认（spec §3.5 实施细化：自动保存静默）----
