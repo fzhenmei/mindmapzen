@@ -83,6 +83,7 @@ test('导入：有忽略块先预览，确认后入库并打开', async () => {
   render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickImport} />)
   fireEvent.click(screen.getByTestId('btn-import'))
   expect(await screen.findByTestId('import-preview')).toHaveTextContent('1 个内容块未映射')
+  expect(screen.getByTestId('import-preview')).toHaveTextContent('段落：一段会被忽略的说明')
   fireEvent.click(screen.getByTestId('import-cancel'))
   expect(await fs.exists('/ws/外部.md')).toBe(false) // 取消不入库
   fireEvent.click(screen.getByTestId('btn-import'))

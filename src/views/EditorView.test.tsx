@@ -286,6 +286,77 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
   await waitFor(() => expect(writes).toHaveLength(1))
 })
 
+// ---- 印记（Task 7：显式保存成功朱砂印 / 复制成功墨青印，替代按钮内 ✓ 文案）----
+
+test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  // 只 fake setTimeout/clearTimeout 控印记的 1.2s 消失；fake 定时器下 RTL 的 waitFor 会挂起，
+  // 故后续用 act 同步推进 + 同步查询（同自动保存静默用例模式）
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-save'))
+    await act(async () => {}) // 排空落盘微任务：印记随保存成功渲染
+    expect(useAppStore.getState().dirty).toBe(false)
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+    expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-seal')
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('干净状态下保存为 no-op：不盖印记（无用户可感知的写盘）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：文档干净
+  fireEvent.click(screen.getByTestId('btn-save'))
+  await act(async () => {})
+  expect(useAppStore.getState().dirty).toBe(false)
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+})
+
+test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await act(async () => {}) // 排空剪贴板微任务
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+  expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
+  expect(screen.getByTestId('btn-copy')).not.toHaveTextContent('✓')
+})
+
 // ---- 多行粘贴执行（拆子节点，spec §3.6）----
 // 单行粘贴不拦截是引擎侧行为（MindMapCanvas onPaste 放行），此处只验证 applyMultilinePaste
 // 对收到的 raw 的执行语义。
@@ -739,9 +810,17 @@ test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5
     expect(useAppStore.getState().dirty).toBe(false) // 已自动保存
     expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
     expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument() // 未弹确认
+    expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument() // 印记只属于显式保存
   } finally {
     vi.useRealTimers()
   }
+})
+
+test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', async () => {
+  await renderIgnoredMap()
+  fireEvent.click(screen.getByTestId('ignored-toggle'))
+  expect(screen.getByTestId('ignored-list')).toHaveTextContent('段落：一段说明')
+  expect(screen.getByTestId('ignored-list')).not.toHaveTextContent('paragraph')
 })
 
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----

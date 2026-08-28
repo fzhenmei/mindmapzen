@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { describeIgnoredType } from '../services/ignoredType'
 import type { IgnoredBlock } from '../types/tree'
 
 /** 忽略块横幅（spec §3.5）：文档内未映射为节点的段落/代码块在打开时告知用户。
@@ -15,7 +16,7 @@ export default function IgnoredBlocksBanner({ blocks }: Readonly<{ blocks: Ignor
         <ul data-testid="ignored-list">
           {blocks.map((b, i) => (
             <li key={i}>
-              {b.type}：{b.excerpt}
+              {describeIgnoredType(b.type)}：{b.excerpt}
             </li>
           ))}
         </ul>

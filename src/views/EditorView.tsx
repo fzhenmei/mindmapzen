@@ -20,6 +20,7 @@ import type { RegisterCloseGuard } from '../types/ports'
 import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
+import SaveStamp from '../components/SaveStamp'
 import ZenDialog from '../components/ZenDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import {
@@ -67,7 +68,6 @@ export default function EditorView({
   const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
   // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
   // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
@@ -78,7 +78,7 @@ export default function EditorView({
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
-  const [copied, setCopied] = useState(false)
+  const [stamp, setStamp] = useState<'saved' | 'copied' | null>(null) // 印记：显式保存/复制成功后闪现 1.2s
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
   const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
@@ -102,9 +102,7 @@ export default function EditorView({
         setActiveUid(null)
       }
       await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
-      setCopied(true)
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
+      setStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
     }
@@ -191,10 +189,19 @@ export default function EditorView({
     return run
   }
 
+  /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」——
+   *  干净状态下保存是 no-op（无用户可感知的写盘），不印记 */
+  const saveAndStamp = async (): Promise<boolean> => {
+    const wasDirty = dirtyRef.current
+    const ok = await saveNow()
+    if (ok && wasDirty) setStamp('saved')
+    return ok
+  }
+
   /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
-   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接调 saveNow。
+   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接落盘。
    *  自动保存（5s 防抖定时器）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃——
-   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）。 */
+   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）；印记亦只属于显式保存。 */
   const explicitSave = async (): Promise<boolean> => {
     if (ignoredRef.current.length > 0 && !ignoredConfirmedRef.current) {
       // 等待用户裁决期间暂停自动保存，防止确认悬而未决时被定时器静默落盘丢弃
@@ -202,7 +209,7 @@ export default function EditorView({
       setConfirmingIgnored(true)
       return false
     }
-    return saveNow()
+    return saveAndStamp()
   }
 
   useEffect(() => {
@@ -306,7 +313,6 @@ export default function EditorView({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
       if (dirtyRef.current) void saveNow() // unmount 冲刷（含返回文件库）
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount 冲刷，saveNow 依赖 refs
@@ -400,7 +406,6 @@ export default function EditorView({
         <button
           type="button"
           data-testid="btn-copy"
-          className={copied ? 'copied' : undefined}
           data-scope={activeUid ? 'branch' : 'full'}
           title={
             activeUid
@@ -409,7 +414,7 @@ export default function EditorView({
           }
           onClick={() => void doCopy()}
         >
-          {copied ? '✓' : <IconCopy />}
+          <IconCopy />
         </button>
         <button
           type="button"
@@ -475,6 +480,8 @@ export default function EditorView({
           ))}
         </fieldset>
       </header>
+      {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记） */}
+      {stamp && <SaveStamp kind={stamp} />}
       {/* 左下题签 + 朱砂脏印；右下主题钮 */}
       <div className="editor-caption">
         <span className="caption-name">{name}</span>
@@ -503,7 +510,7 @@ export default function EditorView({
                 onClick={() => {
                   setConfirmingIgnored(false)
                   ignoredConfirmedRef.current = true // 本会话确认过即不再弹（spec §3.5）
-                  void saveNow() // 仅落盘：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
+                  void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
                 }}
               >
                 继续保存

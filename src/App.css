@@ -81,7 +81,6 @@ html, body { overflow: hidden; }
   width: 28px; height: 28px; border: none; border-radius: var(--radius-s);
   background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
 .zen-bar button:hover { background: var(--accent-soft); color: var(--accent); }
-.zen-bar button.copied { color: var(--accent); }
 .zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 4px; }
 /* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，去边框并入砚栏图标组 */
 .layout-switch { display: inline-flex; gap: 2px; border: none; padding: 0; margin: 0; min-width: 0; }
@@ -91,6 +90,14 @@ html, body { overflow: hidden; }
   gap: 8px; color: var(--ink-2); font-size: 13px; pointer-events: none; }
 .caption-name { font-family: var(--font-mono); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seal-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--seal); display: inline-block; }
+/* 印记（Task 7）：保存成功朱砂印 / 已复制墨青印，右上角 250ms 缩放定影，1.2s 后由组件卸载。
+   top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞 */
+.save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: 4px 10px;
+  font-size: 13px; border-radius: var(--radius-s); animation: stamp-in var(--dur-2) ease-out; }
+.stamp-seal { color: var(--seal); border: 1.5px solid var(--seal); border-radius: 4px; transform: rotate(-3deg); }
+.stamp-ink { color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; }
+@keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .save-stamp { animation: none; } }
 /* 右下主题圆钮；文件库页首同款 */
 .theme-fab { position: absolute; right: 16px; bottom: 12px; z-index: 5; }
 .theme-fab button, .library .theme-toggle { width: 30px; height: 30px; border-radius: var(--radius-pill);

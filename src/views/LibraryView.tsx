@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { parse } from '../services/mdTree'
+import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import ZenDialog from '../components/ZenDialog'
 import ThemeToggle from '../components/ThemeToggle'
@@ -257,11 +258,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }
         >
           <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
-          {/* 忽略块类型文案：Task 7 提供 describeIgnoredType 前沿用 type 原文 */}
           <ul className="ignored-preview-list">
             {importPreview.blocks.map((b) => (
               <li key={`${b.type}:${b.excerpt}`}>
-                {b.type}：{b.excerpt}
+                {describeIgnoredType(b.type)}：{b.excerpt}
               </li>
             ))}
           </ul>

@@ -3,8 +3,9 @@ import { writeSidecar } from './sidecar'
 
 const INVALID = /[\\/:*?"<>|]/
 
-/** 新建导图时随 .md 一并落盘的默认 sidecar（主题/布局/画布均为初始值） */
-const DEFAULT_SIDECAR: Sidecar = {
+/** 新建/导入导图时随 .md 一并落盘的默认 sidecar（主题/布局/画布均为初始值）。
+ *  M4 缓期项清偿：导出供 importMap.ts 复用（原各自持有一份字面副本） */
+export const DEFAULT_SIDECAR: Sidecar = {
   version: 1,
   theme: 'default',
   layout: 'mindmap',
