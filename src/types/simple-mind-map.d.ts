@@ -4,6 +4,7 @@ declare module 'simple-mind-map' {
   import type { EngineNode, MindMapHandle } from './engine'
   export default class MindMap implements MindMapHandle {
     constructor(opts: { el: HTMLElement; data?: EngineNode; [k: string]: unknown })
+    static usePlugin(plugin: unknown, opt?: unknown): void
     on(event: string, cb: (...args: unknown[]) => void): void
     off(event: string, cb: (...args: unknown[]) => void): void
     getData(): EngineNode
@@ -12,4 +13,9 @@ declare module 'simple-mind-map' {
     destroy(): void
     [key: string]: unknown
   }
+}
+
+declare module 'simple-mind-map/src/plugins/Drag.js' {
+  const Drag: unknown
+  export default Drag
 }
