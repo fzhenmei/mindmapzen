@@ -37,6 +37,7 @@ vi.mock('../editor/MindMapCanvas', () => ({
       getData: () => fakeTree,
       execCommand: vi.fn(),
       setLayout: vi.fn(),
+      setTheme: vi.fn(),
       resize: vi.fn(),
       el: null,
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },

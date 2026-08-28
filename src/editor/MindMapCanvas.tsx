@@ -3,10 +3,15 @@ import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import { handleEngineKeyDown } from './engineKeyboard'
+import { registerZenThemes } from './engineThemes'
 
 // 节点拖拽插件：拖到节点上=成为其子节点，拖到两节点之间=调整同级顺序（spec P0"拖拽节点改变层级与顺序"）
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
 MindMap.usePlugin(Drag)
+
+// 主题注册必须先于任何实例构造：构造 opt.theme 未注册时引擎静默回退默认主题
+// （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）
+registerZenThemes()
 
 interface Props {
   tree: EngineNode
@@ -15,6 +20,8 @@ interface Props {
   onActiveChange?: (uid: string | null) => void
   onEditorPaste?: (rawText: string) => void
   layout?: string
+  /** 引擎主题名（zen-paper/zen-night，见 engineThemes.ts）；挂载期入构造 opt，运行中变更走 setTheme 不重挂载 */
+  theme?: string
 }
 
 /** 引擎画布封装：挂载建实例、卸载销毁；父组件用 key={mdPath} 切换文档。
@@ -26,6 +33,7 @@ export default function MindMapCanvas({
   onActiveChange,
   onEditorPaste,
   layout,
+  theme,
 }: Readonly<Props>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mmRef = useRef<MindMapHandle | null>(null)
@@ -38,6 +46,7 @@ export default function MindMapCanvas({
       el: containerRef.current!,
       data: tree,
       ...(layout ? { layout } : {}),
+      ...(theme ? { theme } : {}),
     })
     mmRef.current = mm
     const changed = () => cbRef.current.onDataChange()
@@ -98,6 +107,16 @@ export default function MindMapCanvas({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时初始化，文档切换由父组件 key 重挂载实现
   }, [])
+
+  // 主题切换（M4）：setTheme 即时重渲染不重挂载（引擎 index.js:379-386，清选中→重绘→view_theme_change）；
+  // themeRef 初值即挂载期 theme，构造已生效的值不重复调用
+  const themeRef = useRef(theme)
+  useEffect(() => {
+    if (theme && themeRef.current !== theme) {
+      themeRef.current = theme
+      mmRef.current?.setTheme(theme)
+    }
+  }, [theme])
 
   // role=application：向辅助技术标明这是应用区域（键盘交互在上方 window 监听中处理）
   return <div ref={containerRef} role="application" style={{ width: '100%', height: '100%' }} />

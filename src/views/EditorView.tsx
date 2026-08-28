@@ -11,6 +11,7 @@ import { readSidecar, writeSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
+import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -42,6 +43,7 @@ export default function EditorView({
 }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
+  const resolvedTheme = useAppStore((s) => s.resolvedTheme)
   const mmRef = useRef<MindMapHandle | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirtyRef = useRef(false)
@@ -446,6 +448,7 @@ export default function EditorView({
             key={mdPath}
             tree={engineTree}
             layout={layoutToEngine(initialLayout)}
+            theme={engineThemeName(resolvedTheme)}
             onReady={(mm) => (mmRef.current = mm)}
             onDataChange={onDataChange}
             onActiveChange={(uid) => {

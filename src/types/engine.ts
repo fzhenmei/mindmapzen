@@ -39,6 +39,8 @@ export interface MindMapHandle {
   execCommand(cmd: string, ...args: unknown[]): void
   /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */
   setLayout(name: string): void
+  /** 运行中切换主题（引擎 index.js:379 setTheme(theme)）：清选中→重绘→view_theme_change；不重挂载画布 */
+  setTheme(name: string): void
   /** 容器尺寸变化后重算画布（引擎 index.js:325 resize()；引擎无自动监听，须由宿主在窗口 resize 时调用） */
   resize(): void
   /** 视图变换与复位（引擎 View.js） */
