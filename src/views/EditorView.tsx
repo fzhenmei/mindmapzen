@@ -15,7 +15,9 @@ import type { LayoutKind } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { Sidecar } from '../types/files'
 import type { RegisterCloseGuard } from '../types/ports'
+import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from '../components/CloseGuardDialog'
+import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 
 interface Props {
   mdPath: string
@@ -54,6 +56,11 @@ export default function EditorView({
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [copied, setCopied] = useState(false)
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
+  const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
+  const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
+  // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
+  const ignoredRef = useRef<IgnoredBlock[]>([])
+  const ignoredConfirmedRef = useRef(false) // 本会话确认过一次即不再弹（spec §3.5）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -144,6 +151,20 @@ export default function EditorView({
     }
   }
 
+  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
+   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接调 saveNow。
+   *  自动保存（5s 防抖定时器）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃——
+   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）。 */
+  const explicitSave = async (): Promise<boolean> => {
+    if (ignoredRef.current.length > 0 && !ignoredConfirmedRef.current) {
+      // 等待用户裁决期间暂停自动保存，防止确认悬而未决时被定时器静默落盘丢弃
+      if (timerRef.current) clearTimeout(timerRef.current)
+      setConfirmingIgnored(true)
+      return false
+    }
+    return saveNow()
+  }
+
   useEffect(() => {
     dirtyRef.current = false
     let cancelled = false
@@ -159,6 +180,8 @@ export default function EditorView({
         }
         const sc = await readSidecar(adapter, mdPath)
         if (cancelled) return
+        ignoredRef.current = r.ignoredBlocks
+        setIgnored(r.ignoredBlocks)
         setEngineTree(zenToEngineTree(r.tree, new Set(sc?.collapsed ?? [])))
         setState('ready')
       } catch (e) {
@@ -186,12 +209,12 @@ export default function EditorView({
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        void saveNow()
+        void explicitSave()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveNow/doCopy 闭包依赖 refs，无需重绑
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- explicitSave/saveNow/doCopy 闭包依赖 refs，无需重绑
   }, [])
 
   // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭
@@ -205,8 +228,10 @@ export default function EditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载期注册一次，端口经 props 注入且稳定
   }, [])
 
-  /** 三态选择：取消→收起；放弃→清脏直退；保存→落盘成功才退（失败留在应用，横幅已提示）。
-   *  guardSavingRef 防重入：saveNow 在途合并会立即返回 true，连点保存若不加防将绕过等待提前 exitApp（落盘未完成即销毁窗口）。 */
+  /** 三态选择：取消→收起；放弃→清脏直退；保存→走 explicitSave 落盘成功才退。
+   *  guardSavingRef 防重入：saveNow 在途合并会立即返回 true，连点保存若不加防将绕过等待提前 exitApp（落盘未完成即销毁窗口）。
+   *  explicitSave 返回 false 的两种情形同路处理（收起守卫对话框留在应用）：保存失败（横幅已提示）；
+   *  忽略块确认挂起——由确认对话框接管，确认后仅落盘不退出，用户需再次关闭窗口（不静默退出/丢弃，spec §3.5 细化）。 */
   const onGuardChoice = async (c: 'save' | 'discard' | 'cancel'): Promise<void> => {
     if (c === 'cancel') {
       setGuarding(false)
@@ -220,7 +245,7 @@ export default function EditorView({
     }
     if (guardSavingRef.current) return
     guardSavingRef.current = true
-    const ok = await saveNow()
+    const ok = await explicitSave()
     guardSavingRef.current = false
     if (!ok) {
       setGuarding(false)
@@ -269,8 +294,8 @@ export default function EditorView({
           data-testid="btn-back"
           onClick={async () => {
             if (timerRef.current) clearTimeout(timerRef.current)
-            const ok = await saveNow()
-            if (!ok) return // 保存失败留在编辑器（spec §3.4）
+            const ok = await explicitSave()
+            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
             await backToLibrary()
           }}
         >
@@ -298,10 +323,11 @@ export default function EditorView({
         >
           {copied ? '✓ 已复制' : '复制 MD'}
         </button>
-        <button type="button" data-testid="btn-save" onClick={() => void saveNow()}>
+        <button type="button" data-testid="btn-save" onClick={() => void explicitSave()}>
           保存
         </button>
       </header>
+      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
       <div className="canvas-host">
         {engineTree && (
           <MindMapCanvas
@@ -318,6 +344,33 @@ export default function EditorView({
         )}
       </div>
       {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
+      {confirmingIgnored && (
+        <div className="dialog-mask" role="dialog" aria-label="保存确认">
+          <div className="dialog">
+            <h3>保存将丢弃 {ignored.length} 个未映射的内容块</h3>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                data-testid="ignored-confirm-cancel"
+                onClick={() => setConfirmingIgnored(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                data-testid="ignored-confirm-save"
+                onClick={() => {
+                  setConfirmingIgnored(false)
+                  ignoredConfirmedRef.current = true // 本会话确认过即不再弹（spec §3.5）
+                  void saveNow() // 仅落盘：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
+                }}
+              >
+                继续保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

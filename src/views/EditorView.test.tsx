@@ -497,3 +497,113 @@ test('关闭守卫：对话框内连点保存不提前退出（落盘完成才�
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n') // 落盘完成
   expect(exitApp).toHaveBeenCalledTimes(1) // 也只有这一次
 })
+
+// ---- 忽略块横幅与显式保存确认（spec §3.5 实施细化：自动保存静默）----
+
+/** 渲染带未映射段落（「一段说明。」）的文档：打开成功即顶部横幅可见。
+ *  独立路径 /ws/ignored.md，避免与 beforeEach 的 /ws/a.md 内容互相干扰。 */
+const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
+  const exitApp = vi.fn()
+  await fs.writeTextFileAtomic('/ws/ignored.md', '# 根\n\n一段说明。\n\n## A\n')
+  render(
+    <EditorView
+      mdPath="/ws/ignored.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={guard ? guard.register : noopRegister}
+      exitApp={exitApp}
+    />,
+  )
+  await screen.findByTestId('ignored-banner')
+  return { exitApp }
+}
+
+test('有忽略块时：显式保存先确认，确认后写盘且本会话不再弹', async () => {
+  await renderIgnoredMap()
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  fireEvent.click(screen.getByTestId('btn-save'))
+  expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('ignored-confirm-save'))
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
+  fireEvent.click(screen.getByTestId('btn-save')) // 第二次不再弹（本会话已确认）
+  await waitFor(() => expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument())
+})
+
+test('Ctrl+S 同样先确认（快捷键监听只绑定一次，仍须感知忽略块）', async () => {
+  await renderIgnoredMap()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+})
+
+test('有修改时取消确认：不写盘、脏保留（数据不静默丢弃）', async () => {
+  await renderIgnoredMap()
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  fireEvent.click(screen.getByTestId('btn-save'))
+  expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('ignored-confirm-cancel'))
+  await waitFor(() =>
+    expect(screen.queryByTestId('ignored-confirm-cancel')).not.toBeInTheDocument(),
+  )
+  expect(await fs.readTextFile('/ws/ignored.md')).toContain('一段说明') // 未落盘
+  expect(useAppStore.getState().dirty).toBe(true)
+})
+
+test('有忽略块时返回：确认挂起留在编辑器，确认后仅落盘不自动导航', async () => {
+  await renderIgnoredMap()
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.click(screen.getByTestId('btn-back'))
+  expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+  expect(useAppStore.getState().route).toBe('editor') // 返回动作挂起，未离开
+  fireEvent.click(screen.getByTestId('ignored-confirm-save'))
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明') // 已落盘
+  expect(useAppStore.getState().route).toBe('editor') // 不自动导航：用户需再点一次返回
+})
+
+test('有忽略块时守卫保存：收起守卫对话框改弹忽略确认，确认后仅落盘不退出', async () => {
+  const guard = makeGuardStub()
+  const { exitApp } = await renderIgnoredMap(guard)
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  expect(guard.fireClose()).toBe(true)
+  expect(await screen.findByTestId('closeguard-save')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('closeguard-save'))
+  // 守卫对话框收起，忽略块确认接管（不静默退出，也不静默丢弃）
+  await waitFor(() => expect(screen.queryByTestId('closeguard-save')).not.toBeInTheDocument())
+  expect(await screen.findByTestId('ignored-confirm-save')).toBeInTheDocument()
+  expect(exitApp).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByTestId('ignored-confirm-save'))
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
+  expect(exitApp).not.toHaveBeenCalled() // 不退出：用户确认后需再次关闭窗口
+})
+
+test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5 秒弹窗极扰人）', async () => {
+  await renderIgnoredMap()
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 只 fake setTimeout/clearTimeout 控制自动保存防抖；fake 定时器下 RTL 的 findBy/waitFor
+  // 自身会挂起，故后续改用 act 同步推进 + 同步查询
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    })
+    expect(screen.getByTestId('dirty-badge')).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    await act(async () => {}) // 排空落盘微任务
+    expect(useAppStore.getState().dirty).toBe(false) // 已自动保存
+    expect(await fs.readTextFile('/ws/ignored.md')).not.toContain('一段说明')
+    expect(screen.queryByTestId('ignored-confirm-save')).not.toBeInTheDocument() // 未弹确认
+  } finally {
+    vi.useRealTimers()
+  }
+})
