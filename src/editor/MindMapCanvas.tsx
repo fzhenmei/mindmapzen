@@ -11,16 +11,19 @@ interface Props {
 
 /** 引擎画布封装：挂载建实例、卸载销毁；父组件用 key={mdPath} 切换文档。
  *  本组件不做单元测试（引擎依赖真实 DOM 布局），由 E2E 与手工清单覆盖。 */
-export default function MindMapCanvas({ tree, onReady, onDataChange }: Props) {
+export default function MindMapCanvas({ tree, onReady, onDataChange }: Readonly<Props>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mmRef = useRef<MindMapHandle | null>(null)
+  // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
+  const cbRef = useRef({ onReady, onDataChange })
+  cbRef.current = { onReady, onDataChange }
 
   useEffect(() => {
     const mm = new MindMap({ el: containerRef.current!, data: tree })
     mmRef.current = mm
-    const changed = () => onDataChange()
+    const changed = () => cbRef.current.onDataChange()
     mm.on('data_change', changed)
-    onReady(mm)
+    cbRef.current.onReady(mm)
     return () => {
       mm.off('data_change', changed)
       mm.destroy()
