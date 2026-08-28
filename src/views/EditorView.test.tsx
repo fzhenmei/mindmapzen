@@ -452,6 +452,9 @@ test('关闭守卫：放弃修改 → 不落盘直接退出', async () => {
   fireEvent.click(screen.getByTestId('closeguard-discard'))
   await waitFor(() => expect(exitApp).toHaveBeenCalledTimes(1))
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 旧根\n\n## 旧分支\n') // 未保存
+  // 僵尸态回归钉死：若 exitApp 失败窗口留下，store 脏标记必须已清（● 消失），
+  // 否则"显示未保存但保存按钮 no-op"自相矛盾（v0.3.0 验收实案）
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
 })
 
 test('关闭守卫：保存失败 → 收起对话框留在应用（不静默退出）', async () => {

@@ -269,6 +269,7 @@ export default function EditorView({
     }
     if (c === 'discard') {
       dirtyRef.current = false
+      clearDirty() // store 脏标记同步清除：exitApp 失败窗口留下时，避免"● 显示未保存但保存 no-op"的僵尸态
       setGuarding(false)
       exitApp()
       return
