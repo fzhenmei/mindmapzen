@@ -71,6 +71,10 @@ export default function MindMapCanvas({
     }
     window.addEventListener('keydown', onKeydown)
 
+    // 引擎无容器尺寸自动监听：窗口最大化/还原时手动重算画布（验收实案：最大化后画布保持原尺寸）
+    const onResize = () => mmRef.current?.resize()
+    window.addEventListener('resize', onResize)
+
     // 多行粘贴拦截：引擎编辑框（contenteditable，挂在 document.body）收到含换行的文本时
     // 阻止原生单框粘贴，把原始文本上报给宿主（拆子节点由 EditorView/Task 4 执行）；单行放行给引擎原生行为
     const onPaste = (e: ClipboardEvent) => {
@@ -85,6 +89,7 @@ export default function MindMapCanvas({
 
     return () => {
       window.removeEventListener('keydown', onKeydown)
+      window.removeEventListener('resize', onResize)
       window.removeEventListener('paste', onPaste)
       mm.off('node_active', onActive)
       mm.off('data_change', changed)

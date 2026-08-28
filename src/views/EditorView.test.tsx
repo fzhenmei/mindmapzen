@@ -37,6 +37,8 @@ vi.mock('../editor/MindMapCanvas', () => ({
       getData: () => fakeTree,
       execCommand: vi.fn(),
       setLayout: vi.fn(),
+      resize: vi.fn(),
+      view: { reset: vi.fn() },
       destroy: vi.fn(),
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
@@ -741,6 +743,14 @@ test('有忽略块时自动保存静默落盘不弹确认（实施裁定：每 5
 })
 
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
+
+test('居中按钮：视图复位（缩放 1:1 回中心）', async () => {
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-center'))
+  expect(fakeHandle.view.reset).toHaveBeenCalledTimes(1)
+})
 
 test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', async () => {
   render(

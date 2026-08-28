@@ -382,6 +382,14 @@ export default function EditorView({
         <button type="button" data-testid="btn-save" onClick={() => void explicitSave()}>
           保存
         </button>
+        <button
+          type="button"
+          data-testid="btn-center"
+          title="视图复位：缩放回 100% 并让导图回到画布中心"
+          onClick={() => mmRef.current?.view.reset()}
+        >
+          居中
+        </button>
         <fieldset className="layout-switch" aria-label="布局切换">
           {(
             [
