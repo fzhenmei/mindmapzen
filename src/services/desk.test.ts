@@ -43,4 +43,16 @@ describe('moveMap', () => {
     const info = await moveMap(fs, '/ws', 'b', '', 'd2')
     expect(await fs.exists('/ws/d2/' + info.name + '.md')).toBe(true)
   })
+  test('同目录自碰撞守卫：fromRel/toRel 归一后相同则早返回原 MapInfo，不改名不落时间戳后缀', async () => {
+    // 同目录下源文件自身会被重名循环撞上，若无守卫将误改名为 a-YYYYMMDD-HHmm
+    await fs.writeTextFileAtomic('/ws/a.md', '# a\n')
+    await fs.writeTextFileAtomic('/ws/a.zen.json', '{}')
+    // toRel 带首尾斜杠（'/a/'）也须归一命中守卫
+    const info = await moveMap(fs, '/ws', 'a', 'a', '/a/')
+    expect(info.name).toBe('a')
+    expect(info.relDir).toBe('a')
+    expect(info.mdPath).toBe('/ws/a/a.md')
+    expect(await fs.exists('/ws/a.md')).toBe(true)
+    expect(await fs.exists('/ws/a.zen.json')).toBe(true)
+  })
 })

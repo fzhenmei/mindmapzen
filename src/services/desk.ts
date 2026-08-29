@@ -43,6 +43,8 @@ export async function createDir(fs: FsAdapter, wsDir: string, relPath: string): 
 }
 
 /** 移动导图（.md + .zen.json 两文件同移）到目标目录；源 sidecar 缺失则只移 .md。
+ *  同目录自碰撞守卫（Task 2 复审修复）：fromRel 与 toRel 归一后相同则早返回原 MapInfo——
+ *  否则重名循环第一步就撞上源文件自身，会把导图误改名成 `名称-YYYYMMDD-HHmm`。
  *  目标重名后缀与 importMap.commitImport 同规则：先 `名称`，冲突 `名称-YYYYMMDD-HHmm`，
  *  同一分钟内仍冲突再追加 `-2/-3` 序号循环直到空闲（任何情况都不覆盖既有导图）；
  *  按计划 ruling 两处各自实现（注释互指），不抽公共函数 */
@@ -53,8 +55,13 @@ export async function moveMap(
   fromRel: string,
   toRel: string,
 ): Promise<MapInfo> {
-  const fromDir = relToAbs(wsDir, fromRel)
+  const fromRelNorm = normalizeRel(fromRel)
   const toRelNorm = normalizeRel(toRel)
+  const fromDir = relToAbs(wsDir, fromRelNorm)
+  if (fromRelNorm === toRelNorm) {
+    const mdPath = joinPath(fromDir, name + '.md')
+    return { name, mdPath, relDir: toRelNorm, modifiedAt: await fs.statModified(mdPath) }
+  }
   const toDir = relToAbs(wsDir, toRelNorm)
   await fs.ensureDir(toDir)
   const d = new Date()

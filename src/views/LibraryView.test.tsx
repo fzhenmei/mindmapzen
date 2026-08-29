@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { beforeEach, describe } from 'vitest'
 import LibraryView from './LibraryView'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -13,7 +13,7 @@ beforeEach(async () => {
   fs = new MemoryFsAdapter()
   await fs.writeTextFileAtomic('/ws/想法A.md', '# A\n')
   useAppStore.getState().setAdapter(fs)
-  useAppStore.setState({ route: 'library', maps: [], workspaceDir: null, currentMdPath: null, error: null })
+  useAppStore.setState({ route: 'library', maps: [], workspaceDir: null, currentMdPath: null, error: null, selectedDir: '' })
   pickMdFile.mockClear()
 })
 
@@ -52,7 +52,7 @@ test('删除需二次确认', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)
   fireEvent.click(screen.getByTestId('btn-delete'))
-  expect(screen.queryByTestId('map-item')).toBeInTheDocument()
+  expect(screen.getByTestId('map-item')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-delete-confirm'))
   await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(0))
   expect(fs.removeLog).toEqual(['/ws/想法A.md'])
@@ -90,4 +90,89 @@ test('导入：有忽略块先预览，确认后入库并打开', async () => {
   fireEvent.click(await screen.findByTestId('import-confirm'))
   await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
   expect(await fs.readTextFile('/ws/外部.md')).toContain('# 外部图')
+})
+
+describe('案头目录（M5a）', () => {
+  test('目录树渲染与过滤', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.mkdir('/ws/项目')
+    await dirFs.writeTextFileAtomic('/ws/项目/甲.md', '# 甲\n')
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    expect(await screen.findByTestId('dir-node-项目')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('dir-node-项目'))
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('项目'))
+    // 只剩项目目录的图
+    expect(screen.getByTestId('map-item')).toHaveTextContent('甲')
+    fireEvent.click(screen.getByTestId('dir-node-all'))
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe(''))
+    expect(screen.getAllByTestId('map-item')).toHaveLength(2)
+    // 「全部」视图卡片显示所在层小字（mtime 降序：根图在前）
+    expect(screen.getAllByTestId('map-reldir').map((el) => el.textContent)).toEqual(['根', '项目'])
+  })
+
+  test('移动导图：对话框选目录后两文件进新目录', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    await dirFs.writeTextFileAtomic('/ws/根图.zen.json', '{}')
+    await dirFs.mkdir('/ws/灵')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    const dlg = await screen.findByTestId('move-dialog')
+    // 导图当前所在层（根）作为目标被禁用，防同目录自碰撞
+    expect(within(dlg).getByTestId('dir-node-root')).toBeDisabled()
+    fireEvent.click(within(dlg).getByTestId('dir-node-灵'))
+    fireEvent.click(within(dlg).getByTestId('move-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps[0]?.relDir).toBe('灵'))
+    // .md 与 .zen.json 两文件同移，源位清空
+    expect(await dirFs.exists('/ws/灵/根图.md')).toBe(true)
+    expect(await dirFs.exists('/ws/灵/根图.zen.json')).toBe(true)
+    expect(await dirFs.exists('/ws/根图.md')).toBe(false)
+  })
+
+  test('移动对话框内联新建目录后可直接移入', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    const dlg = await screen.findByTestId('move-dialog')
+    fireEvent.input(within(dlg).getByTestId('move-newdir-input'), { target: { value: '新层' } })
+    fireEvent.click(within(dlg).getByTestId('move-newdir-add'))
+    // 新目录已建好并自动选中，确认即可移入
+    await waitFor(() => expect(within(dlg).getByTestId('move-confirm')).toBeEnabled())
+    fireEvent.click(within(dlg).getByTestId('move-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps[0]?.relDir).toBe('新层'))
+    expect(await dirFs.exists('/ws/新层/根图.md')).toBe(true)
+    // 案头左树同步出现新目录
+    expect(await screen.findByTestId('dir-node-新层')).toBeInTheDocument()
+  })
+
+  test('新建目录', async () => {
+    const dirFs = new MemoryFsAdapter()
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('dir-create'))
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '新层' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    expect(await screen.findByTestId('dir-node-新层')).toBeInTheDocument()
+  })
+
+  test('空目录过滤后显示空态文案', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    await dirFs.mkdir('/ws/空层')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click(await screen.findByTestId('dir-node-空层'))
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('空层'))
+    expect(await screen.findByTestId('dir-empty-state')).toHaveTextContent('这一层还没有导图')
+  })
 })
