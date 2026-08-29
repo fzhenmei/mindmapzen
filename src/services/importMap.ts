@@ -30,5 +30,5 @@ export async function commitImport(
   }
   await fs.writeTextFileAtomic(mdPath, serialize(tree))
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
-  return { name: finalName, mdPath, modifiedAt: await fs.statModified(mdPath) }
+  return { name: finalName, mdPath, relDir: '', modifiedAt: await fs.statModified(mdPath) }
 }

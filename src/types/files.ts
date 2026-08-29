@@ -1,5 +1,6 @@
 // src/types/files.ts —— 文件系统抽象与工作区文件公共类型
-export interface MapInfo { name: string; mdPath: string; modifiedAt: number }
+/** 导图条目：relDir = 相对工作区的目录段（'' = 根；不含首尾斜杠，'/' 分隔） */
+export interface MapInfo { name: string; mdPath: string; relDir: string; modifiedAt: number }
 
 /** 语义布局三态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用） */
 export type LayoutKind = 'mindmap' | 'logic' | 'org'
@@ -47,4 +48,9 @@ export interface FsAdapter {
   remove(p: string): Promise<void>                  // Tauri 实现移入回收站
   exists(p: string): Promise<boolean>
   ensureDir(p: string): Promise<void>               // 递归建目录，已存在则成功
+  readDirEntries(p: string): Promise<DirEntryInfo[]>  // 目录项名 + 是否目录（M5a 案头目录树用）
+  mkdir(p: string): Promise<void>                    // 递归建目录，已存在则成功（幂等）
 }
+
+/** 目录项（readDirEntries 返回）：名字 + 是否目录 */
+export interface DirEntryInfo { name: string; isDir: boolean }

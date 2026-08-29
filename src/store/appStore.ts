@@ -8,6 +8,8 @@ interface AppState {
   route: 'library' | 'editor'
   workspaceDir: string | null
   maps: MapInfo[]
+  /** 案头左树当前选中目录（''=全部；相对工作区路径，'/' 分隔）。maps 在 store 中不过滤，由 LibraryView 渲染时派生 */
+  selectedDir: string
   currentMdPath: string | null
   dirty: boolean
   error: string | null
@@ -23,6 +25,7 @@ interface AppState {
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
   refreshMaps: () => Promise<void>
+  setSelectedDir: (rel: string) => void
   createAndOpen: (name: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
@@ -37,6 +40,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
   workspaceDir: null,
   maps: [],
+  selectedDir: '',
   currentMdPath: null,
   dirty: false,
   error: null,
@@ -69,7 +73,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setWorkspace: async (dir) => {
     const { adapter, configPath } = get()
-    set({ workspaceDir: dir })
+    // 切换工作区时目录视图回「全部」：新工作区不含旧选中目录
+    set({ workspaceDir: dir, selectedDir: '' })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, workspaceDir: dir, lastOpened: get().currentMdPath })
     await get().refreshMaps()
@@ -80,6 +85,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!workspaceDir) return
     set({ maps: await listMaps(adapter, workspaceDir) })
   },
+
+  setSelectedDir: (rel) => set({ selectedDir: rel }),
 
   createAndOpen: async (name) => {
     const { adapter, workspaceDir, preferredLayout } = get()

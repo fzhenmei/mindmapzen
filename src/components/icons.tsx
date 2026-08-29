@@ -98,3 +98,9 @@ export const IconPencil = ({ size }: IconProps) =>
   base(<path d="M11.5 3.5l1 1L6 11l-1.8.8L5 10l6.5-6.5z" />, size)
 export const IconTrash = ({ size }: IconProps) =>
   base(<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5M7 7.5v3M9 7.5v3" />, size)
+/** 目录（M5a 案头移动导图用）：经典双栏文件夹轮廓 */
+export const IconFolder = ({ size }: IconProps) =>
+  base(
+    <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3l1.5 2H12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 12 14H4a1.5 1.5 0 0 1-1.5-1.5z" />,
+    size,
+  )

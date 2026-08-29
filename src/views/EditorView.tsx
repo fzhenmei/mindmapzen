@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
-import {
-  engineTreeToZen,
-  findSubtreeByUid,
-  parse,
-  serialize,
-  zenToEngineTree,
-} from '../services/mdTree'
-import { readSidecar, writeSidecar } from '../services/sidecar'
+import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
+import { readSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
@@ -15,26 +9,17 @@ import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
-import type { Sidecar } from '../types/files'
 import type { RegisterCloseGuard } from '../types/ports'
-import type { IgnoredBlock } from '../types/tree'
+import { useSavePipeline } from '../hooks/useSavePipeline'
+import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
+import { useCloseGuard } from '../hooks/useCloseGuard'
+import { useActiveSelection } from '../hooks/useActiveSelection'
 import CloseGuardDialog from '../components/CloseGuardDialog'
+import EditorCaption from '../components/EditorCaption'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
+import ZenBar from '../components/ZenBar'
 import ZenDialog from '../components/ZenDialog'
-import ThemeToggle from '../components/ThemeToggle'
-import {
-  IconArrowLeft,
-  IconCopy,
-  IconCrosshair,
-  IconFrame,
-  IconLayoutBoth,
-  IconLayoutDown,
-  IconLayoutRight,
-  IconMinus,
-  IconPlus,
-  IconSave,
-} from '../components/icons'
 
 interface Props {
   mdPath: string
@@ -47,48 +32,41 @@ interface Props {
   exitApp: () => void
 }
 
-const AUTOSAVE_MS = 5000
-
-export default function EditorView({
-  mdPath,
-  openInEditor,
-  writeClipboard,
-  registerCloseGuard,
-  exitApp,
-}: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, registerCloseGuard, exitApp }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
   const mmRef = useRef<MindMapHandle | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dirtyRef = useRef(false)
-  const savingRef = useRef(false)
-  const pendingRef = useRef(false)
-  const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true)) // 当前串行保存轮（在途合并调用方等待它的最终结局）
-  const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
-  const lastSavedDataRef = useRef<string | null>(null) // 最近一次成功落盘的引擎整树快照（JSON），供 data_change 同值去重
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
-  const activeUidRef = useRef<string | null>(null)
-  const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
-  // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
-  // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
-  // 故二者分开：switchLayout 只更新 layout/layoutRef，不动 initialLayout
+  // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只来自打开时的 sidecar）；
+  // layout 是当前激活布局（按钮点亮）——运行切换走 setLayout 即时重排、不重挂载，故 switchLayout 只动 layout/layoutRef
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
-  const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
-  const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
-  const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
-  const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
-  // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
-  const ignoredRef = useRef<IgnoredBlock[]>([])
-  const ignoredConfirmedRef = useRef(false) // 本会话确认过一次即不再弹（spec §3.5）
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
+
+  // 保存管线（M5a 拆分）：串行保存链/自动保存/布局落盘；脏标记 ref 归本视图持有（守卫「放弃」路径也读写）
+  const pipeline = useSavePipeline({
+    adapter,
+    mdPath,
+    mmRef,
+    layoutRef,
+    dirtyRef,
+    onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
+    onError: setError,
+  })
+
+  // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
+  const flow = useIgnoredFlow({ clearPendingAutosave: pipeline.clearPendingAutosave })
+
+  // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
+  const selection = useActiveSelection()
 
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
@@ -98,18 +76,15 @@ export default function EditorView({
   }
 
   /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
-   *  陈旧 uid 兜底（M4 缓期项清偿）：选中 uid 未命中渲染树（如撤销删除了该节点）时，
-   *  清除选中态回退整图复制——按钮 data-scope/title 随之回整图，不留幽灵选中 */
+   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中 */
   const doCopy = async (): Promise<void> => {
     try {
       const mm = mmRef.current
       if (!mm) return
       const full = mm.getData()
-      const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
-      if (activeUidRef.current && !active) {
-        activeUidRef.current = null
-        setActiveUid(null)
-      }
+      selection.clearStaleIfMissing(full)
+      const uid = selection.activeUidRef.current
+      const active = uid ? findSubtreeByUid(full, uid) : null
       await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
       flashStamp('copied')
     } catch (e) {
@@ -118,14 +93,14 @@ export default function EditorView({
   }
 
   /** 多行粘贴执行（spec §3.6）：首行替换被编辑节点文本，其余行逐个插入其子节点。
-   *  被编辑节点即激活节点（编辑框打开前提）；无引擎实例/无激活 uid/uid 未命中渲染树均静默放弃（无目标语义）。
    *  顺序上必须先关引擎编辑框再 SET_NODE_TEXT：INSERT_CHILD_NODE 内部会调 hideEditTextBox，
-   *  其会用编辑框内粘贴前的旧文本提交 SET_NODE_TEXT，覆盖掉首行（TextEdit.js:492，引擎核验笔记）。 */
+   *  以编辑框内粘贴前的旧文本提交覆盖首行（TextEdit.js:492，引擎核验笔记）。
+   *  无引擎实例/无激活 uid/uid 未命中渲染树均静默放弃（无目标语义） */
   const applyMultilinePaste = (raw: string): void => {
     const lines = splitMultilineText(raw)
     if (lines.length === 0) return
     const mm = mmRef.current
-    const uid = activeUidRef.current
+    const uid = selection.activeUidRef.current
     if (!mm || !uid) return
     const node = mm.renderer?.findNodeByUid(uid)
     if (!node) return
@@ -136,93 +111,25 @@ export default function EditorView({
     }
   }
 
-  /** 完整 Sidecar 构造（writeOnce 与布局切换即时落盘共用同一形状；layout 取当前切换值） */
-  const buildSidecar = (collapsed: string[]): Sidecar => ({
-    version: 1,
-    theme: 'default',
-    layout: layoutRef.current,
-    collapsed,
-    offsets: {},
-    canvas: { x: 0, y: 0, zoom: 1 },
-  })
-
-  /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功）。
-   *  清脏以修订号为门闩：快照前记 dataRevRef，写盘窗口内若落新编辑（修订号变）则本轮快照
-   *  不含该编辑——此时不能清脏（否则该编辑不在任何快照里且无人再补存，静默丢失），保脏并置补存。 */
-  const writeOnce = async (): Promise<boolean> => {
-    const mm = mmRef.current
-    if (!mm || !dirtyRef.current) return true
-    try {
-      const rev = dataRevRef.current
-      const snapshot = mm.getData()
-      const { tree, collapsed } = engineTreeToZen(snapshot)
-      await adapter.writeTextFileAtomic(mdPath, serialize(tree))
-      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
-      // 记录落盘快照：引擎节流补发的同值 data_change 到达时据此免置脏（见 onDataChange）
-      lastSavedDataRef.current = JSON.stringify(snapshot)
-      if (dataRevRef.current !== rev) {
-        // 写盘窗口内有新编辑：保脏，置补存让串行循环用新快照再来一轮
-        pendingRef.current = true
-        return true
-      }
-      dirtyRef.current = false
-      clearDirty()
-      return true
-    } catch (e) {
-      // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试
-      dirtyRef.current = true
-      markDirty()
-      setError('保存失败：' + String(e))
-      return false
-    }
-  }
-
-  /** 串行化保存：在途时新请求只标记补存，并等待当前轮的最终结局（其循环会消化补存标记）。
-   *  合并分支必须返回当前轮 promise 而非立即 true——否则守卫保存/返回文件库会在补存轮
-   *  真正落盘前退出（窗口销毁/引擎销毁，补存轮可能永不执行）。 */
-  const saveNow = async (): Promise<boolean> => {
-    if (savingRef.current) {
-      pendingRef.current = true
-      return saveChainRef.current
-    }
-    const run = (async () => {
-      savingRef.current = true
-      try {
-        while (true) {
-          pendingRef.current = false
-          if (!(await writeOnce())) return false
-          if (!pendingRef.current) return true
-        }
-      } finally {
-        savingRef.current = false
-      }
-    })()
-    saveChainRef.current = run
-    return run
-  }
-
   /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」——
    *  干净状态下保存是 no-op（无用户可感知的写盘），不印记 */
   const saveAndStamp = async (): Promise<boolean> => {
     const wasDirty = dirtyRef.current
-    const ok = await saveNow()
+    const ok = await pipeline.saveNow()
     if (ok && wasDirty) flashStamp('saved')
     return ok
   }
 
-  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
+  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 经 flow 门弹确认挂起本次保存，
    *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接落盘。
-   *  自动保存（5s 防抖定时器）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃——
-   *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）；印记亦只属于显式保存。 */
+   *  自动保存（5s 防抖）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃（内容打开时横幅已知情）；印记只属显式保存 */
   const explicitSave = async (): Promise<boolean> => {
-    if (ignoredRef.current.length > 0 && !ignoredConfirmedRef.current) {
-      // 等待用户裁决期间暂停自动保存，防止确认悬而未决时被定时器静默落盘丢弃
-      if (timerRef.current) clearTimeout(timerRef.current)
-      setConfirmingIgnored(true)
-      return false
-    }
+    if (!flow.gateExplicitSave()) return false
     return saveAndStamp()
   }
+
+  // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
+  const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
 
   useEffect(() => {
     dirtyRef.current = false
@@ -239,8 +146,7 @@ export default function EditorView({
         }
         const sc = await readSidecar(adapter, mdPath)
         if (cancelled) return
-        ignoredRef.current = r.ignoredBlocks
-        setIgnored(r.ignoredBlocks)
+        flow.setFromParse(r.ignoredBlocks)
         // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）；
         // 无 sidecar（如外部放入的 .md）回退用户偏好布局（验收轮三：记住默认视图）
         const initial = sc?.layout ?? useAppStore.getState().preferredLayout
@@ -265,6 +171,7 @@ export default function EditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 文档内容由父组件 key 重挂载切换
   }, [])
 
+  // 快捷键（Ctrl+S / Ctrl+Shift+C）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
@@ -279,99 +186,21 @@ export default function EditorView({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- explicitSave/saveNow/doCopy 闭包依赖 refs，无需重绑
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy 走 refs 无需重绑
   }, [])
 
-  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭
   useEffect(() => {
-    const unregister = registerCloseGuard((e) => {
-      if (!dirtyRef.current) return
-      e.preventClose()
-      setGuarding(true)
-    })
-    return unregister
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载期注册一次，端口经 props 注入且稳定
-  }, [])
-
-  /** 三态选择：取消→收起；放弃→清脏直退；保存→走 explicitSave 落盘成功才退。
-   *  guardSavingRef 防误触：保存一旦在途，三态（含取消/放弃）一律挡下——收框会与在途落盘竞态，
-   *  放弃清脏直退更会在写盘未完成时销毁窗口（数据丢失）；连点保存同理绕过等待提前 exitApp。
-   *  explicitSave 返回 false 的两种情形同路处理（收起守卫对话框留在应用）：保存失败（横幅已提示）；
-   *  忽略块确认挂起——由确认对话框接管，确认后仅落盘不退出，用户需再次关闭窗口（不静默退出/丢弃，spec §3.5 细化）。 */
-  const onGuardChoice = async (c: 'save' | 'discard' | 'cancel'): Promise<void> => {
-    if (guardSavingRef.current) return // 保存动作在途：本轮对话框冻结，任何选择都不生效
-    if (c === 'cancel') {
-      setGuarding(false)
-      return
-    }
-    if (c === 'discard') {
-      dirtyRef.current = false
-      clearDirty() // store 脏标记同步清除：exitApp 失败窗口留下时，避免"● 显示未保存但保存 no-op"的僵尸态
-      setGuarding(false)
-      exitApp()
-      return
-    }
-    guardSavingRef.current = true
-    const ok = await explicitSave()
-    guardSavingRef.current = false
-    if (!ok) {
-      setGuarding(false)
-      return
-    }
-    setGuarding(false)
-    exitApp()
-  }
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      if (dirtyRef.current) void saveNow() // unmount 冲刷（含返回文件库）
-    }
+    return () => pipeline.unmountFlush()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount 冲刷，saveNow 依赖 refs
   }, [])
 
-  /** 引擎数据变化（data_change 携带整树快照；无载荷调用来自展开命令同步上报，视为必有变化）。
-   *  同值去重（验收修复 4）：引擎 data_change 经 addHistory 尾随节流延迟 ~100ms 补发，快照可能
-   *  在此间已被显式保存落盘——与 lastSavedDataRef 一致的事件不置脏，否则保存成功的图会在
-   *  ~100ms 后重新亮起未保存圆点并触发一轮冗余自动保存 */
-  const onDataChange = (data?: EngineNode) => {
-    if (
-      data !== undefined &&
-      lastSavedDataRef.current !== null &&
-      JSON.stringify(data) === lastSavedDataRef.current
-    ) {
-      return
-    }
-    dirtyRef.current = true
-    dataRevRef.current++
-    // 写盘在途时的新编辑不在在途快照内：标记补存，让当前轮写完再补一轮（否则无人再触发落盘）
-    if (savingRef.current) pendingRef.current = true
-    markDirty()
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_MS)
-  }
-
-  /** sidecar-only 即时落盘（审查裁定）：collapsed 取引擎当前树，构造与 writeOnce 相同；
-   *  仅写 sidecar，不写 .md、不动脏标记；失败提示横幅（fire-and-forget，不重试不阻塞） */
-  const persistLayoutSidecar = async (): Promise<void> => {
-    const mm = mmRef.current
-    if (!mm) return
-    try {
-      const { collapsed } = engineTreeToZen(mm.getData())
-      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
-    } catch (e) {
-      setError('保存布局失败：' + String(e))
-    }
-  }
-
   /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。
-   *  但布局偏好本身须即时落 sidecar：否则用户切换后不再编辑，writeOnce 的 !dirty 早退
-   *  使偏好永不落盘，"重开恢复"变成有条件的（元数据即时落盘不违背"不置脏不自动保存"） */
+   *  但布局偏好须即时落 sidecar——否则 writeOnce 的 !dirty 早退使偏好永不落盘（元数据即时落盘不违背「不置脏不自动保存」） */
   const switchLayout = (kind: LayoutKind) => {
     mmRef.current?.setLayout(layoutToEngine(kind))
     layoutRef.current = kind
     setLayout(kind)
-    void persistLayoutSidecar()
+    void pipeline.persistLayoutSidecar()
     // 记住偏好：用户选择过的布局成为新建/导入/无 sidecar 导图的默认（验收轮三）
     void useAppStore.getState().setPreferredLayout(kind)
   }
@@ -401,139 +230,54 @@ export default function EditorView({
             layout={layoutToEngine(initialLayout)}
             theme={engineThemeName(resolvedTheme)}
             onReady={(mm) => (mmRef.current = mm)}
-            onDataChange={onDataChange}
-            onActiveChange={(uid) => {
-              activeUidRef.current = uid
-              setActiveUid(uid)
-            }}
+            onDataChange={pipeline.onTreeDataChange}
+            onActiveChange={selection.handleActiveChange}
             onEditorPaste={applyMultilinePaste}
           />
         )}
       </div>
-      {/* 浮动砚栏：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
-      <header className="zen-bar" data-testid="zen-bar">
-        <button
-          type="button"
-          data-testid="btn-back"
-          title="返回文件库"
-          onClick={async () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-            const ok = await explicitSave()
-            if (!ok) return // 保存失败或忽略块确认挂起：留在编辑器（确认后仅落盘，不自动导航）
-            await backToLibrary()
-          }}
-        >
-          <IconArrowLeft />
-        </button>
-        <span className="zen-bar-sep" />
-        <button
-          type="button"
-          data-testid="btn-copy"
-          data-scope={activeUid ? 'branch' : 'full'}
-          title={
-            activeUid
-              ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
-              : '复制整图为 Markdown（Ctrl+Shift+C）'
-          }
-          onClick={() => void doCopy()}
-        >
-          <IconCopy />
-        </button>
-        <button
-          type="button"
-          data-testid="btn-save"
-          title="保存（Ctrl+S）"
-          onClick={() => void explicitSave()}
-        >
-          <IconSave />
-        </button>
-        <span className="zen-bar-sep" />
-        <button
-          type="button"
-          data-testid="btn-zoom-out"
-          title="缩小（Ctrl+滚轮）"
-          onClick={() => mmRef.current?.view.narrow()}
-        >
-          <IconMinus />
-        </button>
-        <button
-          type="button"
-          data-testid="btn-zoom-in"
-          title="放大（Ctrl+滚轮）"
-          onClick={() => mmRef.current?.view.enlarge()}
-        >
-          <IconPlus />
-        </button>
-        <button
-          type="button"
-          data-testid="btn-center-root"
-          title="根居中：保持缩放回根"
-          onClick={() => mmRef.current && centerRoot(mmRef.current)}
-        >
-          <IconCrosshair />
-        </button>
-        <button
-          type="button"
-          data-testid="btn-fit"
-          title="适配整图"
-          onClick={() => mmRef.current && fitView(mmRef.current)}
-        >
-          <IconFrame />
-        </button>
-        <span className="zen-bar-sep" />
-        <fieldset className="layout-switch" aria-label="布局切换">
-          {(
-            [
-              ['mindmap', '思维导图（右向）', <IconLayoutRight key="r" />],
-              ['logic', '逻辑图（左右）', <IconLayoutBoth key="b" />],
-              ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
-            ] as const
-          ).map(([kind, label, icon]) => (
-            <button
-              key={kind}
-              type="button"
-              data-testid={`layout-${kind}`}
-              className={layout === kind ? 'active' : ''}
-              aria-pressed={layout === kind}
-              title={label}
-              onClick={() => switchLayout(kind)}
-            >
-              {icon}
-            </button>
-          ))}
-        </fieldset>
-      </header>
+      {/* 浮动砚栏（M5a 拆分至 ZenBar）：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
+      <ZenBar
+        onBack={async () => {
+          pipeline.clearPendingAutosave()
+          if (await explicitSave()) await backToLibrary() // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
+        }}
+        onCopyClick={() => void doCopy()}
+        copied={false}
+        scope={selection.activeUid ? 'branch' : 'full'}
+        onSaveClick={() => void explicitSave()}
+        onZoomOut={() => mmRef.current?.view.narrow()}
+        onZoomIn={() => mmRef.current?.view.enlarge()}
+        onCenterRoot={() => mmRef.current && centerRoot(mmRef.current)}
+        onFit={() => mmRef.current && fitView(mmRef.current)}
+        layout={layout}
+        onSwitchLayout={switchLayout}
+      />
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
-      {/* 左下题签 + 朱砂脏印；右下主题钮 */}
-      <div className="editor-caption">
-        <span className="caption-name">{name}</span>
-        {dirty && <span data-testid="dirty-badge" className="seal-dot" title="有未保存修改" />}
-      </div>
-      <div className="theme-fab">
-        <ThemeToggle />
-      </div>
+      {/* 左下题签 + 朱砂脏印；右下主题钮（M5a 拆分至 EditorCaption） */}
+      <EditorCaption name={name} dirty={dirty} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
-      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
-      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于
-          confirmingIgnored（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
-      {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
-      {confirmingIgnored && !guarding && (
+      {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming（守卫先收起、确认框随即接管，故 !guarding 门闩） */}
+      {guard.guarding && (
+        <CloseGuardDialog mapName={name} onChoice={(c) => void guard.onGuardChoice(c)} />
+      )}
+      {flow.confirming && !guard.guarding && (
         <ZenDialog
-          title={`保存将丢弃 ${ignored.length} 个未映射的内容块`}
-          onClose={() => setConfirmingIgnored(false)}
+          title={`保存将丢弃 ${flow.ignored.length} 个未映射的内容块`}
+          onClose={flow.confirmCancel}
           actions={
             <>
-              <button type="button" data-testid="ignored-confirm-cancel" onClick={() => setConfirmingIgnored(false)}>
+              <button type="button" data-testid="ignored-confirm-cancel" onClick={flow.confirmCancel}>
                 取消
               </button>
               <button
                 type="button"
                 data-testid="ignored-confirm-save"
                 onClick={() => {
-                  setConfirmingIgnored(false)
-                  ignoredConfirmedRef.current = true // 本会话确认过即不再弹（spec §3.5）
+                  flow.confirmProceed()
                   void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
                 }}
               >
