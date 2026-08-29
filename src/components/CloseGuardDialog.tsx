@@ -5,7 +5,7 @@ interface Props {
   onChoice: (c: 'save' | 'discard' | 'cancel') => void
 }
 
-/** 关闭守卫三态对话框：Esc（原生 cancel）与「取消」按钮同义 → onChoice('cancel') */
+/** 关闭守卫三态对话框：Esc/✕/遮罩点击与「取消」按钮同义 → onChoice('cancel') */
 export default function CloseGuardDialog({ mapName, onChoice }: Readonly<Props>) {
   return (
     <ZenDialog

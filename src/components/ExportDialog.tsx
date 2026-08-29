@@ -1,6 +1,6 @@
 // src/components/ExportDialog.tsx —— 导出入口对话框（M5b Task 5）：ZenDialog 三入口
 //（导出 PNG / 导出 SVG / 复制为图片）。动作处理在 useExportFlow（宿主经 EditorDialogs 注入），
-// 本组件纯展示；Esc 经 ZenDialog 原生 cancel → onClose。
+// 本组件纯展示；Esc/✕ 经 ZenDialog → onClose，另有显式取消按钮（想法4 取消权）。
 import type { ExportActions } from '../hooks/useExportFlow'
 import ZenDialog from './ZenDialog'
 
@@ -13,6 +13,9 @@ export default function ExportDialog({ actions }: Readonly<{ actions: ExportActi
       onClose={actions.onClose}
       actions={
         <>
+          <button type="button" data-testid="export-cancel" onClick={actions.onClose}>
+            取消
+          </button>
           <button type="button" data-testid="export-png" onClick={actions.onPng}>
             导出 PNG
           </button>

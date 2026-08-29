@@ -411,7 +411,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         />
       )}
       {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——dialog（新建/重命名/删除/移动/新建目录）
-          与 importPreview 互不并存：原生 dialog 为 modal，弹出期间背景不可点，两条入口天然互斥 */}
+          与 importPreview 互不并存：Radix Dialog 为 modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥 */}
       {dialog === 'delete' && target && (
         <ZenDialog
           title={`删除「${target.name}」？`}
