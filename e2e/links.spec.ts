@@ -7,8 +7,7 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
   // pickDirectory 在 e2e 模式下无 Tauri 对话框：harness 已将 workspaceDir 预设为 /ws
-  // （btn-new 仅在选择工作区后渲染，与 smoke/collapse 用例同款前置）
-  await page.getByTestId('btn-workspace').click()
+  // （M5d 适配：btn-workspace 已随工具栏重构移除，选择工作区入口收敛到开屏页）
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('连线测试')
   await page.getByTestId('btn-confirm').click()
@@ -41,11 +40,13 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   )
   expect(md).toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
 
-  // 返回案头重开：onReady 重建，连线复现
+  // 返回案头重开：onReady 净化（建注册表 + 显示剥离）后按注册表重建，连线复现
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
-  await expect(page.getByText('A [[B]]').first()).toBeVisible()
+  await page.getByTestId('map-item').dblclick() // M5d 交互变更：单击=选中预览，双击=打开
+  // 画布文本无 [[ ]] 标记（M5d Task 2 显示层剥离），连线照常复现
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('A [[B]]')).toHaveCount(0)
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
 })
 
@@ -53,8 +54,7 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
 test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
-  // pickDirectory 在 e2e 模式下无 Tauri 对话框：harness 已将 workspaceDir 预设为 /ws
-  await page.getByTestId('btn-workspace').click()
+  // M5d 适配：btn-workspace 已随工具栏重构移除（harness 已预设 workspaceDir=/ws）
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('操作条测试')
   await page.getByTestId('btn-confirm').click()
@@ -82,11 +82,12 @@ test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框
   await page.getByTestId('note-cancel').click()
   await expect(page.getByTestId('note-dialog')).toBeHidden()
 
-  // 连线按钮 → 引擎建线态 → 点目标 B：linkBridge 把 A 文本改写为 A [[B]] 并立即重建线
+  // 连线按钮 → 引擎建线态 → 点目标 B：桥接只动注册表，A 显示文本保持纯净（净化断言，M5d §4）
   await page.getByText('A', { exact: true }).first().click()
   await page.getByTestId('node-action-link').click()
   await page.getByText('B', { exact: true }).first().click()
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+  await expect(page.getByText('A [[B]]')).toHaveCount(0)
 
   // 保存落盘：md 含 [[B]] 文本标记（连线是文本派生数据，不落引擎层）
   await page.keyboard.press('Control+s')

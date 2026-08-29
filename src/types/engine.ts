@@ -1,5 +1,6 @@
 // src/types/engine.ts —— 引擎节点最小结构类型，避免依赖引擎包类型
 import type { ResolvedLink } from '../services/links'
+import type { LinkAdjust } from '../services/linkAdjust'
 
 export interface EngineNode {
   data: { text: string; expand?: boolean; [k: string]: unknown }
@@ -69,8 +70,12 @@ export interface MindMapHandle {
    *  svg 的 name 会写入 svg 首元素前的 <title>，png 的 name 未被引擎使用 */
   doExport?: EngineExport
   /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
-   *  内部等待首帧渲染完成后按 links 清空并重建关联线 */
+   *  内部等待首帧渲染完成后按 links 清空并重建关联线（既有控制点差值按 uid 留档回填，M5d Task 5） */
   rebuildLinks?(links: ResolvedLink[]): void
+  /** 连线净化（M5d Task 2/5）：宿主侧方法——同上装配挂载；等首帧渲染完成后走渲染树
+   *  建注册表（标记文本 → uid 条目）→ 直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线；
+   *  adjust = 打开时 sidecar linkAdjust，重建时一并恢复用户拖过的弯曲 */
+  applyRegistry?(adjust?: LinkAdjust): void
   /** 关联线插件实例（构造时挂载）：建线态入口与状态（验收轮连线文本桥接） */
   associativeLine?: EngineAssociativeLine
   /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */

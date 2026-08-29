@@ -5,7 +5,9 @@ import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
  *  末尾自动 setWorkspace('/ws')，规避 web 模式下无 Tauri 目录选择对话框的问题。
  *  ?desk=1 追加班头预置（/ws/项目/项目图.md + /ws/根图.md）：仅 desk.spec 使用——
  *  预置须先于 setWorkspace 写盘（refreshMaps/左树在 setWorkspace 时生成），
- *  且不能无条件预置：多卡片会破坏既有用例对 map-item 的单例（严格模式）断言 */
+ *  且不能无条件预置：多卡片会破坏既有用例对 map-item 的单例（严格模式）断言。
+ *  ?nows=1 跳过 setWorkspace（保持无工作区首启态）：仅 welcome.spec 开屏流程使用——
+ *  点 btn-welcome-create 后经 pickDirectory 桩（固定返回 /ws）走真实 setWorkspace 链路 */
 export async function installE2eHarness(): Promise<void> {
   const fs = new MemoryFsAdapter()
   useAppStore.getState().setAdapter(fs)
@@ -24,11 +26,17 @@ export async function installE2eHarness(): Promise<void> {
     async pickMdFile(): Promise<{ name: string; text: string } | null> {
       return { name: '外部图', text: '# 外部图\n\n忽略段。\n\n## A\n' }
     },
+    // 目录选择桩（M5d Task 6 开屏/更换工作区用）：固定返回 /ws，App E2E 分支读取
+    async pickDirectory(): Promise<string | null> {
+      return '/ws'
+    },
   }
   if (new URLSearchParams(window.location.search).has('desk')) {
     await fs.mkdir('/ws/项目')
     await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n')
     await fs.writeTextFileAtomic('/ws/根图.md', '# 根图\n')
   }
-  await useAppStore.getState().setWorkspace('/ws')
+  if (!new URLSearchParams(window.location.search).has('nows')) {
+    await useAppStore.getState().setWorkspace('/ws')
+  }
 }

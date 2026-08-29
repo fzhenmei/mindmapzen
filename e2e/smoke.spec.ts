@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test'
 test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
-  await page.getByTestId('btn-workspace').click()
   // pickDirectory 在 e2e 模式下无 Tauri 对话框：harness 已将 workspaceDir 预设为 /ws
+  // （M5d 适配：btn-workspace 已随工具栏重构移除，选择工作区入口收敛到开屏页）
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('测试图')
   await page.getByTestId('btn-confirm').click()
@@ -27,10 +27,10 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
   await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
   await page.keyboard.press('Control+s')
 
-  // 返回文件库并重新打开
+  // 返回文件库并重新打开（M5d 交互变更：单击=选中预览，双击=打开）
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
+  await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('分支一').first()).toBeVisible()
 
   // 磁盘内容断言（内存 fs）

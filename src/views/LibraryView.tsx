@@ -9,9 +9,11 @@ import NameDialog from '../components/NameDialog'
 import ZenDialog from '../components/ZenDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
-import DirectoryTree from '../components/DirectoryTree'
+import WelcomeScreen from '../components/WelcomeScreen'
+import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
-import { IconFolder, IconPencil, IconTrash } from '../components/icons'
+import PreviewPane from '../components/PreviewPane'
+import { IconFolder, IconPencil, IconTrash, IconSettings } from '../components/icons'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -28,7 +30,8 @@ interface ImportPreview {
   blocks: IgnoredBlock[]
 }
 
-/** 案头（导图列表页）：左目录树 + 右卡片网格；卡片按 selectedDir 精确过滤，「全部」视图显示所在层小字 */
+/** 案头（导图列表页，M5d 三区）：图标工具栏 + 左目录树（含文件行）+ 中卡片网格 + 右大纲预览；
+ *  交互语义：卡片/树文件单击=选中并预览，双击或预览「打开」=进纸面；卡片按 selectedDir 精确过滤 */
 export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
@@ -41,6 +44,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   const [dirCollapsed, setDirCollapsed] = useState(false)
   // 新建目录的父目录（DirectoryTree onCreateDir 传入；''=工作区根）
   const [dirParent, setDirParent] = useState('')
+  // 选中导图（M5d 交互变更：单击卡片/树文件=选中并预览，双击/预览「打开」=进纸面）
+  const [selectedMap, setSelectedMap] = useState<string | null>(null)
 
   /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
    *  useCallback 固定身份（体仅引用稳定的 setTree 与模块导入，无反应式依赖，无陈旧闭包） */
@@ -59,10 +64,21 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     setTarget(null)
   }
 
+  /** 选中态失效清理（M5d 审查修复）：重命名/删除/移动/切换工作区后，选中图 mdPath 失联则清空
+   *  （否则预览指向已不存在的文件、卡片高亮悬空）。须在 maps 已刷新后调用 */
+  const pruneSelectedMap = () => {
+    setSelectedMap((cur) =>
+      cur !== null && useAppStore.getState().maps.some((m) => m.mdPath === cur) ? cur : null,
+    )
+  }
+
   const chooseWorkspace = async () => {
     try {
       const dir = await pickDirectory()
-      if (dir) await store.setWorkspace(dir)
+      if (dir) {
+        await store.setWorkspace(dir)
+        pruneSelectedMap()
+      }
     } catch (e) {
       store.setError('设置工作区失败：' + String(e))
     }
@@ -126,6 +142,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
       await moveMap(store.adapter, workspaceDir, t.name, t.relDir, toRel)
       await store.refreshMaps()
       setTree(await readDirTree(store.adapter, workspaceDir))
+      pruneSelectedMap()
       store.setError(null)
     } catch (e) {
       store.setError('移动失败：' + (e instanceof Error ? e.message : String(e)))
@@ -135,11 +152,25 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   // 卡片过滤在渲染层派生（store.maps 恒为工作区全量）：选中目录精确匹配，「全部」不过滤
   const visibleMaps = selectedDir === '' ? maps : maps.filter((m) => m.relDir === selectedDir)
 
+  // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
+  const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
+  const selectedInfo = maps.find((m) => m.mdPath === selectedMap) ?? null
+  const mdPathOf = (f: TreeFile): string | undefined =>
+    maps.find((m) => m.name === f.name && m.relDir === f.relDir)?.mdPath
+  const selectFile = (f: TreeFile) => {
+    const p = mdPathOf(f)
+    if (p !== undefined) setSelectedMap(p)
+  }
+  const openFile = (f: TreeFile) => {
+    const p = mdPathOf(f)
+    if (p !== undefined) void store.openMap(p)
+  }
+  // 树根显示工作区名（tooltip 全路径承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
+  const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+
   const renderBody = () => {
-    if (!workspaceDir)
-      return (
-        <p className="hint">请选择导图工作区：所有导图将以 .md 文件保存在该文件夹，可直接交给 AI 或其他工具使用。</p>
-      )
+    // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；页首栏在此态隐藏
+    if (!workspaceDir) return <WelcomeScreen onCreateWorkspace={() => void chooseWorkspace()} />
     // 右侧内容三级态：工作区空 → 全局空态；选中层空 → 层空态；否则过滤后的卡片网格
     const renderRight = () => {
       if (maps.length === 0)
@@ -172,9 +203,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
               <button
                 type="button"
                 data-testid="map-item"
-                className="map-card-main"
-                onClick={() => store.openMap(m.mdPath)}
-                title={`打开「${m.name}」`}
+                className={selectedMap === m.mdPath ? 'map-card-main selected' : 'map-card-main'}
+                onClick={() => setSelectedMap(m.mdPath)}
+                onDoubleClick={() => void store.openMap(m.mdPath)}
+                title={`选中「${m.name}」（双击打开）`}
               >
                 <span className="map-name">{m.name}</span>
                 <span className="badge-md">.md</span>
@@ -238,13 +270,19 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         >
           {dirCollapsed ? '›' : '‹'}
         </button>
-        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构 */}
+        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构；树含导图文件行（M5d） */}
         {!dirCollapsed && (
           <aside className="dir-panel" data-testid="dir-panel">
             <DirectoryTree
               tree={tree}
+              files={files}
+              rootLabel={workspaceName}
+              rootTooltip={workspaceDir}
               selected={selectedDir}
+              selectedFile={selectedInfo === null ? null : { name: selectedInfo.name, relDir: selectedInfo.relDir }}
               onSelect={(rel) => store.setSelectedDir(rel)}
+              onSelectFile={selectFile}
+              onOpenFile={openFile}
               onCreateDir={(rel) => {
                 setDirParent(rel)
                 setDialog('newdir')
@@ -253,29 +291,42 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </aside>
         )}
         {renderRight()}
+        {/* 右列大纲预览（M5d）：选中即预览，「打开」进纸面 */}
+        <PreviewPane mdPath={selectedMap} />
       </div>
     )
   }
 
   return (
     <div className="library">
-      <header className="library-header">
-        <div className="desk-title">
-          <h1>案头</h1>
-          {workspaceDir && (
-            <span className="ws-path" title={workspaceDir}>
-              {workspaceDir}
-            </span>
-          )}
-        </div>
-        {/* 设置入口（M5b Task 4）：复制行为两开关；页首次级按钮样式（.library-header 兜底规则） */}
-        <button type="button" data-testid="btn-settings" onClick={() => setDialog('settings')}>
-          设置
-        </button>
-        <button type="button" data-testid="btn-workspace" className="link-btn" onClick={chooseWorkspace}>
-          选择工作区
-        </button>
-        {workspaceDir && (
+      {/* 工具栏区（M5d spec §3，无工作区的开屏态隐藏）：左印章+品牌名 / 右设置(图标)+导入/新建(带字)+主题 */}
+      {workspaceDir && (
+        <header className="library-header">
+          <div className="desk-brand">
+            <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+              <path
+                d="M17 25l5 5 10-12"
+                stroke="var(--paper)"
+                strokeWidth="3.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <h1>Mind Map Zen</h1>
+          </div>
+          {/* 设置入口（M5b Task 4 内容，M5d 改齿轮图标）：复制行为两开关 */}
+          <button
+            type="button"
+            data-testid="btn-settings"
+            className="icon-btn"
+            title="设置"
+            aria-label="设置"
+            onClick={() => setDialog('settings')}
+          >
+            <IconSettings />
+          </button>
           <button
             type="button"
             data-testid="btn-import"
@@ -284,8 +335,6 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           >
             导入 .md
           </button>
-        )}
-        {workspaceDir && (
           <button
             type="button"
             data-testid="btn-new"
@@ -294,10 +343,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           >
             新建导图
           </button>
-        )}
-        {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
-        <ThemeToggle />
-      </header>
+          {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
+          <ThemeToggle />
+        </header>
+      )}
       {error && <div className="error-banner">{error}</div>}
       {renderBody()}
 
@@ -312,8 +361,17 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
-      {/* 设置对话框（M5b Task 4）：与其他对话框共用 dialog 互斥状态 */}
-      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {/* 设置对话框（M5b Task 4 + M5d 更换工作区）：与其他对话框共用 dialog 互斥状态；
+          更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」） */}
+      {dialog === 'settings' && (
+        <SettingsDialog
+          onClose={() => setDialog(null)}
+          onChangeWorkspace={() => {
+            setDialog(null)
+            void chooseWorkspace()
+          }}
+        />
+      )}
       {dialog === 'rename' && target && (
         <NameDialog
           title="重命名导图"
@@ -325,6 +383,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             try {
               await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
               await store.refreshMaps()
+              pruneSelectedMap()
               store.setError(null)
             } catch (e) {
               store.setError(e instanceof Error ? e.message : String(e))
@@ -359,6 +418,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                   try {
                     await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
                     await store.refreshMaps()
+                    pruneSelectedMap()
                   } catch (e) {
                     store.setError('删除失败：' + String(e))
                   }

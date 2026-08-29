@@ -1,5 +1,6 @@
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
+import { extractTargets, injectMarkers } from './linkMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -17,10 +18,22 @@ function assertNoNewline(node: ZenNode): void {
   for (const child of node.children) assertNoNewline(child)
 }
 
-/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；节点备注 → 节点行后引用块 */
-export function serialize(tree: ZenNode): string {
+/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；节点备注 → 节点行后引用块。
+ *  linksByUid（M5d Task 2 序列化注入）：连线净化会话注册表（源 uid → 目标名列表）——
+ *  节点按 uid 命中后句尾追加 ` [[名]]`（多目标依次）；文本已含的目标不重复注入
+ *  （会话内手写标记原样保留，规范化发生在下一次打开剥离后） */
+export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readonly string[]>): string {
   assertNoNewline(tree)
   const lines: string[] = []
+
+  /** 序列化文本：查注册表注入句尾标记（显示层剥离的净化语义下，md 仍是连线唯一事实源） */
+  function textOf(node: ZenNode): string {
+    const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
+    if (targets === undefined || targets.length === 0) return node.text
+    const existing = new Set(extractTargets(node.text))
+    const missing = targets.filter((t) => !existing.has(t))
+    return missing.length > 0 ? injectMarkers(node.text, missing) : node.text
+  }
 
   /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
    *  列表项的引用块须缩进进该项内容列：列首 `>` 会终结整个列表块（子项会升格为同级，roundtrip 断裂） */
@@ -30,8 +43,9 @@ export function serialize(tree: ZenNode): string {
   }
 
   function emitHeading(node: ZenNode, depth: number): void {
+    const text = textOf(node)
     if (lines.length > 0) lines.push('')
-    lines.push('#'.repeat(depth) + (node.text === '' ? '' : ' ' + node.text))
+    lines.push('#'.repeat(depth) + (text === '' ? '' : ' ' + text))
     emitNote(node, '')
     emitChildren(node.children, depth)
   }
@@ -47,7 +61,7 @@ export function serialize(tree: ZenNode): string {
 
   function emitList(children: ZenNode[], level: number): void {
     children.forEach((c) => {
-      lines.push('  '.repeat(level) + '- ' + escapeItemText(c.text))
+      lines.push('  '.repeat(level) + '- ' + escapeItemText(textOf(c)))
       emitNote(c, '  '.repeat(level + 1))
       if (c.children.length > 0) emitList(c.children, level + 1)
     })
@@ -223,7 +237,8 @@ export function zenToEngineTree(
   }
 }
 
-/** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）与备注（data.note 仅字符串） */
+/** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）与备注（data.note 仅字符串）；
+ *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md） */
 export function engineTreeToZen(
   root: EngineNode,
   parentPath = '',
@@ -232,8 +247,14 @@ export function engineTreeToZen(
   const own = root.data.expand === false ? [path] : []
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const note = typeof root.data.note === 'string' ? root.data.note : undefined
+  const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
   return {
-    tree: { text: root.data.text, ...(note !== undefined ? { note } : {}), children: subs.map((s) => s.tree) },
+    tree: {
+      text: root.data.text,
+      ...(note !== undefined ? { note } : {}),
+      ...(uid !== undefined ? { uid } : {}),
+      children: subs.map((s) => s.tree),
+    },
     collapsed: [...own, ...subs.flatMap((s) => s.collapsed)],
   }
 }

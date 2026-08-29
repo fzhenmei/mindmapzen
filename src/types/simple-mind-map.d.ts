@@ -51,3 +51,23 @@ declare module 'simple-mind-map/src/plugins/Export.js' {
   const Export: unknown
   export default Export
 }
+
+// 关联线几何工具（M5d Task 5 弯曲记忆）：节点实例须带布局后几何字段（left/top/width/height）。
+// Point = 端点/控制点坐标 {x,y,dir?,range?}；算法核验见 docs/notes/engine-api.md「M5d 核验 (d)」
+declare module 'simple-mind-map/src/plugins/associativeLine/associativeLineUtils.js' {
+  export interface AssociativeLinePoint {
+    x: number
+    y: number
+    dir?: string
+    range?: number
+  }
+  /** 按两节点几何定连线起/终点（AssociativeLine.computeNodePoints，utils.js:210） */
+  export function computeNodePoints(from: unknown, to: unknown): [AssociativeLinePoint, AssociativeLinePoint]
+  /** 默认贝塞尔控制点（S 曲线，utils.js:11） */
+  export function computeCubicBezierPathPoints(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ): [AssociativeLinePoint, AssociativeLinePoint]
+}

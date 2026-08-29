@@ -59,6 +59,16 @@ export const DEFAULT_CONFIG: AppConfig = {
   theme: 'auto',
   settings: DEFAULT_COPY_SETTINGS,
 }
+/** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
+ *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，
+ *  结构核验见 docs/notes/engine-api.md「M5d 核验 (d)」）；缺省字段恢复时补 0 */
+export interface LinkAdjustEntry {
+  cx1?: number
+  cy1?: number
+  cx2?: number
+  cy2?: number
+}
+
 export interface Sidecar {
   version: 1
   theme: string
@@ -66,6 +76,8 @@ export interface Sidecar {
   collapsed: string[]
   offsets: Record<string, { dx: number; dy: number }>
   canvas: { x: number; y: number; zoom: number }
+  /** 连线弯曲记忆（M5d Task 5）：路径对键 → 控制点差值；容错默认 {} */
+  linkAdjust: Record<string, LinkAdjustEntry>
 }
 export interface FsAdapter {
   readTextFile(p: string): Promise<string>

@@ -13,6 +13,7 @@ export const DEFAULT_SIDECAR: Sidecar = {
   collapsed: [],
   offsets: {},
   canvas: { x: 0, y: 0, zoom: 1 },
+  linkAdjust: {},
 }
 
 export async function listMaps(fs: FsAdapter, wsDir: string): Promise<MapInfo[]> {

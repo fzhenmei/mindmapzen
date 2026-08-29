@@ -299,3 +299,42 @@
 - 桥接把源文本改写为 `源 [[目标文本]]`（SET_NODE_DATA 只合并键，Render.js:1980-1984）→ data_change 置脏 → 自动保存落盘；连线从不写引擎层（文本是唯一事实源），返回 true 阻断引擎 addLine
 - 目标名不唯一时 resolveLinks 宽容丢弃：文本保留、线不显示（与手写 [[..]] 同语义）
 - 节点 left/top 为画布内容坐标，容器像素 = 内容 × view.scale + view.x/y（View.transform() origin[0,0] 即 draw 变换，同引擎 getNodePosInClient :545-555 口径）——浮动操作条锚点计算据此
+
+## M5d 核验（Task 2，连线净化）
+
+路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3）。连线净化以 uid 会话注册表为显示层数据源，三项前提核验均成立。
+
+### (a) uid 生成与稳定性 —— 构造期统一补齐进 data，`SET_NODE_DATA({text})` 后原样保留 —— 成立
+
+- `index.js:181-191 handleData`：构造/`setData`/`updateData` 都先 `simpleDeepClone` 再 `createUidForAppointNodes([data], false, null, true)`（`src/utils/index.js:1002-1019`：缺 `data.uid` 即 `createUid()` 补齐，含概要节点）——uid 落在 **节点 data**（`nodeData.data.uid`），与渲染树/命令快照共享同一数据对象
+- `Render.js:1980-1984 setNodeData`：仅 `Object.keys(data).forEach(key => node.nodeData.data[key] = data[key])` 平铺合并传入键——`SET_NODE_DATA({text})` 只覆写 text，**uid 不在补丁内即不动**（文本编辑、重命名同路）
+- `MindMapNode.js:1029-1031 getData(key)` 读 `nodeData.data[key]`；首帧渲染后（`renderer.root` 就绪）全树 `getData('uid')` 可得（引擎自身 `findNodeByUid` 同源，Render.js:2094-2098）
+- `Command.js:177-184 getCopyData()` → `copyRenderTree`（`utils/index.js:162-180`，`simpleDeepClone(root.data)` 整体深拷）**uid 随 data 进 `mm.getData()` 快照**——序列化按 uid 查注册表可行；引擎另有 `removeDataUid` 仅用于导出场景，getData 不走
+
+### (b) rebuildEngineLinks 清 5 键不含 uid —— 成立
+
+- MindMapCanvas `ASSOCIATIVE_KEYS` 五键均 `associativeLine*` 前缀，uid 不在清除列；净化剥离文本走同一"直写 data 本体"通道，只改 `data.text`，uid 不动
+
+### (c) 直写 + `reRenderNodeCheckChange` 不触发 data_change —— 成立（打开净化不置脏）
+
+- 直写 `data` 本体（`getData()` 无参返回活引用，M5b 核验 (g) 同通道）绕过 `execCommand` → 不进历史、不发 `data_change`（唯一发源地 `Command.js:127` addHistory 链与 `Render.js:752` undo/redo backForward，纯重渲不发）
+- `reRenderNodeCheckChange`（`Render.js:1997`）：`node.reRender()` 重建节点内容 + 尺寸变化时 `mindMap.render()`（`Render.js:552-559` 经 `setTimeout(0)` 去抖的纯重渲）——无 addHistory、无 data_change，打开时批量剥离标记不会点亮脏标记/触发自动保存
+
+### 已知边界（不阻塞，记录在案）
+
+- 撤销栈首条快照是**含标记的构造时数据**：净化直写不进历史，加载后立即 Ctrl+Z 会把标记文本带回显示（连线随之消失）；任一后续编辑/保存自愈（md 事实源不变），连线删除 UI 属计划外
+
+## M5d 核验（Task 5，连线弯曲记忆）
+
+路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3）。弯曲记忆两处前提核验均成立，另发现一处必须适配的数据不变量。
+
+### (d) offsets 数据结构 —— from 节点 data 上的**索引对齐数组**（非 uid 键）——成立，恢复按 targets 顺序回填
+
+- `associativeLineTargetControlOffsets` 挂在**连线源节点** data 上，是**数组**，按索引与 `associativeLineTargets`（目标 uid 数组）逐位对齐；每项 `[{x,y},{x,y}]` = 贝塞尔两控制点相对连线起点/终点的**差值**（`AssociativeLine.js:617-634 addLine` 写入时即注释"保存的实际是控制点和端点的差值"）
+- 读：`associativeLineUtils.js:274-305 getNodeLinePath`（渲染时 `offsets[targetIndex]`，命中则控制点 = 端点 + 偏移，未命中回落默认 S 曲线）；写：`addLine`（建线默认值）/ `associativeLineControls.js:155-216 onControlPointMouseup`（拖完写用户偏移）/ `AssociativeLine.js:647-681 removeLine`（删线按索引 filter 收敛）
+- 引擎自身只写**稠密**数组（addLine 逐条 push、removeLine filter 紧缩）。宿主恢复时若写**稀疏**数组（空洞），渲染安全（getNodeLinePath 有 `offsets[targetIndex]` 判空）但**拖控制点即崩**：`onControlPointMousemove`（controls.js:60-118）与 `onControlPointMouseup`（:190 附近）直接读 `offsets[targetIndex][1].x` 无判空 → TypeError。**适配**：rebuild 写 offsets 时按引擎同款公式（computeNodePoints + computeCubicBezierPathPoints，即 addLine 原算式）把空洞补成默认差值，保持稠密
+
+### (e) 控制点拖完置脏 —— 成立，既有 data_change 监听已覆盖，无需新增监听
+
+- `onControlPointMouseup`（controls.js:155）拖完经 `this.mindMap.execCommand('SET_NODE_DATA', node, { associativeLineTargetControlOffsets, associativeLinePoint })` 落数据 → `Command.js:71-80 exec` 对 SET_NODE_DATA 不在豁免名单 → `addHistory()`（Command.js:92-130）数据有变即 `emit('data_change', data)` → MindMapCanvas 既有 data_change 监听透传 EditorView → pipeline.onTreeDataChange 置脏 + 5s 自动保存
+- 控制点可拖开关 `enableAdjustAssociativeLinePoints` 默认 true（defaultOptions.js:426），无需显式开启
