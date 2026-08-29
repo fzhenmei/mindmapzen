@@ -20,18 +20,19 @@ describe('zen ⇄ engine 转换', () => {
     expect(eng.children![0].children![0].data.expand).toBe(true) // 子节点仍默认展开
   })
 
-  test('engine→zen：还原树并收集折叠路径', () => {
+  test('engine→zen：还原树并收集折叠路径（data.uid 透传进 ZenNode，M5d 序列化注入查表用）', () => {
     const eng: EngineNode = {
       data: { text: '根', expand: true },
       children: [{ data: { text: 'A', expand: false, uid: 'x' }, children: [{ data: { text: 'A1', expand: true }, children: [] }] }],
     }
     const r = engineTreeToZen(eng)
-    expect(r.tree).toEqual(n('根', [n('A', [n('A1')])]))
+    expect(r.tree).toEqual({ text: '根', children: [{ text: 'A', uid: 'x', children: [{ text: 'A1', children: [] }] }] })
     expect(r.collapsed).toEqual(['/根/A'])
   })
 
-  test('engine→zen：children 缺省按空处理', () => {
+  test('engine→zen：children 缺省按空处理；uid 非字符串不透传', () => {
     expect(engineTreeToZen({ data: { text: 'r' } }).tree).toEqual(n('r'))
+    expect(engineTreeToZen({ data: { text: 'r', uid: 42 }, children: [] }).tree).toEqual(n('r'))
   })
 
   test('zen→engine：note 透传进 data（undefined 不设键）', () => {

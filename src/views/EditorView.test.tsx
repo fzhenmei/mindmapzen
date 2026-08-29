@@ -5,6 +5,7 @@ import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
+import type { LinkRegistry } from '../editor/linkRegistry'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
@@ -20,20 +21,26 @@ const defaultFakeTree = (): EngineNode => ({
 })
 let fakeTree: EngineNode = defaultFakeTree()
 let fakeHandle: MindMapHandle
-vi.mock('../editor/MindMapCanvas', () => ({
-  default: ({
-    onReady,
-    onDataChange,
-    onActiveChange,
-    onEditorPaste,
-    layout,
-  }: {
-    onReady: (h: MindMapHandle) => void
-    onDataChange: () => void
-    onActiveChange?: (uid: string | null) => void
-    onEditorPaste?: (rawText: string) => void
-    layout?: string
-  }) => {
+// 假画布 applyRegistry 复用真 linkRegistry 纯函数（M5d Task 2 净化语义与生产一致）；
+// vi.mock 工厂被提升到 import 之前，linkRegistry 须经工厂内动态 import 引入
+vi.mock('../editor/MindMapCanvas', async () => {
+  const { buildRegistry, stripTreeTexts } = await import('../editor/linkRegistry')
+  return {
+    default: ({
+      onReady,
+      onDataChange,
+      onActiveChange,
+      onEditorPaste,
+      layout,
+      registry,
+    }: {
+      onReady: (h: MindMapHandle) => void
+      onDataChange: () => void
+      onActiveChange?: (uid: string | null) => void
+      onEditorPaste?: (rawText: string) => void
+      layout?: string
+      registry: LinkRegistry
+    }) => {
     fakeHandle = {
       getData: () => fakeTree,
       execCommand: vi.fn(),
@@ -51,6 +58,11 @@ vi.mock('../editor/MindMapCanvas', () => ({
       el: null,
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
       destroy: vi.fn(),
+      // 连线净化（M5d Task 2）：生产版等首帧渲染后走渲染树；假画布同步对 getData 树执行同款纯函数
+      applyRegistry: () => {
+        buildRegistry(fakeTree, registry)
+        stripTreeTexts(fakeTree)
+      },
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
         findNodeByUid: (uid: string) =>
@@ -69,8 +81,9 @@ vi.mock('../editor/MindMapCanvas', () => ({
     // 挂载期 layout prop（引擎构造参数，Task 3）：记录供「打开恢复布局」用例断言
     ;(globalThis as unknown as Record<string, unknown>).__lastLayoutProp = layout
     return <div data-testid="fake-canvas" />
-  },
-}))
+      },
+  }
+})
 
 let fs: MemoryFsAdapter
 const openInEditor = vi.fn()
@@ -354,6 +367,66 @@ test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () =>
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
   expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false })).toBe('# 根\n\n## 见 B\n')
+})
+
+// ---- 连线净化（M5d Task 2）：uid 注册表、显示剥离与序列化注入 ----
+/** 净化样例树：child 文本含句中标记 [[B]]，b 为目标节点；md 与 fakeTree 同构 */
+const purifyTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [
+    { data: { text: 'A [[B]] 见', expand: true, uid: 'child-uid' }, children: [] },
+    { data: { text: 'B', expand: true, uid: 'b-uid' }, children: [] },
+  ],
+})
+
+test('连线净化：打开后画布文本剥离标记，保存句尾注入（句中标记规范化到句尾）', async () => {
+  fakeTree = purifyTree()
+  await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## A [[B]] 见\n\n## B\n')
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 画布文本已剥离（fake getData 无标记）
+  expect(fakeTree.children![0]!.data.text).toBe('A 见')
+  expect(fakeTree.children![1]!.data.text).toBe('B')
+  // 净化不置脏：无 data_change，文档干净（显示层剥离不落盘）
+  expect(useAppStore.getState().dirty).toBe(false)
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  // md 含 [[B]] 且在句尾（规范化形）
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## A 见 [[B]]\n\n## B\n')
+})
+
+test('连线净化：源节点改名后保存不断链（注册表以 uid 为键）', async () => {
+  fakeTree = purifyTree()
+  await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## A [[B]] 见\n\n## B\n')
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 源节点改名（uid 不变）：文本早已剥离，注册表条目仍命中
+  fakeTree.children![0]!.data.text = '甲'
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 甲 [[B]]\n\n## B\n')
 })
 
 // ---- 印记（Task 7：显式保存成功朱砂印 / 复制成功墨青印，替代按钮内 ✓ 文案）----

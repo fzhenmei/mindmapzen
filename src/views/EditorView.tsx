@@ -3,7 +3,6 @@ import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
 import { readSidecar } from '../services/sidecar'
 import { applyMultilinePaste } from '../services/multiline'
-import { resolveAllLinks } from '../services/links'
 import { applyCopySettings } from '../services/copyFilter'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
@@ -13,6 +12,7 @@ import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
+import { useLinkPurify } from '../hooks/useLinkPurify'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
@@ -58,6 +58,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
+  // 连线净化（M5d Task 2）：会话注册表（uid → 目标名）——序列化注入、画线桥接、复制共享同一引用
+  const { registry, purify, rebuildFromRegistry } = useLinkPurify(mmRef)
+
   // 保存管线（M5a 拆分）：串行保存链/自动保存/布局落盘；脏标记 ref 归本视图持有（守卫「放弃」路径也读写）
   const pipeline = useSavePipeline({
     adapter,
@@ -65,13 +68,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     mmRef,
     layoutRef,
     dirtyRef,
+    registry,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
     onError: setError,
-    // 落盘成功后按最新树重建双链（M5b Task 3）：[[..]] 是文本派生标记，保存链（含 5s 自动保存）是统一重建时机
-    onSaved: () => {
-      const mm = mmRef.current
-      mm?.rebuildLinks?.(resolveAllLinks(engineTreeToZen(mm.getData()).tree))
-    },
+    onSaved: rebuildFromRegistry, // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）
   })
 
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
@@ -107,7 +107,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       selection.clearStaleIfMissing(full)
       const uid = selection.activeUidRef.current
       const active = uid ? findSubtreeByUid(full, uid) : null
-      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree), useAppStore.getState().settings))
+      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree, registry.byUid), useAppStore.getState().settings))
       flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
@@ -225,13 +225,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           <MindMapCanvas
             key={mdPath}
             tree={engineTree}
+            registry={registry}
             layout={layoutToEngine(initialLayout)}
             theme={engineThemeName(resolvedTheme)}
             onReady={(mm) => {
               mmRef.current = mm
-              // 初始双链：此时引擎首帧尚未渲染且 getData() 未初始化，用打开时解析的 engineTree 作源；
-              // rebuildLinks 内部等待首帧渲染完成后落线
-              mm.rebuildLinks?.(resolveAllLinks(engineTreeToZen(engineTree).tree))
+              // 连线净化（M5d Task 2）：等首帧渲染后建注册表 → 剥离显示文本 → 按注册表落初始连线
+              purify(mm)
             }}
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}

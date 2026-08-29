@@ -86,3 +86,26 @@ describe('serialize', () => {
     expect(serialize(tree)).toBe('# 根\n\n## A\n\n### A1\n')
   })
 })
+
+describe('serialize linksByUid（M5d Task 2：序列化注入）', () => {
+  test('按 node.uid 查表句尾注入（多目标依次追加，列表项同样生效）', () => {
+    const heading: ZenNode = { text: '根', uid: 'u0', children: [{ text: 'A', uid: 'u1', children: [] }] }
+    expect(serialize(heading, new Map([['u1', ['B', 'C']]]))).toBe('# 根\n\n## A [[B]] [[C]]\n')
+    const deep = n('根', [n('a', [n('b', [n('c', [n('d', [n('e', [n('f', [n('item')])])])])])])])
+    const item = deep.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!
+    item.uid = 'u9'
+    expect(serialize(deep, new Map([['u9', ['X']]]))).toContain('  - item [[X]]\n')
+  })
+
+  test('文本已含的目标不重复注入（会话内手写标记场景：md 原样保留）', () => {
+    const tree: ZenNode = { text: '根', children: [{ text: 'A [[B]] 见', uid: 'u1', children: [] }] }
+    expect(serialize(tree, new Map([['u1', ['B']]]))).toBe('# 根\n\n## A [[B]] 见\n')
+  })
+
+  test('参数缺省 / 空表 / uid 未命中：原样序列化', () => {
+    const tree: ZenNode = { text: '根', children: [{ text: 'A', uid: 'u1', children: [] }] }
+    expect(serialize(tree)).toBe('# 根\n\n## A\n')
+    expect(serialize(tree, new Map())).toBe('# 根\n\n## A\n')
+    expect(serialize(tree, new Map([['other', ['B']]]))).toBe('# 根\n\n## A\n')
+  })
+})

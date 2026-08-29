@@ -71,6 +71,9 @@ export interface MindMapHandle {
   /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
    *  内部等待首帧渲染完成后按 links 清空并重建关联线 */
   rebuildLinks?(links: ResolvedLink[]): void
+  /** 连线净化（M5d Task 2）：宿主侧方法——同上装配挂载；等首帧渲染完成后走渲染树
+   *  建注册表（标记文本 → uid 条目）→ 直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线 */
+  applyRegistry?(): void
   /** 关联线插件实例（构造时挂载）：建线态入口与状态（验收轮连线文本桥接） */
   associativeLine?: EngineAssociativeLine
   /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */

@@ -5,9 +5,11 @@ import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
 import Export from 'simple-mind-map/src/plugins/Export.js'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
+import { stripMarkers } from '../services/linkMarkers'
+import { buildRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
-import { bridgeLinkToText } from './linkBridge'
+import { bridgeLinkToRegistry } from './linkBridge'
 
 // 节点拖拽插件：拖到节点上=成为其子节点，拖到两节点之间=调整同级顺序（spec P0"拖拽节点改变层级与顺序"）
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
@@ -88,8 +90,41 @@ function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[]): void {
     })
 }
 
+/** 打开净化（M5d Task 2）：等首帧渲染后走渲染树——①树A标记文本建注册表（buildRegistry 读标记，
+ *  须先于剥离）；②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：
+ *  不进命令层、无历史、无 data_change → 打开净化不置脏）；③逐节点按需重渲（文本变短重算尺寸）；
+ *  ④按注册表重建连线（显示文本已剥离，连线数据源自此是注册表而非文本标记） */
+function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry): void {
+  const run = (): void => {
+    const root = mm.renderer?.root as EngineNodeInstance | null | undefined
+    if (!root) return
+    const changed: EngineNodeInstance[] = []
+    // 活引用快照：plain 树的 data 即引擎节点 data 本体（getData() 无参返回活引用）
+    const toPlain = (node: EngineNodeInstance): EngineNode => {
+      const data = (node.getData() ?? { text: '' }) as EngineNode['data']
+      if (typeof data.text === 'string' && stripMarkers(data.text) !== data.text) changed.push(node)
+      return { data, children: (node.children ?? []).map(toPlain) }
+    }
+    const plain = toPlain(root)
+    buildRegistry(plain, reg)
+    stripTreeTexts(plain)
+    for (const node of changed) mm.renderer?.reRenderNodeCheckChange(node)
+    rebuildEngineLinks(mm, registryToLinks(plain, reg))
+  }
+  // 同 rebuildEngineLinks：构造后首帧渲染经 setTimeout(0) 异步完成，未就绪时一次性挂监听
+  if (mm.renderer?.root) run()
+  else
+    mm.on('node_tree_render_end', function onEnd() {
+      mm.off('node_tree_render_end', onEnd)
+      run()
+    })
+}
+
 interface Props {
   tree: EngineNode
+  /** 连线净化会话注册表（M5d Task 2）：稳定引用对象（EditorView 经 useLinkPurify 持有），
+   *  打开建表、序列化注入、画线桥接共享同一份 */
+  registry: LinkRegistry
   onReady: (mm: MindMapHandle) => void
   /** 引擎数据变化回调；data 为引擎随事件附带的整树快照（无载荷的调用视为必有变化，见下） */
   onDataChange: (data?: EngineNode) => void
@@ -104,6 +139,7 @@ interface Props {
  *  本组件不做单元测试（引擎依赖真实 DOM 布局），由 E2E 与手工清单覆盖。 */
 export default function MindMapCanvas({
   tree,
+  registry,
   onReady,
   onDataChange,
   onActiveChange,
@@ -114,8 +150,8 @@ export default function MindMapCanvas({
   const containerRef = useRef<HTMLDivElement>(null)
   const mmRef = useRef<MindMapHandle | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
-  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste })
-  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste }
+  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, registry })
+  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, registry }
 
   useEffect(() => {
     const mm = new MindMap({
@@ -126,9 +162,17 @@ export default function MindMapCanvas({
       // 叶节点快捷建子 "+"（验收轮）：引擎原生 quickCreateChildBtn——激活叶节点显示、点击即插入子节点并进入
       // 编辑（INSERT_CHILD_NODE，MindMapNode.js:157/516 按 opt 门控；显式声明防未来默认值漂移）
       isShowCreateChildBtnIcon: true,
-      // 连线文本桥接（验收轮）：completeCreateLine 在引擎 addLine 前读此 opt 钩子（AssociativeLine.js:565-571），
-      // 桥接改写源文本 [[目标]] 后返回 true 阻断引擎落线（文本是唯一事实源）。闭包在调用期（构造后）才解引用 mm
-      beforeAssociativeLineConnection: (toNode: unknown) => bridgeLinkToText(mm, toNode),
+      // 连线注册表桥接（M5d Task 2）：completeCreateLine 在引擎 addLine 前读此 opt 钩子
+      // （AssociativeLine.js:565-571），桥接改注册表后返回 true 阻断引擎落线（md 是唯一事实源，
+      // 显示文本全程不动——保存链经 onDataChange 上报触发，序列化时句尾注入标记）。
+      // 闭包在调用期（构造后）才解引用 mm；registry/onDataChange 经 cbRef 取调用期最新值
+      beforeAssociativeLineConnection: (toNode: unknown) =>
+        bridgeLinkToRegistry(
+          mm,
+          cbRef.current.registry,
+          toNode,
+          () => cbRef.current.onDataChange(), // 无载荷上报=必有变化：置脏 + 5s 自动保存链
+        ),
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
@@ -153,6 +197,9 @@ export default function MindMapCanvas({
     mm.on('node_active', onActive)
     // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在 onReady 与保存成功后经 mmRef 调用
     ;(mm as MindMapHandle).rebuildLinks = (links) => rebuildEngineLinks(mm, links)
+    // 打开净化入口（M5d Task 2）：EditorView 在 onReady 调用；内部等首帧渲染完成后
+    // 建注册表 → 剥离显示文本 → 按注册表重建连线（registry 经 cbRef 取最新引用）
+    ;(mm as MindMapHandle).applyRegistry = () => applyRegistryToEngine(mm, cbRef.current.registry)
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；

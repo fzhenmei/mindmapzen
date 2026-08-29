@@ -41,11 +41,13 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   )
   expect(md).toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
 
-  // 返回案头重开：onReady 重建，连线复现
+  // 返回案头重开：onReady 净化（建注册表 + 显示剥离）后按注册表重建，连线复现
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
   await page.getByTestId('map-item').click()
-  await expect(page.getByText('A [[B]]').first()).toBeVisible()
+  // 画布文本无 [[ ]] 标记（M5d Task 2 显示层剥离），连线照常复现
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('A [[B]]')).toHaveCount(0)
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
 })
 

@@ -4,6 +4,7 @@
 import { useRef, type MutableRefObject, type RefObject } from 'react'
 import { engineTreeToZen, serialize } from '../services/mdTree'
 import { writeSidecar } from '../services/sidecar'
+import type { LinkRegistry } from '../editor/linkRegistry'
 import type { FsAdapter, LayoutKind, Sidecar } from '../types/files'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 
@@ -15,6 +16,8 @@ export interface SavePipelineOpts {
   mmRef: RefObject<MindMapHandle | null>
   layoutRef: MutableRefObject<LayoutKind>
   dirtyRef: MutableRefObject<boolean>
+  /** 连线净化会话注册表（M5d Task 2）：序列化时按 uid 查表句尾注入 [[..]] 标记（稳定引用对象） */
+  registry: LinkRegistry
   onDirtyChange: (dirty: boolean) => void // 脏标记同步（markDirty / clearDirty）
   onError: (msg: string) => void // 保存失败横幅（setError）
   onSaved?: () => void // md+sidecar 落盘成功后回调（M5b Task 3：双链重建随保存链）
@@ -62,7 +65,8 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       const rev = dataRevRef.current
       const snapshot = mm.getData()
       const { tree, collapsed } = engineTreeToZen(snapshot)
-      await adapter.writeTextFileAtomic(mdPath, serialize(tree))
+      // M5d Task 2 序列化注入：净化会话下引擎文本无标记，连线按注册表（uid）句尾注入回 md
+      await adapter.writeTextFileAtomic(mdPath, serialize(tree, opts.registry.byUid))
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
       opts.onSaved?.()
       // 记录落盘快照：引擎节流补发的同值 data_change 到达时据此免置脏（见 onTreeDataChange）
