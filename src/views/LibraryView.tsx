@@ -179,10 +179,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         return (
           <div className="library-empty" data-testid="library-empty">
             <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
-              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
               <path
                 d="M17 25l5 5 10-12"
-                stroke="var(--paper)"
+                stroke="var(--color-background)"
                 strokeWidth="3"
                 fill="none"
                 strokeLinecap="round"
@@ -310,10 +310,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         <header className="library-header">
           <div className="desk-brand">
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
-              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
               <path
                 d="M17 25l5 5 10-12"
-                stroke="var(--paper)"
+                stroke="var(--color-background)"
                 strokeWidth="3.5"
                 fill="none"
                 strokeLinecap="round"

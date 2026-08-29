@@ -22,10 +22,10 @@ test('视觉冒烟 1：晨松亮主题——令牌就位且旧样式未动（案
   )
   expect(token).toBe('#F7F8F7')
 
-  // 零视觉变更实证：案头背景仍由旧纸令牌 --paper 驱动（#F7F6F3 ≠ 新 #F7F8F7），
-  // Tailwind 层与旧 CSS 并存、未动现有 UI
+  // 令牌层收口实证（M12b Task 1）：旧 --paper 已退役，案头背景改由 @theme
+  // --color-background 驱动（旧 rgb(247,246,243) 反证随之删除；全面重写见 M12b Task 6）
   const libraryBg = await page.evaluate(() => getComputedStyle(document.querySelector('.library')!).backgroundColor)
-  expect(libraryBg).toBe('rgb(247, 246, 243)')
+  expect(libraryBg).toBe('rgb(247, 248, 247)')
 })
 
 test('视觉冒烟 2：夜航暗主题——令牌翻转（纸面）', async ({ page }) => {

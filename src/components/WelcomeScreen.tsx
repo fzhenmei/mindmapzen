@@ -10,10 +10,10 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
   return (
     <div className="welcome-screen" data-testid="welcome-screen">
       <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
-        <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+        <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
         <path
           d="M17 25l5 5 10-12"
-          stroke="var(--paper)"
+          stroke="var(--color-background)"
           strokeWidth="3"
           fill="none"
           strokeLinecap="round"
