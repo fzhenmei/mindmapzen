@@ -1,11 +1,14 @@
 // src/editor/undoSeed.ts —— 撤销历史栈卫生（v1.1 撤销/重做，想法5）：
-// ①基线种子：引擎核心实证不播初始快照（Command 构造 history=[]，唯一补种入口是 setMode('edit')，
-// index.js:558，本项目不调用）——不补种子则首条编辑后 activeHistoryIndex 恒为 0，BACK 无法回退
-// （back 的 index-step>=0 守卫），即「首条编辑不可撤销」。种子时机在打开净化完成之后
-// （MindMapCanvas applyRegistryToEngine 尾部）：基线取净化后的现态（标记已剥离、连线 targets 已落位），
-// 首条编辑的撤销落在净化态而非含 [[..]] 标记的构造数据。直写 history 数组而非 originAddHistory：
-// 后者必发 data_change（Command.js:127）→ 打开即误置脏（净化不置脏语义，engine-api.md「M5d 核验 (c)」）；
-// 直写零事件，禁用态初值本就 false/false，back_forward 未发也无碍。
+// ①基线种子（v1.1 修复，审查裁定①）：引擎构造器默认自播种子（addHistoryOnInit: true，index.js:163-166
+// 构造器内 command.addHistory()，经节流延迟入史）——捕获的是**未净化构造数据**（含 [[..]] 标记、无连线
+// targets）。它与本文件的「栈非空即跳过」构成竞态：自播先落则基线含标记（打开含连线文件后回退栈底把
+// 标记带回画布，且自播的 data_change 开图误置脏）。宿主在构造 opts 显式 `addHistoryOnInit: false`
+// 关闭自播（见 MindMapCanvas），本种子由此成为唯一确定路径：时机在打开净化完成之后
+// （MindMapCanvas applyRegistryToEngine 尾部），基线取净化后的现态（标记已剥离、连线 targets 已落位）。
+// 直写 history 数组而非 originAddHistory：后者必发 data_change（Command.js:127）→ 打开即误置脏
+// （净化不置脏语义，engine-api.md「M5d 核验 (c)」）；直写零事件，禁用态初值本就 false/false，
+// back_forward 未发也无碍。引擎另有三个补种入口（setData index.js:466-476 clearHistory+addHistory /
+// updateData :461 / setMode :558，本项目均不走）。
 // ②瞬态键剥离：copyRenderTree（utils/index.js:162-181）除 data/children 外的节点级键全量入快照，
 // 含插入命令的瞬态标记 inserting（Render.insertChildNode 写入，首渲时由 MindMapNode.js:674-680 消费
 // 并自动开编辑框）。它进历史造成两处实锤污染（v1.1 浏览器实证，engine-api.md「v1.1 核验」）：
@@ -32,7 +35,8 @@ function hasTransient(snapshot: string): boolean {
   return TRANSIENT_NODE_KEYS.some((key) => snapshot.includes(`"${key}":`))
 }
 
-/** 打开净化完成后播一条基线快照进撤销栈（幂等：栈非空即跳过，保存链再净化路径不受扰） */
+/** 打开净化完成后播一条基线快照进撤销栈——基线唯一来源（引擎自播已由 addHistoryOnInit:false 关闭；
+ *  幂等守卫：栈非空即跳过，保存链再净化路径不受扰） */
 export function seedUndoBaseline(mm: MindMapHandle): void {
   const command = mm.command
   if (!command || command.history.length > 0) return

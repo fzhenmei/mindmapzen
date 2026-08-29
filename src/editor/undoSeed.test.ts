@@ -1,6 +1,7 @@
 // src/editor/undoSeed.test.ts —— 撤销历史栈卫生单元测试（v1.1）：
-// ①基线种子：引擎核心不播初始快照（v1.1 核验实证：构造+首帧渲染后 history=0，首条编辑后 index=0
-// 不可 BACK），seedUndoBaseline 在打开净化完成后直写基线，保证首条编辑可撤销；直写零事件（不置脏）。
+// ①基线种子：引擎构造器自播种子（addHistoryOnInit 默认 true）捕获未净化构造数据且与宿主种子竞态，
+// 本仓已关闭自播（MindMapCanvas 构造 opts），seedUndoBaseline 在打开净化完成后直写净化态基线，
+// 是撤销栈的唯一基线来源；直写零事件（不置脏）。
 // ②瞬态键剥离：copyRenderTree 把节点级 inserting 标记一并入史，实证造成重复入史与「撤销重做截断」
 // （undoSeed.ts 文件头 ②），sanitizeTopHistory 在 back_forward 尾随剥除栈顶快照的该键。
 import { describe, expect, test, vi } from 'vitest'

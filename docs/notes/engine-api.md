@@ -341,7 +341,7 @@
 
 ## v1.1 核验（撤销/重做，想法5）
 
-对引擎撤销历史子系统逐项核验+实证（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3；实证手段：jsdom 直构实例的一次性脚本 + 浏览器 e2e 经临时调试钩子直读 `command.history`）。**结论先行：原生快捷键与 back_forward 历史态事件成立可直接用；但撤销栈存在三处上游缺陷，宿主已在 `src/editor/undoSeed.ts` + `MindMapCanvas` 构造选项补齐，否则「首条编辑不可撤销 / 文本提交不入史 / 撤销一次即截断重做栈」三症全现。**
+对引擎撤销历史子系统逐项核验+实证（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3；实证手段：jsdom 直构实例的一次性脚本 + 浏览器 e2e 经临时调试钩子直读 `command.history`；修复轮由审查复核后勘误两处实证结论，见 (2)(4)）。**结论先行：原生快捷键与 back_forward 历史态事件成立可直接用；但撤销栈存在三处上游缺陷，宿主已在 `src/editor/undoSeed.ts` + `MindMapCanvas` 构造选项补齐，否则「基线含未净化标记（自播种子竞态）/ 两条逻辑编辑合并为一条历史（粒度损失）/ 撤销一次即截断重做栈」三症全现。**
 
 ### (1) 命令与快捷键 —— 成立
 
@@ -349,11 +349,16 @@
 - `Render.js:745-753 backForward`：清选中 → command.back/forward → `renderTree = data` → 重渲 → **无条件 `emit('data_change', data)`**——撤销重做走既有置脏/自动保存链，撤销结果随保存落盘（无需新链路）
 - 历史态事件 `back_forward(activeHistoryIndex, history.length)`：`Command.js` addHistory(:128)/back(:143)/forward(:164)/clearHistory(:46) 四处发出 → `canUndo = index > 0`，`canRedo = index < length - 1`（实证载荷 [0,1]/[1,2]/[0,2]）
 
-### (2) 引擎不播初始快照 —— **缺陷一，宿主补基线种子**
+### (2) 构造器自播种子与宿主基线竞态 —— **缺陷一（v1.1 修复轮勘误并修复，审查裁定①）**
 
-- 实证：构造+首帧渲染后 `command.history.length === 0`；首条编辑命令后 history=1、activeHistoryIndex=0 → `canUndo=false`，BACK 的 `index-step>=0` 守卫（Command.js:140）拦下 → **首条编辑不可撤销**（用户改根节点文本后 Ctrl+Z 无效）
-- 引擎唯一补种入口是 `setMode('edit')`（index.js:558-560，栈空时 originAddHistory）——本项目不调 setMode
-- 宿主修复：`seedUndoBaseline` 在打开净化完成后（applyRegistryToEngine 尾部）**直写** `command.history = [JSON.stringify(mm.getData())]`。不走 `originAddHistory`：其必发 data_change（Command.js:127）→ 打开即误置脏（与「净化不置脏」语义冲突，M5d 核验 (c)）；直写零事件。基线取净化后现态（标记已剥离、targets 已落位），首条编辑的撤销落在净化态——**M5d 时代记录的「撤销栈首条快照是含标记的构造时数据」边界就此消除**
+- 引擎共有**四个**补种/入史入口（v1.1 首轮笔记称「唯一入口 setMode」不实，勘误）：
+  1. **构造器自播**（index.js:163-166）：`if (this.opt.addHistoryOnInit && this.opt.data) this.command.addHistory()`——`defaultOptions.js:268` 默认 **true**，且走的是**节流** addHistory（实际入史延后 addHistoryTime ms）
+  2. `setData`（index.js:466-476）：clearHistory + addHistory（本项目不调用）
+  3. `updateData`（index.js:461）：addHistory（本项目不调用）
+  4. `setMode('edit')`（index.js:558-560）：栈空时 originAddHistory（本项目不调用）
+- 首轮 jsdom 脚本「构造+首帧渲染后 history=0」系**节流时序伪影**：脚本只推进了 50ms，自播种子在构造后 100ms（默认节流窗）才落——不能作为「不播种子」的证据，勘误
+- 竞态实况（浏览器复现，回归用例 `e2e/undoredo.spec.ts` 第二条在未修复 HEAD 上失败）：自播种子捕获的是**未净化构造数据**（含 [[..]] 标记、无连线 targets），与宿主 `seedUndoBaseline` 的「栈非空即跳过」竞态——自播先落则基线含标记（打开含连线文件后回退栈底，画布显示「A [[B]]」，标记带回显示层），且自播 push 连带 data_change 会**开图误置脏**。本仓 `addHistoryTime: 1` 把自播入史提前到 ~1ms（早于首帧渲染与净化），等于把竞态的败方固定为宿主
+- 宿主修复：构造 opts 显式 **`addHistoryOnInit: false`** 关闭自播；`seedUndoBaseline` 在打开净化完成后（applyRegistryToEngine 尾部）**直写** `command.history = [JSON.stringify(mm.getData())]`，成为唯一确定基线路径。不走 `originAddHistory`：其必发 data_change（Command.js:127）→ 打开即误置脏（与「净化不置脏」语义冲突，M5d 核验 (c)）；直写零事件。基线取净化后现态（标记已剥离、targets 已落位），首条编辑的撤销落在净化态——**M5d 时代记录的「撤销栈首条快照是含标记的构造时数据」边界就此消除**
 
 ### (3) copyRenderTree 携带节点级瞬态键 `inserting` —— **缺陷二，宿主入史后剥离**
 
@@ -361,10 +366,10 @@
 - 实证两症（浏览器直读历史栈）：插入后激活链的 SET_NODE_DATA（`Render.setNodeActive` :1642 内嵌）触发节流 addHistory，此时标记已被渲染消费、JSON 漂移 → **重复入史一条近似快照**；BACK 恢复含标记快照 → 重渲重开编辑框 + 再发 SET_NODE_DATA/SET_NODE_ACTIVE 命令链 → 尾随 addHistory 按 `slice(0, index+1)` 截断 → **撤销一次后重做栈永久少一级**
 - 宿主修复：`sanitizeTopHistory` 在每次 back_forward（addHistory 尾随发出）剥除栈顶快照的 `inserting` 键（干净串零成本早退，幂等）。恢复出的快照干净后，两症的漂移比较均变相等而不再入史
 
-### (4) 100ms 丢弃式节流吞掉文本提交 —— **缺陷三，宿主收节流窗**
+### (4) 100ms 丢弃式节流合并历史粒度 —— **缺陷三，宿主收节流窗**（v1.1 修复轮措辞勘误）
 
 - `utils/index.js:281 throttle` 是纯尾随节流：`if (timer) return`——**窗口内的后续调用整体丢弃**（非合并尾随）；`defaultOptions.js:189 addHistoryTime: 100`
-- 实证（时序彩票，约半数复现）：插入（Tab）与文本提交（点画布 → hideEditTextBox → SET_NODE_TEXT，TextEdit.js:492）间隔若落入前一调用（插入激活链）的节流窗内，提交的 addHistory 被丢弃——**历史栈顶停在插入时默认文本「二级节点」，live 树却是「要点」**：最后一条编辑无法按步撤销、重做落点与用户撤销前所见漂移（数据在撤销栈里丢了一步）
+- 症状（措辞勘误：节流触发时读的是**现树**，快照永远如实反映其落地时刻的树态，不存在「栈顶腐化」；丢的是调用不是数据）：插入（Tab）与文本提交（点画布 → hideEditTextBox → SET_NODE_TEXT，TextEdit.js:492）两条逻辑编辑，若提交的 addHistory 调用落入前一调用的节流窗被丢弃，且前一调用的定时器又先于数据写入落地——**提交不产生独立历史条目，两条逻辑编辑合并为一条（粒度损失）**：最后一条编辑无法单独撤销（Ctrl+Z 一步跨过），重做落点也回到合并前的树态而非用户撤销前所见；直到下一条命令入史才补上
 - 宿主修复：构造选项 `addHistoryTime: 1`（窗口近零，命令变更即时入史）。副作用可控：入史 push 才发事件（同值去重在 addHistory 首行早退，激活类的 isActive 差异又被 copyRenderTree 的 removeActiveState 剥离吸收），事件量与语义一致
 
 ### (5) 空栈撤销重做的 data_change(undefined) —— 宿主丢弃无载荷转发

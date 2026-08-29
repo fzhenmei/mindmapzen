@@ -249,11 +249,15 @@ export default function MindMapCanvas({
       // 叶节点快捷建子 "+"（验收轮）：引擎原生 quickCreateChildBtn——激活叶节点显示、点击即插入子节点并进入
       // 编辑（INSERT_CHILD_NODE，MindMapNode.js:157/516 按 opt 门控；显式声明防未来默认值漂移）
       isShowCreateChildBtnIcon: true,
-      // 撤销历史入栈节流窗（v1.1）：引擎默认 100ms 且窗口内调用**整体丢弃**（utils/index.js:281 纯尾随节流），
-      // 实证会把文本提交的入史调用整个吞掉——撤销栈顶停在插入时默认文本，最后一条编辑无法按步撤销、
-      // 重做落点也与用户所见漂移。窗口收到近零后每次命令变更即时入史（重复入史由 undoSeed 的
-      // 瞬态键剥离+同值去重吸收；见 engine-api.md「v1.1 核验」）
+      // 撤销历史入栈节流窗（v1.1）：引擎默认 100ms 且窗口内调用**整体丢弃**（utils/index.js:281 纯尾随
+      // 节流）——插入与文本提交两条逻辑编辑可能合并为一条历史（粒度损失，最后一条编辑无法单独撤销）。
+      // 窗口收到近零后命令变更即时入史（重复入史由 undoSeed 的瞬态键剥离+同值去重吸收）
       addHistoryTime: 1,
+      // 关闭构造器自播种子（v1.1 修复，审查裁定①）：引擎默认在构造器里 command.addHistory()（节流后
+      // 入史，index.js:163-166）捕获的是**未净化构造数据**——与宿主 seedUndoBaseline「栈非空即跳过」
+      // 竞态：自播先落则基线含 [[..]] 标记（打开含连线文件后回退栈底会把标记带回画布，且自播的
+      // data_change 开图误置脏）。关闭后净化后的宿主基线种子是唯一确定路径（undoSeed.ts）
+      addHistoryOnInit: false,
       // 连线注册表桥接（M5d Task 2）：completeCreateLine 在引擎 addLine 前读此 opt 钩子
       // （AssociativeLine.js:565-571），桥接改注册表后返回 true 阻断引擎落线（md 是唯一事实源，
       // 显示文本全程不动——保存链经 onDataChange 上报触发，序列化时句尾注入标记）。

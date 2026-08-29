@@ -63,8 +63,9 @@ export interface EngineView {
 }
 
 /** 引擎命令层（MindMapHandle.command，Command.js）：撤销历史栈为字符串数组（JSON 快照）+ 活动指针。
- *  v1.1 实证（engine-api.md「v1.1 核验」）：核心不播初始快照（仅 setMode 补种子，index.js:558），
- *  宿主在打开净化完成后直写基线（editor/undoSeed.ts），否则首条编辑不可撤销 */
+ *  v1.1（engine-api.md「v1.1 核验」）：引擎构造器默认自播种子（addHistoryOnInit: true，index.js:163-166）
+ *  捕获未净化构造数据，本仓以 addHistoryOnInit: false 关闭，净化后的宿主基线种子（editor/undoSeed.ts）
+ *  是唯一路径；引擎另有 setData/updateData/setMode 三个补种入口（本项目不走） */
 export interface EngineCommand {
   /** 历史栈：JSON 字符串形式的整树快照（back/forward 按 JSON.parse 恢复） */
   history: string[]

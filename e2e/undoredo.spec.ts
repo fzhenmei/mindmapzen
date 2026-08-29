@@ -62,3 +62,65 @@ test('回退与重做：撤销建子编辑回打开基线并随保存落盘，�
   )
   expect(mdAfterRedo).toBe('# 根主题\n\n## 要点\n')
 })
+
+// v1.1 修复回归（审查裁定①）：引擎构造器自播种子（addHistoryOnInit 默认 true，index.js:163-166，
+// 节流后入史）捕获的是**未净化构造数据**——与宿主 seedUndoBaseline 的「栈非空即跳过」竞态：
+// 引擎先落则基线含 [[..]] 标记，打开含连线文件后回退到栈底会把标记文本带回画布（且自播的
+// data_change 会开图误置脏）。宿主以 addHistoryOnInit: false 关闭自播，净化后基线种子成唯一路径。
+// 复现路径：UI 建含连线图（同 links.spec）→ 返回重开（净化生效）→ 编辑 → 回退到栈底 →
+// 断言标记文本永不重现（缺陷在时基线=构造数据，画布将显示「A [[B]]」）。
+test('回退不切回含标记态：含连线文件重开后撤销至栈底，[[..]] 标记不重现', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('撤销连线')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('根主题').first()).toBeVisible()
+
+  // 建子节点 A（文本含 [[B]]）与 B（同 links.spec 的建图流程）
+  await page.getByText('根主题').first().click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+  await page.keyboard.type('A [[B]]')
+  await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
+  await page.getByText('根主题').first().click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+  await page.keyboard.type('B')
+  await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
+  await page.keyboard.press('Control+s')
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+
+  // 返回案头重开：onReady 净化（显示文本剥离标记）——撤销基线应取净化后现态
+  await page.getByTestId('btn-back').click()
+  await expect(page.getByTestId('map-item')).toBeVisible()
+  await page.getByTestId('map-item').dblclick()
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('A [[B]]')).toHaveCount(0) // 净化已剥离显示标记
+
+  // 打开即双禁用：基线是唯一历史条目（自播种子若在也只是 index=0，此项不 discriminating，
+  // 栈底标记断言才是缺陷探针）
+  await expect(page.getByTestId('btn-undo')).toBeDisabled()
+
+  // 编辑一条（插入子节点并输入文本）后回退到栈底（=打开基线）
+  await page.getByText('根主题').first().click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+  await page.keyboard.type('要点')
+  await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
+  await expect(page.getByTestId('btn-undo')).toBeEnabled()
+  for (let i = 0; i < 5; i++) {
+    if (!(await page.getByTestId('btn-undo').isEnabled())) break
+    await page.getByTestId('btn-undo').click()
+  }
+  await expect(page.getByTestId('btn-undo')).toBeDisabled()
+  await expect(page.getByText('要点').first()).toBeHidden()
+
+  // 缺陷探针：栈底基线若是引擎自播的未净化构造数据，此处将显示「A [[B]]」（标记带回画布）
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('A [[B]]')).toHaveCount(0)
+  await expect(page.getByText(/\[\[/)).toHaveCount(0)
+})
