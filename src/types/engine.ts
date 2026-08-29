@@ -34,6 +34,19 @@ export interface EngineExport {
   svg(name?: string): Promise<string>
 }
 
+/** 关联线插件实例面（MindMapHandle.associativeLine，usePlugin(AssociativeLine) 后构造时挂载，
+ *  instanceName='associativeLine'）：建线态入口与状态（验收轮连线文本桥接，见 editor/linkBridge.ts） */
+export interface EngineAssociativeLine {
+  /** 从当前激活节点发起建线（activeNodeList[0] 为源，AssociativeLine.js:449）：进入建线态，线随光标，点目标节点完成 */
+  createLineFromActiveNode(): void
+  /** 取消建线态（:483）：completeCreateLine 的 stop 路径不调用，宿主桥接须自理 */
+  cancelCreateLine(): void
+  /** 建线态源节点实例（createLine :477 写入，cancel 置 null）——opt 钩子只收到 toNode，源从这里取 */
+  creatingStartNode?: unknown
+  /** 建线态标志（createLine 置 true）：宿主浮动条等据此避让 */
+  isCreatingLine?: boolean
+}
+
 /** 引擎视图（MindMapHandle.view）：x/y/scale 为可直接赋值的变换状态，改后须调 transform() 生效（View.js） */
 export interface EngineView {
   reset(): void
@@ -58,6 +71,8 @@ export interface MindMapHandle {
   /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
    *  内部等待首帧渲染完成后按 links 清空并重建关联线 */
   rebuildLinks?(links: ResolvedLink[]): void
+  /** 关联线插件实例（构造时挂载）：建线态入口与状态（验收轮连线文本桥接） */
+  associativeLine?: EngineAssociativeLine
   /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */
   setLayout(name: string): void
   /** 运行中切换主题（引擎 index.js:379 setTheme(theme)）：清选中→重绘→view_theme_change；不重挂载画布 */

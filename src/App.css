@@ -116,6 +116,15 @@ html, body { overflow: hidden; }
 .raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--paper);
   border: 1px solid var(--hairline); border-radius: var(--radius-s); padding: 12px; white-space: pre-wrap; font-size: 12px; }
 .canvas-host { position: absolute; inset: 0; overflow: hidden; }
+/* 选中节点浮动操作条（验收轮）：锚定选中节点右下角（useNodeActions 定位），z-index 8 低于砚栏 10/横幅 9 */
+.node-actions { position: absolute; z-index: 8; display: flex; align-items: center; gap: 2px; padding: 4px 6px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline); border-radius: var(--radius-pill); box-shadow: var(--shadow-1); }
+.node-actions button { display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; border-radius: var(--radius-s);
+  background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
+.node-actions button:hover { background: var(--accent-soft); color: var(--accent); }
 /* 浮动砚栏（spec §4.4 UI 隐身）：静置淡化，悬停/聚焦浮现 */
 .zen-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
   display: flex; align-items: center; gap: 2px; padding: 6px 10px;
@@ -160,7 +169,7 @@ html, body { overflow: hidden; }
 /* 全局动效豁免（终审修复 2，Global Constraints）：reduce 下所有过渡/悬停位移关闭，收敛为单一 @media 块 */
 @media (prefers-reduced-motion: reduce) {
   .btn-primary, .library-header button, .map-card-main, .map-card-actions,
-  .zen-bar, .zen-bar button, .save-stamp { transition: none; }
+  .zen-bar, .zen-bar button, .node-actions button, .save-stamp { transition: none; }
   .map-card-main:hover { transform: none; }
   .save-stamp { animation: none; }
 }

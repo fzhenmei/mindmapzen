@@ -7,6 +7,7 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
+import { bridgeLinkToText } from './linkBridge'
 
 // 节点拖拽插件：拖到节点上=成为其子节点，拖到两节点之间=调整同级顺序（spec P0"拖拽节点改变层级与顺序"）
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
@@ -122,6 +123,12 @@ export default function MindMapCanvas({
       data: tree,
       ...(layout ? { layout } : {}),
       ...(theme ? { theme } : {}),
+      // 叶节点快捷建子 "+"（验收轮）：引擎原生 quickCreateChildBtn——激活叶节点显示、点击即插入子节点并进入
+      // 编辑（INSERT_CHILD_NODE，MindMapNode.js:157/516 按 opt 门控；显式声明防未来默认值漂移）
+      isShowCreateChildBtnIcon: true,
+      // 连线文本桥接（验收轮）：completeCreateLine 在引擎 addLine 前读此 opt 钩子（AssociativeLine.js:565-571），
+      // 桥接改写源文本 [[目标]] 后返回 true 阻断引擎落线（文本是唯一事实源）。闭包在调用期（构造后）才解引用 mm
+      beforeAssociativeLineConnection: (toNode: unknown) => bridgeLinkToText(mm, toNode),
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
