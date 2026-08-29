@@ -57,7 +57,8 @@ export function resolveLinks(tree: ZenNode, links: MindLink[]): ResolvedLink[] {
   return out
 }
 
-/** 便捷组合（EditorView 两处调用点共用，行数护栏友好） */
+/** 便捷组合（公共工具，当前无内部调用方——M5d Task 2 起编辑器改走 linkRegistry 注册表；
+ *  resolveLinks 本体仍被 registryToLinks 复用） */
 export function resolveAllLinks(tree: ZenNode): ResolvedLink[] {
   return resolveLinks(tree, parseLinks(tree))
 }

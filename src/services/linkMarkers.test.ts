@@ -22,6 +22,10 @@ describe('stripMarkers', () => {
     expect(stripMarkers('a [[]] b')).toBe('a [[]] b')
     expect(stripMarkers('a [[x[y]] b')).toBe('a [[x[y]] b')
   })
+  test('无标记文本原样返回（含连续/首尾空格）：空格收敛只发生在标记删除后，不触发改写', () => {
+    expect(stripMarkers('a  b')).toBe('a  b')
+    expect(stripMarkers('  普通文本  ')).toBe('  普通文本  ')
+  })
 })
 
 describe('injectMarkers', () => {
