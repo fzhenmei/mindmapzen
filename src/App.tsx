@@ -12,8 +12,18 @@ import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/t
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
 
+/** 生产工作区目录选择：Tauri 目录对话框。
+ *  E2E web 模式无 Tauri 对话框：读取 harness 预置桩（固定返回 /ws，开屏/更换工作区流程用）。 */
 const pickDirectory = async (): Promise<string | null> => {
-  if (E2E) return null
+  if (E2E) {
+    return (
+      (
+        window as unknown as {
+          __zenE2e?: { pickDirectory(): Promise<string | null> }
+        }
+      ).__zenE2e?.pickDirectory() ?? null
+    )
+  }
   const dir = await open({ directory: true, multiple: false })
   return typeof dir === 'string' ? dir : null
 }

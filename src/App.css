@@ -122,6 +122,8 @@ html, body { overflow: hidden; }
 /* 设置对话框（M5b）：开关行——checkbox 走 accent 色（覆盖上面 .zen-dialog input 的文本框样式） */
 .setting-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .setting-row input { width: auto; padding: 0; accent-color: var(--accent); cursor: pointer; }
+/* 设置对话框（M5d）：更换工作区行——当前路径与按钮两端对齐，非可点标签去掉手型 */
+.setting-workspace { cursor: default; justify-content: space-between; }
 /* 节点备注对话框（M5b）：4 行等宽 textarea（行数由组件 rows=4 提供），可纵向拉伸 */
 .zen-dialog textarea.note-textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--hairline);
   border-radius: var(--radius-s); font-family: var(--font-mono); font-size: 13px; line-height: 1.6;

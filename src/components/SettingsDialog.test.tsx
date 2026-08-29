@@ -54,4 +54,20 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByTestId('settings-close'))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  // M5d 更换工作区行：注入回调才渲染；点击触发回调并显示当前工作区路径
+  test('更换工作区行：默认隐藏，注入回调后显示路径并可点', () => {
+    const onChangeWorkspace = vi.fn()
+    const { rerender } = render(<SettingsDialog onClose={() => {}} />)
+    expect(screen.queryByTestId('settings-workspace-change')).not.toBeInTheDocument()
+    rerender(<SettingsDialog onClose={() => {}} onChangeWorkspace={onChangeWorkspace} />)
+    expect(useAppStore.getState().workspaceDir).toBeNull()
+    expect(screen.getByText('工作区：未设置')).toBeInTheDocument()
+    useAppStore.setState({ workspaceDir: '/ws' })
+    // setState 后重渲：行内显示当前工作区路径
+    rerender(<SettingsDialog onClose={() => {}} onChangeWorkspace={onChangeWorkspace} />)
+    expect(screen.getByText('工作区：/ws')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('settings-workspace-change'))
+    expect(onChangeWorkspace).toHaveBeenCalledTimes(1)
+  })
 })

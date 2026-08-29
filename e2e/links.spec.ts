@@ -82,11 +82,12 @@ test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框
   await page.getByTestId('note-cancel').click()
   await expect(page.getByTestId('note-dialog')).toBeHidden()
 
-  // 连线按钮 → 引擎建线态 → 点目标 B：linkBridge 把 A 文本改写为 A [[B]] 并立即重建线
+  // 连线按钮 → 引擎建线态 → 点目标 B：桥接只动注册表，A 显示文本保持纯净（净化断言，M5d §4）
   await page.getByText('A', { exact: true }).first().click()
   await page.getByTestId('node-action-link').click()
   await page.getByText('B', { exact: true }).first().click()
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+  await expect(page.getByText('A [[B]]')).toHaveCount(0)
 
   // 保存落盘：md 含 [[B]] 文本标记（连线是文本派生数据，不落引擎层）
   await page.keyboard.press('Control+s')

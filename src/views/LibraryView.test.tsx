@@ -40,6 +40,22 @@ test('开屏次入口「选择已有文件夹」同走工作区选择流', async
   expect(await screen.findByTestId('map-item')).toBeInTheDocument()
 })
 
+// M5d 缓期项清偿：设置页「更换工作区」——pickDirectory 选新文件夹后案头切换、对话框关闭
+test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框', async () => {
+  await fs.writeTextFileAtomic('/ws2/新家.md', '# 新家\n')
+  await useAppStore.getState().setWorkspace('/ws')
+  const pick = vi.fn(async () => '/ws2')
+  render(<LibraryView pickDirectory={pick} pickMdFile={pickMdFile} />)
+  fireEvent.click(screen.getByTestId('btn-settings'))
+  expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('settings-workspace-change'))
+  expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument()
+  await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws2'))
+  expect(pick).toHaveBeenCalledTimes(1)
+  const card = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('新家'))
+  expect(card).toBeTruthy()
+})
+
 test('空态引导文案', async () => {
   await useAppStore.getState().setWorkspace('/ws-empty')
   render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickMdFile} />)

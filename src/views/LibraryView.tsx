@@ -361,8 +361,17 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
-      {/* 设置对话框（M5b Task 4）：与其他对话框共用 dialog 互斥状态 */}
-      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {/* 设置对话框（M5b Task 4 + M5d 更换工作区）：与其他对话框共用 dialog 互斥状态；
+          更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」） */}
+      {dialog === 'settings' && (
+        <SettingsDialog
+          onClose={() => setDialog(null)}
+          onChangeWorkspace={() => {
+            setDialog(null)
+            void chooseWorkspace()
+          }}
+        />
+      )}
       {dialog === 'rename' && target && (
         <NameDialog
           title="重命名导图"
