@@ -186,3 +186,93 @@
 ### d.ts 影响
 
 新增静态方法 `defineTheme(name: string, config: Record<string, unknown>): void` 与实例方法 `setTheme(name: string): void`（返回 Error 对象的细节不进类型——守卫保证不会走到该分支），构造 opts 显式补 `theme?: string` 注释键。
+
+## M5b 核验（Task 2，节点备注）
+
+### (13) `SET_NODE_DATA` 接受部分 data，但**不触发重渲染** —— 成立，且须补一次重渲染
+
+- `Render.js:1980-1984 setNodeData(node, data)`：仅 `Object.keys(data).forEach(key => node.nodeData.data[key] = data[key])` 平铺合并——传 `{ note }` 单键即可，无需整份 data
+- 对比：`SET_NODE_TEXT`（Render.js:1987 `setNodeDataRender`）内部走 `SET_NODE_DATA` + `reRenderNodeCheckChange`（节点重渲 + 尺寸变化时全图重排）；裸 `SET_NODE_DATA` **不重渲**，备注角标（增/删）不会即时出现/消失
+- 结论：保存备注后须补调 `renderer.reRenderNodeCheckChange(node)`（`Render.js:1997`，引擎自用的"改数据后按需重渲"入口；`node.reRender()` 重建节点内容含角标，尺寸变化时自动 `mindMap.render()`）
+
+### (14) `nodeCreateContents` 备注角标与**原生悬停显示** —— 成立，无需 CSS title 兜底
+
+- `nodeCreateContents.js:430-475 createNoteNode()`：`getData('note')` truthy 才渲染 `.smm-node-note` 角标（空串/undefined 均无角标——"空值清除角标"由此免费获得）
+- 悬停为引擎原生：`node.on('mouseover')` 把 `noteEl`（构造时 append 到 body 的 fixed 定位 div，`innerText = getData('note')`）定位到 `getNoteContentPosition()` 并 `display:block`，`mouseout` 隐藏；仅当设置 `opt.customNoteContentShow` 时才改走自定义回调（本仓未设置）。另有 `node_note_click` 事件（本仓未用）
+- `noteIcon` 默认选项（`defaultOptions.js:270`）提供默认图标与配色
+
+### (15) `SET_NODE_DATA` 后的 `data_change` 与置脏链路 —— 成立（与文本编辑同路）
+
+- `Command.js:60-77 exec` → `addHistory`（节流）→ 快照 JSON 变化才 emit `data_change`（`Command.js:127`）。备注写入改变树 JSON → 经 MindMapCanvas 既有监听进 `onTreeDataChange` 置脏 + 自动保存；`note: undefined` 被 `JSON.stringify` 丢弃，清除备注同样产生 JSON 差异，置脏成立
+- 注意 `MindMapCanvas` 的 `afterExecCommand` 白名单不含 `SET_NODE_DATA`（悬停/激活高频误报脏）——置脏只依赖节流后的 `data_change`，文本编辑（`SET_NODE_TEXT`）已验证同链路可用
+
+### d.ts 影响
+
+`EngineRenderer` 增 `reRenderNodeCheckChange(node: unknown, notRender?: boolean): void`（Render.js:1997）；备注读取走节点实例 `getData('note')`（MindMapNode.js:1029，未进类型——`findNodeByUid` 返回 `unknown`，调用点结构断言）。
+
+## M5b 核验（Task 3，节点连线）
+
+对 [[..]] 双链 → 引擎关联线接线的关键引擎事实核验（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3；插件入口为 `src/plugins/AssociativeLine.js`，插件实例挂 `mindMap.associativeLine`，instanceName 见 :763）。
+
+### (a) 建线命令 `ADD_ASSOCIATIVE_LINE` —— 成立
+
+- `AssociativeLine.js:99` 注册：`this.mindMap.command.add('ADD_ASSOCIATIVE_LINE', this.addLine)`，实现 `addLine(fromNode, toNode)`（:578 起）：目标无 uid 时先经 SET_NODE_DATA 补生成，再把目标 uid 追加进 fromNode 的 `associativeLineTargets`
+
+### (b) `removeAllLines` 只删 SVG，不删数据 —— 真“清空”须删键后重绘
+
+- `renderAllLines`（:210）每次先 `removeAllLines()`（仅移除 SVG 元素）再按节点 data 里的 `associativeLineTargets` 重建；要删一条线必须从节点 data 删 uid/样式键后触发重绘。宿主重建语义 = 清空全树 5 个关联线键（`associativeLineTargets`/`associativeLinePoint`/`associativeLineTargetControlOffsets`/`associativeLineText`/`associativeLineStyle`）后按 md 重写
+
+### (c) 连线数据是节点 data 普通键 —— 会进 getData 但不泄入 md；命令层同 uid 去重
+
+- 上述 5 键均挂在节点 `data` 上（addLine :633/:645 等），`getCopyData()`/`getData()` 会带上；但 `engineTreeToZen` 只读 text/note/expand，天然不泄入 md（连线是纯派生数据，不落盘）
+- `addLine` 对同 from 节点重复目标 uid 去重（:592 `sameLine` 检查）防双建；宿主直写路径在 rebuildEngineLinks 内自行去重（Map + includes）
+
+### (d) 无 `.smm-associative-line` 类 —— 容器类名与主题键实况
+
+- 容器是引擎主入口 `index.js:200-201` 创建的 group：`this.associativeLineDraw = this.draw.group(); addClass('smm-associative-line-container')`；每条线由 drawLine（:261 起）直挂 2 个 path——可见线（stroke 主题色）+ 透明点击线（`color: 'transparent'`，宽为 activeWidth），箭头在 marker defs 内、文字为 group，均非直挂 path
+- 线色/线宽走主题根键 `associativeLineColor`/`associativeLineWidth`（`src/theme/default.js:43-45`），经 SVG.js 属性着色；CSS 直染会波及透明点击线，不可取
+
+### (e) 首帧渲染异步 —— onReady 时 root 为 null
+
+- `Render.render` 经 `setTimeout(0)` 去抖（`Render.js:553-559`），引擎构造同步完成后首帧仍未落：`renderer.root` 为 null。首帧前的双链重建须一次性挂 `node_tree_render_end`（Render.js:171 等处 emit）等渲染结束再落线
+
+### (f) `getData()` 首命令前数据未初始化
+
+- 初始重建（onReady）不用 `mm.getData()` 作解析源，改用 EditorView 打开时自持的 engineTree；运行中（保存链 onSaved）才用 getData 取最新树
+
+### (g) `getData()` 无参返回活引用 —— 直写 + renderAllLines 绕过命令系统
+
+- `MindMapNode.js:1029-1031`：`getData(key)` 无参返回 `this.nodeData.data` 本体。直写关联线键后调 `associativeLine.renderAllLines()`：不 execCommand → 不进历史、不触发 data_change → 无置脏/自动保存循环
+- 插件已订阅 `node_tree_render_end`/`data_change`（AssociativeLine.js:89/91）自动重绘，后续文本编辑引起的重排无需再触发重建
+
+### (h) `[[x]]` 是普通文本 —— serialize/parse 字面保留
+
+- md 层对 `[[..]]` 无任何特殊处理，roundtrip 属性测试无需改动；双链语义仅在 links.ts 解析与引擎渲染层
+
+## M5b 核验（Task 5，导出与复制为图片）
+
+路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3），插件入口 `src/plugins/Export.js`。
+
+### (a) `doExport.png()/svg()` 返回 **base64 data URL 字符串，不是 Blob** —— 与计划假设相反
+
+- `png(...args)`（Export.js:353-356）委托 `_image('image/png', ...)`（:333-346）：`getSvgData` 取 svg 串 → `fixSvgStrAndToBlob(str)` → `svgToPng(svgUrl, ...)` 最终 `resolve(canvas.toDataURL(format))`（:254）——**png() 返回 `data:image/png;base64,...` 字符串**（canvas.toDataURL 直出，不经 readBlob）
+- `svg(name)`（:400-408）返回 `await this.fixSvgStrAndToBlob(str)`——**函数名有误导**：`fixSvgStrAndToBlob`（:411-422）内部 `new Blob` 后经 `readBlob(blob)`（src/utils/index.js:441-451）`FileReader.readAsDataURL` —— **返回的也是 data URL 字符串**（`data:image/svg+xml;base64,...`）
+- 结论：宿主侧转换函数做 `dataUrlToBytes(dataUrl)`（`atob` 解码 base64 段 → Uint8Array），非 `blobToBytes`；png 链路依赖 `document.createElement('canvas')`（svgToPng :145），jsdom 不可用——组件测试走 fake mm，真链路由 E2E chromium 覆盖
+- `svg(name)` 会把 `name` 写入 svg 首元素前的 `<title>`（:403）；png 链路的 name 参数未被使用（仅 `export()` 的浏览器下载文件名用）
+
+### (b) 插件挂载 —— `MindMap.usePlugin(Export)` → 实例构造时挂 `mindMap.doExport`
+
+- `Export.instanceName = 'doExport'`（Export.js:458）；`usePlugin`（index.js:822-829）仅入模块级 pluginList，实例构造时 `initPlugin`（:744-749）执行 `this[plugin.instanceName] = new plugin({ mindMap, pluginOpt })`
+- 与 Drag/AssociativeLine 同款接线：MindMapCanvas 模块顶层 `MindMap.usePlugin(Export)` 即可，构造出的每个实例都带 `doExport`
+- **不可走 `export(type, isDownload=true, name)`**（:24-34）：默认 `isDownload=true` 会触发 `downloadFile`（浏览器下载），Tauri 桌面端直接调 `doExport.png()`/`doExport.svg()` 方法取返回值
+
+### (c) Tauri 侧核验（writeFile/writeImage/save）
+
+- plugin-fs `writeFile(path: string | URL, data: Uint8Array | ReadableStream<Uint8Array>, options?)`（dist-js/index.d.ts:721）——二进制写盘直接用，经 FsAdapter 新增 `writeBytes` 收口（`writeTextFileAtomic` 只收字符串）
+- plugin-clipboard-manager `writeImage(image: string | Image | Uint8Array | ArrayBuffer | number[])`（index.d.ts:52）——传 Uint8Array
+- plugin-dialog `save(options?: SaveDialogOptions): Promise<string | null>`（index.d.ts:319），`defaultPath` 选项指定默认文件名；用户取消返回 null
+- **capabilities 补充（与计划"无需改"相反）**：`dialog:default` 已含 `allow-save`；但 `fs:default` 不含 write-file、`clipboard-manager:default` 启用空集——`src-tauri/capabilities/default.json` 须补 `fs:allow-write-file`（scope `**`，同既有 fs 项）与 `clipboard-manager:allow-write-image`，否则运行时被权限拦截
+
+### d.ts 影响
+
+`src/types/simple-mind-map.d.ts` 增 `declare module 'simple-mind-map/src/plugins/Export.js'`；`MindMapHandle`（src/types/engine.ts）增可选 `doExport?: { png(name?: string): Promise<string>; svg(name?: string): Promise<string> }`。

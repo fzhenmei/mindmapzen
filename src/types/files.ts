@@ -22,6 +22,26 @@ export function parseThemePref(v: unknown): ThemePref {
   return THEME_PREFS.has(v as ThemePref) ? (v as ThemePref) : 'auto'
 }
 
+/** 复制行为设置（M5b Task 4）：copyIncludeNote=复制 md 时包含节点备注引用块；copyIncludeLinks=保留 [[..]] 双链标记 */
+export interface CopySettings {
+  copyIncludeNote: boolean
+  copyIncludeLinks: boolean
+}
+
+export type CopySettingKey = keyof CopySettings
+
+export const DEFAULT_COPY_SETTINGS: CopySettings = { copyIncludeNote: false, copyIncludeLinks: true }
+
+/** 宽容解析配置中的复制设置：非对象/字段类型非法逐字段回退默认（旧配置无 settings 字段按默认兼容） */
+export function parseSettings(v: unknown): CopySettings {
+  if (typeof v !== 'object' || v === null) return DEFAULT_COPY_SETTINGS
+  const o = v as Record<string, unknown>
+  return {
+    copyIncludeNote: typeof o.copyIncludeNote === 'boolean' ? o.copyIncludeNote : DEFAULT_COPY_SETTINGS.copyIncludeNote,
+    copyIncludeLinks: typeof o.copyIncludeLinks === 'boolean' ? o.copyIncludeLinks : DEFAULT_COPY_SETTINGS.copyIncludeLinks,
+  }
+}
+
 export interface AppConfig {
   workspaceDir: string | null
   lastOpened: string | null
@@ -29,8 +49,16 @@ export interface AppConfig {
   preferredLayout: LayoutKind | null
   /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
   theme: ThemePref
+  /** 复制行为设置（设置页两开关） */
+  settings: CopySettings
 }
-export const DEFAULT_CONFIG: AppConfig = { workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto' }
+export const DEFAULT_CONFIG: AppConfig = {
+  workspaceDir: null,
+  lastOpened: null,
+  preferredLayout: null,
+  theme: 'auto',
+  settings: DEFAULT_COPY_SETTINGS,
+}
 export interface Sidecar {
   version: 1
   theme: string
@@ -42,6 +70,8 @@ export interface Sidecar {
 export interface FsAdapter {
   readTextFile(p: string): Promise<string>
   writeTextFileAtomic(p: string, contents: string): Promise<void>
+  /** 二进制写盘（M5b Task 5 导出 PNG/SVG）：整文件覆盖写，无原子换名（导出非事实源，非原子可接受） */
+  writeBytes(p: string, bytes: Uint8Array): Promise<void>
   readDir(p: string): Promise<string[]>            // 返回文件/目录名列表
   statModified(p: string): Promise<number>          // mtime 毫秒
   rename(a: string, b: string): Promise<void>       // 目标存在则替换

@@ -25,18 +25,83 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
       maxDepth <= 1
         ? fc.constant<ZenNode[]>([])
         : fc.array(nodeArb(maxDepth - 1), { maxLength: 3 }),
+    // 备注候选（brief）：'' 须序列化为无引用块（parse 侧还原为无 note 键），比较前归一化掉
+    note: fc.constantFrom('', '备注', '多\n行'),
   })
 
 const treeArb = nodeArb(6)
+
+/** '' 与 undefined 同为「无备注」：属性断言前归一化（toEqual 视缺键与 undefined 等价） */
+const stripEmptyNote = (t: ZenNode): ZenNode => ({
+  ...t,
+  note: t.note === '' ? undefined : t.note,
+  children: t.children.map(stripEmptyNote),
+})
 
 test('parse(serialize(tree)) 结构恒等（500 例，深度≤6 时全走标题）', () => {
   fc.assert(
     fc.property(treeArb, (tree) => {
       const r = parse(serialize(tree))
-      expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
+      expect(r).toEqual({ ok: true, tree: stripEmptyNote(tree), ignoredBlocks: [] })
     }),
     { numRuns: 500 },
   )
+})
+
+test('备注含空字符串的树 roundtrip：空串序列化为无引用块（parse 无 note 键）', () => {
+  const tree: ZenNode = {
+    text: '根',
+    note: '',
+    children: [{ text: 'A', note: '备注', children: [{ text: 'A1', note: '多\n行', children: [] }] }],
+  }
+  expect(parse(serialize(tree))).toEqual({
+    ok: true,
+    tree: stripEmptyNote(tree),
+    ignoredBlocks: [],
+  })
+})
+
+test('列表层备注 roundtrip：项与子项并存时引用块缩进归入该项，结构恒等', () => {
+  // 列表层（深度≥7）：item 带备注且带子项——未缩进的引用块会截断列表（子项变同级），
+  // 序列化必须把引用块缩进进该项内容（见 serialize 实现注释）
+  const deep: ZenNode = {
+    text: 'r',
+    children: [
+      {
+        text: 'a',
+        children: [
+          {
+            text: 'b',
+            children: [
+              {
+                text: 'c',
+                children: [
+                  {
+                    text: 'd',
+                    children: [
+                      {
+                        text: 'e',
+                        children: [
+                          {
+                            text: 'item',
+                            note: '项\n注',
+                            children: [{ text: 'sub', note: '子项备注', children: [] }],
+                          },
+                          { text: 'tail', children: [] },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+  const r = parse(serialize(deep))
+  expect(r).toEqual({ ok: true, tree: deep, ignoredBlocks: [] })
 })
 
 test('深层树（含列表层）roundtrip：手工构造深度 8', () => {

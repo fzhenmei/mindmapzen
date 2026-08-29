@@ -56,4 +56,32 @@ describe('parse', () => {
     const r = parse('# 根\n\n## **加粗** 与 `代码`\n')
     expect(r.ok && r.tree.children[0].text).toBe('**加粗** 与 `代码`')
   })
+
+  test('引用块归属上方最近节点', () => {
+    const r = parse('# 根\n\n## A\n> 备注\n')
+    expect(r.ok && r.tree.children[0].note).toBe('备注')
+  })
+
+  test('文档级引用块（无上方节点）进忽略块', () => {
+    const r = parse('> 孤儿引用\n\n# 根\n')
+    expect(r.ok && r.ignoredBlocks.map((b) => b.type)).toContain('blockquote')
+  })
+
+  test('列表项后的引用块归属该列表项', () => {
+    const r = parse('# 根\n\n## A\n- x\n> 尾注\n')
+    expect(r.ok && r.tree.children[0].children![0].note).toBe('尾注')
+  })
+
+  test('缩进进列表项的引用块归属该项（有子项时的序列化形态）', () => {
+    const r = parse('# 根\n\n## A\n- x\n  > 尾注\n  - sub\n')
+    expect(r.ok && r.tree.children[0].children![0].note).toBe('尾注')
+    expect(r.ok && r.tree.children[0].children![0].children.map((c) => c.text)).toEqual(['sub'])
+  })
+
+  test('多行引用块保留换行与原文（含空行与嵌套 > 前缀）', () => {
+    const r = parse('# 根\n\n## A\n> 第一行\n> 第二行\n')
+    expect(r.ok && r.tree.children[0].note).toBe('第一行\n第二行')
+    const r2 = parse('# 根\n\n## A\n> > 原样\n>\n> 尾行\n')
+    expect(r2.ok && r2.tree.children[0].note).toBe('> 原样\n\n尾行')
+  })
 })

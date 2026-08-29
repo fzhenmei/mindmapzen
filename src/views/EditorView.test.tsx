@@ -8,9 +8,10 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
-// fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）
-const fakeRootNode = { uid: 'root-uid' }
-const fakeChildNode = { uid: 'child-uid' }
+// fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）；
+// getData 备注预填用（M5b）：child 带「既有备注」，root 无（undefined）
+const fakeRootNode = { uid: 'root-uid', getData: () => undefined }
+const fakeChildNode = { uid: 'child-uid', getData: (k: string) => (k === 'note' ? '既有备注' : undefined) }
 // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）。
 // 模块级可变：写盘窗口用例改写它模拟「落了新编辑」（getData 每次取当前值，跨重渲染可见）
 const defaultFakeTree = (): EngineNode => ({
@@ -36,6 +37,14 @@ vi.mock('../editor/MindMapCanvas', () => ({
     fakeHandle = {
       getData: () => fakeTree,
       execCommand: vi.fn(),
+      // 导出插件（M5b Task 5）：png/svg 返回固定 data URL（引擎真实返回为 base64 字符串，见 exportImage.test）
+      doExport: {
+        png: vi.fn(async () => pngDataUrl),
+        svg: vi.fn(async () => svgDataUrl),
+      },
+      // 事件订阅/退订（M5b Task 3 进 MindMapHandle）：假画布无引擎事件源，空桩即可
+      on: vi.fn(),
+      off: vi.fn(),
       setLayout: vi.fn(),
       setTheme: vi.fn(),
       resize: vi.fn(),
@@ -47,6 +56,8 @@ vi.mock('../editor/MindMapCanvas', () => ({
         findNodeByUid: (uid: string) =>
           uid === 'root-uid' ? fakeRootNode : uid === 'child-uid' ? fakeChildNode : null,
         textEdit: { hideEditTextBox: vi.fn() },
+        // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
+        reRenderNodeCheckChange: vi.fn(),
       },
     }
     ;(globalThis as unknown as Record<string, unknown>).__emitReady = () => onReady(fakeHandle)
@@ -64,7 +75,13 @@ vi.mock('../editor/MindMapCanvas', () => ({
 let fs: MemoryFsAdapter
 const openInEditor = vi.fn()
 
+// 导出测试样例（M5b Task 5）：与 exportImage.test 同款 PNG 魔数 data URL
+const pngDataUrl = `data:image/png;base64,${btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47))}`
+const svgDataUrl = `data:image/svg+xml;base64,${btoa('<svg/>')}`
+
 // 既有用例的守卫桩：注册即弃（jsdom 无窗口关闭事件源），仅满足新 prop 契约
+// 既有用例的导出端口桩：多数用例不触发导出，注册即弃（仅满足新 prop 契约）
+const stubExportPorts = { pickSavePath: vi.fn(async () => null), writeImage: vi.fn() }
 const noopRegister: RegisterCloseGuard = () => () => {}
 const noopExitApp = () => {}
 
@@ -80,6 +97,7 @@ beforeEach(async () => {
     maps: [],
     dirty: false,
     error: null,
+    settings: { copyIncludeNote: false, copyIncludeLinks: true },
   })
 })
 
@@ -89,6 +107,7 @@ test('打开文档渲染画布并显示名称', async () => {
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -103,6 +122,7 @@ test('解析失败显示错误面板与原文', async () => {
       mdPath="/ws/bad.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -119,6 +139,7 @@ test('读取失败显示错误面板并可纯文本打开', async () => {
       mdPath="/ws/missing.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -134,6 +155,7 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -154,6 +176,7 @@ test('返回文件库前冲刷未保存修改', async () => {
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -172,6 +195,7 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -207,6 +231,7 @@ test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -231,6 +256,7 @@ test('复制整图：无选中时写入完整 md', async () => {
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -251,6 +277,7 @@ test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async ()
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -276,6 +303,7 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
       writeClipboard={async (t) => {
         writes.push(t)
       }}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -286,6 +314,48 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
   await waitFor(() => expect(writes).toHaveLength(1))
 })
 
+// ---- 复制后处理（M5b Task 4：settings 两开关）----
+// 样例树：child 带 note「备注」与文本双链 [[B]]（备注/双链均由 data 携带，engineTreeToZen 还原）
+const noteLinkTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [{ data: { text: '见 [[B]]', expand: true, uid: 'child-uid', note: '备注' }, children: [] }],
+})
+
+const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: boolean }): Promise<string> => {
+  fakeTree = noteLinkTree()
+  useAppStore.setState({ settings })
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  return writes[0]!
+}
+
+test('复制后处理：默认设置剥备注、留双链', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n')
+})
+
+test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () => {
+  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
+})
+
+test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false })).toBe('# 根\n\n## 见 B\n')
+})
+
 // ---- 印记（Task 7：显式保存成功朱砂印 / 复制成功墨青印，替代按钮内 ✓ 文案）----
 
 test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () => {
@@ -294,6 +364,7 @@ test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () 
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -326,6 +397,7 @@ test('干净状态下保存为 no-op：不盖印记（无用户可感知的写�
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -344,6 +416,7 @@ test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -363,6 +436,7 @@ test('同会话到期卸载后再次保存可再次盖印（回归：stamp state
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -399,6 +473,7 @@ test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -439,6 +514,7 @@ test('多行粘贴拆子节点：首行替换被编辑节点文本，其余行�
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -479,6 +555,7 @@ test('多行粘贴拆分后无有效行（纯空白）不执行命令', async ()
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -500,6 +577,7 @@ test('多行粘贴 uid 未命中渲染树时静默放弃（无命令执行）', 
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -546,6 +624,7 @@ const renderDirtyAndClose = async (guard: ReturnType<typeof makeGuardStub>) => {
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={guard.register}
       exitApp={exitApp}
     />,
@@ -625,6 +704,7 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={guard.register}
       exitApp={exitApp}
     />,
@@ -679,6 +759,7 @@ test('写盘窗口内的新编辑不丢：清脏被修订号拦下并补存一�
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -706,6 +787,7 @@ test('在途保存时点返回：等待补存轮落盘完成才回文件库（I1
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -778,6 +860,7 @@ const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
       mdPath="/ws/ignored.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={guard ? guard.register : noopRegister}
       exitApp={exitApp}
     />,
@@ -898,8 +981,8 @@ test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', a
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
 
 test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 viewOps 单测覆盖）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.click(screen.getByTestId('btn-zoom-out'))
   expect(fakeHandle.view.narrow).toHaveBeenCalledTimes(1)
@@ -916,6 +999,7 @@ test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', as
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -946,6 +1030,7 @@ test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', as
       mdPath="/ws/b.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -971,6 +1056,7 @@ test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不�
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -999,6 +1085,7 @@ test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
       writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       exitApp={noopExitApp}
     />,
@@ -1014,15 +1101,15 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
   test('无 sidecar 的导图按偏好布局打开', async () => {
     await fs.writeTextFileAtomic('/ws/bare.md', '# 裸图\n') // 无 .zen.json
     useAppStore.setState({ preferredLayout: 'logic' })
-    render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+    await screen.findByTestId('fake-canvas')
     expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('切换布局会记住偏好', async () => {
     useAppStore.setState({ preferredLayout: 'mindmap' })
-    render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+    await screen.findByTestId('fake-canvas')
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     fireEvent.click(screen.getByTestId('layout-org'))
     await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
@@ -1032,8 +1119,8 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
 // ---- 复制按钮 data-scope（M4 新增 E2E 信号：随选中态在 full/branch 间切换）----
 
 test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
@@ -1042,4 +1129,234 @@ test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
+})
+
+// ---- 节点备注（M5b：btn-note → NoteDialog → SET_NODE_DATA + 按需重渲）----
+
+/** 渲染并选中 child-uid 节点（备注对话框的常规前置）；ready 放 emitActive 后保证 mmRef 与返回实例同源。
+ *  返回 ready 时刻的 handle：对话框开闭引发的假画布工厂重跑会重赋 fakeHandle，断言须锁定 mmRef 所持实例 */
+const renderWithSelection = async (): Promise<MindMapHandle> => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  expect(screen.getByTestId('btn-note')).toBeEnabled()
+  return fakeHandle
+}
+
+test('btn-note：选中节点打开对话框预填既有备注，保存调用 SET_NODE_DATA 并补按需重渲', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
+  expect(textarea.value).toBe('既有备注') // 预填节点实例 getData('note')
+  fireEvent.change(textarea, { target: { value: '第一行\n第二行' } })
+  fireEvent.click(screen.getByTestId('note-save'))
+  // 空值置 undefined 的清除语义见下用例；此处整值写入
+  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+    note: '第一行\n第二行',
+  })
+  // 裸 SET_NODE_DATA 不重渲染（引擎核验 M5b (13)）：补调 reRenderNodeCheckChange 使角标即时增删
+  expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+})
+
+test('btn-note：清空保存置 note=undefined（空值清除角标）', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  fireEvent.change(screen.getByTestId('note-text'), { target: { value: '' } })
+  fireEvent.click(screen.getByTestId('note-save'))
+  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+    note: undefined,
+  })
+})
+
+test('btn-note：取消不执行命令且对话框关闭', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  fireEvent.click(screen.getByTestId('note-cancel'))
+  expect(handle.execCommand).not.toHaveBeenCalled()
+  expect(handle.renderer?.reRenderNodeCheckChange).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+})
+
+test('btn-note：无选中节点时禁用', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  expect(screen.getByTestId('btn-note')).toBeDisabled()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  expect(screen.getByTestId('btn-note')).toBeEnabled()
+})
+
+test('备注快捷键：Shift+F2 / Ctrl+. 打开选中节点的备注框（预填既有备注）', async () => {
+  await renderWithSelection()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
+  expect(textarea.value).toBe('既有备注') // 预填与 btn-note 同源（节点实例 getData('note')）
+  fireEvent.click(screen.getByTestId('note-cancel'))
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+  fireEvent.keyDown(window, { key: '.', ctrlKey: true }) // Ctrl+. 同入口
+  expect(screen.getByTestId('note-dialog')).toBeInTheDocument()
+})
+
+test('备注快捷键：无选中节点时不打开对话框', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  fireEvent.keyDown(window, { key: '.', ctrlKey: true })
+  await act(async () => {}) // 排空微任务：若误开对话框，随后的同步查询即暴露
+  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
+})
+
+test('备注快捷键：任一对话框在开时不再开备注框（互斥约定）', async () => {
+  await renderWithSelection() // 有选中节点：仅互斥守卫能拦下（锁定 anyDialogRef 含导出框开态）
+  fireEvent.click(screen.getByTestId('btn-export'))
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  await act(async () => {})
+  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
+})
+
+// ---- 导出与复制为图片（M5b Task 5：btn-export → ExportDialog 三入口 → 端口注入）----
+
+/** 渲染并 ready，返回 ready 时刻 handle（对话框开闭重渲染会重建 fakeHandle，断言须锁定 mmRef 所持实例） */
+const renderReady = async (exportPorts: {
+  pickSavePath(defaultName: string): Promise<string | null>
+  writeImage(bytes: Uint8Array): Promise<void>
+}): Promise<MindMapHandle> => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+      exportPorts={exportPorts}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  return fakeHandle
+}
+
+test('btn-export：打开三入口对话框，复制为图片走 writeImage 桩并盖「已复制」印', async () => {
+  const writeImage = vi.fn()
+  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('export-copy'))
+  await waitFor(() => expect(writeImage).toHaveBeenCalledTimes(1))
+  const [bytes] = writeImage.mock.calls[0] as [Uint8Array]
+  expect(bytes).toBeInstanceOf(Uint8Array)
+  expect(bytes.length).toBeGreaterThan(0)
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+  await waitFor(() => expect(screen.queryByTestId('export-dialog')).not.toBeInTheDocument())
+})
+
+test('导出 PNG：pickSavePath 收到默认文件名，字节经 writeBytes 落盘并盖「已存」印', async () => {
+  const pickSavePath = vi.fn(async (n: string) => `/ws/出/${n}`)
+  const handle = await renderReady({ pickSavePath, writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-png'))
+  await waitFor(() => expect(pickSavePath).toHaveBeenCalledWith('a.png'))
+  await waitFor(async () => {
+    const bytes = await fs.readBytes('/ws/出/a.png')
+    expect(bytes).toHaveLength(4)
+    expect([...bytes]).toEqual([0x89, 0x50, 0x4e, 0x47])
+  })
+  expect(handle.doExport?.png).toHaveBeenCalledTimes(1)
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已存')
+})
+
+test('导出 SVG：savePath 基名传给引擎 svg()（写入 svg <title>），落盘字节为 svg 串', async () => {
+  const handle = await renderReady({ pickSavePath: vi.fn(async () => '/ws/子/我的图.svg'), writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-svg'))
+  await waitFor(() => expect(handle.doExport?.svg).toHaveBeenCalledWith('我的图'))
+  await waitFor(async () => {
+    expect(await fs.readBytes('/ws/子/我的图.svg')).toHaveLength('<svg/>'.length)
+  })
+})
+
+test('保存对话框取消（pickSavePath 返回 null）：不写盘不盖印不报错', async () => {
+  await renderReady({ pickSavePath: vi.fn(async () => null), writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-png'))
+  await act(async () => {}) // 排空取消链微任务
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  expect(useAppStore.getState().error).toBeNull()
+  expect(await fs.exists('/ws/a.png')).toBe(false)
+})
+
+test('导出失败（写盘抛错）：中文横幅提示且不盖印', async () => {
+  fs.writeBytes = vi.fn(async () => {
+    throw new Error('目标目录不存在')
+  })
+  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-png'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('导出失败'))
+  expect(useAppStore.getState().error).toContain('目标目录不存在')
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+})
+
+test('Esc 关闭导出对话框：无任何导出动作', async () => {
+  const pickSavePath = vi.fn()
+  const writeImage = vi.fn()
+  const handle = await renderReady({ pickSavePath, writeImage })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  // jsdom 无原生 dialog cancel 事件：直接派发（ZenDialog 监听 'cancel'）
+  fireEvent(
+    screen.getByTestId('export-dialog'),
+    new Event('cancel', { bubbles: false, cancelable: true }),
+  )
+  await waitFor(() => expect(screen.queryByTestId('export-dialog')).not.toBeInTheDocument())
+  expect(pickSavePath).not.toHaveBeenCalled()
+  expect(writeImage).not.toHaveBeenCalled()
+  expect(handle.doExport?.png).not.toHaveBeenCalled()
+})
+
+test('保存对话框异常（pickSavePath 抛错）：中文横幅提示且不写盘不盖印', async () => {
+  const pickSavePath = vi.fn(async () => {
+    throw new Error('对话框插件崩溃')
+  })
+  await renderReady({ pickSavePath, writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-png'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('导出失败'))
+  expect(useAppStore.getState().error).toContain('对话框插件崩溃')
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  expect(await fs.exists('/ws/a.png')).toBe(false)
 })

@@ -9,6 +9,7 @@
     "opener:default",
     "opener:allow-open-path",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
     "fs:default",
     {
       "identifier": "fs:allow-read-text-file",
@@ -16,6 +17,10 @@
     },
     {
       "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
       "allow": [{ "path": "**" }]
     },
     {

@@ -2,45 +2,52 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
 import { readSidecar } from '../services/sidecar'
-import { splitMultilineText } from '../services/multiline'
+import { applyMultilinePaste } from '../services/multiline'
+import { resolveAllLinks } from '../services/links'
+import { applyCopySettings } from '../services/copyFilter'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
-import type { RegisterCloseGuard } from '../types/ports'
+import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
-import CloseGuardDialog from '../components/CloseGuardDialog'
+import { useNoteEdit } from '../hooks/useNoteEdit'
+import { useExportFlow } from '../hooks/useExportFlow'
 import EditorCaption from '../components/EditorCaption'
+import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
-import ZenDialog from '../components/ZenDialog'
 
+/** 备注编辑快捷键命中（spec §3）：Shift+F2 或 Ctrl/Cmd+.；裸 F2 留给引擎原生文字编辑 */
+const isNoteHotkey = (e: KeyboardEvent): boolean =>
+  (e.shiftKey && e.key === 'F2') || ((e.ctrlKey || e.metaKey) && e.key === '.')
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
   /** 剪贴板写入端口：生产为 Tauri 插件实现，测试注入内存实现 */
   writeClipboard: WriteClipboard
+  /** 导出与复制图片端口（M5b）：生产为 Tauri save 对话框 + writeImage，测试注入记录桩 */
+  exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
   registerCloseGuard: RegisterCloseGuard
   /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
   exitApp: () => void
 }
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard, registerCloseGuard, exitApp }: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
-  // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只来自打开时的 sidecar）；
-  // layout 是当前激活布局（按钮点亮）——运行切换走 setLayout 即时重排、不重挂载，故 switchLayout 只动 layout/layoutRef
+  // 布局双状态（spec §3.7）：initialLayout=挂载期布局（只来自 sidecar）；layout=当前激活——切换走 setLayout 即时重排不重挂载
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -60,6 +67,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     dirtyRef,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
     onError: setError,
+    // 落盘成功后按最新树重建双链（M5b Task 3）：[[..]] 是文本派生标记，保存链（含 5s 自动保存）是统一重建时机
+    onSaved: () => {
+      const mm = mmRef.current
+      mm?.rebuildLinks?.(resolveAllLinks(engineTreeToZen(mm.getData()).tree))
+    },
   })
 
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
@@ -68,6 +80,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
   // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
   const selection = useActiveSelection()
 
+  // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
+  const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
+
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
   const flashStamp = (kind: 'saved' | 'copied'): void => {
@@ -75,8 +90,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     setStamp({ kind, seq: stampSeqRef.current })
   }
 
+  // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
+  const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
+
   /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
-   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中 */
+   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中。
+   *  后处理（M5b Task 4）：按 settings 剥备注引用块/双链括号（getState 取实时值——键盘闭包绑定首渲染） */
   const doCopy = async (): Promise<void> => {
     try {
       const mm = mmRef.current
@@ -85,29 +104,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
       selection.clearStaleIfMissing(full)
       const uid = selection.activeUidRef.current
       const active = uid ? findSubtreeByUid(full, uid) : null
-      await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
+      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree), useAppStore.getState().settings))
       flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
-    }
-  }
-
-  /** 多行粘贴执行（spec §3.6）：首行替换被编辑节点文本，其余行逐个插入其子节点。
-   *  顺序上必须先关引擎编辑框再 SET_NODE_TEXT：INSERT_CHILD_NODE 内部会调 hideEditTextBox，
-   *  以编辑框内粘贴前的旧文本提交覆盖首行（TextEdit.js:492，引擎核验笔记）。
-   *  无引擎实例/无激活 uid/uid 未命中渲染树均静默放弃（无目标语义） */
-  const applyMultilinePaste = (raw: string): void => {
-    const lines = splitMultilineText(raw)
-    if (lines.length === 0) return
-    const mm = mmRef.current
-    const uid = selection.activeUidRef.current
-    if (!mm || !uid) return
-    const node = mm.renderer?.findNodeByUid(uid)
-    if (!node) return
-    mm.renderer?.textEdit.hideEditTextBox()
-    mm.execCommand('SET_NODE_TEXT', node, lines[0])
-    for (const line of lines.slice(1)) {
-      mm.execCommand('INSERT_CHILD_NODE', false, [node], { text: line })
     }
   }
 
@@ -171,13 +171,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 文档内容由父组件 key 重挂载切换
   }, [])
 
-  // 快捷键（Ctrl+S / Ctrl+Shift+C）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
+  const anyDialogRef = useRef(false) // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开，渲染期同步供只绑一次闭包读
+  anyDialogRef.current = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open
+  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+.）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         void doCopy()
         return
+      }
+      if (isNoteHotkey(e)) {
+        e.preventDefault()
+        if (selection.activeUidRef.current && !anyDialogRef.current) noteEdit.openNoteDialog() // 守卫同 btn-note：无选中/对话框互斥期 no-op
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
@@ -186,7 +192,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy 走 refs 无需重绑
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy/备注快捷键守卫均走 refs 无需重绑
   }, [])
 
   useEffect(() => {
@@ -229,10 +235,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
             tree={engineTree}
             layout={layoutToEngine(initialLayout)}
             theme={engineThemeName(resolvedTheme)}
-            onReady={(mm) => (mmRef.current = mm)}
+            onReady={(mm) => {
+              mmRef.current = mm
+              // 初始双链：此时引擎首帧尚未渲染且 getData() 未初始化，用打开时解析的 engineTree 作源；
+              // rebuildLinks 内部等待首帧渲染完成后落线
+              mm.rebuildLinks?.(resolveAllLinks(engineTreeToZen(engineTree).tree))
+            }}
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
-            onEditorPaste={applyMultilinePaste}
+            onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
           />
         )}
       </div>
@@ -243,9 +254,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
           if (await explicitSave()) await backToLibrary() // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         }}
         onCopyClick={() => void doCopy()}
-        copied={false}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
+        onNoteClick={noteEdit.openNoteDialog}
+        noteEnabled={selection.activeUid !== null}
+        onExportClick={exportFlow.openExport}
         onZoomOut={() => mmRef.current?.view.narrow()}
         onZoomIn={() => mmRef.current?.view.enlarge()}
         onCenterRoot={() => mmRef.current && centerRoot(mmRef.current)}
@@ -260,33 +273,28 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
       <EditorCaption name={name} dirty={dirty} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
-      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming（守卫先收起、确认框随即接管，故 !guarding 门闩） */}
-      {guard.guarding && (
-        <CloseGuardDialog mapName={name} onChoice={(c) => void guard.onGuardChoice(c)} />
-      )}
-      {flow.confirming && !guard.guarding && (
-        <ZenDialog
-          title={`保存将丢弃 ${flow.ignored.length} 个未映射的内容块`}
-          onClose={flow.confirmCancel}
-          actions={
-            <>
-              <button type="button" data-testid="ignored-confirm-cancel" onClick={flow.confirmCancel}>
-                取消
-              </button>
-              <button
-                type="button"
-                data-testid="ignored-confirm-save"
-                onClick={() => {
-                  flow.confirmProceed()
-                  void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
-                }}
-              >
-                继续保存
-              </button>
-            </>
-          }
-        />
-      )}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming
+          （守卫先收起、确认框随即接管，故 !guarding 门闩）；两框 JSX 已迁 EditorDialogs（M5b Task 1） */}
+      <EditorDialogs
+        guarding={guard.guarding}
+        mapName={name}
+        onGuardChoice={(c) => void guard.onGuardChoice(c)}
+        confirmingIgnored={flow.confirming && !guard.guarding}
+        ignored={flow.ignored}
+        onIgnoredConfirm={() => {
+          flow.confirmProceed()
+          void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
+        }}
+        onIgnoredCancel={flow.confirmCancel}
+        // 备注框同样让位互斥（guarding > confirming 优先级同上）
+        noteDraft={!guard.guarding && !flow.confirming ? noteEdit.noteDraft : null}
+        onNoteSave={noteEdit.saveNote}
+        onNoteCancel={noteEdit.cancelNote}
+        // 导出框同样让位互斥（guarding/confirming 优先，actions 稳定引用无重渲负担）
+        exportActions={
+          exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null
+        }
+      />
     </div>
   )
 }

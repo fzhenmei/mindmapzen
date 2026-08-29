@@ -7,6 +7,10 @@ export const ENGINE_THEME_PAPER = {
   backgroundColor: '#F7F6F3',
   lineColor: '#8B867A',
   lineWidth: 1.5,
+  // 关联线（M5b Task 3 核验）：引擎无 .smm-associative-line 类，线色经主题根键 associativeLineColor
+  // 由 SVG.js 属性着色（CSS 直染会波及透明点击线）；取值与 tokens.css --canvas-line 同源
+  associativeLineColor: '#8B867A',
+  associativeLineWidth: 1.5,
   lineStyle: 'curve',
   rootLineKeepSameInCurve: true,
   paddingX: 14,
@@ -54,6 +58,7 @@ export const ENGINE_THEME_NIGHT: typeof ENGINE_THEME_PAPER = {
   ...ENGINE_THEME_PAPER,
   backgroundColor: '#191A18',
   lineColor: '#4A4C46',
+  associativeLineColor: '#4A4C46',
   root: { ...ENGINE_THEME_PAPER.root, fillColor: '#D9D7D0', color: '#191A18', hoverRectColor: '#C96A5F' },
   second: {
     ...ENGINE_THEME_PAPER.second,

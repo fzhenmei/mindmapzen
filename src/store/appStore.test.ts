@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { DEFAULT_COPY_SETTINGS } from '../types/files'
 
 let fs: MemoryFsAdapter
 beforeEach(async () => {
@@ -9,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light' })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS } })
 })
 
 describe('appStore', () => {
@@ -90,5 +91,27 @@ describe('theme（M4 禅意视觉）', () => {
     await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'light' }))
     await useAppStore.getState().init()
     expect(useAppStore.getState().themePref).toBe('light')
+  })
+})
+
+describe('settings（M5b Task 4：复制行为）', () => {
+  test('初始默认 {copyIncludeNote:false, copyIncludeLinks:true}', () => {
+    expect(useAppStore.getState().settings).toEqual(DEFAULT_COPY_SETTINGS)
+  })
+  test('init 读配置的 settings', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: true, copyIncludeLinks: false } }))
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+  })
+  test('setSetting 更新状态并 load-merge-save 持久化（单字段不覆盖另一字段）', async () => {
+    await useAppStore.getState().setSetting('copyIncludeNote', true)
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: true })
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: true })
+    await useAppStore.getState().setSetting('copyIncludeLinks', false)
+    const cfg2 = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg2.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
   })
 })

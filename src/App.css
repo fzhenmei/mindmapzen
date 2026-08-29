@@ -97,6 +97,13 @@ html, body { overflow: hidden; }
 .zen-dialog-actions button { padding: 6px 14px; border-radius: var(--radius-s);
   border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); cursor: pointer; }
 .zen-dialog input { padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-s); font: inherit; background: var(--paper); color: var(--ink); }
+/* 设置对话框（M5b）：开关行——checkbox 走 accent 色（覆盖上面 .zen-dialog input 的文本框样式） */
+.setting-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.setting-row input { width: auto; padding: 0; accent-color: var(--accent); cursor: pointer; }
+/* 节点备注对话框（M5b）：4 行等宽 textarea（行数由组件 rows=4 提供），可纵向拉伸 */
+.zen-dialog textarea.note-textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--hairline);
+  border-radius: var(--radius-s); font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+  background: var(--paper); color: var(--ink); resize: vertical; }
 /* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
 .ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: 12px; }
 
@@ -121,6 +128,7 @@ html, body { overflow: hidden; }
   width: 28px; height: 28px; border: none; border-radius: var(--radius-s);
   background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
 .zen-bar button:hover { background: var(--accent-soft); color: var(--accent); }
+.zen-bar button:disabled { color: var(--ink-2); opacity: 0.4; cursor: default; background: transparent; }
 .zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 4px; }
 /* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，去边框并入砚栏图标组 */
 .layout-switch { display: inline-flex; gap: 2px; border: none; padding: 0; margin: 0; min-width: 0; }

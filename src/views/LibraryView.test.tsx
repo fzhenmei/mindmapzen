@@ -191,4 +191,21 @@ describe('案头目录（M5a）', () => {
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('空层'))
     expect(await screen.findByTestId('dir-empty-state')).toHaveTextContent('这一层还没有导图')
   })
+
+  // 设置入口（M5b Task 4）：页首 btn-settings 打开设置对话框，开关切换写入 store
+  test('页首设置按钮打开设置对话框并可切换复制开关', async () => {
+    const dirFs = new MemoryFsAdapter()
+    useAppStore.getState().setAdapter(dirFs)
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('btn-settings'))
+    expect(await screen.findByTestId('settings-dialog')).toBeInTheDocument()
+    expect(screen.getByTestId('copy-note-toggle')).not.toBeChecked()
+    fireEvent.click(screen.getByTestId('copy-note-toggle'))
+    await waitFor(() => expect(useAppStore.getState().settings.copyIncludeNote).toBe(true))
+    // 关闭后对话框卸载
+    fireEvent.click(screen.getByTestId('settings-close'))
+    await waitFor(() => expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument())
+  })
 })
