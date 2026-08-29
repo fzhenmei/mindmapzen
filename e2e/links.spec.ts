@@ -48,3 +48,52 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   await expect(page.getByText('A [[B]]').first()).toBeVisible()
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
 })
+
+// 验收轮：选中节点浮动操作条——免记快捷键点按钮加备注、点按钮拖出连线（连线经 linkBridge 落 [[..]] 文本）
+test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  // pickDirectory 在 e2e 模式下无 Tauri 对话框：harness 已将 workspaceDir 预设为 /ws
+  await page.getByTestId('btn-workspace').click()
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('操作条测试')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('根主题').first()).toBeVisible()
+
+  // 建叶节点 A 与 B：引擎「插入→渲染→弹编辑框」异步链路，先等框弹出再输入
+  for (const label of ['A', 'B']) {
+    await page.getByText('根主题').first().click()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+    await page.keyboard.type(label)
+    await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+    await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
+  }
+
+  // 选中 A：浮动操作条出现（node-actions 锚定选中节点右下角）；
+  // 叶节点激活同时出现引擎原生快捷建子 "+"（isShowCreateChildBtnIcon，MindMapNode.js:516）
+  await page.getByText('A', { exact: true }).first().click()
+  await expect(page.getByTestId('node-actions')).toBeVisible()
+  await expect(page.locator('.smm-quick-create-child-btn').first()).toBeVisible()
+
+  // 备注按钮：打开备注对话框（与砚栏 btn-note 同流），取消关闭
+  await page.getByTestId('node-action-note').click()
+  await expect(page.getByTestId('note-dialog')).toBeVisible()
+  await page.getByTestId('note-cancel').click()
+  await expect(page.getByTestId('note-dialog')).toBeHidden()
+
+  // 连线按钮 → 引擎建线态 → 点目标 B：linkBridge 把 A 文本改写为 A [[B]] 并立即重建线
+  await page.getByText('A', { exact: true }).first().click()
+  await page.getByTestId('node-action-link').click()
+  await page.getByText('B', { exact: true }).first().click()
+  await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+
+  // 保存落盘：md 含 [[B]] 文本标记（连线是文本派生数据，不落引擎层）
+  await page.keyboard.press('Control+s')
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/操作条测试.md',
+    ),
+  )
+  expect(md).toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
+})

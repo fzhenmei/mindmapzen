@@ -18,15 +18,15 @@ import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useNoteEdit } from '../hooks/useNoteEdit'
 import { useExportFlow } from '../hooks/useExportFlow'
+import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
+import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import EditorCaption from '../components/EditorCaption'
+import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
 
-/** 备注编辑快捷键命中（spec §3）：Shift+F2 或 Ctrl/Cmd+.；裸 F2 留给引擎原生文字编辑 */
-const isNoteHotkey = (e: KeyboardEvent): boolean =>
-  (e.shiftKey && e.key === 'F2') || ((e.ctrlKey || e.metaKey) && e.key === '.')
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
@@ -82,6 +82,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
   const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
+
+  // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
+  const nodePos = useNodeActions(mmRef, selection.activeUid)
 
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
@@ -171,29 +174,18 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 文档内容由父组件 key 重挂载切换
   }, [])
 
-  const anyDialogRef = useRef(false) // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开，渲染期同步供只绑一次闭包读
-  anyDialogRef.current = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open
-  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+.）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
-        e.preventDefault()
-        void doCopy()
-        return
-      }
-      if (isNoteHotkey(e)) {
-        e.preventDefault()
-        if (selection.activeUidRef.current && !anyDialogRef.current) noteEdit.openNoteDialog() // 守卫同 btn-note：无选中/对话框互斥期 no-op
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        void explicitSave()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy/备注快捷键守卫均走 refs 无需重绑
-  }, [])
+  // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open
+  const anyDialogRef = useRef(false)
+  anyDialogRef.current = anyDialog
+  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+.）拆至 useEditorHotkeys（验收轮，行数护栏）
+  useEditorHotkeys({
+    doCopy,
+    explicitSave,
+    openNoteDialog: noteEdit.openNoteDialog,
+    activeUidRef: selection.activeUidRef,
+    anyDialogRef,
+  })
 
   useEffect(() => {
     return () => pipeline.unmountFlush()
@@ -247,6 +239,14 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           />
         )}
       </div>
+      {/* 选中节点浮动条（验收轮）：备注笔 + 连线箭头，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
+      {nodePos && !anyDialog && (
+        <NodeActions
+          pos={nodePos}
+          onNoteClick={noteEdit.openNoteDialog}
+          onLinkClick={() => startLinkFromActive(mmRef.current)}
+        />
+      )}
       {/* 浮动砚栏（M5a 拆分至 ZenBar）：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
       <ZenBar
         onBack={async () => {

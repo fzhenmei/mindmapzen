@@ -276,3 +276,26 @@
 ### d.ts 影响
 
 `src/types/simple-mind-map.d.ts` 增 `declare module 'simple-mind-map/src/plugins/Export.js'`；`MindMapHandle`（src/types/engine.ts）增可选 `doExport?: { png(name?: string): Promise<string>; svg(name?: string): Promise<string> }`。
+
+## 验收核验（节点操作条 + 快捷建子 + 连线文本桥接）
+
+验收轮三项接线的关键引擎事实（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3）。
+
+### (a) 快捷建子按钮 `isShowCreateChildBtnIcon` —— 默认已开，激活叶节点显示 "+"
+
+- `constants/defaultOptions.js:294` 默认 `isShowCreateChildBtnIcon: true`；宿主在构造 opts 显式声明（防默认值漂移）。方法注册门控 `MindMapNode.js:157`，显隐门控 `:516-527`：**仅叶节点（childrenLength ≤ 0）且 isActive 时显示**，有子节点时 removeQuickCreateChildBtn（让位展开钮）
+- 点击 → `INSERT_CHILD_NODE(true, [this])`（`core/render/node/quickCreateChildBtn.js:46`，true=插入后开编辑框），click 带 stopPropagation，不与宿主 Tab 快捷键（window 层）冲突；SVG class `smm-quick-create-child-btn`（E2E 观测点）
+- 定位复用 `renderer.layout.renderExpandBtn`（quickCreateChildBtn.js:62），落在节点右缘——与展开钮同一锚位
+
+### (b) `beforeAssociativeLineConnection` 构造 opt 钩子 —— stop 路径不自清建线态
+
+- `AssociativeLine.js:563-575` completeCreateLine：先自环检查（`creatingStartNode.uid === node.uid` 直接 return，:564），再读 `this.mindMap.opt.beforeAssociativeLineConnection(toNode)`，返回真值即 `return`——**该路径不调 cancelCreateLine（:576 才调）**，宿主拦截后必须自己 `mm.associativeLine.cancelCreateLine()`，否则 isCreatingLine 残留、后续任意节点点击被误续线
+- 钩子只收到 toNode；**源节点从 `mm.associativeLine.creatingStartNode` 取**（createLine :477 写入实例字段，cancelCreateLine :483 置 null）
+- 建线入口 `createLineFromActiveNode()`（:449-454）：以 `renderer.activeNodeList[0]` 为源进入建线态，`creatingLine` 虚线随 mousemove（:101/:505-514）经 `checkOverlapNode`（:530-555）高亮悬停目标
+- 事件面：`draw_click` 绑在 svg 自身（Event.js:51）——宿主 HTML 浮层按钮在 svg 外，点击不触发取消；node_click 先于 draw_click（DOM 冒泡：目标节点 → svg），完成建线时序成立
+
+### (c) 宿主桥接语义（editor/linkBridge.ts）
+
+- 桥接把源文本改写为 `源 [[目标文本]]`（SET_NODE_DATA 只合并键，Render.js:1980-1984）→ data_change 置脏 → 自动保存落盘；连线从不写引擎层（文本是唯一事实源），返回 true 阻断引擎 addLine
+- 目标名不唯一时 resolveLinks 宽容丢弃：文本保留、线不显示（与手写 [[..]] 同语义）
+- 节点 left/top 为画布内容坐标，容器像素 = 内容 × view.scale + view.x/y（View.transform() origin[0,0] 即 draw 变换，同引擎 getNodePosInClient :545-555 口径）——浮动操作条锚点计算据此

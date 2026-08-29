@@ -124,3 +124,13 @@ export const IconImage = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 节点连线（验收轮）：双环链扣（斜向断链表示可连接），缩自 lucide link-2 */
+export const IconLink = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M6.5 9.5l3-3" />
+      <path d="M5 11l-1.5 1.5a2.1 2.1 0 0 1-3-3L3 7" />
+      <path d="M11 5l1.5-1.5a2.1 2.1 0 0 1 3 3L13 9" />
+    </>,
+    size,
+  )
