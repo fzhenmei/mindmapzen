@@ -2,6 +2,7 @@
 // 关闭守卫三态框与忽略块保存确认框的 JSX 原样迁入；后续 task 的对话框（备注/导出等）都进此容器。
 // 互斥门闩留 EditorView：confirmingIgnored 传入前已 && !guarding（ZenDialog 互斥约定——每视图至多一个）。
 // SaveStamp 不入容器——它是浮层非对话框。
+import { useState } from 'react'
 import type { IgnoredBlock } from '../types/tree'
 import CloseGuardDialog from './CloseGuardDialog'
 import ZenDialog from './ZenDialog'
@@ -16,6 +17,44 @@ interface EditorDialogsProps {
   ignored: IgnoredBlock[]
   onIgnoredConfirm(): void
   onIgnoredCancel(): void
+  /** 节点备注对话框（M5b Task 2）：非 null 时打开；draft 为预填文本（保存值经 onNoteSave 回传） */
+  noteDraft: string | null
+  onNoteSave(value: string): void
+  onNoteCancel(): void
+}
+
+/** 备注对话框：textarea 本地受控（draft 仅为初值），保存回传编辑值 */
+function NoteDialog({
+  draft,
+  onSave,
+  onCancel,
+}: Readonly<{ draft: string; onSave(value: string): void; onCancel(): void }>) {
+  const [value, setValue] = useState(draft)
+  return (
+    <ZenDialog
+      testid="note-dialog"
+      title="编辑节点备注"
+      onClose={onCancel}
+      actions={
+        <>
+          <button type="button" data-testid="note-cancel" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" data-testid="note-save" onClick={() => onSave(value)}>
+            保存
+          </button>
+        </>
+      }
+    >
+      <textarea
+        data-testid="note-text"
+        className="note-textarea"
+        rows={4}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+    </ZenDialog>
+  )
 }
 
 export default function EditorDialogs({
@@ -26,6 +65,9 @@ export default function EditorDialogs({
   ignored,
   onIgnoredConfirm,
   onIgnoredCancel,
+  noteDraft,
+  onNoteSave,
+  onNoteCancel,
 }: Readonly<EditorDialogsProps>) {
   return (
     <>
@@ -45,6 +87,9 @@ export default function EditorDialogs({
             </>
           }
         />
+      )}
+      {noteDraft !== null && (
+        <NoteDialog draft={noteDraft} onSave={onNoteSave} onCancel={onNoteCancel} />
       )}
     </>
   )

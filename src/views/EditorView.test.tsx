@@ -8,9 +8,10 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
-// fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）
-const fakeRootNode = { uid: 'root-uid' }
-const fakeChildNode = { uid: 'child-uid' }
+// fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）；
+// getData 备注预填用（M5b）：child 带「既有备注」，root 无（undefined）
+const fakeRootNode = { uid: 'root-uid', getData: () => undefined }
+const fakeChildNode = { uid: 'child-uid', getData: (k: string) => (k === 'note' ? '既有备注' : undefined) }
 // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）。
 // 模块级可变：写盘窗口用例改写它模拟「落了新编辑」（getData 每次取当前值，跨重渲染可见）
 const defaultFakeTree = (): EngineNode => ({
@@ -47,6 +48,8 @@ vi.mock('../editor/MindMapCanvas', () => ({
         findNodeByUid: (uid: string) =>
           uid === 'root-uid' ? fakeRootNode : uid === 'child-uid' ? fakeChildNode : null,
         textEdit: { hideEditTextBox: vi.fn() },
+        // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
+        reRenderNodeCheckChange: vi.fn(),
       },
     }
     ;(globalThis as unknown as Record<string, unknown>).__emitReady = () => onReady(fakeHandle)
@@ -899,7 +902,7 @@ test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', a
 
 test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 viewOps 单测覆盖）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.click(screen.getByTestId('btn-zoom-out'))
   expect(fakeHandle.view.narrow).toHaveBeenCalledTimes(1)
@@ -1015,14 +1018,14 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
     await fs.writeTextFileAtomic('/ws/bare.md', '# 裸图\n') // 无 .zen.json
     useAppStore.setState({ preferredLayout: 'logic' })
     render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    await screen.findByTestId('fake-canvas')
     expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('切换布局会记住偏好', async () => {
     useAppStore.setState({ preferredLayout: 'mindmap' })
     render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-    await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+    await screen.findByTestId('fake-canvas')
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     fireEvent.click(screen.getByTestId('layout-org'))
     await waitFor(() => expect(useAppStore.getState().preferredLayout).toBe('org'))
@@ -1033,7 +1036,7 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
 
 test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
-  await waitFor(() => expect(screen.getByTestId('fake-canvas')).toBeInTheDocument())
+  await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
@@ -1042,4 +1045,80 @@ test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
+})
+
+// ---- 节点备注（M5b：btn-note → NoteDialog → SET_NODE_DATA + 按需重渲）----
+
+/** 渲染并选中 child-uid 节点（备注对话框的常规前置）；ready 放 emitActive 后保证 mmRef 与返回实例同源。
+ *  返回 ready 时刻的 handle：对话框开闭引发的假画布工厂重跑会重赋 fakeHandle，断言须锁定 mmRef 所持实例 */
+const renderWithSelection = async (): Promise<MindMapHandle> => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  expect(screen.getByTestId('btn-note')).toBeEnabled()
+  return fakeHandle
+}
+
+test('btn-note：选中节点打开对话框预填既有备注，保存调用 SET_NODE_DATA 并补按需重渲', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
+  expect(textarea.value).toBe('既有备注') // 预填节点实例 getData('note')
+  fireEvent.change(textarea, { target: { value: '第一行\n第二行' } })
+  fireEvent.click(screen.getByTestId('note-save'))
+  // 空值置 undefined 的清除语义见下用例；此处整值写入
+  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+    note: '第一行\n第二行',
+  })
+  // 裸 SET_NODE_DATA 不重渲染（引擎核验 M5b (13)）：补调 reRenderNodeCheckChange 使角标即时增删
+  expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+})
+
+test('btn-note：清空保存置 note=undefined（空值清除角标）', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  fireEvent.change(screen.getByTestId('note-text'), { target: { value: '' } })
+  fireEvent.click(screen.getByTestId('note-save'))
+  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+    note: undefined,
+  })
+})
+
+test('btn-note：取消不执行命令且对话框关闭', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  fireEvent.click(screen.getByTestId('note-cancel'))
+  expect(handle.execCommand).not.toHaveBeenCalled()
+  expect(handle.renderer?.reRenderNodeCheckChange).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+})
+
+test('btn-note：无选中节点时禁用', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  expect(screen.getByTestId('btn-note')).toBeDisabled()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  expect(screen.getByTestId('btn-note')).toBeEnabled()
 })

@@ -33,4 +33,25 @@ describe('zen ⇄ engine 转换', () => {
   test('engine→zen：children 缺省按空处理', () => {
     expect(engineTreeToZen({ data: { text: 'r' } }).tree).toEqual(n('r'))
   })
+
+  test('zen→engine：note 透传进 data（undefined 不设键）', () => {
+    const eng = zenToEngineTree(n('根', [{ text: 'A', note: '备注', children: [] }]))
+    expect(eng.children![0].data.note).toBe('备注')
+    expect('note' in eng.data).toBe(false) // 根无 note：不设键而非 undefined 值
+  })
+
+  test('engine→zen：收集 data.note（仅字符串，其余视为无备注）', () => {
+    const eng: EngineNode = {
+      data: { text: '根' },
+      children: [
+        { data: { text: 'A', note: '备注' }, children: [] },
+        { data: { text: 'B', note: 42 }, children: [] },
+        { data: { text: 'C', note: undefined }, children: [] },
+      ],
+    }
+    const r = engineTreeToZen(eng)
+    expect(r.tree.children[0].note).toBe('备注')
+    expect('note' in r.tree.children[1]).toBe(false)
+    expect('note' in r.tree.children[2]).toBe(false)
+  })
 })

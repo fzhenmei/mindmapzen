@@ -186,3 +186,26 @@
 ### d.ts 影响
 
 新增静态方法 `defineTheme(name: string, config: Record<string, unknown>): void` 与实例方法 `setTheme(name: string): void`（返回 Error 对象的细节不进类型——守卫保证不会走到该分支），构造 opts 显式补 `theme?: string` 注释键。
+
+## M5b 核验（Task 2，节点备注）
+
+### (13) `SET_NODE_DATA` 接受部分 data，但**不触发重渲染** —— 成立，且须补一次重渲染
+
+- `Render.js:1980-1984 setNodeData(node, data)`：仅 `Object.keys(data).forEach(key => node.nodeData.data[key] = data[key])` 平铺合并——传 `{ note }` 单键即可，无需整份 data
+- 对比：`SET_NODE_TEXT`（Render.js:1987 `setNodeDataRender`）内部走 `SET_NODE_DATA` + `reRenderNodeCheckChange`（节点重渲 + 尺寸变化时全图重排）；裸 `SET_NODE_DATA` **不重渲**，备注角标（增/删）不会即时出现/消失
+- 结论：保存备注后须补调 `renderer.reRenderNodeCheckChange(node)`（`Render.js:1997`，引擎自用的"改数据后按需重渲"入口；`node.reRender()` 重建节点内容含角标，尺寸变化时自动 `mindMap.render()`）
+
+### (14) `nodeCreateContents` 备注角标与**原生悬停显示** —— 成立，无需 CSS title 兜底
+
+- `nodeCreateContents.js:430-475 createNoteNode()`：`getData('note')` truthy 才渲染 `.smm-node-note` 角标（空串/undefined 均无角标——"空值清除角标"由此免费获得）
+- 悬停为引擎原生：`node.on('mouseover')` 把 `noteEl`（构造时 append 到 body 的 fixed 定位 div，`innerText = getData('note')`）定位到 `getNoteContentPosition()` 并 `display:block`，`mouseout` 隐藏；仅当设置 `opt.customNoteContentShow` 时才改走自定义回调（本仓未设置）。另有 `node_note_click` 事件（本仓未用）
+- `noteIcon` 默认选项（`defaultOptions.js:270`）提供默认图标与配色
+
+### (15) `SET_NODE_DATA` 后的 `data_change` 与置脏链路 —— 成立（与文本编辑同路）
+
+- `Command.js:60-77 exec` → `addHistory`（节流）→ 快照 JSON 变化才 emit `data_change`（`Command.js:127`）。备注写入改变树 JSON → 经 MindMapCanvas 既有监听进 `onTreeDataChange` 置脏 + 自动保存；`note: undefined` 被 `JSON.stringify` 丢弃，清除备注同样产生 JSON 差异，置脏成立
+- 注意 `MindMapCanvas` 的 `afterExecCommand` 白名单不含 `SET_NODE_DATA`（悬停/激活高频误报脏）——置脏只依赖节流后的 `data_change`，文本编辑（`SET_NODE_TEXT`）已验证同链路可用
+
+### d.ts 影响
+
+`EngineRenderer` 增 `reRenderNodeCheckChange(node: unknown, notRender?: boolean): void`（Render.js:1997）；备注读取走节点实例 `getData('note')`（MindMapNode.js:1029，未进类型——`findNodeByUid` 返回 `unknown`，调用点结构断言）。

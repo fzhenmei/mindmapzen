@@ -14,6 +14,7 @@ import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
+import { useNoteEdit } from '../hooks/useNoteEdit'
 import EditorCaption from '../components/EditorCaption'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
@@ -66,6 +67,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
 
   // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
   const selection = useActiveSelection()
+
+  // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
+  const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
 
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
@@ -245,6 +249,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
         copied={false}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
+        onNoteClick={noteEdit.openNoteDialog}
+        noteEnabled={selection.activeUid !== null}
         onZoomOut={() => mmRef.current?.view.narrow()}
         onZoomIn={() => mmRef.current?.view.enlarge()}
         onCenterRoot={() => mmRef.current && centerRoot(mmRef.current)}
@@ -272,6 +278,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
           void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
         }}
         onIgnoredCancel={flow.confirmCancel}
+        // 备注框同样让位互斥（guarding > confirming 优先级同上）
+        noteDraft={!guard.guarding && !flow.confirming ? noteEdit.noteDraft : null}
+        onNoteSave={noteEdit.saveNote}
+        onNoteCancel={noteEdit.cancelNote}
       />
     </div>
   )

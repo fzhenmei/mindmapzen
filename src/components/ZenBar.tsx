@@ -12,6 +12,7 @@ import {
   IconLayoutDown,
   IconLayoutRight,
   IconMinus,
+  IconNote,
   IconPlus,
   IconSave,
 } from './icons'
@@ -27,6 +28,10 @@ interface Props {
   scope: 'full' | 'branch'
   /** 保存（Ctrl+S 的按钮路径） */
   onSaveClick(): void
+  /** 编辑选中节点备注（M5b）：无选中节点时禁用（逻辑在 EditorView 的 useNoteEdit） */
+  onNoteClick(): void
+  /** btn-note 可用信号：有激活节点才可编辑备注 */
+  noteEnabled: boolean
   onZoomOut(): void
   onZoomIn(): void
   onCenterRoot(): void
@@ -44,6 +49,8 @@ export default function ZenBar({
   onCopyClick,
   scope,
   onSaveClick,
+  onNoteClick,
+  noteEnabled,
   onZoomOut,
   onZoomIn,
   onCenterRoot,
@@ -72,6 +79,15 @@ export default function ZenBar({
       </button>
       <button type="button" data-testid="btn-save" title="保存（Ctrl+S）" onClick={onSaveClick}>
         <IconSave />
+      </button>
+      <button
+        type="button"
+        data-testid="btn-note"
+        title="编辑选中节点的备注"
+        onClick={onNoteClick}
+        disabled={!noteEnabled}
+      >
+        <IconNote />
       </button>
       <span className="zen-bar-sep" />
       <button
