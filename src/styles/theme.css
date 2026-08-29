@@ -10,6 +10,11 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+/* safelist（M12a Task 4）：bg-background 当前无源码消费点，按需生成不会产出该工具类；
+ * 视觉冒烟第三用例运行时注入此类断言「工具类 → @theme 令牌 → data-theme 覆盖」链路。
+ * M12b 全 UI 重构接入 bg-background 后可移除（v4.1+ 语法） */
+@source inline('bg-background');
+
 @theme static {
   /* 色彩令牌：spec §2 表逐字（十六进制照抄），晨松（亮）为默认。
    * static：禁用 v4 按需摇树——令牌表是公开接口（Task 4 冒烟经 getComputedStyle 断言
