@@ -26,15 +26,22 @@ describe('stripMarkers', () => {
     expect(stripMarkers('a  b')).toBe('a  b')
     expect(stripMarkers('  普通文本  ')).toBe('  普通文本  ')
   })
+  test('空格收敛只在标记删除处（M5c 幂等修复）：无标记处的原有连续空格不动，无空白标记不补空格', () => {
+    // 旧实现全局收敛 ` {2,}`→' '：'a  b' 挂线保存后文本变 'a  b [[A]]'，重开剥离变 'a b'——改写用户文本
+    expect(stripMarkers('a  b [[A]]')).toBe('a  b')
+    expect(stripMarkers('a[[A]]b')).toBe('ab')
+    expect(stripMarkers('a [[A]][[B]] b')).toBe('a b')
+  })
 })
 
 describe('injectMarkers', () => {
   test('句尾依次追加', () => {
     expect(injectMarkers('文本', ['A', 'B'])).toBe('文本 [[A]] [[B]]')
   })
-  test('空目标原样；空文本只留标记（"句尾追加"字面语义：\'\' + \' [[A]]\'，不 trim）', () => {
+  test('空目标原样；空文本首枚标记无前导空格（M5c 定点修复：旧 \' [[A]]\' 经序列化产出 \'#  [[A]]\'，parse 规范化吞空格 → 二次开-存 md 漂移）', () => {
     expect(injectMarkers('x', [])).toBe('x')
-    expect(injectMarkers('', ['A'])).toBe(' [[A]]')
+    expect(injectMarkers('', ['A'])).toBe('[[A]]')
+    expect(injectMarkers('', ['A', 'B'])).toBe('[[A]] [[B]]')
   })
 })
 

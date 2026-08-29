@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
+import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
 import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
@@ -139,7 +140,14 @@ export default function App() {
         setAdapter(tauriFsAdapter)
         // 动态 import：jsdom 测试环境不触达 Tauri 路径 API
         const { appDataDir, join } = await import('@tauri-apps/api/path')
-        useAppStore.setState({ configPath: await join(await appDataDir(), 'config.json') })
+        const configPath = await join(await appDataDir(), 'config.json')
+        // identifier 迁移（com.tauri.dev → com.mindmapzen.app）：init 前一次性搬旧配置（行为见 services/migration.ts 端口测试）
+        await migrateOldConfig(
+          tauriFsAdapter,
+          configPath,
+          configPath.replace('com.mindmapzen.app', 'com.tauri.dev'),
+        )
+        useAppStore.setState({ configPath })
         await init()
       } catch (e) {
         useAppStore.getState().setError('初始化失败：' + String(e))

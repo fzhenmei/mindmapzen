@@ -16,7 +16,17 @@ export default function EditorCaption({ name, dirty }: Readonly<Props>) {
     <>
       <div className="editor-caption">
         <span className="caption-name">{name}</span>
-        {dirty && <span data-testid="dirty-badge" className="seal-dot" title="有未保存修改" />}
+        {dirty && (
+          /* aria-live：朱砂点出现/消失时向读屏播报（色点本身无文本，aria-label 提供语义） */
+          <span role="status" aria-live="polite">
+            <span
+              data-testid="dirty-badge"
+              className="seal-dot"
+              title="有未保存修改"
+              aria-label="有未保存修改"
+            />
+          </span>
+        )}
       </div>
       <div className="theme-fab">
         <ThemeToggle />

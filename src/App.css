@@ -5,10 +5,10 @@ html, body { overflow: hidden; }
 .app { height: 100%; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
 
 /* 案头（导图列表页，M4 卡片化、M5a 左树右网格、M5d 三区重设计）：滚动只发生在 .dir-panel/.map-grid/.preview-outline 内，页自身不滚（页面级 overflow hidden） */
-.library { height: 100%; display: flex; flex-direction: column; padding: 24px 32px; gap: 20px; background: var(--paper); }
-.library-header { display: flex; align-items: center; gap: 12px; }
+.library { height: 100%; display: flex; flex-direction: column; padding: var(--space-5) var(--space-6); gap: 20px; background: var(--paper); }
+.library-header { display: flex; align-items: center; gap: var(--space-3); }
 /* 工具栏左段（M5d）：16px 印章 + 品牌名；工作区路径移到树根 tooltip */
-.desk-brand { margin-right: auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.desk-brand { margin-right: auto; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .desk-brand h1 { font-size: 16px; font-weight: 600; white-space: nowrap; letter-spacing: 0.03em; }
 /* 页首按钮层级（M5a 视觉降级，M5d 收敛）：新建/导入为主操作（accent 实心带字），设置为低频纯图标 */
 .btn-primary { padding: 6px 14px; border: 1px solid var(--accent); border-radius: var(--radius-s);
@@ -20,34 +20,34 @@ html, body { overflow: hidden; }
   color: var(--ink); font: inherit; cursor: pointer;
   transition: border-color var(--dur-1), color var(--dur-1); }
 .library-header button:not(.btn-primary):not(.theme-toggle):hover { border-color: var(--accent); color: var(--accent); }
-.library-header .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; }
+.library-header .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px var(--space-2); }
 /* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
 /* 首次开屏页（M5d spec §2）：无工作区时的居中品牌引导（替代旧 hint 文案）；页首栏在此态隐藏 */
 .welcome-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; color: var(--ink-2); }
-.welcome-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: 0.04em; }
-.welcome-sub { font-size: 13px; }
+.welcome-title { font-size: var(--font-size-xl); font-weight: 600; color: var(--ink); letter-spacing: 0.04em; }
+.welcome-sub { font-size: var(--font-size-sm); }
 .welcome-actions { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.welcome-actions .btn-primary { padding: 8px 24px; font-size: 14px; }
+.welcome-actions .btn-primary { padding: var(--space-2) var(--space-5); font-size: 14px; }
 .welcome-pick { padding: 2px; border: none; background: none; color: var(--ink-2); font: inherit; cursor: pointer;
   text-decoration: underline dotted; text-underline-offset: 4px; }
 .welcome-pick:hover { color: var(--accent); }
 /* 案头主体行：左目录树 200px 可折叠 + 右卡片网格 */
-.library-body { flex: 1; min-height: 0; display: flex; gap: 12px; }
+.library-body { flex: 1; min-height: 0; display: flex; gap: var(--space-3); }
 .dir-panel-toggle { flex-shrink: 0; width: 20px; align-self: stretch; border: 1px solid var(--hairline);
   border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2);
   font-family: var(--font-mono); font-size: 14px; line-height: 1; cursor: pointer; }
 .dir-panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
-.dir-panel { width: 200px; flex-shrink: 0; overflow-y: auto; padding-right: 8px; }
+.dir-panel { width: 200px; flex-shrink: 0; overflow-y: auto; padding-right: var(--space-2); }
 /* 目录树（M5a）：等宽小字 + 按层缩进（缩进值由组件内联 paddingLeft 提供） */
-.dir-tree { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: 12px; }
-.dir-node { display: block; width: 100%; padding: 4px 8px; border: none; border-radius: var(--radius-s);
+.dir-tree { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.dir-node { display: block; width: 100%; padding: var(--space-1) var(--space-2); border: none; border-radius: var(--radius-s);
   background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dir-node:hover { color: var(--accent); background: var(--accent-soft); }
 .dir-node.active { color: var(--accent); background: var(--accent-soft); }
 .dir-node:disabled { color: var(--ink-2); opacity: 0.45; cursor: default; background: none; }
-.dir-create-btn { margin-top: 8px; padding: 4px 8px; border: none; background: none; color: var(--ink-2);
+.dir-create-btn { margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border: none; background: none; color: var(--ink-2);
   font: inherit; text-align: left; cursor: pointer; }
 .dir-create-btn:hover { color: var(--accent); }
 /* 树目录/文件行（M5d）：IconFolder/IconFile + 名，flex 排图标（与 .dir-node 基础样式叠加） */
@@ -55,7 +55,7 @@ html, body { overflow: hidden; }
 .dir-folder svg, .file-node svg { flex-shrink: 0; }
 .dir-folder-name, .file-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 目录视图空态：选中层没有导图 */
-.dir-empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: 13px; }
+.dir-empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: var(--font-size-sm); }
 /* 移动导图对话框内嵌目录树（复用 .dir-tree/.dir-node，收窄并限制高度可滚） */
 .move-tree { max-height: 40vh; overflow-y: auto; border: 1px solid var(--hairline);
   border-radius: var(--radius-s); padding: 6px; }
@@ -65,10 +65,10 @@ html, body { overflow: hidden; }
   background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; white-space: nowrap; }
 .move-newdir button:hover { color: var(--accent); border-color: var(--accent); }
 .map-grid { flex: 1; min-width: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 10px; align-content: start; padding: 4px 4px 24px; }
+  gap: 10px; align-content: start; padding: var(--space-1) var(--space-1) var(--space-5); }
 .map-card { position: relative; }
 .map-card-main { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-  padding: 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-m);
+  padding: var(--space-4); background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-m);
   cursor: pointer; text-align: left; box-shadow: var(--shadow-1); transition: border-color var(--dur-1), transform var(--dur-1); }
 .map-card-main:hover { border-color: var(--accent); transform: translateY(-1px); }
 /* 单击选中态（M5d 交互变更）：accent 描边 + 浅底，区别于悬停 */
@@ -80,26 +80,32 @@ html, body { overflow: hidden; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge-md { font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--accent-soft);
   padding: 1px 6px; border-radius: var(--radius-s); }
-.map-time { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
-.map-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity var(--dur-1); }
+.map-time { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--ink-2); }
+.map-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: var(--space-1); opacity: 0; transition: opacity var(--dur-1); }
 .map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { opacity: 1; }
 .map-card-actions button { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: var(--radius-s); background: var(--surface); color: var(--ink-2); cursor: pointer; }
 .map-card-actions button:hover { color: var(--accent); background: var(--accent-soft); }
 /* 空态：朱砂印章对勾 + 引导文案 */
-.library-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--ink-2); }
+.library-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); color: var(--ink-2); }
 /* 大纲预览区（M5d spec §3 右列）：等宽大纲树（层级缩进 14px 由组件内联提供）+ 底部「打开」 */
-.preview-panel { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px;
-  min-height: 0; border-left: 1px solid var(--hairline); padding-left: 12px; }
+.preview-panel { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: var(--space-3);
+  min-height: 0; border-left: 1px solid var(--hairline); padding-left: var(--space-3); }
 .preview-outline { flex: 1; min-height: 0; overflow-y: auto; font-family: var(--font-mono);
-  font-size: 12px; line-height: 2; }
-.preview-row { display: flex; align-items: baseline; gap: 4px; color: var(--ink-2); }
+  font-size: var(--font-size-xs); line-height: 2; }
+.preview-row { display: flex; align-items: baseline; gap: var(--space-1); color: var(--ink-2); }
 .preview-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-note { color: var(--accent); flex-shrink: 0; }
-.preview-hint { color: var(--ink-2); font-size: 12px; padding-top: 8px; }
+.preview-hint { color: var(--ink-2); font-size: var(--font-size-xs); padding-top: var(--space-2); }
 .preview-panel .btn-primary { flex-shrink: 0; align-self: stretch; }
 .error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
-  border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
+  border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: var(--space-2) var(--space-3); white-space: pre-wrap; }
+
+/* 浮签（ZenTooltip：Radix Tooltip 原语 + tokens 皮肤，M5c）——反白小墨签，
+   取代图标按钮的原生 title（无样式/延迟不可控/双提示）；亮暗主题各自反白 */
+.zen-tooltip { padding: var(--space-1) 10px; border-radius: var(--radius-s);
+  background: var(--ink); color: var(--paper); font-size: var(--font-size-xs); line-height: 1.6;
+  box-shadow: var(--shadow-1); max-width: 260px; z-index: 20; }
 
 /* 对话框（ZenDialog 统一外壳：Radix Dialog 原语 + tokens 皮肤，M6 想法4 迁移）
    遮罩为独立 Overlay 元素（原 ::backdrop 样式原值平移：纸墨/夜墨双主题通用字面值） */
@@ -107,45 +113,45 @@ html, body { overflow: hidden; }
 /* Content 定位平移（原 [open] 态的固定居中）：Radix Content 无默认定位，transform 配方居中；
    全局 * { margin: 0 } 对 transform 定位无影响（原 margin:auto 方案随原生 <dialog> 一并退役） */
 .zen-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; gap: 12px;
-  border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: 24px;
+  display: flex; flex-direction: column; gap: var(--space-3);
+  border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: var(--space-5);
   width: 360px; max-width: 90vw; max-height: 85vh; overflow: auto;
   background: var(--surface); color: var(--ink); box-shadow: var(--shadow-2); }
 /* 取消权出口（想法4）：右上角 ✕ 关闭（ZenDialog dismissable 时渲染），tokens 同款描边钮 */
 .zen-dialog-close { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 13px; line-height: 1; cursor: pointer;
+  padding: 0; font-size: var(--font-size-sm); line-height: 1; cursor: pointer;
   border: none; border-radius: var(--radius-s); background: transparent; color: var(--ink-2); }
 .zen-dialog-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.zen-dialog h3 { font-size: 18px; font-weight: 600; }
-.zen-dialog-body { font-size: 13px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
-.zen-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.zen-dialog h3 { font-size: var(--font-size-lg); font-weight: 600; }
+.zen-dialog-body { font-size: var(--font-size-sm); color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
+.zen-dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .zen-dialog-actions button { padding: 6px 14px; border-radius: var(--radius-s);
   border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); cursor: pointer; }
-.zen-dialog input { padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-s); font: inherit; background: var(--paper); color: var(--ink); }
+.zen-dialog input { padding: var(--space-2) 10px; border: 1px solid var(--hairline); border-radius: var(--radius-s); font: inherit; background: var(--paper); color: var(--ink); }
 /* 设置对话框（M5b）：开关行——checkbox 走 accent 色（覆盖上面 .zen-dialog input 的文本框样式） */
-.setting-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.setting-row { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; user-select: none; }
 .setting-row input { width: auto; padding: 0; accent-color: var(--accent); cursor: pointer; }
 /* 设置对话框（M5d）：更换工作区行——当前路径与按钮两端对齐，非可点标签去掉手型 */
 .setting-workspace { cursor: default; justify-content: space-between; }
 /* 节点备注对话框（M5b）：4 行等宽 textarea（行数由组件 rows=4 提供），可纵向拉伸 */
-.zen-dialog textarea.note-textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--hairline);
-  border-radius: var(--radius-s); font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+.zen-dialog textarea.note-textarea { width: 100%; padding: var(--space-2) 10px; border: 1px solid var(--hairline);
+  border-radius: var(--radius-s); font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.6;
   background: var(--paper); color: var(--ink); resize: vertical; }
 /* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
-.ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: 12px; }
+.ignored-preview-list { padding-left: 20px; color: var(--ink-2); font-size: var(--font-size-xs); }
 
 /* 编辑器 */
 .editor { position: relative; height: 100%; background: var(--paper); }
 .editor-loading, .editor-error { height: 100%; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 12px; padding: 24px; }
-.editor-error h2 { font-size: 18px; }
+  align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-5); }
+.editor-error h2 { font-size: var(--font-size-lg); }
 .error-detail { color: var(--seal); }
 .raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--paper);
-  border: 1px solid var(--hairline); border-radius: var(--radius-s); padding: 12px; white-space: pre-wrap; font-size: 12px; }
+  border: 1px solid var(--hairline); border-radius: var(--radius-s); padding: var(--space-3); white-space: pre-wrap; font-size: var(--font-size-xs); }
 .canvas-host { position: absolute; inset: 0; overflow: hidden; }
 /* 选中节点浮动操作条（验收轮）：锚定选中节点右下角（useNodeActions 定位），z-index 8 低于砚栏 10/横幅 9 */
-.node-actions { position: absolute; z-index: 8; display: flex; align-items: center; gap: 2px; padding: 4px 6px;
+.node-actions { position: absolute; z-index: 8; display: flex; align-items: center; gap: 2px; padding: var(--space-1) 6px;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--hairline); border-radius: var(--radius-pill); box-shadow: var(--shadow-1); }
@@ -166,19 +172,19 @@ html, body { overflow: hidden; }
   background: transparent; color: var(--ink); cursor: pointer; transition: background var(--dur-1); }
 .zen-bar button:hover { background: var(--accent-soft); color: var(--accent); }
 .zen-bar button:disabled { color: var(--ink-2); opacity: 0.4; cursor: default; background: transparent; }
-.zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 4px; }
+.zen-bar-sep { width: 1px; height: 16px; background: var(--hairline); margin: 0 var(--space-1); }
 /* 布局分段控件（spec §3.7）：fieldset 原生 group 语义，去边框并入砚栏图标组 */
 .layout-switch { display: inline-flex; gap: 2px; border: none; padding: 0; margin: 0; min-width: 0; }
 .layout-switch button.active { background: var(--accent-soft); color: var(--accent); }
 /* 左下题签 + 朱砂脏印 */
 .editor-caption { position: absolute; left: 16px; bottom: 12px; z-index: 5; display: flex; align-items: center;
-  gap: 8px; color: var(--ink-2); font-size: 13px; pointer-events: none; }
+  gap: var(--space-2); color: var(--ink-2); font-size: var(--font-size-sm); pointer-events: none; }
 .caption-name { font-family: var(--font-mono); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seal-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--seal); display: inline-block; }
 /* 印记（Task 7）：保存成功朱砂印 / 已复制墨青印，右上角 250ms 缩放定影，1.2s 后由组件卸载。
    top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞 */
-.save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: 4px 10px;
-  font-size: 13px; border-radius: var(--radius-s); animation: stamp-in var(--dur-2) ease-out; }
+.save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: var(--space-1) 10px;
+  font-size: var(--font-size-sm); border-radius: var(--radius-s); animation: stamp-in var(--dur-2) ease-out; }
 .stamp-seal { color: var(--seal); border: 1.5px solid var(--seal); border-radius: 4px; transform: rotate(-3deg); }
 .stamp-ink { color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; }
 @keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
@@ -190,10 +196,10 @@ html, body { overflow: hidden; }
 .theme-fab button:hover, .library .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
 /* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于砚栏下方 */
 .zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 70vw;
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); max-width: 70vw;
   background: color-mix(in srgb, var(--seal) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--seal) 25%, var(--surface));
-  border-radius: var(--radius-m); box-shadow: var(--shadow-1); padding: 8px 14px; font-size: 13px; }
-.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--ink-2); font-size: 12px; }
+  border-radius: var(--radius-m); box-shadow: var(--shadow-1); padding: var(--space-2) 14px; font-size: var(--font-size-sm); }
+.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--ink-2); font-size: var(--font-size-xs); }
 /* 全局动效豁免（终审修复 2，Global Constraints）：reduce 下所有过渡/悬停位移关闭，收敛为单一 @media 块 */
 @media (prefers-reduced-motion: reduce) {
   .btn-primary, .library-header button, .map-card-main, .map-card-actions,

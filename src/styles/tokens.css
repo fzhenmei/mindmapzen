@@ -17,6 +17,19 @@
   --radius-pill: 999px;
   --dur-1: 150ms;
   --dur-2: 250ms;
+  /* 间距阶梯（M5c 质量批）：4/8/12/16/24/32，App.css 间距消费点逐步收敛到此六值 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  /* 字号阶梯：12/13/15/18/22（正文 15 为 UI 基准字） */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
   --font-ui: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Cascadia Mono', 'Consolas', monospace;
 }

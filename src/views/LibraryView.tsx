@@ -7,6 +7,7 @@ import { parse } from '../services/mdTree'
 import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import ZenDialog from '../components/ZenDialog'
+import ZenTooltip from '../components/ZenTooltip'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
@@ -210,14 +211,18 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 title={`选中「${m.name}」（双击打开）`}
               >
                 <span className="map-name">{m.name}</span>
-                <span className="badge-md">.md</span>
+                <span className="badge-md" aria-hidden="true">
+                  .md
+                </span>
                 {/* 「全部」视图显示所在层小字，帮助定位目录归属 */}
                 {selectedDir === '' && (
                   <span className="map-reldir" data-testid="map-reldir">
                     {m.relDir === '' ? '根' : m.relDir}
                   </span>
                 )}
-                <span className="map-time">{new Date(m.modifiedAt).toLocaleString('zh-CN')}</span>
+                <span className="map-time" aria-hidden="true">
+                  {new Date(m.modifiedAt).toLocaleString('zh-CN')}
+                </span>
               </button>
               <div className="map-card-actions">
                 <button
@@ -317,38 +322,42 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             </svg>
             <h1>Mind Map Zen</h1>
           </div>
-          {/* 设置入口（M5b Task 4 内容，M5d 改齿轮图标）：复制行为两开关 */}
-          <button
-            type="button"
-            data-testid="btn-settings"
-            className="icon-btn"
-            title="设置"
-            aria-label="设置"
-            onClick={() => setDialog('settings')}
-          >
-            <IconSettings />
-          </button>
-          {/* 导入/新建（v0.7.0 验收纯图标化）：图标 + 中文 title 悬浮提示（testid 不变，E2E 兼容） */}
-          <button
-            type="button"
-            data-testid="btn-import"
-            className="icon-btn"
-            title="导入 .md"
-            aria-label="导入 .md"
-            onClick={() => void startImport()}
-          >
-            <IconImport />
-          </button>
-          <button
-            type="button"
-            data-testid="btn-new"
-            className="icon-btn"
-            title="新建导图"
-            aria-label="新建导图"
-            onClick={() => setDialog('new')}
-          >
-            <IconPlus />
-          </button>
+          {/* 设置入口（M5b Task 4 内容，M5d 改齿轮图标）：复制行为两开关。
+              M5c 接 ZenTooltip（title 退役防双提示，aria-label 保留语义名） */}
+          <ZenTooltip label="设置">
+            <button
+              type="button"
+              data-testid="btn-settings"
+              className="icon-btn"
+              aria-label="设置"
+              onClick={() => setDialog('settings')}
+            >
+              <IconSettings />
+            </button>
+          </ZenTooltip>
+          {/* 导入/新建（v0.7.0 验收纯图标化）：图标 + ZenTooltip 悬浮提示（testid 不变，E2E 兼容） */}
+          <ZenTooltip label="导入 .md">
+            <button
+              type="button"
+              data-testid="btn-import"
+              className="icon-btn"
+              aria-label="导入 .md"
+              onClick={() => void startImport()}
+            >
+              <IconImport />
+            </button>
+          </ZenTooltip>
+          <ZenTooltip label="新建导图">
+            <button
+              type="button"
+              data-testid="btn-new"
+              className="icon-btn"
+              aria-label="新建导图"
+              onClick={() => setDialog('new')}
+            >
+              <IconPlus />
+            </button>
+          </ZenTooltip>
           {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
           <ThemeToggle />
         </header>
