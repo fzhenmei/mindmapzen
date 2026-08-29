@@ -99,3 +99,48 @@ describe('净化后桥接与注册表闭环（组合语义）', () => {
     expect(registry.byUid.get('u1')).toEqual(['C', 'B'])
   })
 })
+
+// v1.1 验收 Bug「连线有时能连有时不能连」：目标名在全树不唯一时，裸名经
+// registryToLinks 宽容丢弃（多命中）→ 线永不绘制且无反馈。修复：桥接改推全路径消歧。
+describe('桥接消歧：目标名不唯一时推全路径', () => {
+  const makeDup = () => {
+    // 两处同名 B：/根/B 与 /根/A/B（不同子树，全路径可消歧）
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'B', uid: 'u9' }, children: [] },
+        { data: { text: 'A', uid: 'u1' }, children: [{ data: { text: 'B', uid: 'u2' }, children: [] }] },
+      ],
+    }
+    const fromNode = { getData: (k: string) => (k === 'text' ? 'A' : k === 'uid' ? 'u1' : undefined) }
+    const toNode = { getData: (k: string) => (k === 'text' ? 'B' : k === 'uid' ? 'u2' : undefined) }
+    const mm = {
+      getData: () => tree,
+      rebuildLinks: vi.fn(),
+      execCommand: vi.fn(),
+      associativeLine: { creatingStartNode: fromNode, cancelCreateLine: vi.fn() },
+    } as unknown as MindMapHandle
+    return { mm, registry: { byUid: new Map() } as LinkRegistry, toNode }
+  }
+
+  test('目标名唯一：仍推裸名（md 简洁）', () => {
+    const f = makeDup()
+    // 先破坏唯一性：把 u9 文本改为 C → B 唯一
+    ;(f.mm.getData() as EngineNode).children![0].data.text = 'C'
+    const { toNode } = f
+    const onData = vi.fn()
+    bridgeLinkToRegistry(f.mm, f.registry, toNode, onData)
+    expect(f.registry.byUid.get('u1')).toEqual(['B'])
+  })
+
+  test('目标名不唯一：推全路径形式，registryToLinks 可精确解析', () => {
+    const f = makeDup()
+    const onData = vi.fn()
+    bridgeLinkToRegistry(f.mm, f.registry, f.toNode, onData)
+    expect(f.registry.byUid.get('u1')).toEqual(['/根/A/B'])
+    // 重建参数直接带全路径 toPath → resolveLinks 按路径命中 → 线绘制
+    expect(f.mm.rebuildLinks).toHaveBeenCalledWith([
+      { fromPath: '/根/A', toPath: '/根/A/B' },
+    ])
+  })
+})
