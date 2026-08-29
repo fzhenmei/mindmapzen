@@ -5,6 +5,7 @@ import { useRef, type RefObject } from 'react'
 import { engineTreeToZen, serialize } from '../services/mdTree'
 import { writeSidecar } from '../services/sidecar'
 import { collectLinkAdjust, type LinkAdjust } from '../services/linkAdjust'
+import { harvestRegistry } from '../editor/linkRegistry'
 import type { LinkRegistry } from '../editor/linkRegistry'
 import type { FsAdapter, LayoutKind, Sidecar } from '../types/files'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -67,6 +68,10 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
     try {
       const rev = dataRevRef.current
       const snapshot = mm.getData()
+      // v0.7.0 验收修复（删线复活）：序列化前以引擎现态重建注册表（引擎 targets ∪ 残留文本
+      // 标记，**替换**而非并集）——删线（引擎 removeLine 修剪 targets → data_change 置脏）后的
+      // 保存不再把陈旧条目注回 md；md 是事实源，无标记则重开重建无线（删了不再回来）
+      harvestRegistry(snapshot, opts.registry)
       const { tree, collapsed } = engineTreeToZen(snapshot)
       // M5d Task 2 序列化注入：净化会话下引擎文本无标记，连线按注册表（uid）句尾注入回 md
       await adapter.writeTextFileAtomic(mdPath, serialize(tree, opts.registry.byUid))

@@ -132,6 +132,15 @@ export const IconSettings = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 导入 .md（v0.7.0 验收纯图标化）：下装入托盘——箭头向下入 + 底部托盘轮廓 */
+export const IconImport = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M8 2v7M5 6.5 8 9.5l3-3" />
+      <path d="M2.5 11.5v1A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5v-1" />
+    </>,
+    size,
+  )
 /** 导出图片（M5b）：相框轮廓 + 山形折线 + 日点 */
 export const IconImage = ({ size }: IconProps) =>
   base(

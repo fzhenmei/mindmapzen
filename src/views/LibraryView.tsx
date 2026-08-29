@@ -13,7 +13,7 @@ import WelcomeScreen from '../components/WelcomeScreen'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import PreviewPane from '../components/PreviewPane'
-import { IconFolder, IconPencil, IconTrash, IconSettings } from '../components/icons'
+import { IconFolder, IconImport, IconPencil, IconPlus, IconTrash, IconSettings } from '../components/icons'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -166,7 +166,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     if (p !== undefined) void store.openMap(p)
   }
   // 树根显示工作区名（tooltip 全路径承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
-  const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+  // （尾部 `/\\` 收敛用「首字符 + 零或多次」展开式，规避 Sonar S8786 回溯警告）
+  const workspaceName = workspaceDir?.replace(/[\\/][\\/]*$/, '').split(/[\\/]/).pop() ?? ''
 
   const renderBody = () => {
     // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；页首栏在此态隐藏
@@ -299,7 +300,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
 
   return (
     <div className="library">
-      {/* 工具栏区（M5d spec §3，无工作区的开屏态隐藏）：左印章+品牌名 / 右设置(图标)+导入/新建(带字)+主题 */}
+      {/* 工具栏区（M5d spec §3，无工作区的开屏态隐藏）：左印章+品牌名 / 右设置+导入+新建(纯图标)+主题 */}
       {workspaceDir && (
         <header className="library-header">
           <div className="desk-brand">
@@ -327,21 +328,26 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           >
             <IconSettings />
           </button>
+          {/* 导入/新建（v0.7.0 验收纯图标化）：图标 + 中文 title 悬浮提示（testid 不变，E2E 兼容） */}
           <button
             type="button"
             data-testid="btn-import"
-            className="btn-primary"
+            className="icon-btn"
+            title="导入 .md"
+            aria-label="导入 .md"
             onClick={() => void startImport()}
           >
-            导入 .md
+            <IconImport />
           </button>
           <button
             type="button"
             data-testid="btn-new"
-            className="btn-primary"
+            className="icon-btn"
+            title="新建导图"
+            aria-label="新建导图"
             onClick={() => setDialog('new')}
           >
-            新建导图
+            <IconPlus />
           </button>
           {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
           <ThemeToggle />
@@ -361,14 +367,19 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
-      {/* 设置对话框（M5b Task 4 + M5d 更换工作区）：与其他对话框共用 dialog 互斥状态；
-          更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」） */}
+      {/* 设置对话框（M5b Task 4 + M5d 更换工作区 + v0.7.0 退出工作区）：与其他对话框共用 dialog 互斥状态；
+          更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」）；退出工作区清 store 落
+          workspaceDir:null 回开屏页（renderBody 无工作区分支渲染 WelcomeScreen） */}
       {dialog === 'settings' && (
         <SettingsDialog
           onClose={() => setDialog(null)}
           onChangeWorkspace={() => {
             setDialog(null)
             void chooseWorkspace()
+          }}
+          onExitWorkspace={() => {
+            setDialog(null)
+            void store.exitWorkspace()
           }}
         />
       )}

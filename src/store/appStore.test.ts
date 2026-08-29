@@ -20,6 +20,28 @@ describe('appStore', () => {
     expect(useAppStore.getState().maps.map((m) => m.name)).toEqual(['已有'])
   })
 
+  // v0.7.0 验收：设置页「退出工作区（回到开屏）」的 store 面——清内存态 + load-merge-save 持久化 null
+  test('exitWorkspace 清工作区内存态并持久化 workspaceDir:null（其他字段保留）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
+    await useAppStore.getState().openMap('/ws/已有.md')
+    await useAppStore.getState().exitWorkspace()
+    const s = useAppStore.getState()
+    expect(s.workspaceDir).toBeNull()
+    expect(s.maps).toEqual([])
+    expect(s.selectedDir).toBe('')
+    expect(s.currentMdPath).toBeNull()
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.workspaceDir).toBeNull()
+    expect(cfg.lastOpened).toBeNull()
+    expect(cfg.preferredLayout).toBe('logic')
+    // 退出后 init 停在开屏（文件库态，不因残留指针劫持进编辑器）
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().route).toBe('library')
+    expect(useAppStore.getState().workspaceDir).toBeNull()
+  })
+
   test('init 无配置时停在文件库', async () => {
     await useAppStore.getState().init()
     expect(useAppStore.getState().route).toBe('library')

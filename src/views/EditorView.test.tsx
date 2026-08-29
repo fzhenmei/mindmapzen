@@ -21,10 +21,36 @@ const defaultFakeTree = (): EngineNode => ({
 })
 let fakeTree: EngineNode = defaultFakeTree()
 let fakeHandle: MindMapHandle
-// 假画布 applyRegistry 复用真 linkRegistry 纯函数（M5d Task 2 净化语义与生产一致）；
+// 假画布 applyRegistry 复用真 linkRegistry 纯函数（M5d Task 2 净化语义与生产一致；
+// v0.7.0 起生产净化含引擎 targets 收割与落位（harvestRegistry/rebuildEngineLinks），
+// 假画布镜像之：收割重建注册表 → 剥离显示文本 → 注册表解析结果写 data.associativeLineTargets）；
 // vi.mock 工厂被提升到 import 之前，linkRegistry 须经工厂内动态 import 引入
 vi.mock('../editor/MindMapCanvas', async () => {
-  const { buildRegistry, stripTreeTexts } = await import('../editor/linkRegistry')
+  const { harvestRegistry, stripTreeTexts, registryToLinks } = await import('../editor/linkRegistry')
+  /** rebuildEngineLinks 的 targets 落位镜像（免 offsets/重绘——单测只关心数据面）：
+   *  全清后按解析结果重写（同生产「连线完全派生、重建即全清」语义） */
+  const writeFakeTargets = (tree: EngineNode, reg: { byUid: Map<string, string[]> }): void => {
+    const byPath = new Map<string, EngineNode>()
+    const targets = new Map<EngineNode, string[]>()
+    const walk = (node: EngineNode, parent: string): void => {
+      const path = parent === '' ? '/' + node.data.text : parent + '/' + node.data.text
+      byPath.set(path, node)
+      delete node.data.associativeLineTargets
+      for (const c of node.children ?? []) walk(c, path)
+    }
+    walk(tree, '')
+    for (const { fromPath, toPath } of registryToLinks(tree, reg)) {
+      const from = byPath.get(fromPath)
+      const uid = byPath.get(toPath)?.data.uid
+      if (!from || typeof uid !== 'string') continue
+      const list = targets.get(from) ?? []
+      if (!list.includes(uid)) list.push(uid)
+      targets.set(from, list)
+    }
+    targets.forEach((uids, from) => {
+      from.data.associativeLineTargets = uids
+    })
+  }
   return {
     default: ({
       onReady,
@@ -58,12 +84,13 @@ vi.mock('../editor/MindMapCanvas', async () => {
       el: null,
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
       destroy: vi.fn(),
-      // 连线净化（M5d Task 2）：生产版等首帧渲染后走渲染树；假画布同步对 getData 树执行同款纯函数
-      // （M5d Task 5：记录收到的 adjust 参数，供弯曲记忆恢复注入断言）
+      // 连线净化（M5d Task 2 + v0.7.0）：生产版等首帧渲染后走渲染树；假画布同步对 getData 树
+      // 执行同款纯函数并镜像 targets 落位（M5d Task 5：记录 adjust 参数，供弯曲记忆恢复注入断言）
       applyRegistry: (adjust?: unknown) => {
         ;(globalThis as unknown as Record<string, unknown>).__lastApplyAdjust = adjust ?? null
-        buildRegistry(fakeTree, registry)
+        harvestRegistry(fakeTree, registry)
         stripTreeTexts(fakeTree)
+        writeFakeTargets(fakeTree, registry)
       },
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
@@ -215,8 +242,51 @@ test('保存采集连线弯曲：引擎 offsets → sidecar linkAdjust 路径对
   await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
   const sidecar = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
   expect(sidecar.linkAdjust).toEqual({ '/根->/根/新分支': { cx1: 9, cy1: 8, cx2: 7, cy2: 6 } })
-  // md 事实源不受引擎连线数据污染
-  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+  // v0.7.0 起引擎 targets 是会话权威：保存收割入注册表 → md 句尾注入标记（该树源是根节点；md 仍是唯一事实源）
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根 [[新分支]]\n\n## 新分支\n')
+})
+
+// ---- 删线不复活（v0.7.0 验收修复）：引擎 targets 是会话权威，注册表收割为替换语义 ----
+/** 删线样例树：A 经引擎 targets 连 B 与 C（净化会话语义——文本无标记，连线数据只在引擎层） */
+const linkedTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [
+    {
+      data: { text: 'A', expand: true, uid: 'child-uid', associativeLineTargets: ['b-uid', 'c-uid'] },
+      children: [],
+    },
+    { data: { text: 'B', expand: true, uid: 'b-uid' }, children: [] },
+    { data: { text: 'C', expand: true, uid: 'c-uid' }, children: [] },
+  ],
+})
+
+test('删线不复活：引擎 targets 删一后保存，md 缺该标记（注册表替换而非并集）', async () => {
+  fakeTree = linkedTree()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  // 首存：引擎两条连线都收割注入 md
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## A [[B]] [[C]]\n\n## B\n\n## C\n')
+  // 引擎 Del（removeLine 修剪 targets，SET_NODE_DATA → data_change）：A→B 线被删
+  fakeTree.children![0]!.data.associativeLineTargets = ['c-uid']
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  // 保存按引擎现态**替换**注册表：[[B]] 不再注回 md（并集语义下线将复活），[[C]] 保留
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## A [[C]]\n\n## B\n\n## C\n')
 })
 
 // M5d Task 5 恢复：打开时 sidecar linkAdjust 经 useLinkPurify 注入画布净化入口（purify → applyRegistry）

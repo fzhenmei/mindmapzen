@@ -44,6 +44,9 @@ export interface EngineAssociativeLine {
   cancelCreateLine(): void
   /** 建线态源节点实例（createLine :477 写入，cancel 置 null）——opt 钩子只收到 toNode，源从这里取 */
   creatingStartNode?: unknown
+  /** 建线态悬停目标节点（checkOverlapNode :541 写入）：引擎 stop 路径跳过其去激活（:572-574），
+   *  桥接自理（否则目标高亮残留 + 尾随 data_change 清 activeLine 使删线失效，v0.7.0 验收实案） */
+  overlapNode?: unknown
   /** 建线态标志（createLine 置 true）：宿主浮动条等据此避让 */
   isCreatingLine?: boolean
 }
@@ -72,9 +75,10 @@ export interface MindMapHandle {
   /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
    *  内部等待首帧渲染完成后按 links 清空并重建关联线（既有控制点差值按 uid 留档回填，M5d Task 5） */
   rebuildLinks?(links: ResolvedLink[]): void
-  /** 连线净化（M5d Task 2/5）：宿主侧方法——同上装配挂载；等首帧渲染完成后走渲染树
-   *  建注册表（标记文本 → uid 条目）→ 直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线；
-   *  adjust = 打开时 sidecar linkAdjust，重建时一并恢复用户拖过的弯曲 */
+  /** 连线净化/再净化（M5d Task 2/5 + v0.7.0 验收修复）：宿主侧方法——同上装配挂载；等首帧渲染完成后
+   *  走渲染树：按引擎现态收割重建注册表（打开时引擎 targets 恒空＝文本标记建表；保存后再净化时
+   *  以引擎 targets 为权威，替换语义）→ 直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线；
+   *  adjust = 打开时 sidecar linkAdjust，重建时一并恢复用户拖过的弯曲（保存后入口不传，引擎现存优先） */
   applyRegistry?(adjust?: LinkAdjust): void
   /** 关联线插件实例（构造时挂载）：建线态入口与状态（验收轮连线文本桥接） */
   associativeLine?: EngineAssociativeLine

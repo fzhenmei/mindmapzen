@@ -17,7 +17,7 @@ import {
   type ControlPointOffset,
   type LinkAdjust,
 } from '../services/linkAdjust'
-import { buildRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
+import { harvestRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
 import { bridgeLinkToRegistry } from './linkBridge'
@@ -169,11 +169,14 @@ function defaultControlOffsets(
   ]
 }
 
-/** 打开净化（M5d Task 2）：等首帧渲染后走渲染树——①树A标记文本建注册表（buildRegistry 读标记，
- *  须先于剥离）；②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：
+/** 打开/保存后再净化（M5d Task 2 + v0.7.0 验收修复）：等首帧渲染后走渲染树——
+ *  ①harvestRegistry 按引擎现态重建注册表（打开时引擎 targets 恒空＝纯文本标记建表；
+ *  保存后收割含引擎 targets——删线修剪后的现态为权威，替换语义不残留陈旧条目）；
+ *  ②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：
  *  不进命令层、无历史、无 data_change → 打开净化不置脏）；③逐节点按需重渲（文本变短重算尺寸）；
  *  ④按注册表重建连线（显示文本已剥离，连线数据源自此是注册表而非文本标记）。
- *  adjust（M5d Task 5）＝打开时 sidecar linkAdjust，随重建一并恢复用户拖过的弯曲 */
+ *  adjust（M5d Task 5）＝打开时 sidecar linkAdjust，随重建一并恢复用户拖过的弯曲；
+ *  保存后入口（onSaved）不传 adjust——引擎现存差值即最新（rebuildEngineLinks 内按 uid 留档回填） */
 function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: LinkAdjust): void {
   const run = (): void => {
     const root = mm.renderer?.root as EngineNodeInstance | null | undefined
@@ -186,7 +189,7 @@ function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: Li
       return { data, children: (node.children ?? []).map(toPlain) }
     }
     const plain = toPlain(root)
-    buildRegistry(plain, reg)
+    harvestRegistry(plain, reg)
     stripTreeTexts(plain)
     for (const node of changed) mm.renderer?.reRenderNodeCheckChange(node)
     rebuildEngineLinks(mm, registryToLinks(plain, reg), adjust)
