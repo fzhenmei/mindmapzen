@@ -33,6 +33,10 @@ describe('stripLinkBrackets（copyIncludeLinks=false 留名去括号）', () => 
   test('空括号 [[]] 与含内层括号的非法形式不动（与 links.ts 解析口径一致）', () => {
     expect(stripLinkBrackets('a [[]] b [[x[y]] c')).toBe('a [[]] b [[x[y]] c')
   })
+  test('内层嵌套 [[ 形式按 LINK_RE 口径剥内层合法链（最外层括号保留）', () => {
+    // links.ts 对 [[[a]] 同样只解析到内层 [[a]]（链名 a）：剥内层留最外层的 [
+    expect(stripLinkBrackets('[[[a]]')).toBe('[a')
+  })
 })
 
 describe('applyCopySettings（按设置组合）', () => {

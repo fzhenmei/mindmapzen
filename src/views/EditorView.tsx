@@ -24,6 +24,9 @@ import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
 
+/** 备注编辑快捷键命中（spec §3）：Shift+F2 或 Ctrl/Cmd+.；裸 F2 留给引擎原生文字编辑 */
+const isNoteHotkey = (e: KeyboardEvent): boolean =>
+  (e.shiftKey && e.key === 'F2') || ((e.ctrlKey || e.metaKey) && e.key === '.')
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
@@ -168,13 +171,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 文档内容由父组件 key 重挂载切换
   }, [])
 
-  // 快捷键（Ctrl+S / Ctrl+Shift+C）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
+  const anyDialogRef = useRef(false) // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开，渲染期同步供只绑一次闭包读
+  anyDialogRef.current = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open
+  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+.）留本视图的 window effect（M5a 收敛裁定，不随砚栏迁移）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         void doCopy()
         return
+      }
+      if (isNoteHotkey(e)) {
+        e.preventDefault()
+        if (selection.activeUidRef.current && !anyDialogRef.current) noteEdit.openNoteDialog() // 守卫同 btn-note：无选中/对话框互斥期 no-op
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
@@ -183,7 +192,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy 走 refs 无需重绑
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy/备注快捷键守卫均走 refs 无需重绑
   }, [])
 
   useEffect(() => {

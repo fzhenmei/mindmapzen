@@ -1209,6 +1209,46 @@ test('btn-note：无选中节点时禁用', async () => {
   expect(screen.getByTestId('btn-note')).toBeEnabled()
 })
 
+test('备注快捷键：Shift+F2 / Ctrl+. 打开选中节点的备注框（预填既有备注）', async () => {
+  await renderWithSelection()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
+  expect(textarea.value).toBe('既有备注') // 预填与 btn-note 同源（节点实例 getData('note')）
+  fireEvent.click(screen.getByTestId('note-cancel'))
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+  fireEvent.keyDown(window, { key: '.', ctrlKey: true }) // Ctrl+. 同入口
+  expect(screen.getByTestId('note-dialog')).toBeInTheDocument()
+})
+
+test('备注快捷键：无选中节点时不打开对话框', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  fireEvent.keyDown(window, { key: '.', ctrlKey: true })
+  await act(async () => {}) // 排空微任务：若误开对话框，随后的同步查询即暴露
+  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
+})
+
+test('备注快捷键：任一对话框在开时不再开备注框（互斥约定）', async () => {
+  await renderWithSelection() // 有选中节点：仅互斥守卫能拦下（锁定 anyDialogRef 含导出框开态）
+  fireEvent.click(screen.getByTestId('btn-export'))
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  await act(async () => {})
+  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
+})
+
 // ---- 导出与复制为图片（M5b Task 5：btn-export → ExportDialog 三入口 → 端口注入）----
 
 /** 渲染并 ready，返回 ready 时刻 handle（对话框开闭重渲染会重建 fakeHandle，断言须锁定 mmRef 所持实例） */

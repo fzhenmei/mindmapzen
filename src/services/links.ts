@@ -32,7 +32,7 @@ export function parseLinks(root: ZenNode): MindLink[] {
 
 /** 宽容解析（spec §4）：名称形式按全树精确同名计数，唯一命中保留（归一为该节点全路径——ResolvedLink
  *  两端均为树内路径，建线端按路径映射引擎实例），零/多命中丢弃；
- *  '/' 开头的全路径形式按路径精确匹配（重复路径亦保留——取遍历序首个语义由建线端 Map 覆盖决定）。 */
+ *  '/' 开头的全路径形式按路径精确匹配（重复路径亦保留——后写覆盖（最后遍历节点胜出））。 */
 export function resolveLinks(tree: ZenNode, links: MindLink[]): ResolvedLink[] {
   const paths: string[] = []
   const nameCount = new Map<string, number>()
