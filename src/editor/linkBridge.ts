@@ -5,11 +5,34 @@
 // 钩子时机：completeCreateLine（AssociativeLine.js:563-575）先问 opt.beforeAssociativeLineConnection(toNode)，
 // 返回 true 即跳过 addLine 并 return —— 注意该路径不调 cancelCreateLine，建线态须由桥接自行清理（:571）。
 import { registryToLinks, type LinkRegistry } from './linkRegistry'
-import type { MindMapHandle } from '../types/engine'
+import type { EngineNode, MindMapHandle } from '../types/engine'
 
 /** 引擎节点实例的最小结构（桥接只读 text/uid） */
 interface NodeLike {
   getData(key: string): unknown
+}
+
+
+/** 目标名在全树不唯一时改推全路径形式（v1.1 验收 Bug 修复）：裸名多命中会被
+ *  registryToLinks 宽容丢弃 → 线永不绘制且无任何反馈（"有时能连有时不能连"的根因）。
+ *  桥接手里有精确节点实例，可自动消歧为 spec §4 的 [[/全/路径]] 形式（AI 仍可读）。
+ *  同父同名（路径也相同）时全路径取首个命中——线可见地连到同名节点之一，优于静默丢弃。 */
+function disambiguatedTarget(mm: MindMapHandle, toNode: NodeLike, bareName: string): string {
+  const plain = mm.getData()
+  const toUid = toNode.getData('uid')
+  let nameCount = 0
+  let targetPath: string | null = null
+  const walk = (node: EngineNode, parentPath: string): void => {
+    const { uid, text } = node.data
+    const path = parentPath === '' ? '/' + String(text) : parentPath + '/' + String(text)
+    if (text === bareName) nameCount += 1
+    if (toUid !== undefined && uid === toUid) targetPath = path
+    for (const child of node.children ?? []) walk(child, path)
+  }
+  if (!plain) return bareName
+  walk(plain, '')
+  if (nameCount <= 1 || targetPath === null) return bareName
+  return targetPath
 }
 
 /** 桥接钩子（构造 opt 传入，complete 时机调用）：注册表 push → 立即按注册表重建 → 上报触发保存链。
@@ -29,7 +52,8 @@ export function bridgeLinkToRegistry(
   const uid = fromNode.getData('uid')
   if (typeof toText === 'string' && toText !== '' && typeof uid === 'string') {
     const list = registry.byUid.get(uid) ?? []
-    if (!list.includes(toText)) list.push(toText)
+    const marker = disambiguatedTarget(mm, toNode as NodeLike, toText)
+    if (!list.includes(marker)) list.push(marker)
     registry.byUid.set(uid, list)
     // 立即按注册表重建：线马上可见（保存链 onSaved 也会再重建，幂等）
     const plain = mm.getData()
