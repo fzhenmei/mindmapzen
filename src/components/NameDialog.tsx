@@ -9,7 +9,7 @@ interface Props {
   onCancel: () => void
 }
 
-/** 命名对话框：ZenDialog 外壳，Esc（原生 cancel）→ onCancel */
+/** 命名对话框：ZenDialog 外壳，Esc/✕/遮罩点击 → onCancel */
 export default function NameDialog({ title, initial = '', confirmText, onConfirm, onCancel }: Readonly<Props>) {
   const [value, setValue] = useState(initial)
   return (

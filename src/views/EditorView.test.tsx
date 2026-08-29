@@ -1543,11 +1543,8 @@ test('Esc 关闭导出对话框：无任何导出动作', async () => {
   const writeImage = vi.fn()
   const handle = await renderReady({ pickSavePath, writeImage })
   fireEvent.click(screen.getByTestId('btn-export'))
-  // jsdom 无原生 dialog cancel 事件：直接派发（ZenDialog 监听 'cancel'）
-  fireEvent(
-    screen.getByTestId('export-dialog'),
-    new Event('cancel', { bubbles: false, cancelable: true }),
-  )
+  // ZenDialog 已迁移 Radix Dialog：Esc 经其 document 捕获监听 → onClose
+  fireEvent.keyDown(screen.getByTestId('export-dialog'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByTestId('export-dialog')).not.toBeInTheDocument())
   expect(pickSavePath).not.toHaveBeenCalled()
   expect(writeImage).not.toHaveBeenCalled()

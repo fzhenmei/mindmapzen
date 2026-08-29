@@ -101,18 +101,22 @@ html, body { overflow: hidden; }
 .error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
   border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
 
-/* 对话框（ZenDialog 统一外壳：原生 <dialog> + ::backdrop，M4） */
-.zen-dialog { border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: 24px;
-  width: 360px; max-width: 90vw; background: var(--surface); color: var(--ink);
-  box-shadow: var(--shadow-2); }
-/* display 收敛至 [open]（终审修复 1）：基础态不覆盖 UA 的 dialog:not([open]){display:none}，
-   消除 DOM 插入到 showModal 之间无遮罩的流内闪现；flex 布局与 gap 随之移入 [open] 态 */
-/* 居中（验收修复 3）：全局 * { margin: 0 } 覆盖了 UA 的 dialog:modal { margin: auto }，
-   导致纵向贴顶——fixed + inset:0 + margin:auto + 高度收敛恢复双轴居中；宽度仍由基础态 360px/90vw 提供 */
-.zen-dialog[open] { display: flex; flex-direction: column; gap: 12px;
-  position: fixed; inset: 0; margin: auto; height: fit-content; }
-/* 遮罩为 ::backdrop 专属暗色（纸墨/夜墨双主题通用字面值，Task 1 裁定可接受） */
-.zen-dialog::backdrop { background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
+/* 对话框（ZenDialog 统一外壳：Radix Dialog 原语 + tokens 皮肤，M6 想法4 迁移）
+   遮罩为独立 Overlay 元素（原 ::backdrop 样式原值平移：纸墨/夜墨双主题通用字面值） */
+.zen-dialog-overlay { position: fixed; inset: 0; background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
+/* Content 定位平移（原 [open] 态的固定居中）：Radix Content 无默认定位，transform 配方居中；
+   全局 * { margin: 0 } 对 transform 定位无影响（原 margin:auto 方案随原生 <dialog> 一并退役） */
+.zen-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-m); padding: 24px;
+  width: 360px; max-width: 90vw; max-height: 85vh; overflow: auto;
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow-2); }
+/* 取消权出口（想法4）：右上角 ✕ 关闭（ZenDialog dismissable 时渲染），tokens 同款描边钮 */
+.zen-dialog-close { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; font-size: 13px; line-height: 1; cursor: pointer;
+  border: none; border-radius: var(--radius-s); background: transparent; color: var(--ink-2); }
+.zen-dialog-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .zen-dialog h3 { font-size: 18px; font-weight: 600; }
 .zen-dialog-body { font-size: 13px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .zen-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
