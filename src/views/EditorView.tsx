@@ -18,6 +18,7 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
+import { useCloseGuard } from '../hooks/useCloseGuard'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
@@ -61,7 +62,6 @@ export default function EditorView({
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
   const activeUidRef = useRef<string | null>(null)
-  const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
   // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
   // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
   // 故二者分开：switchLayout 只更新 layout/layoutRef，不动 initialLayout
@@ -72,7 +72,6 @@ export default function EditorView({
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
-  const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
@@ -156,6 +155,9 @@ export default function EditorView({
     return saveAndStamp()
   }
 
+  // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
+  const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
+
   useEffect(() => {
     dirtyRef.current = false
     let cancelled = false
@@ -212,46 +214,6 @@ export default function EditorView({
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- explicitSave/saveNow/doCopy 闭包依赖 refs，无需重绑
   }, [])
-
-  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭
-  useEffect(() => {
-    const unregister = registerCloseGuard((e) => {
-      if (!dirtyRef.current) return
-      e.preventClose()
-      setGuarding(true)
-    })
-    return unregister
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载期注册一次，端口经 props 注入且稳定
-  }, [])
-
-  /** 三态选择：取消→收起；放弃→清脏直退；保存→走 explicitSave 落盘成功才退。
-   *  guardSavingRef 防误触：保存一旦在途，三态（含取消/放弃）一律挡下——收框会与在途落盘竞态，
-   *  放弃清脏直退更会在写盘未完成时销毁窗口（数据丢失）；连点保存同理绕过等待提前 exitApp。
-   *  explicitSave 返回 false 的两种情形同路处理（收起守卫对话框留在应用）：保存失败（横幅已提示）；
-   *  忽略块确认挂起——由确认对话框接管，确认后仅落盘不退出，用户需再次关闭窗口（不静默退出/丢弃，spec §3.5 细化）。 */
-  const onGuardChoice = async (c: 'save' | 'discard' | 'cancel'): Promise<void> => {
-    if (guardSavingRef.current) return // 保存动作在途：本轮对话框冻结，任何选择都不生效
-    if (c === 'cancel') {
-      setGuarding(false)
-      return
-    }
-    if (c === 'discard') {
-      dirtyRef.current = false
-      clearDirty() // store 脏标记同步清除：exitApp 失败窗口留下时，避免"● 显示未保存但保存 no-op"的僵尸态
-      setGuarding(false)
-      exitApp()
-      return
-    }
-    guardSavingRef.current = true
-    const ok = await explicitSave()
-    guardSavingRef.current = false
-    if (!ok) {
-      setGuarding(false)
-      return
-    }
-    setGuarding(false)
-    exitApp()
-  }
 
   useEffect(() => {
     return () => {
@@ -414,8 +376,10 @@ export default function EditorView({
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
       {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于
           flow.confirming（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
-      {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
-      {flow.confirming && !guarding && (
+      {guard.guarding && (
+        <CloseGuardDialog mapName={name} onChoice={(c) => void guard.onGuardChoice(c)} />
+      )}
+      {flow.confirming && !guard.guarding && (
         <ZenDialog
           title={`保存将丢弃 ${flow.ignored.length} 个未映射的内容块`}
           onClose={flow.confirmCancel}
