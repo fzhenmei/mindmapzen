@@ -317,7 +317,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           onConfirm={async (name) => {
             closeDialog()
             try {
-              await renameMap(store.adapter, workspaceDir!, target.name, name)
+              await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
               await store.refreshMaps()
               store.setError(null)
             } catch (e) {
@@ -351,7 +351,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 onClick={async () => {
                   closeDialog()
                   try {
-                    await deleteMap(store.adapter, workspaceDir!, target.name)
+                    await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
                     await store.refreshMaps()
                   } catch (e) {
                     store.setError('删除失败：' + String(e))

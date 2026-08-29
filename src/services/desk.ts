@@ -1,25 +1,12 @@
 // src/services/desk.ts —— 案头目录服务（M5a）：目录树读取、递归建目录、导图移动
 import type { FsAdapter, MapInfo } from '../types/files'
-import { INVALID, joinPath } from './workspace'
+import { INVALID, joinPath, normalizeRel, resolveDir } from './workspace'
 
 /** 目录树节点：path 为工作区相对路径（不含首尾斜杠，'/' 分隔）；根不出现在树中（「全部」项由 UI 提供） */
 export interface DirNode { name: string; path: string; children: DirNode[] }
 
-/** 相对路径归一：去首尾斜杠（'' 即工作区根） */
-const normalizeRel = (rel: string): string => {
-  let r = rel
-  while (r.startsWith('/')) r = r.slice(1)
-  while (r.endsWith('/')) r = r.slice(0, -1)
-  return r
-}
-
-/** 相对路径 → 工作区下的绝对路径（'' 映射 wsDir 本身） */
-const relToAbs = (wsDir: string, rel: string): string => {
-  const r = normalizeRel(rel)
-  return r === '' ? wsDir : joinPath(wsDir, r)
-}
-
-/** 递归读取工作区纯目录树：只含目录、空目录也保留（案头左树用） */
+/** 递归读取工作区纯目录树：只含目录、空目录也保留（案头左树用）。
+ *  每层按名称排序（中文走 zh-Hans-CN 拼音 collation）——与文件系统遍历序解耦，目录树渲染顺序确定 */
 export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode[]> {
   const walk = async (dir: string, rel: string): Promise<DirNode[]> => {
     const nodes: DirNode[] = []
@@ -28,6 +15,7 @@ export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode
       const path = rel === '' ? e.name : `${rel}/${e.name}`
       nodes.push({ name: e.name, path, children: await walk(joinPath(dir, e.name), path) })
     }
+    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
     return nodes
   }
   return walk(wsDir, '')
@@ -57,12 +45,12 @@ export async function moveMap(
 ): Promise<MapInfo> {
   const fromRelNorm = normalizeRel(fromRel)
   const toRelNorm = normalizeRel(toRel)
-  const fromDir = relToAbs(wsDir, fromRelNorm)
+  const fromDir = resolveDir(wsDir, fromRelNorm)
   if (fromRelNorm === toRelNorm) {
     const mdPath = joinPath(fromDir, name + '.md')
     return { name, mdPath, relDir: toRelNorm, modifiedAt: await fs.statModified(mdPath) }
   }
-  const toDir = relToAbs(wsDir, toRelNorm)
+  const toDir = resolveDir(wsDir, toRelNorm)
   await fs.ensureDir(toDir)
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')

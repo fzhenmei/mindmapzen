@@ -8,14 +8,25 @@ beforeEach(() => {
 })
 
 describe('readDirTree', () => {
-  test('递归返回纯目录树（空目录含）', async () => {
+  test('递归返回纯目录树（空目录含；各层按名称排序）', async () => {
     await fs.mkdir('/ws/项目'); await fs.mkdir('/ws/项目/sub'); await fs.mkdir('/ws/灵感')
     await fs.writeTextFileAtomic('/ws/项目/a.md', 'x')
     const tree = await readDirTree(fs, '/ws')
+    // 插入序为 项目、灵感，输出按拼音排序：lǐng(灵感) < xiàng(项目)
     expect(tree).toEqual([
-      { name: '项目', path: '项目', children: [{ name: 'sub', path: '项目/sub', children: [] }] },
       { name: '灵感', path: '灵感', children: [] },
+      { name: '项目', path: '项目', children: [{ name: 'sub', path: '项目/sub', children: [] }] },
     ])
+  })
+
+  test('各层目录按名称排序（中文拼音 collation），与文件系统返回序解耦', async () => {
+    // 乱序建目录：根层插入序 乙、丙、甲；丙内插入序 z、a（readDirEntries 按记录序返回，非有序）
+    await fs.mkdir('/ws/乙'); await fs.mkdir('/ws/丙'); await fs.mkdir('/ws/甲')
+    await fs.mkdir('/ws/丙/z'); await fs.mkdir('/ws/丙/a')
+    const tree = await readDirTree(fs, '/ws')
+    // 拼音序 bǐng(丙) < jiǎ(甲) < yǐ(乙)——亦区别于码点序（丙乙甲），证明走 zh collation 而非默认排序
+    expect(tree.map((n) => n.name)).toEqual(['丙', '甲', '乙'])
+    expect(tree[0]!.children.map((n) => n.name)).toEqual(['a', 'z'])
   })
 })
 describe('createDir', () => {

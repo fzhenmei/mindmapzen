@@ -53,7 +53,7 @@ export default function ZenBar({
 }: Readonly<Props>) {
   return (
     <header className="zen-bar" data-testid="zen-bar">
-      <button type="button" data-testid="btn-back" title="返回文件库" onClick={onBack}>
+      <button type="button" data-testid="btn-back" title="返回案头" onClick={onBack}>
         <IconArrowLeft />
       </button>
       <span className="zen-bar-sep" />
