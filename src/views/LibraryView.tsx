@@ -7,6 +7,7 @@ import { parse } from '../services/mdTree'
 import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import ZenDialog from '../components/ZenDialog'
+import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import DirectoryTree from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
@@ -31,7 +32,7 @@ interface ImportPreview {
 export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
-  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | null>(null)
+  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | null>(null)
   // 重命名/删除/移动对话框当前操作的导图（由所在卡片的按钮选定，而非 maps[0]）
   const [target, setTarget] = useState<MapInfo | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
@@ -267,7 +268,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             </span>
           )}
         </div>
-        {/* 设置入口占位（M5b）：页首右侧后续增加设置页 */}
+        {/* 设置入口（M5b Task 4）：复制行为两开关；页首次级按钮样式（.library-header 兜底规则） */}
+        <button type="button" data-testid="btn-settings" onClick={() => setDialog('settings')}>
+          设置
+        </button>
         <button type="button" data-testid="btn-workspace" className="link-btn" onClick={chooseWorkspace}>
           选择工作区
         </button>
@@ -308,6 +312,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           }}
         />
       )}
+      {/* 设置对话框（M5b Task 4）：与其他对话框共用 dialog 互斥状态 */}
+      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
       {dialog === 'rename' && target && (
         <NameDialog
           title="重命名导图"

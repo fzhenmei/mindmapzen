@@ -86,6 +86,7 @@ beforeEach(async () => {
     maps: [],
     dirty: false,
     error: null,
+    settings: { copyIncludeNote: false, copyIncludeLinks: true },
   })
 })
 
@@ -290,6 +291,47 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.keyDown(window, { key: 'c', ctrlKey: true, shiftKey: true })
   await waitFor(() => expect(writes).toHaveLength(1))
+})
+
+// ---- 复制后处理（M5b Task 4：settings 两开关）----
+// 样例树：child 带 note「备注」与文本双链 [[B]]（备注/双链均由 data 携带，engineTreeToZen 还原）
+const noteLinkTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [{ data: { text: '见 [[B]]', expand: true, uid: 'child-uid', note: '备注' }, children: [] }],
+})
+
+const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: boolean }): Promise<string> => {
+  fakeTree = noteLinkTree()
+  useAppStore.setState({ settings })
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  return writes[0]!
+}
+
+test('复制后处理：默认设置剥备注、留双链', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n')
+})
+
+test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () => {
+  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
+})
+
+test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false })).toBe('# 根\n\n## 见 B\n')
 })
 
 // ---- 印记（Task 7：显式保存成功朱砂印 / 复制成功墨青印，替代按钮内 ✓ 文案）----

@@ -4,6 +4,7 @@ import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } 
 import { readSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
 import { resolveAllLinks } from '../services/links'
+import { applyCopySettings } from '../services/copyFilter'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { engineThemeName } from '../editor/engineThemes'
@@ -40,8 +41,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
-  // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只来自打开时的 sidecar）；
-  // layout 是当前激活布局（按钮点亮）——运行切换走 setLayout 即时重排、不重挂载，故 switchLayout 只动 layout/layoutRef
+  // 布局双状态（spec §3.7）：initialLayout=挂载期布局（只来自 sidecar）；layout=当前激活——切换走 setLayout 即时重排不重挂载
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -85,7 +85,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
   }
 
   /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
-   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中 */
+   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中。
+   *  后处理（M5b Task 4）：按 settings 剥备注引用块/双链括号（getState 取实时值——键盘闭包绑定首渲染） */
   const doCopy = async (): Promise<void> => {
     try {
       const mm = mmRef.current
@@ -94,7 +95,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
       selection.clearStaleIfMissing(full)
       const uid = selection.activeUidRef.current
       const active = uid ? findSubtreeByUid(full, uid) : null
-      await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
+      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree), useAppStore.getState().settings))
       flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))

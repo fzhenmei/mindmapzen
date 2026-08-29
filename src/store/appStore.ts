@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FsAdapter, LayoutKind, MapInfo, ThemePref } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, type CopySettingKey, type CopySettings, type FsAdapter, type LayoutKind, type MapInfo, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
@@ -21,6 +21,8 @@ interface AppState {
   themePref: ThemePref
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
+  /** 复制行为设置（M5b Task 4：init 自配置，切换时持久化；EditorView 复制时按此后处理） */
+  settings: CopySettings
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -30,6 +32,7 @@ interface AppState {
   openMap: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
+  setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
   markDirty: () => void
   clearDirty: () => void
   backToLibrary: () => Promise<void>
@@ -49,6 +52,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   preferredLayout: 'mindmap',
   themePref: 'auto',
   resolvedTheme: 'light',
+  settings: DEFAULT_COPY_SETTINGS,
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -58,7 +62,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved, settings: cfg.settings })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir })
@@ -115,6 +119,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyDocumentTheme(resolved)
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, theme: pref })
+  },
+
+  /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */
+  setSetting: async (key, value) => {
+    const { adapter, configPath } = get()
+    const settings = { ...get().settings, [key]: value }
+    set({ settings })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, settings })
   },
 
   openMap: async (mdPath) => {
