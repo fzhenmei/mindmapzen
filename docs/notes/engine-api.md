@@ -338,3 +338,52 @@
 
 - `onControlPointMouseup`（controls.js:155）拖完经 `this.mindMap.execCommand('SET_NODE_DATA', node, { associativeLineTargetControlOffsets, associativeLinePoint })` 落数据 → `Command.js:71-80 exec` 对 SET_NODE_DATA 不在豁免名单 → `addHistory()`（Command.js:92-130）数据有变即 `emit('data_change', data)` → MindMapCanvas 既有 data_change 监听透传 EditorView → pipeline.onTreeDataChange 置脏 + 5s 自动保存
 - 控制点可拖开关 `enableAdjustAssociativeLinePoints` 默认 true（defaultOptions.js:426），无需显式开启
+
+## v1.1 核验（撤销/重做，想法5）
+
+对引擎撤销历史子系统逐项核验+实证（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3；实证手段：jsdom 直构实例的一次性脚本 + 浏览器 e2e 经临时调试钩子直读 `command.history`；修复轮由审查复核后勘误两处实证结论，见 (2)(4)）。**结论先行：原生快捷键与 back_forward 历史态事件成立可直接用；但撤销栈存在三处上游缺陷，宿主已在 `src/editor/undoSeed.ts` + `MindMapCanvas` 构造选项补齐，否则「基线含未净化标记（自播种子竞态）/ 两条逻辑编辑合并为一条历史（粒度损失）/ 撤销一次即截断重做栈」三症全现。**
+
+### (1) 命令与快捷键 —— 成立
+
+- `Render.js:248/251` 注册 `BACK`/`FORWARD` 命令；`Command.js:51-57` 原生注册 `Control+z` → BACK、`Control+y` → FORWARD（**无 Ctrl+Shift+z**，该组合由宿主画布兜底层补译为 FORWARD）；`Command.js:67` BACK/FORWARD 在 addHistory 豁免名单（无重入）
+- `Render.js:745-753 backForward`：清选中 → command.back/forward → `renderTree = data` → 重渲 → **无条件 `emit('data_change', data)`**——撤销重做走既有置脏/自动保存链，撤销结果随保存落盘（无需新链路）
+- 历史态事件 `back_forward(activeHistoryIndex, history.length)`：`Command.js` addHistory(:128)/back(:143)/forward(:164)/clearHistory(:46) 四处发出 → `canUndo = index > 0`，`canRedo = index < length - 1`（实证载荷 [0,1]/[1,2]/[0,2]）
+
+### (2) 构造器自播种子与宿主基线竞态 —— **缺陷一（v1.1 修复轮勘误并修复，审查裁定①）**
+
+- 引擎共有**四个**补种/入史入口（v1.1 首轮笔记称「唯一入口 setMode」不实，勘误）：
+  1. **构造器自播**（index.js:163-166）：`if (this.opt.addHistoryOnInit && this.opt.data) this.command.addHistory()`——`defaultOptions.js:268` 默认 **true**，且走的是**节流** addHistory（实际入史延后 addHistoryTime ms）
+  2. `setData`（index.js:466-476）：clearHistory + addHistory（本项目不调用）
+  3. `updateData`（index.js:461）：addHistory（本项目不调用）
+  4. `setMode('edit')`（index.js:558-560）：栈空时 originAddHistory（本项目不调用）
+- 首轮 jsdom 脚本「构造+首帧渲染后 history=0」系**节流时序伪影**：脚本只推进了 50ms，自播种子在构造后 100ms（默认节流窗）才落——不能作为「不播种子」的证据，勘误
+- 竞态实况（浏览器复现，回归用例 `e2e/undoredo.spec.ts` 第二条在未修复 HEAD 上失败）：自播种子捕获的是**未净化构造数据**（含 [[..]] 标记、无连线 targets），与宿主 `seedUndoBaseline` 的「栈非空即跳过」竞态——自播先落则基线含标记（打开含连线文件后回退栈底，画布显示「A [[B]]」，标记带回显示层），且自播 push 连带 data_change 会**开图误置脏**。本仓 `addHistoryTime: 1` 把自播入史提前到 ~1ms（早于首帧渲染与净化），等于把竞态的败方固定为宿主
+- 宿主修复：构造 opts 显式 **`addHistoryOnInit: false`** 关闭自播；`seedUndoBaseline` 在打开净化完成后（applyRegistryToEngine 尾部）**直写** `command.history = [JSON.stringify(mm.getData())]`，成为唯一确定基线路径。不走 `originAddHistory`：其必发 data_change（Command.js:127）→ 打开即误置脏（与「净化不置脏」语义冲突，M5d 核验 (c)）；直写零事件。基线取净化后现态（标记已剥离、targets 已落位），首条编辑的撤销落在净化态——**M5d 时代记录的「撤销栈首条快照是含标记的构造时数据」边界就此消除**
+
+### (3) copyRenderTree 携带节点级瞬态键 `inserting` —— **缺陷二，宿主入史后剥离**
+
+- `utils/index.js:162-181 copyRenderTree`：除 data/children 外的节点级键全量入快照——含 `Render.insertChildNode` 写入的瞬态标记 `inserting`（首渲时 MindMapNode.js:674-680 消费：删标记 + active + node_dblclick 自动开编辑框）
+- 实证两症（浏览器直读历史栈）：插入后激活链的 SET_NODE_DATA（`Render.setNodeActive` :1642 内嵌）触发节流 addHistory，此时标记已被渲染消费、JSON 漂移 → **重复入史一条近似快照**；BACK 恢复含标记快照 → 重渲重开编辑框 + 再发 SET_NODE_DATA/SET_NODE_ACTIVE 命令链 → 尾随 addHistory 按 `slice(0, index+1)` 截断 → **撤销一次后重做栈永久少一级**
+- 宿主修复：`sanitizeTopHistory` 在每次 back_forward（addHistory 尾随发出）剥除栈顶快照的 `inserting` 键（干净串零成本早退，幂等）。恢复出的快照干净后，两症的漂移比较均变相等而不再入史
+
+### (4) 100ms 丢弃式节流合并历史粒度 —— **缺陷三，宿主收节流窗**（v1.1 修复轮措辞勘误）
+
+- `utils/index.js:281 throttle` 是纯尾随节流：`if (timer) return`——**窗口内的后续调用整体丢弃**（非合并尾随）；`defaultOptions.js:189 addHistoryTime: 100`
+- 症状（措辞勘误：节流触发时读的是**现树**，快照永远如实反映其落地时刻的树态，不存在「栈顶腐化」；丢的是调用不是数据）：插入（Tab）与文本提交（点画布 → hideEditTextBox → SET_NODE_TEXT，TextEdit.js:492）两条逻辑编辑，若提交的 addHistory 调用落入前一调用的节流窗被丢弃，且前一调用的定时器又先于数据写入落地——**提交不产生独立历史条目，两条逻辑编辑合并为一条（粒度损失）**：最后一条编辑无法单独撤销（Ctrl+Z 一步跨过），重做落点也回到合并前的树态而非用户撤销前所见；直到下一条命令入史才补上
+- 宿主修复：构造选项 `addHistoryTime: 1`（窗口近零，命令变更即时入史）。副作用可控：入史 push 才发事件（同值去重在 addHistory 首行早退，激活类的 isActive 差异又被 copyRenderTree 的 removeActiveState 剥离吸收），事件量与语义一致
+
+### (5) 空栈撤销重做的 data_change(undefined) —— 宿主丢弃无载荷转发
+
+- `Render.js:752` 无条件 `emit('data_change', data)`——back/forward 空栈 no-op 时 data 为 undefined；而管线「无载荷视为必有变化」（展开命令同步上报约定）→ **空栈按 Ctrl+Z 会误置脏 + 一轮冗余自动保存**
+- 引擎 data_change 全源码仅两处发源：Command.js:127（恒带载荷）与 Render.js:752（可能 undefined）→ MindMapCanvas 的 data_change 监听丢弃 undefined 载荷（既有展开同步上报走 afterExecCommand 独立通道，不受影响）
+
+### (6) 快捷键焦点矩阵与对话框守卫
+
+- 引擎 KeyCommand `defaultEnableCheck`（KeyCommand.js:100-110）只认 body 焦点（editNodeClassList 初始为空）→ 焦点在砚栏按钮时 Ctrl+Z/Y 引擎不响应；宿主画布 window 兜底层补位（body 焦点时引擎已 preventDefault，宿主 defaultPrevented 守卫保证不双发；`Control+Shift+z` 也在此层译为 FORWARD）
+- 编辑框（contenteditable，挂 body）内不拦截（框内原生撤销优先）；对话框开着（Radix `[role="dialog"]` 焦点陷阱）不补位——维持「框下不撤销」
+- 引擎 `setNodeActive` 内嵌 `execCommand('SET_NODE_DATA', {isActive})`（Render.js:1642）不在豁免名单——激活本身靠 copyRenderTree 的 isActive 剥离 + 同值去重免入史，无需宿主处理
+
+### 已知边界（不阻塞，语义记录）
+
+- **连线画线/拖弯不走撤销**：文本桥接的 SET_NODE_DATA 命令可撤销；但注册表直写（rebuildEngineLinks/净化剥离）绕过命令层，画线动作（registry push）不产生历史条目——Ctrl+Z 不会移除刚画的线（删除线/改文本可撤销）。与「连线是 md 派生数据」的设计一致
+- **撤销含标记的文本编辑**：用户在节点里键入 `[[B]]` 提交后立即撤销，恢复的是编辑前快照（无标记）；若在保存再净化（onSaved applyRegistry）**之后**重做，重做目标快照可能仍含标记文本（净化直写不回写历史）——自愈边界：任一后续编辑/保存即恢复净化态（M5d 已知边界的残余形态，出现窗口极窄）

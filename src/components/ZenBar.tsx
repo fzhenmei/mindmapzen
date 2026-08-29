@@ -4,6 +4,7 @@
 // 仍由 EditorView 的 window keydown effect 承担（砚栏只是按钮路径）。
 // M5c：全部图标按钮接 ZenTooltip（视觉提示），title 退役防双提示；语义名由 aria-label 承担。
 import type { LayoutKind } from '../editor/layoutMap'
+import type { UndoRedo } from '../hooks/useUndoRedo'
 import ZenTooltip from './ZenTooltip'
 import {
   IconArrowLeft,
@@ -17,12 +18,17 @@ import {
   IconMinus,
   IconNote,
   IconPlus,
+  IconRedo,
   IconSave,
+  IconUndo,
 } from './icons'
 
 interface Props {
   /** 返回文件库（EditorView 组合：暂停自动保存 → 显式保存链 → 成功才导航） */
   onBack(): void
+  /** 回退/重做（v1.1，想法5）：引擎 BACK/FORWARD 命令 + back_forward 历史态驱动的禁用信号
+   *  （状态与执行在 EditorView 的 useUndoRedo；键盘 Ctrl+Z/Y 走引擎原生与画布兜底，砚栏只是按钮路径） */
+  undoRedo: UndoRedo
   /** 复制 Markdown（Ctrl+Shift+C 的按钮路径） */
   onCopyClick(): void
   /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮提示 */
@@ -45,10 +51,11 @@ interface Props {
   onSwitchLayout(kind: LayoutKind): void
 }
 
-/** 浮动砚栏：返回/复制/保存/备注/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
+/** 浮动砚栏：返回/回退/重做/复制/保存/备注/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
   onBack,
+  undoRedo,
   onCopyClick,
   scope,
   onSaveClick,
@@ -63,12 +70,37 @@ export default function ZenBar({
   onSwitchLayout,
 }: Readonly<Props>) {
   const copyLabel =
-    scope === 'branch' ? '复制选中分支为 Markdown（Ctrl+Shift+C）' : '复制整图为 Markdown（Ctrl+Shift+C）'
+    scope === 'branch'
+      ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
+      : '复制整图为 Markdown（Ctrl+Shift+C）'
   return (
     <header className="zen-bar" data-testid="zen-bar">
       <ZenTooltip label="返回案头">
         <button type="button" data-testid="btn-back" aria-label="返回案头" onClick={onBack}>
           <IconArrowLeft />
+        </button>
+      </ZenTooltip>
+      <span className="zen-bar-sep" />
+      <ZenTooltip label="回退（Ctrl+Z）">
+        <button
+          type="button"
+          data-testid="btn-undo"
+          aria-label="回退（Ctrl+Z）"
+          onClick={undoRedo.onUndo}
+          disabled={!undoRedo.canUndo}
+        >
+          <IconUndo />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="重做（Ctrl+Y）">
+        <button
+          type="button"
+          data-testid="btn-redo"
+          aria-label="重做（Ctrl+Y）"
+          onClick={undoRedo.onRedo}
+          disabled={!undoRedo.canRedo}
+        >
+          <IconRedo />
         </button>
       </ZenTooltip>
       <span className="zen-bar-sep" />
@@ -84,7 +116,12 @@ export default function ZenBar({
         </button>
       </ZenTooltip>
       <ZenTooltip label="保存（Ctrl+S）">
-        <button type="button" data-testid="btn-save" aria-label="保存（Ctrl+S）" onClick={onSaveClick}>
+        <button
+          type="button"
+          data-testid="btn-save"
+          aria-label="保存（Ctrl+S）"
+          onClick={onSaveClick}
+        >
           <IconSave />
         </button>
       </ZenTooltip>

@@ -161,3 +161,21 @@ export const IconLink = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 撤销（v1.1）：左向回头箭头 + 下方半圆钩（lucide undo-2 缩至 16 网格） */
+export const IconUndo = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M3.5 7.5h7a3.5 3.5 0 1 1 0 7H8" />
+      <path d="M6 4.5 3 7.5l3 3" />
+    </>,
+    size,
+  )
+/** 重做（v1.1）：IconUndo 的镜像（右向回头箭头 + 下方半圆钩） */
+export const IconRedo = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M12.5 7.5h-7a3.5 3.5 0 1 0 0 7H8" />
+      <path d="M10 4.5l3 3-3 3" />
+    </>,
+    size,
+  )

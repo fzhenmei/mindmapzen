@@ -21,6 +21,7 @@ import { harvestRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } f
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
 import { bridgeLinkToRegistry } from './linkBridge'
+import { seedUndoBaseline } from './undoSeed'
 
 // 节点拖拽插件：拖到节点上=成为其子节点，拖到两节点之间=调整同级顺序（spec P0"拖拽节点改变层级与顺序"）
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
@@ -193,6 +194,9 @@ function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: Li
     stripTreeTexts(plain)
     for (const node of changed) mm.renderer?.reRenderNodeCheckChange(node)
     rebuildEngineLinks(mm, registryToLinks(plain, reg), adjust)
+    // 撤销基线种子（v1.1）：此刻是「文档打开且净化完成」的稳态——净化后现态入撤销栈，首条编辑才可
+    // 撤销；栈非空即幂等跳过（保存链再净化路径不受扰）。机制与实证见 undoSeed.ts / engine-api.md
+    seedUndoBaseline(mm)
   }
   // 同 rebuildEngineLinks：构造后首帧渲染经 setTimeout(0) 异步完成，未就绪时一次性挂监听
   if (mm.renderer?.root) run()
@@ -245,6 +249,15 @@ export default function MindMapCanvas({
       // 叶节点快捷建子 "+"（验收轮）：引擎原生 quickCreateChildBtn——激活叶节点显示、点击即插入子节点并进入
       // 编辑（INSERT_CHILD_NODE，MindMapNode.js:157/516 按 opt 门控；显式声明防未来默认值漂移）
       isShowCreateChildBtnIcon: true,
+      // 撤销历史入栈节流窗（v1.1）：引擎默认 100ms 且窗口内调用**整体丢弃**（utils/index.js:281 纯尾随
+      // 节流）——插入与文本提交两条逻辑编辑可能合并为一条历史（粒度损失，最后一条编辑无法单独撤销）。
+      // 窗口收到近零后命令变更即时入史（重复入史由 undoSeed 的瞬态键剥离+同值去重吸收）
+      addHistoryTime: 1,
+      // 关闭构造器自播种子（v1.1 修复，审查裁定①）：引擎默认在构造器里 command.addHistory()（节流后
+      // 入史，index.js:163-166）捕获的是**未净化构造数据**——与宿主 seedUndoBaseline「栈非空即跳过」
+      // 竞态：自播先落则基线含 [[..]] 标记（打开含连线文件后回退栈底会把标记带回画布，且自播的
+      // data_change 开图误置脏）。关闭后净化后的宿主基线种子是唯一确定路径（undoSeed.ts）
+      addHistoryOnInit: false,
       // 连线注册表桥接（M5d Task 2）：completeCreateLine 在引擎 addLine 前读此 opt 钩子
       // （AssociativeLine.js:565-571），桥接改注册表后返回 true 阻断引擎落线（md 是唯一事实源，
       // 显示文本全程不动——保存链经 onDataChange 上报触发，序列化时句尾注入标记）。
@@ -259,10 +272,17 @@ export default function MindMapCanvas({
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
-    // 无载荷的调用（下方展开命令同步上报）视为必有变化
-    const changed = (...args: unknown[]) => cbRef.current.onDataChange(args[0] as EngineNode | undefined)
+    // 无载荷的调用（下方展开命令同步上报）视为必有变化。
+    // v1.1：引擎 data_change 仅两处发源（Command.js:127 恒带载荷 / Render.js:752 backForward），
+    // 撤销重做空栈无操作时 backForward 仍发 data_change(undefined)——无载荷即无变化，丢弃，
+    // 否则空栈按 Ctrl+Z 会误置脏并触发一轮冗余自动保存（v1.1 核验，engine-api.md）
+    const changed = (...args: unknown[]) => {
+      if (args[0] === undefined) return
+      cbRef.current.onDataChange(args[0] as EngineNode)
+    }
     mm.on('data_change', changed)
-    // 展开/收起即时上报（验收修复 4）：引擎 data_change 经 addHistory 尾随节流（默认 100ms）延迟发出，
+    // 展开/收起即时上报（验收修复 4）：引擎 data_change 经 addHistory 尾随节流延迟发出（引擎默认
+    // 100ms，本仓已设 1ms，见上方 addHistoryTime；同值不重发使展开折叠命令可能根本不触发事件），
     // 期间宿主 dirty 尚未置位——干净图上折叠后立即 Ctrl+S/返回文件库会被 writeOnce 的 !dirty 早退吞掉，
     // 折叠静默丢失（sidecar 仍 collapsed:[]）。SET_NODE_EXPAND 命令完成即同步上报，不再依赖节流事件；
     // 白名单外不转发（SET_NODE_DATA 会被悬停/激活等非持久化交互高频触发，误报脏）
@@ -295,12 +315,20 @@ export default function MindMapCanvas({
     const onKeydown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
       const t = e.target
-      if (
-        t instanceof Element &&
-        t.closest('input, textarea, select, button, a, [contenteditable="true"]')
-      ) {
+      // 文本编辑框（input/textarea/contenteditable）内不拦截：框内原生撤销与正常输入优先于撤销重做兜底
+      if (t instanceof Element && t.closest('input, textarea, [contenteditable="true"]')) return
+      // 撤销/重做兜底（v1.1）：引擎原生 Control+z/y 只认 body 焦点（KeyCommand defaultEnableCheck），
+      // 焦点落在砚栏按钮等交互元素时不响应——此处直发命令补位；body 焦点时引擎已 preventDefault 不双发；
+      // 对话框开着时不补位（Radix 陷阱困住焦点，引擎本就不响应，维持框下不撤销）。Ctrl+Shift+z 同译
+      // FORWARD（编辑类软件惯例；引擎未注册此组合，v1.1 核验）
+      const k = e.key.toLowerCase()
+      const inDialog = t instanceof Element && t.closest('[role="dialog"]') !== null
+      if (!inDialog && (e.ctrlKey || e.metaKey) && !e.altKey && (k === 'z' || k === 'y')) {
+        mmRef.current?.execCommand(k === 'y' || e.shiftKey ? 'FORWARD' : 'BACK')
+        e.preventDefault()
         return
       }
+      if (t instanceof Element && t.closest('select, button, a')) return
       const handled = handleEngineKeyDown((cmd) => mmRef.current?.execCommand(cmd), null, e.key)
       if (handled) e.preventDefault()
     }
