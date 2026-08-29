@@ -16,8 +16,8 @@ import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { RegisterCloseGuard } from '../types/ports'
-import type { IgnoredBlock } from '../types/tree'
 import { useSavePipeline } from '../hooks/useSavePipeline'
+import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
@@ -73,11 +73,6 @@ export default function EditorView({
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
-  const [ignored, setIgnored] = useState<IgnoredBlock[]>([]) // 未映射块（渲染横幅/确认文案）
-  const [confirmingIgnored, setConfirmingIgnored] = useState(false) // 忽略块保存确认对话框
-  // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
-  const ignoredRef = useRef<IgnoredBlock[]>([])
-  const ignoredConfirmedRef = useRef(false) // 本会话确认过一次即不再弹（spec §3.5）
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
@@ -92,6 +87,9 @@ export default function EditorView({
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
     onError: setError,
   })
+
+  // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
+  const flow = useIgnoredFlow({ clearPendingAutosave: pipeline.clearPendingAutosave })
 
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
@@ -148,17 +146,13 @@ export default function EditorView({
     return ok
   }
 
-  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 弹确认挂起本次保存，
+  // Ctrl+S 监听只绑定一次（下方 effect 闭包取首渲染值），逻辑判断必须走 refs（同 dirtyRef 模式）
+  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 经 flow 门弹确认挂起本次保存，
    *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接落盘。
    *  自动保存（5s 防抖定时器）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃——
    *  丢弃内容在打开时的横幅已知情（裁定细节见任务报告）；印记亦只属于显式保存。 */
   const explicitSave = async (): Promise<boolean> => {
-    if (ignoredRef.current.length > 0 && !ignoredConfirmedRef.current) {
-      // 等待用户裁决期间暂停自动保存，防止确认悬而未决时被定时器静默落盘丢弃
-      pipeline.clearPendingAutosave()
-      setConfirmingIgnored(true)
-      return false
-    }
+    if (!flow.gateExplicitSave()) return false
     return saveAndStamp()
   }
 
@@ -177,8 +171,7 @@ export default function EditorView({
         }
         const sc = await readSidecar(adapter, mdPath)
         if (cancelled) return
-        ignoredRef.current = r.ignoredBlocks
-        setIgnored(r.ignoredBlocks)
+        flow.setFromParse(r.ignoredBlocks)
         // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）；
         // 无 sidecar（如外部放入的 .md）回退用户偏好布局（验收轮三：记住默认视图）
         const initial = sc?.layout ?? useAppStore.getState().preferredLayout
@@ -418,25 +411,24 @@ export default function EditorView({
         <ThemeToggle />
       </div>
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
-      {ignored.length > 0 && <IgnoredBlocksBanner blocks={ignored} />}
+      {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
       {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于
-          confirmingIgnored（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
+          flow.confirming（守卫保存触发确认时，守卫先收起、确认框随即接管，故 !guarding 门闩） */}
       {guarding && <CloseGuardDialog mapName={name} onChoice={(c) => void onGuardChoice(c)} />}
-      {confirmingIgnored && !guarding && (
+      {flow.confirming && !guarding && (
         <ZenDialog
-          title={`保存将丢弃 ${ignored.length} 个未映射的内容块`}
-          onClose={() => setConfirmingIgnored(false)}
+          title={`保存将丢弃 ${flow.ignored.length} 个未映射的内容块`}
+          onClose={flow.confirmCancel}
           actions={
             <>
-              <button type="button" data-testid="ignored-confirm-cancel" onClick={() => setConfirmingIgnored(false)}>
+              <button type="button" data-testid="ignored-confirm-cancel" onClick={flow.confirmCancel}>
                 取消
               </button>
               <button
                 type="button"
                 data-testid="ignored-confirm-save"
                 onClick={() => {
-                  setConfirmingIgnored(false)
-                  ignoredConfirmedRef.current = true // 本会话确认过即不再弹（spec §3.5）
+                  flow.confirmProceed()
                   void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
                 }}
               >
