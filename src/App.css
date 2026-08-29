@@ -101,6 +101,12 @@ html, body { overflow: hidden; }
 .error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
   border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
 
+/* 浮签（ZenTooltip：Radix Tooltip 原语 + tokens 皮肤，M5c）——反白小墨签，
+   取代图标按钮的原生 title（无样式/延迟不可控/双提示）；亮暗主题各自反白 */
+.zen-tooltip { padding: 4px 10px; border-radius: var(--radius-s);
+  background: var(--ink); color: var(--paper); font-size: 12px; line-height: 1.6;
+  box-shadow: var(--shadow-1); max-width: 260px; z-index: 20; }
+
 /* 对话框（ZenDialog 统一外壳：Radix Dialog 原语 + tokens 皮肤，M6 想法4 迁移）
    遮罩为独立 Overlay 元素（原 ::backdrop 样式原值平移：纸墨/夜墨双主题通用字面值） */
 .zen-dialog-overlay { position: fixed; inset: 0; background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }

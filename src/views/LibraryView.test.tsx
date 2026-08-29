@@ -270,15 +270,17 @@ describe('案头三区与交互（M5d）', () => {
     await useAppStore.getState().setWorkspace('/ws')
   })
 
-  test('工具栏：印章 + 品牌名、设置/导入/新建均纯图标（中文 title）；工作区路径移到树根 tooltip', async () => {
+  test('工具栏：印章 + 品牌名、设置/导入/新建均纯图标（M5c 起 ZenTooltip 承担提示，title 退役防双提示）；工作区路径移到树根 tooltip', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
     expect(screen.getByText('Mind Map Zen')).toBeInTheDocument()
-    // v0.7.0 验收：导入/新建随设置入口一并纯图标化（title 承担中文提示，testid 不变）
+    // v0.7.0 验收纯图标化 + M5c：视觉提示改 ZenTooltip（悬停浮签），语义名归 aria-label（title 移除）
     expect(screen.getByTestId('btn-settings').textContent).toBe('')
     expect(screen.getByTestId('btn-import').textContent).toBe('')
-    expect(screen.getByTestId('btn-import')).toHaveAttribute('title', '导入 .md')
+    expect(screen.getByTestId('btn-import')).toHaveAttribute('aria-label', '导入 .md')
+    expect(screen.getByTestId('btn-import')).not.toHaveAttribute('title')
     expect(screen.getByTestId('btn-new').textContent).toBe('')
-    expect(screen.getByTestId('btn-new')).toHaveAttribute('title', '新建导图')
+    expect(screen.getByTestId('btn-new')).toHaveAttribute('aria-label', '新建导图')
+    expect(screen.getByTestId('btn-new')).not.toHaveAttribute('title')
     // 选择工作区入口从工具栏移除（开屏页承担）
     expect(screen.queryByTestId('btn-workspace')).not.toBeInTheDocument()
     // 树根 = 工作区名，tooltip 全路径

@@ -2,7 +2,9 @@
 // 静置淡化、悬停/聚焦浮现（spec §4.4 UI 隐身）的全部按钮/分隔/布局切换。
 // 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑）不在此处，
 // 仍由 EditorView 的 window keydown effect 承担（砚栏只是按钮路径）。
+// M5c：全部图标按钮接 ZenTooltip（视觉提示），title 退役防双提示；语义名由 aria-label 承担。
 import type { LayoutKind } from '../editor/layoutMap'
+import ZenTooltip from './ZenTooltip'
 import {
   IconArrowLeft,
   IconCopy,
@@ -23,7 +25,7 @@ interface Props {
   onBack(): void
   /** 复制 Markdown（Ctrl+Shift+C 的按钮路径） */
   onCopyClick(): void
-  /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮 title */
+  /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮提示 */
   scope: 'full' | 'branch'
   /** 保存（Ctrl+S 的按钮路径） */
   onSaveClick(): void
@@ -60,68 +62,89 @@ export default function ZenBar({
   layout,
   onSwitchLayout,
 }: Readonly<Props>) {
+  const copyLabel =
+    scope === 'branch' ? '复制选中分支为 Markdown（Ctrl+Shift+C）' : '复制整图为 Markdown（Ctrl+Shift+C）'
   return (
     <header className="zen-bar" data-testid="zen-bar">
-      <button type="button" data-testid="btn-back" title="返回案头" onClick={onBack}>
-        <IconArrowLeft />
-      </button>
+      <ZenTooltip label="返回案头">
+        <button type="button" data-testid="btn-back" aria-label="返回案头" onClick={onBack}>
+          <IconArrowLeft />
+        </button>
+      </ZenTooltip>
       <span className="zen-bar-sep" />
-      <button
-        type="button"
-        data-testid="btn-copy"
-        data-scope={scope}
-        title={
-          scope === 'branch'
-            ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
-            : '复制整图为 Markdown（Ctrl+Shift+C）'
-        }
-        onClick={onCopyClick}
-      >
-        <IconCopy />
-      </button>
-      <button type="button" data-testid="btn-save" title="保存（Ctrl+S）" onClick={onSaveClick}>
-        <IconSave />
-      </button>
-      <button
-        type="button"
-        data-testid="btn-note"
-        title="编辑选中节点的备注（Shift+F2）"
-        onClick={onNoteClick}
-        disabled={!noteEnabled}
-      >
-        <IconNote />
-      </button>
-      <button
-        type="button"
-        data-testid="btn-export"
-        title="导出或复制为图片"
-        onClick={onExportClick}
-      >
-        <IconImage />
-      </button>
+      <ZenTooltip label={copyLabel}>
+        <button
+          type="button"
+          data-testid="btn-copy"
+          data-scope={scope}
+          aria-label={copyLabel}
+          onClick={onCopyClick}
+        >
+          <IconCopy />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="保存（Ctrl+S）">
+        <button type="button" data-testid="btn-save" aria-label="保存（Ctrl+S）" onClick={onSaveClick}>
+          <IconSave />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="编辑选中节点的备注（Shift+F2）">
+        <button
+          type="button"
+          data-testid="btn-note"
+          aria-label="编辑选中节点的备注（Shift+F2）"
+          onClick={onNoteClick}
+          disabled={!noteEnabled}
+        >
+          <IconNote />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="导出或复制为图片">
+        <button
+          type="button"
+          data-testid="btn-export"
+          aria-label="导出或复制为图片"
+          onClick={onExportClick}
+        >
+          <IconImage />
+        </button>
+      </ZenTooltip>
       <span className="zen-bar-sep" />
-      <button
-        type="button"
-        data-testid="btn-zoom-out"
-        title="缩小（Ctrl+滚轮）"
-        onClick={onZoomOut}
-      >
-        <IconMinus />
-      </button>
-      <button type="button" data-testid="btn-zoom-in" title="放大（Ctrl+滚轮）" onClick={onZoomIn}>
-        <IconPlus />
-      </button>
-      <button
-        type="button"
-        data-testid="btn-center-root"
-        title="根居中：保持缩放回根"
-        onClick={onCenterRoot}
-      >
-        <IconCrosshair />
-      </button>
-      <button type="button" data-testid="btn-fit" title="适配整图" onClick={onFit}>
-        <IconFrame />
-      </button>
+      <ZenTooltip label="缩小（Ctrl+滚轮）">
+        <button
+          type="button"
+          data-testid="btn-zoom-out"
+          aria-label="缩小（Ctrl+滚轮）"
+          onClick={onZoomOut}
+        >
+          <IconMinus />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="放大（Ctrl+滚轮）">
+        <button
+          type="button"
+          data-testid="btn-zoom-in"
+          aria-label="放大（Ctrl+滚轮）"
+          onClick={onZoomIn}
+        >
+          <IconPlus />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="根居中：保持缩放回根">
+        <button
+          type="button"
+          data-testid="btn-center-root"
+          aria-label="根居中：保持缩放回根"
+          onClick={onCenterRoot}
+        >
+          <IconCrosshair />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="适配整图">
+        <button type="button" data-testid="btn-fit" aria-label="适配整图" onClick={onFit}>
+          <IconFrame />
+        </button>
+      </ZenTooltip>
       <span className="zen-bar-sep" />
       <fieldset className="layout-switch" aria-label="布局切换">
         {(
@@ -131,17 +154,18 @@ export default function ZenBar({
             ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
           ] as const
         ).map(([kind, label, icon]) => (
-          <button
-            key={kind}
-            type="button"
-            data-testid={`layout-${kind}`}
-            className={layout === kind ? 'active' : ''}
-            aria-pressed={layout === kind}
-            title={label}
-            onClick={() => onSwitchLayout(kind)}
-          >
-            {icon}
-          </button>
+          <ZenTooltip key={kind} label={label}>
+            <button
+              type="button"
+              data-testid={`layout-${kind}`}
+              className={layout === kind ? 'active' : ''}
+              aria-pressed={layout === kind}
+              aria-label={label}
+              onClick={() => onSwitchLayout(kind)}
+            >
+              {icon}
+            </button>
+          </ZenTooltip>
         ))}
       </fieldset>
     </header>

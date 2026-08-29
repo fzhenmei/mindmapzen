@@ -2,6 +2,7 @@
 // 锚定选中节点右下角（几何由 useNodeActions 计算）。纯展示组件：定位/显隐状态全在 hook 与父级，
 // 不必记快捷键即可加备注/拉连线（zen 视觉：小浮条，z-index 8，低于砚栏 10/横幅 9）。
 import type { NodeActionPos } from '../hooks/useNodeActions'
+import ZenTooltip from './ZenTooltip'
 import { IconLink, IconPencil } from './icons'
 
 interface Props {
@@ -16,17 +17,26 @@ interface Props {
 export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<Props>) {
   return (
     <div className="node-actions" data-testid="node-actions" style={{ left: pos.left, top: pos.top }}>
-      <button type="button" data-testid="node-action-note" title="编辑该节点备注（Shift+F2）" onClick={onNoteClick}>
-        <IconPencil />
-      </button>
-      <button
-        type="button"
-        data-testid="node-action-link"
-        title="创建连线：点此钮后再点目标节点"
-        onClick={onLinkClick}
-      >
-        <IconLink />
-      </button>
+      <ZenTooltip label="编辑该节点备注（Shift+F2）">
+        <button
+          type="button"
+          data-testid="node-action-note"
+          aria-label="编辑该节点备注（Shift+F2）"
+          onClick={onNoteClick}
+        >
+          <IconPencil />
+        </button>
+      </ZenTooltip>
+      <ZenTooltip label="创建连线：点此钮后再点目标节点">
+        <button
+          type="button"
+          data-testid="node-action-link"
+          aria-label="创建连线：点此钮后再点目标节点"
+          onClick={onLinkClick}
+        >
+          <IconLink />
+        </button>
+      </ZenTooltip>
     </div>
   )
 }
