@@ -25,7 +25,16 @@ html, body { overflow: hidden; }
   text-decoration: underline dotted; text-underline-offset: 4px; font: inherit; cursor: pointer; }
 .library-header .link-btn:hover { color: var(--accent); }
 /* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
-.hint { color: var(--ink-2); padding: 24px; text-align: center; }
+/* 首次开屏页（M5d spec §2）：无工作区时的居中品牌引导（替代旧 hint 文案）；页首栏在此态隐藏 */
+.welcome-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; color: var(--ink-2); }
+.welcome-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: 0.04em; }
+.welcome-sub { font-size: 13px; }
+.welcome-actions { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.welcome-actions .btn-primary { padding: 8px 24px; font-size: 14px; }
+.welcome-pick { padding: 2px; border: none; background: none; color: var(--ink-2); font: inherit; cursor: pointer;
+  text-decoration: underline dotted; text-underline-offset: 4px; }
+.welcome-pick:hover { color: var(--accent); }
 /* 案头主体行：左目录树 200px 可折叠 + 右卡片网格 */
 .library-body { flex: 1; min-height: 0; display: flex; gap: 12px; }
 .dir-panel-toggle { flex-shrink: 0; width: 20px; align-self: stretch; border: 1px solid var(--hairline);

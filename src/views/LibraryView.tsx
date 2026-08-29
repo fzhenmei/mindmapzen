@@ -9,6 +9,7 @@ import NameDialog from '../components/NameDialog'
 import ZenDialog from '../components/ZenDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
+import WelcomeScreen from '../components/WelcomeScreen'
 import DirectoryTree from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import { IconFolder, IconPencil, IconTrash } from '../components/icons'
@@ -136,10 +137,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   const visibleMaps = selectedDir === '' ? maps : maps.filter((m) => m.relDir === selectedDir)
 
   const renderBody = () => {
-    if (!workspaceDir)
-      return (
-        <p className="hint">请选择导图工作区：所有导图将以 .md 文件保存在该文件夹，可直接交给 AI 或其他工具使用。</p>
-      )
+    // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；页首栏在此态隐藏
+    if (!workspaceDir) return <WelcomeScreen onCreateWorkspace={() => void chooseWorkspace()} />
     // 右侧内容三级态：工作区空 → 全局空态；选中层空 → 层空态；否则过滤后的卡片网格
     const renderRight = () => {
       if (maps.length === 0)
@@ -259,23 +258,22 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
 
   return (
     <div className="library">
-      <header className="library-header">
-        <div className="desk-title">
-          <h1>案头</h1>
-          {workspaceDir && (
+      {/* 页首栏（无工作区的开屏态隐藏，M5d spec §2） */}
+      {workspaceDir && (
+        <header className="library-header">
+          <div className="desk-title">
+            <h1>案头</h1>
             <span className="ws-path" title={workspaceDir}>
               {workspaceDir}
             </span>
-          )}
-        </div>
-        {/* 设置入口（M5b Task 4）：复制行为两开关；页首次级按钮样式（.library-header 兜底规则） */}
-        <button type="button" data-testid="btn-settings" onClick={() => setDialog('settings')}>
-          设置
-        </button>
-        <button type="button" data-testid="btn-workspace" className="link-btn" onClick={chooseWorkspace}>
-          选择工作区
-        </button>
-        {workspaceDir && (
+          </div>
+          {/* 设置入口（M5b Task 4）：复制行为两开关；页首次级按钮样式（.library-header 兜底规则） */}
+          <button type="button" data-testid="btn-settings" onClick={() => setDialog('settings')}>
+            设置
+          </button>
+          <button type="button" data-testid="btn-workspace" className="link-btn" onClick={chooseWorkspace}>
+            选择工作区
+          </button>
           <button
             type="button"
             data-testid="btn-import"
@@ -284,8 +282,6 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           >
             导入 .md
           </button>
-        )}
-        {workspaceDir && (
           <button
             type="button"
             data-testid="btn-new"
@@ -294,10 +290,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           >
             新建导图
           </button>
-        )}
-        {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
-        <ThemeToggle />
-      </header>
+          {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
+          <ThemeToggle />
+        </header>
+      )}
       {error && <div className="error-banner">{error}</div>}
       {renderBody()}
 

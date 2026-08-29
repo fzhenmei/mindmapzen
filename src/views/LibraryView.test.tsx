@@ -17,10 +17,25 @@ beforeEach(async () => {
   pickMdFile.mockClear()
 })
 
-test('无工作区时显示引导并可选择', async () => {
+// 无工作区 → 开屏页（M5d Task 3）：替代旧 hint；页首栏随之隐藏（spec §2）
+test('无工作区时渲染开屏页，创建工作区后进入案头', async () => {
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)
-  expect(screen.getByText(/选择导图工作区/)).toBeInTheDocument()
-  fireEvent.click(screen.getByTestId('btn-workspace'))
+  expect(screen.getByTestId('welcome-screen')).toBeInTheDocument()
+  expect(screen.getByTestId('btn-welcome-create')).toBeInTheDocument()
+  expect(screen.getByTestId('btn-welcome-pick')).toBeInTheDocument()
+  // 页首栏隐藏：设置/主题入口不渲染
+  expect(screen.queryByTestId('btn-settings')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('btn-theme')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('btn-welcome-create'))
+  await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws'))
+  expect(await screen.findByTestId('map-item')).toBeInTheDocument()
+  // 有工作区后开屏页不再渲染
+  expect(screen.queryByTestId('welcome-screen')).not.toBeInTheDocument()
+})
+
+test('开屏次入口「选择已有文件夹」同走工作区选择流', async () => {
+  render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)
+  fireEvent.click(screen.getByTestId('btn-welcome-pick'))
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws'))
   expect(await screen.findByTestId('map-item')).toBeInTheDocument()
 })
