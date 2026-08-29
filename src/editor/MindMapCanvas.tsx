@@ -3,9 +3,20 @@ import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
 import Export from 'simple-mind-map/src/plugins/Export.js'
+// 关联线几何工具（M5d Task 5 弯曲记忆）：端点定位与默认控制点算式，与引擎 addLine 同源（见下方 defaultControlOffsets）
+import {
+  computeNodePoints,
+  computeCubicBezierPathPoints,
+} from 'simple-mind-map/src/plugins/associativeLine/associativeLineUtils.js'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
+import {
+  normalizeEngineOffsets,
+  resolveLinkOffsets,
+  type ControlPointOffset,
+  type LinkAdjust,
+} from '../services/linkAdjust'
 import { buildRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
@@ -31,10 +42,15 @@ registerZenThemes()
 // 改变折叠态的引擎命令（与引擎 Render.js 注册的四个展开类命令对齐）：命令完成即改变需持久化的数据
 const EXPAND_COMMANDS = new Set(['SET_NODE_EXPAND', 'EXPAND_ALL', 'UNEXPAND_ALL', 'UNEXPAND_TO_LEVEL'])
 
-/** 渲染树节点实例的最小结构（MindMapNode）：getData() 无参返回 nodeData.data 活引用（引擎核验 M5b Task 3） */
+/** 渲染树节点实例的最小结构（MindMapNode）：getData() 无参返回 nodeData.data 活引用（引擎核验 M5b Task 3）；
+ *  left/top/width/height 为布局后的画布内容坐标（M5d Task 5 弯曲记忆默认差值计算用） */
 interface EngineNodeInstance {
   getData(key?: string): unknown
   children?: EngineNodeInstance[]
+  left?: number
+  top?: number
+  width?: number
+  height?: number
 }
 
 /** 关联线宿主数据键全集（AssociativeLine 写/读；重建时全清——连线完全由 [[..]] 派生） */
@@ -50,18 +66,47 @@ const ASSOCIATIVE_KEYS = [
  *  刻意不走 ADD_ASSOCIATIVE_LINE/SET_NODE_DATA 命令：命令会进历史并触发 data_change → 宿主置脏 →
  *  自动保存循环；而连线是 md 派生数据（engineTreeToZen 只读 text/note/expand，不落盘），无需入历史。
  *  渲染器数据驱动：node_tree_render_end/data_change 时插件按 data.associativeLineTargets 自动重绘，
- *  故后续文本编辑引起的重排无需再触发本函数。自环丢弃（引擎 UI completeCreateLine 同语义）。 */
-function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[]): void {
+ *  故后续文本编辑引起的重排无需再触发本函数。自环丢弃（引擎 UI completeCreateLine 同语义）。
+ *  弯曲记忆（M5d Task 5）：可选 adjust（sidecar linkAdjust，打开恢复用）——写 targets 后逐节点按
+ *  resolveLinkOffsets 回填控制点差值（引擎现存优先，保存链重建不回退用户刚拖的弯；失联回退 sidecar）。
+ *  offsets 数组必须稠密（引擎拖控制点路径直读 offsets[targetIndex][1] 无判空，稀疏数组拖弯即崩，
+ *  见 engine-api.md「M5d 核验 (d)」）：有落位时空洞按 addLine 同款算式补引擎默认差值；
+ *  节点几何不可得（防御）则整节点放弃写 offsets（渲染仍按默认曲线画）。 */
+function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adjust?: LinkAdjust): void {
   const run = (): void => {
     const root = mm.renderer?.root as EngineNodeInstance | null | undefined
     if (!root) return
     const byPath = new Map<string, EngineNodeInstance>()
+    const pathByNode = new Map<EngineNodeInstance, string>()
+    const nodeByUid = new Map<string, EngineNodeInstance>()
+    const pathByUid = new Map<string, string>()
+    // 清键前按 uid 留档既有差值：重建后按 uid 回填（索引顺序可能因增删线漂移，uid 才是稳定锚）
+    const existingByUid = new Map<EngineNodeInstance, Map<string, [ControlPointOffset, ControlPointOffset]>>()
     const walk = (node: EngineNodeInstance, parentPath: string): void => {
       const text = node.getData('text')
       const path = parentPath === '' ? '/' + String(text) : parentPath + '/' + String(text)
       byPath.set(path, node)
+      pathByNode.set(node, path)
+      const uid = node.getData('uid')
+      if (typeof uid === 'string') {
+        nodeByUid.set(uid, node)
+        pathByUid.set(uid, path)
+      }
       const data = node.getData() as Record<string, unknown> | undefined
-      if (data) for (const key of ASSOCIATIVE_KEYS) delete data[key]
+      if (data) {
+        const oldTargets = data.associativeLineTargets
+        const oldOffsets = data.associativeLineTargetControlOffsets
+        if (Array.isArray(oldTargets) && Array.isArray(oldOffsets)) {
+          const kept = new Map<string, [ControlPointOffset, ControlPointOffset]>()
+          oldTargets.forEach((t, i) => {
+            if (typeof t !== 'string') return
+            const pair = normalizeEngineOffsets(oldOffsets[i])
+            if (pair !== undefined) kept.set(t, pair)
+          })
+          if (kept.size > 0) existingByUid.set(node, kept)
+        }
+        for (const key of ASSOCIATIVE_KEYS) delete data[key]
+      }
       for (const child of node.children ?? []) walk(child, path)
     }
     walk(root, '')
@@ -77,7 +122,25 @@ function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[]): void {
     }
     targets.forEach((uids, from) => {
       const data = from.getData() as Record<string, unknown> | undefined
-      if (data) data.associativeLineTargets = uids
+      if (!data) return
+      data.associativeLineTargets = uids
+      const pairs = resolveLinkOffsets(uids, pathByNode.get(from)!, pathByUid, existingByUid.get(from) ?? new Map(), adjust)
+      if (!pairs.some((p) => p !== undefined)) return // 全线无弯曲：不写 offsets，渲染按默认曲线
+      // 空洞补引擎默认差值（addLine 同款算式，AssociativeLine.js:609-632）：差值相对当前端点，
+      // 与节点后续重排解耦（引擎保存差值正为此）；几何不可得时整节点放弃（宁缺勿稀疏）
+      const dense: Array<[ControlPointOffset, ControlPointOffset]> = []
+      for (let i = 0; i < uids.length; i++) {
+        const pair = pairs[i]
+        if (pair !== undefined) {
+          dense[i] = pair
+          continue
+        }
+        const to = nodeByUid.get(uids[i]!)
+        const fallback = to ? defaultControlOffsets(from, to) : undefined
+        if (fallback === undefined) return
+        dense[i] = fallback
+      }
+      data.associativeLineTargetControlOffsets = dense
     })
     ;(mm as unknown as { associativeLine?: { renderAllLines(): void } }).associativeLine?.renderAllLines()
   }
@@ -90,11 +153,27 @@ function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[]): void {
     })
 }
 
+/** 引擎默认控制点差值（AssociativeLine.addLine 的建线算式复刻：computeNodePoints 定端点 +
+ *  computeCubicBezierPathPoints 得默认控制点，差值 = 控制点 − 端点）；节点几何不可得返回 undefined */
+function defaultControlOffsets(
+  from: EngineNodeInstance,
+  to: EngineNodeInstance,
+): [ControlPointOffset, ControlPointOffset] | undefined {
+  const [sp, ep] = computeNodePoints(from, to)
+  const [c1, c2] = computeCubicBezierPathPoints(sp.x, sp.y, ep.x, ep.y)
+  if ([sp.x, sp.y, ep.x, ep.y, c1.x, c1.y, c2.x, c2.y].some((n) => !Number.isFinite(n))) return undefined
+  return [
+    { x: c1.x - sp.x, y: c1.y - sp.y },
+    { x: c2.x - ep.x, y: c2.y - ep.y },
+  ]
+}
+
 /** 打开净化（M5d Task 2）：等首帧渲染后走渲染树——①树A标记文本建注册表（buildRegistry 读标记，
  *  须先于剥离）；②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：
  *  不进命令层、无历史、无 data_change → 打开净化不置脏）；③逐节点按需重渲（文本变短重算尺寸）；
- *  ④按注册表重建连线（显示文本已剥离，连线数据源自此是注册表而非文本标记） */
-function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry): void {
+ *  ④按注册表重建连线（显示文本已剥离，连线数据源自此是注册表而非文本标记）。
+ *  adjust（M5d Task 5）＝打开时 sidecar linkAdjust，随重建一并恢复用户拖过的弯曲 */
+function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: LinkAdjust): void {
   const run = (): void => {
     const root = mm.renderer?.root as EngineNodeInstance | null | undefined
     if (!root) return
@@ -109,7 +188,7 @@ function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry): void {
     buildRegistry(plain, reg)
     stripTreeTexts(plain)
     for (const node of changed) mm.renderer?.reRenderNodeCheckChange(node)
-    rebuildEngineLinks(mm, registryToLinks(plain, reg))
+    rebuildEngineLinks(mm, registryToLinks(plain, reg), adjust)
   }
   // 同 rebuildEngineLinks：构造后首帧渲染经 setTimeout(0) 异步完成，未就绪时一次性挂监听
   if (mm.renderer?.root) run()
@@ -195,11 +274,13 @@ export default function MindMapCanvas({
       cbRef.current.onActiveChange?.(typeof uid === 'string' ? uid : null)
     }
     mm.on('node_active', onActive)
-    // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在 onReady 与保存成功后经 mmRef 调用
+    // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在保存成功后经 mmRef 调用。
+    // 旧差值在重建内按 uid 留档回填（M5d Task 5），故此入口无需 adjust——引擎现存即最新
     ;(mm as MindMapHandle).rebuildLinks = (links) => rebuildEngineLinks(mm, links)
-    // 打开净化入口（M5d Task 2）：EditorView 在 onReady 调用；内部等首帧渲染完成后
-    // 建注册表 → 剥离显示文本 → 按注册表重建连线（registry 经 cbRef 取最新引用）
-    ;(mm as MindMapHandle).applyRegistry = () => applyRegistryToEngine(mm, cbRef.current.registry)
+    // 打开净化入口（M5d Task 2/5）：EditorView 在 onReady 调用（purify 传入 sidecar linkAdjust）；
+    // 内部等首帧渲染完成后建注册表 → 剥离显示文本 → 按注册表重建连线（registry 经 cbRef 取最新引用）
+    ;(mm as MindMapHandle).applyRegistry = (adjust?: LinkAdjust) =>
+      applyRegistryToEngine(mm, cbRef.current.registry, adjust)
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；

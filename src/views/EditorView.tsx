@@ -58,8 +58,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
-  // 连线净化（M5d Task 2）：会话注册表（uid → 目标名）——序列化注入、画线桥接、复制共享同一引用
-  const { registry, purify, rebuildFromRegistry } = useLinkPurify(mmRef)
+  // 连线净化（M5d Task 2）：会话注册表（uid → 目标名）序列化注入/画线桥接/复制共享；setLinkAdjust（Task 5）注入 sidecar 弯曲记忆
+  const { registry, purify, rebuildFromRegistry, setLinkAdjust } = useLinkPurify(mmRef)
 
   // 保存管线（M5a 拆分）：串行保存链/自动保存/布局落盘；脏标记 ref 归本视图持有（守卫「放弃」路径也读写）
   const pipeline = useSavePipeline({
@@ -150,8 +150,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         const sc = await readSidecar(adapter, mdPath)
         if (cancelled) return
         flow.setFromParse(r.ignoredBlocks)
-        // sidecar.layout 三处同步：挂载初值 + 激活态 + 保存引用（spec §3.7 打开恢复）；
-        // 无 sidecar（如外部放入的 .md）回退用户偏好布局（验收轮三：记住默认视图）
+        setLinkAdjust(sc?.linkAdjust ?? {}) // M5d Task 5：弯曲记忆随净化入口恢复（须先于 onReady purify）
+        // sidecar.layout 三处同步（挂载初值/激活态/保存引用，spec §3.7 打开恢复）；无 sidecar 回退用户偏好布局
         const initial = sc?.layout ?? useAppStore.getState().preferredLayout
         setInitialLayout(initial)
         setLayout(initial)

@@ -59,7 +59,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
       destroy: vi.fn(),
       // 连线净化（M5d Task 2）：生产版等首帧渲染后走渲染树；假画布同步对 getData 树执行同款纯函数
-      applyRegistry: () => {
+      // （M5d Task 5：记录收到的 adjust 参数，供弯曲记忆恢复注入断言）
+      applyRegistry: (adjust?: unknown) => {
+        ;(globalThis as unknown as Record<string, unknown>).__lastApplyAdjust = adjust ?? null
         buildRegistry(fakeTree, registry)
         stripTreeTexts(fakeTree)
       },
@@ -181,6 +183,67 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
   await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
   expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
   expect(JSON.parse(await fs.readTextFile('/ws/a.zen.json')).version).toBe(1)
+})
+
+// M5d Task 5 采集：保存链读引擎树 offsets（targets uid 数组 + 索引对齐差值数组）→ sidecar linkAdjust（路径对键）
+test('保存采集连线弯曲：引擎 offsets → sidecar linkAdjust 路径对键', async () => {
+  fakeTree = {
+    data: {
+      text: '根',
+      expand: true,
+      uid: 'root-uid',
+      associativeLineTargets: ['child-uid'],
+      associativeLineTargetControlOffsets: [[{ x: 9, y: 8 }, { x: 7, y: 6 }]],
+    },
+    children: [{ data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] }],
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  await screen.findByTestId('dirty-badge')
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  const sidecar = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
+  expect(sidecar.linkAdjust).toEqual({ '/根->/根/新分支': { cx1: 9, cy1: 8, cx2: 7, cy2: 6 } })
+  // md 事实源不受引擎连线数据污染
+  expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+})
+
+// M5d Task 5 恢复：打开时 sidecar linkAdjust 经 useLinkPurify 注入画布净化入口（purify → applyRegistry）
+test('打开时 sidecar linkAdjust 注入画布弯曲恢复', async () => {
+  await fs.writeTextFileAtomic(
+    '/ws/a.zen.json',
+    JSON.stringify({
+      version: 1,
+      linkAdjust: { '/根->/根/新分支': { cx1: 9, cy1: 8, cx2: 7, cy2: 6 }, '/失联->/键': { cx1: 1 } },
+    }),
+  )
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  expect((globalThis as unknown as Record<string, unknown>).__lastApplyAdjust).toEqual({
+    '/根->/根/新分支': { cx1: 9, cy1: 8, cx2: 7, cy2: 6 },
+    '/失联->/键': { cx1: 1 },
+  })
 })
 
 test('返回文件库前冲刷未保存修改', async () => {

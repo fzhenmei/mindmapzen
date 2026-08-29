@@ -1,9 +1,10 @@
 // src/hooks/useSavePipeline.ts —— 保存管线（M5a 拆分自 EditorView，零行为变化）：
 // 串行保存链、5s 防抖自动保存、布局 sidecar 即时落盘。依赖经 opts 注入（脏标记 ref 归 EditorView 持有，
 // 守卫「放弃」路径也读写它）；所有管线状态走 refs，闭包取首渲染值即可（同 dirtyRef 模式）。
-import { useRef, type MutableRefObject, type RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { engineTreeToZen, serialize } from '../services/mdTree'
 import { writeSidecar } from '../services/sidecar'
+import { collectLinkAdjust, type LinkAdjust } from '../services/linkAdjust'
 import type { LinkRegistry } from '../editor/linkRegistry'
 import type { FsAdapter, LayoutKind, Sidecar } from '../types/files'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -14,8 +15,8 @@ export interface SavePipelineOpts {
   adapter: FsAdapter
   mdPath: string
   mmRef: RefObject<MindMapHandle | null>
-  layoutRef: MutableRefObject<LayoutKind>
-  dirtyRef: MutableRefObject<boolean>
+  layoutRef: RefObject<LayoutKind>
+  dirtyRef: RefObject<boolean>
   /** 连线净化会话注册表（M5d Task 2）：序列化时按 uid 查表句尾注入 [[..]] 标记（稳定引用对象） */
   registry: LinkRegistry
   onDirtyChange: (dirty: boolean) => void // 脏标记同步（markDirty / clearDirty）
@@ -45,14 +46,16 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
   const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
   const lastSavedDataRef = useRef<string | null>(null) // 最近一次成功落盘的引擎整树快照（JSON），供 data_change 同值去重
 
-  /** 完整 Sidecar 构造（writeOnce 与布局切换即时落盘共用同一形状；layout 取当前切换值） */
-  const buildSidecar = (collapsed: string[]): Sidecar => ({
+  /** 完整 Sidecar 构造（writeOnce 与布局切换即时落盘共用同一形状；layout 取当前切换值）。
+   *  linkAdjust（M5d Task 5）由调用方从引擎树采集——布局即时落盘也须带上，否则切换布局会抹掉已拖弯曲 */
+  const buildSidecar = (collapsed: string[], linkAdjust: LinkAdjust): Sidecar => ({
     version: 1,
     theme: 'default',
     layout: layoutRef.current,
     collapsed,
     offsets: {},
     canvas: { x: 0, y: 0, zoom: 1 },
+    linkAdjust,
   })
 
   /** 单轮保存：md + sidecar 原子落盘，返回成功与否（无实例/不脏视为成功）。
@@ -67,7 +70,8 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       const { tree, collapsed } = engineTreeToZen(snapshot)
       // M5d Task 2 序列化注入：净化会话下引擎文本无标记，连线按注册表（uid）句尾注入回 md
       await adapter.writeTextFileAtomic(mdPath, serialize(tree, opts.registry.byUid))
-      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+      // M5d Task 5 弯曲采集：引擎 offsets（uid 失联/空洞自然跳过）→ sidecar linkAdjust（路径对键）
+      await writeSidecar(adapter, mdPath, buildSidecar(collapsed, collectLinkAdjust(snapshot)))
       opts.onSaved?.()
       // 记录落盘快照：引擎节流补发的同值 data_change 到达时据此免置脏（见 onTreeDataChange）
       lastSavedDataRef.current = JSON.stringify(snapshot)
@@ -133,14 +137,16 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
     timerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_MS)
   }
 
-  /** sidecar-only 即时落盘（审查裁定）：collapsed 取引擎当前树，构造与 writeOnce 相同；
-   *  仅写 sidecar，不写 .md、不动脏标记；失败提示横幅（fire-and-forget，不重试不阻塞） */
+  /** sidecar-only 即时落盘（审查裁定）：collapsed 取引擎当前树，构造与 writeOnce 相同
+   *  （linkAdjust 同步采集，防切换布局抹掉弯曲记忆）；仅写 sidecar，不写 .md、不动脏标记；
+   *  失败提示横幅（fire-and-forget，不重试不阻塞） */
   const persistLayoutSidecar = async (): Promise<void> => {
     const mm = mmRef.current
     if (!mm) return
     try {
-      const { collapsed } = engineTreeToZen(mm.getData())
-      await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+      const snapshot = mm.getData()
+      const { collapsed } = engineTreeToZen(snapshot)
+      await writeSidecar(adapter, mdPath, buildSidecar(collapsed, collectLinkAdjust(snapshot)))
     } catch (e) {
       onError('保存布局失败：' + String(e))
     }

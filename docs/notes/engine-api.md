@@ -323,3 +323,18 @@
 ### 已知边界（不阻塞，记录在案）
 
 - 撤销栈首条快照是**含标记的构造时数据**：净化直写不进历史，加载后立即 Ctrl+Z 会把标记文本带回显示（连线随之消失）；任一后续编辑/保存自愈（md 事实源不变），连线删除 UI 属计划外
+
+## M5d 核验（Task 5，连线弯曲记忆）
+
+路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3）。弯曲记忆两处前提核验均成立，另发现一处必须适配的数据不变量。
+
+### (d) offsets 数据结构 —— from 节点 data 上的**索引对齐数组**（非 uid 键）——成立，恢复按 targets 顺序回填
+
+- `associativeLineTargetControlOffsets` 挂在**连线源节点** data 上，是**数组**，按索引与 `associativeLineTargets`（目标 uid 数组）逐位对齐；每项 `[{x,y},{x,y}]` = 贝塞尔两控制点相对连线起点/终点的**差值**（`AssociativeLine.js:617-634 addLine` 写入时即注释"保存的实际是控制点和端点的差值"）
+- 读：`associativeLineUtils.js:274-305 getNodeLinePath`（渲染时 `offsets[targetIndex]`，命中则控制点 = 端点 + 偏移，未命中回落默认 S 曲线）；写：`addLine`（建线默认值）/ `associativeLineControls.js:155-216 onControlPointMouseup`（拖完写用户偏移）/ `AssociativeLine.js:647-681 removeLine`（删线按索引 filter 收敛）
+- 引擎自身只写**稠密**数组（addLine 逐条 push、removeLine filter 紧缩）。宿主恢复时若写**稀疏**数组（空洞），渲染安全（getNodeLinePath 有 `offsets[targetIndex]` 判空）但**拖控制点即崩**：`onControlPointMousemove`（controls.js:60-118）与 `onControlPointMouseup`（:190 附近）直接读 `offsets[targetIndex][1].x` 无判空 → TypeError。**适配**：rebuild 写 offsets 时按引擎同款公式（computeNodePoints + computeCubicBezierPathPoints，即 addLine 原算式）把空洞补成默认差值，保持稠密
+
+### (e) 控制点拖完置脏 —— 成立，既有 data_change 监听已覆盖，无需新增监听
+
+- `onControlPointMouseup`（controls.js:155）拖完经 `this.mindMap.execCommand('SET_NODE_DATA', node, { associativeLineTargetControlOffsets, associativeLinePoint })` 落数据 → `Command.js:71-80 exec` 对 SET_NODE_DATA 不在豁免名单 → `addHistory()`（Command.js:92-130）数据有变即 `emit('data_change', data)` → MindMapCanvas 既有 data_change 监听透传 EditorView → pipeline.onTreeDataChange 置脏 + 5s 自动保存
+- 控制点可拖开关 `enableAdjustAssociativeLinePoints` 默认 true（defaultOptions.js:426），无需显式开启
