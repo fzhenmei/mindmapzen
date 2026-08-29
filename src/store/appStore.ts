@@ -27,6 +27,8 @@ interface AppState {
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
+  /** 退出工作区（v0.7.0 验收：设置页「退出工作区（回到开屏）」）：清内存态并持久化 workspaceDir:null */
+  exitWorkspace: () => Promise<void>
   refreshMaps: () => Promise<void>
   setSelectedDir: (rel: string) => void
   createAndOpen: (name: string) => Promise<void>
@@ -83,6 +85,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, workspaceDir: dir, lastOpened: get().currentMdPath })
     await get().refreshMaps()
+  },
+
+  /** 退出工作区（v0.7.0 验收：回到开屏）：内存清工作区态（列表/选中目录/打开指针），
+   *  配置 load-merge-save 持久化 workspaceDir:null——重启停在开屏；lastOpened 一并清空
+   *  （无工作区不得残留打开指针，否则换工作区重进会被旧指针劫持） */
+  exitWorkspace: async () => {
+    const { adapter, configPath } = get()
+    set({ workspaceDir: null, maps: [], selectedDir: '', currentMdPath: null })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, workspaceDir: null, lastOpened: null })
   },
 
   refreshMaps: async () => {

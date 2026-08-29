@@ -21,6 +21,7 @@ const makeFake = () => {
   const mm = {
     getData: () => tree,
     rebuildLinks: vi.fn(),
+    execCommand: vi.fn(),
     associativeLine: { creatingStartNode: fromNode, cancelCreateLine: vi.fn() },
   } as unknown as MindMapHandle
   const registry: LinkRegistry = { byUid: new Map() }
@@ -49,6 +50,20 @@ describe('bridgeLinkToRegistry', () => {
     bridgeLinkToRegistry(mm, registry, toNode, onDataChanged)
     bridgeLinkToRegistry(mm, registry, toNode, onDataChanged)
     expect(registry.byUid.get('u1')).toEqual(['B'])
+  })
+
+  // v0.7.0 删线验收实案：引擎 stop 路径跳过悬停目标去激活（:572-574）——桥接须自理，
+  // 否则目标高亮残留 + 尾随 data_change 清 activeLine 使删线失效
+  test('悬停目标已激活时补 SET_NODE_ACTIVE 去激活；未激活/无目标不执行命令', () => {
+    const active = makeFake()
+    const overlap = { getData: (key: string) => key === 'isActive' }
+    ;(active.mm.associativeLine as { overlapNode?: unknown }).overlapNode = overlap
+    bridgeLinkToRegistry(active.mm, active.registry, active.toNode, active.onDataChanged)
+    expect(active.mm.execCommand).toHaveBeenCalledWith('SET_NODE_ACTIVE', overlap, false)
+
+    const idle = makeFake() // 无 overlapNode：不执行命令
+    bridgeLinkToRegistry(idle.mm, idle.registry, idle.toNode, idle.onDataChanged)
+    expect(idle.mm.execCommand).not.toHaveBeenCalled()
   })
 
   test('无建线源（异常态）放行引擎路径（返回 false，引擎对空源 no-op 且自清）', () => {

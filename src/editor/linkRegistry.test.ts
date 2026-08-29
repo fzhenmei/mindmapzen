@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildRegistry, registryToLinks, stripTreeTexts } from './linkRegistry'
+import { buildRegistry, harvestRegistry, registryToLinks, stripTreeTexts } from './linkRegistry'
 import type { EngineNode } from '../types/engine'
 
 /** 样例引擎树：u1 含两个标记（一命中一无命中），u2/u3 无标记 */
@@ -40,6 +40,63 @@ describe('buildRegistry', () => {
     reg.byUid.set('u1', ['B'])
     buildRegistry(tree, reg)
     expect(reg.byUid.get('u1')).toEqual(['B', 'C'])
+  })
+})
+
+describe('harvestRegistry（v0.7.0 删线修复：引擎现态权威，替换语义）', () => {
+  /** 引擎 targets 样例：A 连 B 与 C（净化会话——文本无标记，连线数据只在引擎层） */
+  const targetsTree = (): EngineNode => ({
+    data: { text: '根', uid: 'u0' },
+    children: [
+      { data: { text: 'A', uid: 'u1', associativeLineTargets: ['u2', 'u3'] }, children: [] },
+      { data: { text: 'B', uid: 'u2' }, children: [] },
+      { data: { text: 'C', uid: 'u3' }, children: [] },
+    ],
+  })
+
+  test('引擎 targets 经 uid→名解析建表', () => {
+    const reg = harvestRegistry(targetsTree(), { byUid: new Map() })
+    expect(reg.byUid.get('u1')).toEqual(['B', 'C'])
+    expect(reg.byUid.size).toBe(1) // 无连线节点不建条目
+  })
+
+  test('替换而非并集：引擎已无的条目（已删线/已删源）不残留', () => {
+    const reg = buildRegistry(makeTree()) // 预置陈旧条目：u1 → ['B', '无此名']
+    harvestRegistry(targetsTree(), reg)
+    expect(reg.byUid.get('u1')).toEqual(['B', 'C']) // u1 条目被引擎现态整体替换
+    // 目标删尽（removeLine 留空数组）：条目自然消失，md 不再注入（删线不复活的根）
+    const pruned: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1', associativeLineTargets: [] }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+      ],
+    }
+    harvestRegistry(pruned, reg)
+    expect(reg.byUid.size).toBe(0)
+  })
+
+  test('目标 uid 失联（节点已删）丢弃；自环跳过', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1', associativeLineTargets: ['ghost-uid', 'u1', 'u2'] }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+      ],
+    }
+    expect(harvestRegistry(tree, { byUid: new Map() }).byUid.get('u1')).toEqual(['B'])
+  })
+
+  test('文本残留标记一并收割（会话内手写）并与引擎 targets 去重', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A [[C]]', uid: 'u1', associativeLineTargets: ['u2'] }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+        { data: { text: 'C', uid: 'u3' }, children: [] },
+      ],
+    }
+    expect(harvestRegistry(tree, { byUid: new Map() }).byUid.get('u1')).toEqual(['B', 'C'])
   })
 })
 

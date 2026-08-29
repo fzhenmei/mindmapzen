@@ -6,12 +6,15 @@ interface SettingsDialogProps {
   /** 更换工作区入口（M5d 缓期项清偿）：案头设置页内的目录选择流（pickDirectory）；
    *  未注入则隐藏该行（如测试单独渲染） */
   onChangeWorkspace?: () => void
+  /** 退出工作区入口（v0.7.0 验收）：清 workspaceDir 回开屏页；未注入则隐藏该行 */
+  onExitWorkspace?: () => void
 }
 
 /** 设置对话框（M5b Task 4）：复制行为两开关（checkbox 形式）。
  *  改动即生效——toggle 直写 store 并 load-merge-save 持久化，无确认按钮，关闭即退出。
- *  M5d 增「更换工作区」行（M5a 缓期项：无工作区切换入口） */
-export default function SettingsDialog({ onClose, onChangeWorkspace }: Readonly<SettingsDialogProps>) {
+ *  M5d 增「更换工作区」行（M5a 缓期项：无工作区切换入口）；
+ *  v0.7.0 增「退出工作区（回到开屏）」行 */
+export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorkspace }: Readonly<SettingsDialogProps>) {
   const settings = useAppStore((s) => s.settings)
   const setSetting = useAppStore((s) => s.setSetting)
   const workspaceDir = useAppStore((s) => s.workspaceDir) // 更换工作区行显示当前路径
@@ -49,6 +52,14 @@ export default function SettingsDialog({ onClose, onChangeWorkspace }: Readonly<
           <span>工作区：{workspaceDir ?? '未设置'}</span>
           <button type="button" data-testid="settings-workspace-change" onClick={onChangeWorkspace}>
             更换工作区
+          </button>
+        </div>
+      )}
+      {onExitWorkspace && (
+        <div className="setting-row setting-workspace">
+          <span>退出工作区（回到开屏）</span>
+          <button type="button" data-testid="settings-workspace-exit" onClick={onExitWorkspace}>
+            退出
           </button>
         </div>
       )}

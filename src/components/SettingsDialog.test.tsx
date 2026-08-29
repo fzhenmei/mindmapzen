@@ -70,4 +70,15 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByTestId('settings-workspace-change'))
     expect(onChangeWorkspace).toHaveBeenCalledTimes(1)
   })
+
+  // v0.7.0 退出工作区行：注入回调才渲染；点击触发回调（store/持久化链路由 LibraryView/appStore 测试覆盖）
+  test('退出工作区行：默认隐藏，注入回调后显示并可点', () => {
+    const onExitWorkspace = vi.fn()
+    const { rerender } = render(<SettingsDialog onClose={() => {}} />)
+    expect(screen.queryByTestId('settings-workspace-exit')).not.toBeInTheDocument()
+    rerender(<SettingsDialog onClose={() => {}} onExitWorkspace={onExitWorkspace} />)
+    expect(screen.getByText('退出工作区（回到开屏）')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('settings-workspace-exit'))
+    expect(onExitWorkspace).toHaveBeenCalledTimes(1)
+  })
 })

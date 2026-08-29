@@ -37,6 +37,12 @@ export function bridgeLinkToRegistry(
     // 注册表即事实源变化：上报宿主置脏，走保存链把句尾标记落 md
     onDataChanged?.()
   }
+  // 引擎 stop 路径同样跳过悬停目标去激活（:572-574）：桥接自理——否则目标节点高亮残留；
+  // 且残留激活会让随后「点击连线」的 CLEAR_ACTIVE_NODE 触发 SET_NODE_DATA → 节流 data_change
+  // （~100ms）→ renderAllLines 清掉 activeLine，紧接的 Del 删线失效（v0.7.0 删线验收实案）。
+  // 须在 cancelCreateLine 前读取（cancel 会置空 overlapNode）
+  const overlap = al.overlapNode as NodeLike | null | undefined
+  if (overlap?.getData('isActive') === true) mm.execCommand('SET_NODE_ACTIVE', overlap, false)
   // 引擎 stop 路径不清建线态（AssociativeLine.js:571 return 前无 cancel）：自清，否则后续节点点击被误续线
   al.cancelCreateLine()
   // 目标无名/源无 uid 时不入表但同样阻断引擎 addLine（不落无文本支撑的线）并自清

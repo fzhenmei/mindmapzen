@@ -56,6 +56,25 @@ test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框',
   expect(card).toBeTruthy()
 })
 
+// v0.7.0 验收：设置页「退出工作区（回到开屏）」——清 workspaceDir 回开屏页并持久化 null
+test('设置退出工作区：回到开屏页，配置落 workspaceDir:null（其他字段保留）', async () => {
+  useAppStore.setState({ configPath: '/cfg.json' })
+  await useAppStore.getState().setWorkspace('/ws')
+  await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
+  render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickMdFile} />)
+  fireEvent.click(screen.getByTestId('btn-settings'))
+  fireEvent.click(screen.getByTestId('settings-workspace-exit'))
+  await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
+  // 开屏页重新渲染，页首工具栏随无工作区态隐藏
+  expect(await screen.findByTestId('welcome-screen')).toBeInTheDocument()
+  expect(screen.queryByTestId('btn-settings')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('map-item')).not.toBeInTheDocument()
+  const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+  expect(cfg.workspaceDir).toBeNull()
+  expect(cfg.lastOpened).toBeNull()
+  expect(cfg.preferredLayout).toBe('logic') // load-merge-save 保留其他字段
+})
+
 test('空态引导文案', async () => {
   await useAppStore.getState().setWorkspace('/ws-empty')
   render(<LibraryView pickDirectory={vi.fn()} pickMdFile={pickMdFile} />)
@@ -251,13 +270,15 @@ describe('案头三区与交互（M5d）', () => {
     await useAppStore.getState().setWorkspace('/ws')
   })
 
-  test('工具栏：印章 + 品牌名、图标设置入口、导入/新建带字；工作区路径移到树根 tooltip', async () => {
+  test('工具栏：印章 + 品牌名、设置/导入/新建均纯图标（中文 title）；工作区路径移到树根 tooltip', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
     expect(screen.getByText('Mind Map Zen')).toBeInTheDocument()
-    // 设置入口改为齿轮图标（纯图标无文字），导入/新建保留文字
+    // v0.7.0 验收：导入/新建随设置入口一并纯图标化（title 承担中文提示，testid 不变）
     expect(screen.getByTestId('btn-settings').textContent).toBe('')
-    expect(screen.getByTestId('btn-import')).toHaveTextContent('导入 .md')
-    expect(screen.getByTestId('btn-new')).toHaveTextContent('新建导图')
+    expect(screen.getByTestId('btn-import').textContent).toBe('')
+    expect(screen.getByTestId('btn-import')).toHaveAttribute('title', '导入 .md')
+    expect(screen.getByTestId('btn-new').textContent).toBe('')
+    expect(screen.getByTestId('btn-new')).toHaveAttribute('title', '新建导图')
     // 选择工作区入口从工具栏移除（开屏页承担）
     expect(screen.queryByTestId('btn-workspace')).not.toBeInTheDocument()
     // 树根 = 工作区名，tooltip 全路径
