@@ -64,10 +64,21 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     setTarget(null)
   }
 
+  /** 选中态失效清理（M5d 审查修复）：重命名/删除/移动/切换工作区后，选中图 mdPath 失联则清空
+   *  （否则预览指向已不存在的文件、卡片高亮悬空）。须在 maps 已刷新后调用 */
+  const pruneSelectedMap = () => {
+    setSelectedMap((cur) =>
+      cur !== null && useAppStore.getState().maps.some((m) => m.mdPath === cur) ? cur : null,
+    )
+  }
+
   const chooseWorkspace = async () => {
     try {
       const dir = await pickDirectory()
-      if (dir) await store.setWorkspace(dir)
+      if (dir) {
+        await store.setWorkspace(dir)
+        pruneSelectedMap()
+      }
     } catch (e) {
       store.setError('设置工作区失败：' + String(e))
     }
@@ -131,6 +142,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
       await moveMap(store.adapter, workspaceDir, t.name, t.relDir, toRel)
       await store.refreshMaps()
       setTree(await readDirTree(store.adapter, workspaceDir))
+      pruneSelectedMap()
       store.setError(null)
     } catch (e) {
       store.setError('移动失败：' + (e instanceof Error ? e.message : String(e)))
@@ -154,7 +166,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     if (p !== undefined) void store.openMap(p)
   }
   // 树根显示工作区名（tooltip 全路径承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
-  const workspaceName = workspaceDir?.split(/[\\/]/).filter(Boolean).pop() ?? ''
+  const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
 
   const renderBody = () => {
     // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；页首栏在此态隐藏
@@ -362,6 +374,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             try {
               await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
               await store.refreshMaps()
+              pruneSelectedMap()
               store.setError(null)
             } catch (e) {
               store.setError(e instanceof Error ? e.message : String(e))
@@ -396,6 +409,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                   try {
                     await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
                     await store.refreshMaps()
+                    pruneSelectedMap()
                   } catch (e) {
                     store.setError('删除失败：' + String(e))
                   }

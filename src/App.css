@@ -50,10 +50,10 @@ html, body { overflow: hidden; }
 .dir-create-btn { margin-top: 8px; padding: 4px 8px; border: none; background: none; color: var(--ink-2);
   font: inherit; text-align: left; cursor: pointer; }
 .dir-create-btn:hover { color: var(--accent); }
-/* 树文件行（M5d）：IconFile + 名（不含扩展名），复用 .dir-node 样式叠flex 排图标 */
-.dir-node.file-node { display: flex; align-items: center; gap: 5px; }
-.file-node svg { flex-shrink: 0; }
-.file-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 树目录/文件行（M5d）：IconFolder/IconFile + 名，flex 排图标（与 .dir-node 基础样式叠加） */
+.dir-node.dir-folder, .dir-node.file-node { display: flex; align-items: center; gap: 5px; }
+.dir-folder svg, .file-node svg { flex-shrink: 0; }
+.dir-folder-name, .file-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 目录视图空态：选中层没有导图 */
 .dir-empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: 13px; }
 /* 移动导图对话框内嵌目录树（复用 .dir-tree/.dir-node，收窄并限制高度可滚） */

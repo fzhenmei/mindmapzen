@@ -1,5 +1,5 @@
 import type { DirNode } from '../services/desk'
-import { IconFile } from './icons'
+import { IconFile, IconFolder } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
@@ -68,12 +68,13 @@ export default function DirectoryTree({
         <button
           type="button"
           data-testid={`dir-node-${n.name}`}
-          className={selected === n.path ? 'dir-node active' : 'dir-node'}
+          className={selected === n.path ? 'dir-node dir-folder active' : 'dir-node dir-folder'}
           style={{ paddingLeft: 8 + depth * 14 }}
           title={n.path}
           onClick={() => onSelect(n.path)}
         >
-          {n.name}
+          <IconFolder />
+          <span className="dir-folder-name">{n.name}</span>
         </button>
         {renderNodes(n.children, depth + 1)}
         {renderFiles(n.path, depth + 1)}

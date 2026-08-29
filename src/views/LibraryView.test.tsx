@@ -261,13 +261,40 @@ describe('案头三区与交互（M5d）', () => {
     expect(useAppStore.getState().route).toBe('library')
   })
 
-  test('树文件行渲染：目录与根下文件行可见，单击选中预览', async () => {
+  test('树文件行渲染：目录与根下文件行可见，单击选中预览；目录行带文件夹图标', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
     expect(await screen.findByTestId('file-node-甲')).toBeInTheDocument()
     expect(screen.getByTestId('file-node-想法A')).toBeInTheDocument()
+    // 目录节点图标化（spec §3）：IconFolder 存在于目录行
+    expect(screen.getByTestId('dir-node-项目').querySelector('svg')).toBeInTheDocument()
+    // 文件行图标（IconFile）
+    expect(screen.getByTestId('file-node-甲').querySelector('svg')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('file-node-甲'))
     expect(screen.getByTestId('file-node-甲').className).toContain('active')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('甲')
+  })
+
+  test('选中态失效清理：重命名/删除选中图后选中与预览清空', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    // 选中 想法A（maps 序：甲 新在前）
+    const card = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
+    fireEvent.click(card)
+    expect(await screen.findByTestId('preview-outline')).toBeInTheDocument()
+    // 重命名 → mdPath 失联 → 选中清空、预览回空态
+    fireEvent.click(card.parentElement!.querySelector('[data-testid="btn-rename"]')!)
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '改名图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(screen.queryByTestId('preview-outline')).not.toBeInTheDocument())
+    expect(screen.getByText('选择导图预览')).toBeInTheDocument()
+    // 重新选中后删除 → 同样清空
+    const renamed = (await screen.findAllByTestId('map-item')).find((el) =>
+      el.textContent!.includes('改名图'),
+    )!
+    fireEvent.click(renamed)
+    await screen.findByTestId('preview-outline')
+    fireEvent.click(renamed.parentElement!.querySelector('[data-testid="btn-delete"]')!)
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    await waitFor(() => expect(screen.queryByTestId('preview-outline')).not.toBeInTheDocument())
   })
 
   test('树文件行双击打开进纸面', async () => {
