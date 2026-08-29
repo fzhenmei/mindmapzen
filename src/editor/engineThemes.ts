@@ -1,15 +1,16 @@
 import MindMap from 'simple-mind-map'
 
-/** 纸墨（亮）：纸底、墨块根、墨青一级、淡墨曲线、朱砂选中环（设计值见计划 Global Constraints）。
+/** 晨松（亮）：白墙底、石墨实心根（亮字）、青松浅底一级、雾灰曲线、青松选中环（spec §2）。
  *  键名依据 docs/notes/engine-api.md「M4 核验」：选中态无 activeBorderColor/activeBorderWidth，
- *  真实键为各层级 hoverRectColor（hover 与选中共用，浓淡由引擎内置 CSS 区分）。 */
+ *  真实键为各层级 hoverRectColor（hover 与选中共用，浓淡由引擎内置 CSS 区分）；
+ *  环宽亦为引擎内置（核验 (10) 的 stroke 调用仅取色），主题只控色与圆角。 */
 export const ENGINE_THEME_PAPER = {
-  backgroundColor: '#F7F6F3',
-  lineColor: '#8B867A',
+  backgroundColor: '#F7F8F7',
+  lineColor: '#64707A',
   lineWidth: 1.5,
   // 关联线（M5b Task 3 核验）：引擎无 .smm-associative-line 类，线色经主题根键 associativeLineColor
-  // 由 SVG.js 属性着色（CSS 直染会波及透明点击线）；取值与 tokens.css --canvas-line 同源
-  associativeLineColor: '#8B867A',
+  // 由 SVG.js 属性着色（CSS 直染会波及透明点击线）；取值与 @theme --color-line 同源（M12b Task 1 键）
+  associativeLineColor: '#64707A',
   associativeLineWidth: 1.5,
   lineStyle: 'curve',
   rootLineKeepSameInCurve: true,
@@ -17,62 +18,62 @@ export const ENGINE_THEME_PAPER = {
   paddingY: 6,
   root: {
     shape: 'rectangle',
-    fillColor: '#26241F',
-    color: '#F7F6F3',
+    fillColor: '#1F2328',
+    color: '#F7F7F7',
     fontSize: 16,
     fontWeight: 'bold',
     borderColor: 'transparent',
     borderWidth: 0,
     borderRadius: 6,
-    hoverRectColor: '#B5453C',
+    hoverRectColor: '#1D7A6B',
     hoverRectRadius: 6,
   },
   second: {
     shape: 'rectangle',
-    fillColor: '#E8EFEA',
-    color: '#26241F',
+    fillColor: '#E3F2EE',
+    color: '#1F2328',
     fontSize: 14,
     fontWeight: '500',
-    borderColor: '#385B57',
+    borderColor: '#1D7A6B',
     borderWidth: 1,
     borderRadius: 6,
-    hoverRectColor: '#B5453C',
+    hoverRectColor: '#1D7A6B',
     hoverRectRadius: 6,
   },
   node: {
     shape: 'rectangle',
-    fillColor: '#FCFBF9',
-    color: '#26241F',
+    fillColor: '#FFFFFF',
+    color: '#1F2328',
     fontSize: 14,
     fontWeight: '500',
-    borderColor: '#E4E1DA',
+    borderColor: '#E4E7E6',
     borderWidth: 1,
     borderRadius: 6,
-    hoverRectColor: '#B5453C',
+    hoverRectColor: '#1D7A6B',
     hoverRectRadius: 6,
   },
 }
 
-/** 夜墨（暗）：暖炭底、月白根（反墨）、青瓷一级、夜连线、砂亮选中环 */
+/** 夜航（暗）：夜航底、月白根（反转）、青松深底一级、夜雾连线、青松亮选中环 */
 export const ENGINE_THEME_NIGHT: typeof ENGINE_THEME_PAPER = {
   ...ENGINE_THEME_PAPER,
-  backgroundColor: '#191A18',
-  lineColor: '#4A4C46',
-  associativeLineColor: '#4A4C46',
-  root: { ...ENGINE_THEME_PAPER.root, fillColor: '#D9D7D0', color: '#191A18', hoverRectColor: '#C96A5F' },
+  backgroundColor: '#14181A',
+  lineColor: '#8B9599',
+  associativeLineColor: '#8B9599',
+  root: { ...ENGINE_THEME_PAPER.root, fillColor: '#D6DBDA', color: '#14181A', hoverRectColor: '#4CBFA8' },
   second: {
     ...ENGINE_THEME_PAPER.second,
-    fillColor: '#2A3B37',
-    color: '#D9D7D0',
-    borderColor: '#7FA8A0',
-    hoverRectColor: '#C96A5F',
+    fillColor: '#1D3B36',
+    color: '#D6DBDA',
+    borderColor: '#4CBFA8',
+    hoverRectColor: '#4CBFA8',
   },
   node: {
     ...ENGINE_THEME_PAPER.node,
-    fillColor: '#202221',
-    color: '#D9D7D0',
-    borderColor: '#343633',
-    hoverRectColor: '#C96A5F',
+    fillColor: '#1B2022',
+    color: '#D6DBDA',
+    borderColor: '#2A3033',
+    hoverRectColor: '#4CBFA8',
   },
 }
 
