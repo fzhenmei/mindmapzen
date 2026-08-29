@@ -114,6 +114,24 @@ export const IconFolder = ({ size }: IconProps) =>
     <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3l1.5 2H12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 12 14H4a1.5 1.5 0 0 1-1.5-1.5z" />,
     size,
   )
+/** 导图文件（M5d 案头目录树文件行）：文档轮廓 + 右上折角 */
+export const IconFile = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M4 1.5h5L12.5 5v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1z" />
+      <path d="M9 1.5V5h3.5" />
+    </>,
+    size,
+  )
+/** 设置（M5d 案头工具栏）：齿轮（中心圆 + 八向辐条） */
+export const IconSettings = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1" />
+    </>,
+    size,
+  )
 /** 导出图片（M5b）：相框轮廓 + 山形折线 + 日点 */
 export const IconImage = ({ size }: IconProps) =>
   base(

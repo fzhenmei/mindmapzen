@@ -46,10 +46,10 @@ test('空态引导文案', async () => {
   expect(await screen.findByTestId('library-empty')).toHaveTextContent('空白的纸')
 })
 
-test('已有工作区时列出导图并可打开', async () => {
+test('已有工作区时列出导图，双击打开进纸面', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)
-  fireEvent.click((await screen.findAllByTestId('map-item'))[0]!)
+  fireEvent.dblClick((await screen.findAllByTestId('map-item'))[0]!)
   await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
 })
 
@@ -222,5 +222,58 @@ describe('案头目录（M5a）', () => {
     // 关闭后对话框卸载
     fireEvent.click(screen.getByTestId('settings-close'))
     await waitFor(() => expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument())
+  })
+})
+
+describe('案头三区与交互（M5d）', () => {
+  beforeEach(async () => {
+    fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/ws/想法A.md', '# 想法A\n\n## 分支\n')
+    await fs.mkdir('/ws/项目')
+    await fs.writeTextFileAtomic('/ws/项目/甲.md', '# 甲\n')
+    useAppStore.getState().setAdapter(fs)
+    await useAppStore.getState().setWorkspace('/ws')
+  })
+
+  test('工具栏：印章 + 品牌名、图标设置入口、导入/新建带字；工作区路径移到树根 tooltip', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    expect(screen.getByText('Mind Map Zen')).toBeInTheDocument()
+    // 设置入口改为齿轮图标（纯图标无文字），导入/新建保留文字
+    expect(screen.getByTestId('btn-settings').textContent).toBe('')
+    expect(screen.getByTestId('btn-import')).toHaveTextContent('导入 .md')
+    expect(screen.getByTestId('btn-new')).toHaveTextContent('新建导图')
+    // 选择工作区入口从工具栏移除（开屏页承担）
+    expect(screen.queryByTestId('btn-workspace')).not.toBeInTheDocument()
+    // 树根 = 工作区名，tooltip 全路径
+    const root = await screen.findByTestId('dir-node-all')
+    expect(root).toHaveTextContent('ws')
+    expect(root).toHaveAttribute('title', '/ws')
+  })
+
+  test('卡片单击 = 选中：高亮 + 预览出现', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    const card = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
+    expect(screen.queryByTestId('preview-outline')).not.toBeInTheDocument()
+    fireEvent.click(card)
+    expect(card.className).toContain('selected')
+    expect(await screen.findByTestId('preview-outline')).toHaveTextContent('想法A')
+    // 单击只选中不进纸面
+    expect(useAppStore.getState().route).toBe('library')
+  })
+
+  test('树文件行渲染：目录与根下文件行可见，单击选中预览', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    expect(await screen.findByTestId('file-node-甲')).toBeInTheDocument()
+    expect(screen.getByTestId('file-node-想法A')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('file-node-甲'))
+    expect(screen.getByTestId('file-node-甲').className).toContain('active')
+    expect(await screen.findByTestId('preview-outline')).toHaveTextContent('甲')
+  })
+
+  test('树文件行双击打开进纸面', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/想法A.md')
   })
 })

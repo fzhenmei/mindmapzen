@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
 test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
-  await page.getByTestId('btn-workspace').click()
+  // M5d 适配：btn-workspace 已随工具栏重构移除（harness 已预设 workspaceDir=/ws）
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('折叠图')
   await page.getByTestId('btn-confirm').click()
@@ -57,7 +57,7 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
   // 返回文件库 → 重新打开 → 折叠应保持（apply 侧）
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
+  await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('根主题').first()).toBeVisible()
   await expect(page.getByText('叶一')).toHaveCount(0)
 })
@@ -68,7 +68,7 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
 test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
-  await page.getByTestId('btn-workspace').click()
+  // M5d 适配：btn-workspace 已随工具栏重构移除（harness 已预设 workspaceDir=/ws）
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('竞态图')
   await page.getByTestId('btn-confirm').click()
@@ -99,7 +99,7 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
   await expect(page.getByTestId('dirty-badge')).toHaveCount(0)
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
+  await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('根主题').first()).toBeVisible()
 
   // 同一 JS 任务连发「展开点击 + Ctrl+S」（引擎 data_change 尾随节流 100ms 窗内）：
@@ -126,6 +126,6 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
   // 重开验证展开态被持久化（子树重新可见）
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
+  await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('分支甲').first()).toBeVisible()
 })

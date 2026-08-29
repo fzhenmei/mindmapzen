@@ -10,9 +10,10 @@ import ZenDialog from '../components/ZenDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
-import DirectoryTree from '../components/DirectoryTree'
+import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
-import { IconFolder, IconPencil, IconTrash } from '../components/icons'
+import PreviewPane from '../components/PreviewPane'
+import { IconFolder, IconPencil, IconTrash, IconSettings } from '../components/icons'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -29,7 +30,8 @@ interface ImportPreview {
   blocks: IgnoredBlock[]
 }
 
-/** 案头（导图列表页）：左目录树 + 右卡片网格；卡片按 selectedDir 精确过滤，「全部」视图显示所在层小字 */
+/** 案头（导图列表页，M5d 三区）：图标工具栏 + 左目录树（含文件行）+ 中卡片网格 + 右大纲预览；
+ *  交互语义：卡片/树文件单击=选中并预览，双击或预览「打开」=进纸面；卡片按 selectedDir 精确过滤 */
 export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
@@ -42,6 +44,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   const [dirCollapsed, setDirCollapsed] = useState(false)
   // 新建目录的父目录（DirectoryTree onCreateDir 传入；''=工作区根）
   const [dirParent, setDirParent] = useState('')
+  // 选中导图（M5d 交互变更：单击卡片/树文件=选中并预览，双击/预览「打开」=进纸面）
+  const [selectedMap, setSelectedMap] = useState<string | null>(null)
 
   /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
    *  useCallback 固定身份（体仅引用稳定的 setTree 与模块导入，无反应式依赖，无陈旧闭包） */
@@ -136,6 +140,22 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   // 卡片过滤在渲染层派生（store.maps 恒为工作区全量）：选中目录精确匹配，「全部」不过滤
   const visibleMaps = selectedDir === '' ? maps : maps.filter((m) => m.relDir === selectedDir)
 
+  // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
+  const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
+  const selectedInfo = maps.find((m) => m.mdPath === selectedMap) ?? null
+  const mdPathOf = (f: TreeFile): string | undefined =>
+    maps.find((m) => m.name === f.name && m.relDir === f.relDir)?.mdPath
+  const selectFile = (f: TreeFile) => {
+    const p = mdPathOf(f)
+    if (p !== undefined) setSelectedMap(p)
+  }
+  const openFile = (f: TreeFile) => {
+    const p = mdPathOf(f)
+    if (p !== undefined) void store.openMap(p)
+  }
+  // 树根显示工作区名（tooltip 全路径承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
+  const workspaceName = workspaceDir?.split(/[\\/]/).filter(Boolean).pop() ?? ''
+
   const renderBody = () => {
     // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；页首栏在此态隐藏
     if (!workspaceDir) return <WelcomeScreen onCreateWorkspace={() => void chooseWorkspace()} />
@@ -171,9 +191,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
               <button
                 type="button"
                 data-testid="map-item"
-                className="map-card-main"
-                onClick={() => store.openMap(m.mdPath)}
-                title={`打开「${m.name}」`}
+                className={selectedMap === m.mdPath ? 'map-card-main selected' : 'map-card-main'}
+                onClick={() => setSelectedMap(m.mdPath)}
+                onDoubleClick={() => void store.openMap(m.mdPath)}
+                title={`选中「${m.name}」（双击打开）`}
               >
                 <span className="map-name">{m.name}</span>
                 <span className="badge-md">.md</span>
@@ -237,13 +258,19 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         >
           {dirCollapsed ? '›' : '‹'}
         </button>
-        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构 */}
+        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构；树含导图文件行（M5d） */}
         {!dirCollapsed && (
           <aside className="dir-panel" data-testid="dir-panel">
             <DirectoryTree
               tree={tree}
+              files={files}
+              rootLabel={workspaceName}
+              rootTooltip={workspaceDir}
               selected={selectedDir}
+              selectedFile={selectedInfo === null ? null : { name: selectedInfo.name, relDir: selectedInfo.relDir }}
               onSelect={(rel) => store.setSelectedDir(rel)}
+              onSelectFile={selectFile}
+              onOpenFile={openFile}
               onCreateDir={(rel) => {
                 setDirParent(rel)
                 setDialog('newdir')
@@ -252,27 +279,41 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </aside>
         )}
         {renderRight()}
+        {/* 右列大纲预览（M5d）：选中即预览，「打开」进纸面 */}
+        <PreviewPane mdPath={selectedMap} />
       </div>
     )
   }
 
   return (
     <div className="library">
-      {/* 页首栏（无工作区的开屏态隐藏，M5d spec §2） */}
+      {/* 工具栏区（M5d spec §3，无工作区的开屏态隐藏）：左印章+品牌名 / 右设置(图标)+导入/新建(带字)+主题 */}
       {workspaceDir && (
         <header className="library-header">
-          <div className="desk-title">
-            <h1>案头</h1>
-            <span className="ws-path" title={workspaceDir}>
-              {workspaceDir}
-            </span>
+          <div className="desk-brand">
+            <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--seal)" />
+              <path
+                d="M17 25l5 5 10-12"
+                stroke="var(--paper)"
+                strokeWidth="3.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <h1>Mind Map Zen</h1>
           </div>
-          {/* 设置入口（M5b Task 4）：复制行为两开关；页首次级按钮样式（.library-header 兜底规则） */}
-          <button type="button" data-testid="btn-settings" onClick={() => setDialog('settings')}>
-            设置
-          </button>
-          <button type="button" data-testid="btn-workspace" className="link-btn" onClick={chooseWorkspace}>
-            选择工作区
+          {/* 设置入口（M5b Task 4 内容，M5d 改齿轮图标）：复制行为两开关 */}
+          <button
+            type="button"
+            data-testid="btn-settings"
+            className="icon-btn"
+            title="设置"
+            aria-label="设置"
+            onClick={() => setDialog('settings')}
+          >
+            <IconSettings />
           </button>
           <button
             type="button"

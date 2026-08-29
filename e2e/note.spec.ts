@@ -40,7 +40,7 @@ test('节点备注：对话框编辑保存后 md 含引用块，重开持久', a
   // 返回案头重开：引用块解析回 data.note，引擎渲染备注角标（.smm-node-note）
   await page.getByTestId('btn-back').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').click()
+  await page.getByTestId('map-item').dblclick() // M5d 交互变更：双击打开
   await expect(page.getByText('要点').first()).toBeVisible()
   await expect(page.locator('.smm-node-note').first()).toBeVisible()
 })

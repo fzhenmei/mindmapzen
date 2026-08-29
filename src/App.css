@@ -4,26 +4,23 @@ html, body, #root { height: 100%; }
 html, body { overflow: hidden; }
 .app { height: 100%; font-family: var(--font-ui); color: var(--ink); background: var(--paper); }
 
-/* 案头（导图列表页，M4 卡片化、M5a 左树右网格重设计）：滚动只发生在 .dir-panel 与 .map-grid 内，页自身不滚（页面级 overflow hidden） */
+/* 案头（导图列表页，M4 卡片化、M5a 左树右网格、M5d 三区重设计）：滚动只发生在 .dir-panel/.map-grid/.preview-outline 内，页自身不滚（页面级 overflow hidden） */
 .library { height: 100%; display: flex; flex-direction: column; padding: 24px 32px; gap: 20px; background: var(--paper); }
 .library-header { display: flex; align-items: center; gap: 12px; }
-.desk-title { margin-right: auto; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.library-header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
-.ws-path { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 页首按钮层级（M5a 视觉降级）：新建/导入为主操作（accent 实心），选择工作区文字链接化静默 */
+/* 工具栏左段（M5d）：16px 印章 + 品牌名；工作区路径移到树根 tooltip */
+.desk-brand { margin-right: auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.desk-brand h1 { font-size: 16px; font-weight: 600; white-space: nowrap; letter-spacing: 0.03em; }
+/* 页首按钮层级（M5a 视觉降级，M5d 收敛）：新建/导入为主操作（accent 实心带字），设置为低频纯图标 */
 .btn-primary { padding: 6px 14px; border: 1px solid var(--accent); border-radius: var(--radius-s);
   background: var(--accent); color: var(--paper); font: inherit; cursor: pointer;
   transition: background var(--dur-1), border-color var(--dur-1); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.library-header button:not(.btn-primary):not(.theme-toggle):not(.link-btn) { padding: 6px 14px;
+.library-header button:not(.btn-primary):not(.theme-toggle) { padding: 6px 14px;
   border: 1px solid var(--hairline); border-radius: var(--radius-s); background: var(--surface);
   color: var(--ink); font: inherit; cursor: pointer;
   transition: border-color var(--dur-1), color var(--dur-1); }
-.library-header button:not(.btn-primary):not(.theme-toggle):not(.link-btn):hover { border-color: var(--accent); color: var(--accent); }
-.library-header .link-btn { padding: 6px 2px; border: none; background: none; color: var(--ink-2);
-  text-decoration: underline dotted; text-underline-offset: 4px; font: inherit; cursor: pointer; }
-.library-header .link-btn:hover { color: var(--accent); }
+.library-header button:not(.btn-primary):not(.theme-toggle):hover { border-color: var(--accent); color: var(--accent); }
+.library-header .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; }
 /* 主题三态切换（M4）：图标圆钮，与编辑器右下 .theme-fab 同款，样式统一在编辑器段定义 */
 /* 首次开屏页（M5d spec §2）：无工作区时的居中品牌引导（替代旧 hint 文案）；页首栏在此态隐藏 */
 .welcome-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -53,6 +50,10 @@ html, body { overflow: hidden; }
 .dir-create-btn { margin-top: 8px; padding: 4px 8px; border: none; background: none; color: var(--ink-2);
   font: inherit; text-align: left; cursor: pointer; }
 .dir-create-btn:hover { color: var(--accent); }
+/* 树文件行（M5d）：IconFile + 名（不含扩展名），复用 .dir-node 样式叠flex 排图标 */
+.dir-node.file-node { display: flex; align-items: center; gap: 5px; }
+.file-node svg { flex-shrink: 0; }
+.file-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 目录视图空态：选中层没有导图 */
 .dir-empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-size: 13px; }
 /* 移动导图对话框内嵌目录树（复用 .dir-tree/.dir-node，收窄并限制高度可滚） */
@@ -70,6 +71,8 @@ html, body { overflow: hidden; }
   padding: 16px; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-m);
   cursor: pointer; text-align: left; box-shadow: var(--shadow-1); transition: border-color var(--dur-1), transform var(--dur-1); }
 .map-card-main:hover { border-color: var(--accent); transform: translateY(-1px); }
+/* 单击选中态（M5d 交互变更）：accent 描边 + 浅底，区别于悬停 */
+.map-card-main.selected { border-color: var(--accent); background: var(--accent-soft); }
 .map-name { font-size: 14px; font-weight: 500; color: var(--ink); max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 所在层小字（仅「全部」视图显示，M5a）：帮助定位目录归属 */
@@ -85,6 +88,16 @@ html, body { overflow: hidden; }
 .map-card-actions button:hover { color: var(--accent); background: var(--accent-soft); }
 /* 空态：朱砂印章对勾 + 引导文案 */
 .library-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--ink-2); }
+/* 大纲预览区（M5d spec §3 右列）：等宽大纲树（层级缩进 14px 由组件内联提供）+ 底部「打开」 */
+.preview-panel { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px;
+  min-height: 0; border-left: 1px solid var(--hairline); padding-left: 12px; }
+.preview-outline { flex: 1; min-height: 0; overflow-y: auto; font-family: var(--font-mono);
+  font-size: 12px; line-height: 2; }
+.preview-row { display: flex; align-items: baseline; gap: 4px; color: var(--ink-2); }
+.preview-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-note { color: var(--accent); flex-shrink: 0; }
+.preview-hint { color: var(--ink-2); font-size: 12px; padding-top: 8px; }
+.preview-panel .btn-primary { flex-shrink: 0; align-self: stretch; }
 .error-banner { background: color-mix(in srgb, var(--seal) 10%, var(--paper)); color: var(--seal);
   border: 1px solid color-mix(in srgb, var(--seal) 30%, var(--paper)); border-radius: var(--radius-s); padding: 8px 12px; white-space: pre-wrap; }
 
