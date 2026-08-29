@@ -387,3 +387,30 @@
 
 - **连线画线/拖弯不走撤销**：文本桥接的 SET_NODE_DATA 命令可撤销；但注册表直写（rebuildEngineLinks/净化剥离）绕过命令层，画线动作（registry push）不产生历史条目——Ctrl+Z 不会移除刚画的线（删除线/改文本可撤销）。与「连线是 md 派生数据」的设计一致
 - **撤销含标记的文本编辑**：用户在节点里键入 `[[B]]` 提交后立即撤销，恢复的是编辑前快照（无标记）；若在保存再净化（onSaved applyRegistry）**之后**重做，重做目标快照可能仍含标记文本（净化直写不回写历史）——自愈边界：任一后续编辑/保存即恢复净化态（M5d 已知边界的残余形态，出现窗口极窄）
+
+## v1.2 核验（M12a Task 3，方向键导航 KeyboardNavigation 插件）
+
+接入方式：`MindMap.usePlugin(KeyboardNavigation)`（`src/plugins/KeyboardNavigation.js`，285 行，instanceName `'keyboardNavigation'`，:285）。对简报三则假设逐条核验（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3）。**结论先行：三则全部成立——插件只注册四个裸方向键、按几何最近移动选中；编辑框打开期间引擎以「清空快捷键表」而非 isPause 拦截（机制比简报假设更强）；宿主兜底层不触碰方向键，同窗双监听有序无双发。**
+
+### (a) 几何/KEY_DIR 语义 —— 成立
+
+- `constant.js:31-36` `KEY_DIR = { LEFT:'Left', UP:'Up', RIGHT:'Right', DOWN:'Down' }`；`keyMap.js:24-27` 对应键码 37/38/39/40（与浏览器方向键 keyCode 一致）。插件构造时对四个方向分别 `keyCommand.addShortcut(KEY_DIR.x, handler)`（KeyboardNavigation.js:20-32）
+- `onKeyup(dir)`（:68-75）：无激活节点时任意方向键 `GO_TARGET_NODE(root)` 聚焦根；有激活节点走 `focus(dir)`
+- `focus(dir)`（:78-127）三算法逐级兜底，全部纯几何、取中心点欧氏距离最近者（`checkNodeDis` 严格 `<`，等距时保留先遍历到者——bfsWalk 树序）：①阴影算法（目标与当前节点在按键方向上投影重叠，:169-205）→ ②区域算法（中心点差值落入方向扇区，:208-242）→ ③简单算法（目标整体在按键方向一侧，:130-166）；命中即 `GO_TARGET_NODE`
+- `Render.js:369` 注册命令 `GO_TARGET_NODE` → `goTargetNode`（Render.js:1966-1975）：按 uid 展开到节点 → `targetNode.active()`（加 `active` class，MindMapNode.js:579，并触发 `node_active` 事件）→ `moveNodeToCenter`
+- E2E 断言锚点即 `g.active`：激活节点的 SVG `<g class="smm-node active">`
+
+### (b) 编辑框打开时不劫持方向键 —— 成立（机制与简报假设有偏差，且更强）
+
+- 简报假设「TextEdit 保存/恢复 KeyCommand 的 isPause」**不实**：`isPause` 全引擎仅 Demonstrate 演示插件使用（Demonstrate.js:86/125）；真实机制是**换表**——编辑框打开 `TextEdit.showEditTextBox` emit `before_show_text_edit`（TextEdit.js:298，缩放重建的 `isFromScale` 场景不重发）→ `Render.js:415-417` `startTextEdit()` → `keyCommand.save()`（KeyCommand.js:43-50）把 `shortcutMap` 整体缓存进 `shortcutMapCache` 后**清空**；关闭 `hideEditTextBox` emit `hide_text_edit`（TextEdit.js:499）→ `endTextEdit()` → `restore()` 换回
+- 空表期间 `KeyCommand.onKeydown` 遍历 `Object.keys(this.shortcutMap)` 为空——方向键（连同引擎注册的 Tab/Enter/Del/Control+a）一条都不会命中，框内方向键只剩 contenteditable 原生光标移动
+- 拦截确实依赖换表而非焦点过滤：`TextEdit.js:39` 构造时即 `addEditNodeClass('smm-node-edit-wrap')`，编辑框 div 冒泡到 window 的 keydown（target=编辑框）**能通过** `defaultEnableCheck`（KeyCommand.js:100-110 遍历 `editNodeClassList` 放行）——若无换表，框内方向键会真触发 GO_TARGET_NODE。顺带勘误 v1.1 核验 (6) 括注「editNodeClassList 初始为空」：TextEdit 构造（随引擎实例化）即注册编辑框 class，并非空表
+- `checkKey`（KeyCommand.js:153-170）是键码多重集精确匹配：裸 `'Right'`（k=[39]）对 Shift+Right（origin=[16,39]）长度不等直接不命中——**Shift/Ctrl/Alt+方向组合一律不劫持**
+- 行为断言（e2e/keyboard-nav.spec.ts 第二用例）：框内连按四方向 → 编辑框不关闭、激活节点不漂移。若被劫持，`goTargetNode → targetNode.active()` 会先发 `before_node_active`，TextEdit 对其监听 `hideEditTextBox`（TextEdit.js:73-75）——编辑框会被立即关闭，断言即失败
+
+### (c) 与宿主 window 兜底层无冲突 —— 成立
+
+- 宿主 `MindMapCanvas.onKeydown` → `handleEngineKeyDown`（engineKeyboard.ts）只映射 Tab/Enter/Delete 三键，方向键返回 false：不 preventDefault、不 execCommand
+- 同窗双监听顺序：引擎 `KeyCommand.onKeydown` 在构造时绑定（KeyCommand.js:88），宿主兜底在 useEffect 内后绑——引擎先收。方向键命中时引擎 `preventDefault()+stopPropagation()`（KeyCommand.js:135-137；stopPropagation 不拦同节点后续监听，preventDefault 可见），宿主以 `e.defaultPrevented` 守卫早退（MindMapCanvas.tsx onKeydown 首行）；Tab/Enter/Delete 同理由引擎原生快捷键先应答（Render.js:384/392/407），宿主仅兜「焦点落在非 body 元素」的引擎不响应场景——无双发（该序在 E2E 复制用例中已实证，见 M2 核验「键盘处理」节）
+- KeyboardNavigation 不触碰 Tab/Enter/Delete：插件只 addShortcut 四个方向键（KeyboardNavigation.js:20-32），Tab 建子/Enter 建同级/Delete 删节点语义不变
+- 引擎核心不注册裸方向键：Render.js 快捷键全集（:384-452）仅含 Control+Up/Down 缩放组合（:430/:434，M3 笔记所称「方向键」即此）——键码多重集与插件裸方向键不同，Ctrl+上下缩放不受插件影响

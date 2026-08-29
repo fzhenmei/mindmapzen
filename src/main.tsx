@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { disableBrowserContextMenu } from './services/contextMenuGuard'
 import './styles/tokens.css'
+import './styles/theme.css'
 import './App.css'
 
 // 想法4：全局禁用 WebView 原生右键菜单（输入区保留粘贴）——详见 services/contextMenuGuard.ts

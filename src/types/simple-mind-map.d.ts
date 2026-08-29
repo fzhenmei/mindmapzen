@@ -52,6 +52,13 @@ declare module 'simple-mind-map/src/plugins/Export.js' {
   export default Export
 }
 
+// 方向键导航插件（M12a Task 3）：instanceName 'keyboardNavigation'（KeyboardNavigation.js:285），
+// 注册 Left/Up/Right/Down 快捷键按几何最近移动选中；核验见 docs/notes/engine-api.md「v1.2 核验」
+declare module 'simple-mind-map/src/plugins/KeyboardNavigation.js' {
+  const KeyboardNavigation: unknown
+  export default KeyboardNavigation
+}
+
 // 关联线几何工具（M5d Task 5 弯曲记忆）：节点实例须带布局后几何字段（left/top/width/height）。
 // Point = 端点/控制点坐标 {x,y,dir?,range?}；算法核验见 docs/notes/engine-api.md「M5d 核验 (d)」
 declare module 'simple-mind-map/src/plugins/associativeLine/associativeLineUtils.js' {

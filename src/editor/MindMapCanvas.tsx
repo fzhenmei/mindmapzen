@@ -3,6 +3,7 @@ import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
 import Export from 'simple-mind-map/src/plugins/Export.js'
+import KeyboardNavigation from 'simple-mind-map/src/plugins/KeyboardNavigation.js'
 // 关联线几何工具（M5d Task 5 弯曲记忆）：端点定位与默认控制点算式，与引擎 addLine 同源（见下方 defaultControlOffsets）
 import {
   computeNodePoints,
@@ -35,6 +36,14 @@ MindMap.usePlugin(AssociativeLine)
 // png()/svg() 返回 base64 data URL 字符串，由 services/exportImage 解码写盘/入剪贴板
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
 MindMap.usePlugin(Export)
+
+// 方向键导航插件（M12a Task 3）：Left/Up/Right/Down 在节点间按几何最近移动选中（阴影→区域→简单三算法
+// 逐级兜底，GO_TARGET_NODE 聚焦）；无选中时任意方向键聚焦根。只注册四个裸方向键（键码多重集精确匹配，
+// Shift/Ctrl 组合不命中），Tab/Enter/Delete 仍由引擎原生快捷键 + 宿主兜底层负责，互不触碰；
+// 编辑框打开期间引擎经 keyCommand.save() 清空快捷键表，框内方向键只走光标移动——三项核验见
+// docs/notes/engine-api.md「v1.2 核验」
+// eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
+MindMap.usePlugin(KeyboardNavigation)
 
 // 主题注册必须先于任何实例构造：构造 opt.theme 未注册时引擎静默回退默认主题
 // （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）
