@@ -47,4 +47,9 @@ export interface FsAdapter {
   remove(p: string): Promise<void>                  // Tauri 实现移入回收站
   exists(p: string): Promise<boolean>
   ensureDir(p: string): Promise<void>               // 递归建目录，已存在则成功
+  readDirEntries(p: string): Promise<DirEntryInfo[]>  // 目录项名 + 是否目录（M5a 案头目录树用）
+  mkdir(p: string): Promise<void>                    // 递归建目录，已存在则成功（幂等）
 }
+
+/** 目录项（readDirEntries 返回）：名字 + 是否目录 */
+export interface DirEntryInfo { name: string; isDir: boolean }

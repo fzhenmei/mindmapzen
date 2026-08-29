@@ -36,4 +36,13 @@ export const tauriFsAdapter: FsAdapter = {
     // recursive 建目录；已存在视为成功
     await mkdir(p, { recursive: true })
   },
+  async readDirEntries(p) {
+    // plugin-fs DirEntry 的 isDirectory 即「是否目录」标记
+    const entries = await readDir(p)
+    return entries.map((e) => ({ name: e.name, isDir: e.isDirectory }))
+  },
+  async mkdir(p) {
+    // recursive：已存在视为成功（幂等）
+    await mkdir(p, { recursive: true })
+  },
 }

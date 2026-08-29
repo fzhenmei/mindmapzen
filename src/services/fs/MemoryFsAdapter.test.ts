@@ -67,3 +67,24 @@ describe('MemoryFsAdapter', () => {
     await expect(fs.ensureDir()).resolves.toBeUndefined()
   })
 })
+
+describe('目录能力（M5a）', () => {
+  test('mkdir 幂等且 readDirEntries 识别目录', async () => {
+    await fs.mkdir('/ws/项目')
+    await fs.mkdir('/ws/项目') // 幂等
+    await fs.writeTextFileAtomic('/ws/图.md', '# a\n') // 注：brief 原稿为 /ws/项目/图.md，与 readDirEntries('/ws') 直接子项断言矛盾（首段推导语义下文件不在 /ws 层）
+    const entries = await fs.readDirEntries('/ws')
+    expect(entries).toContainEqual({ name: '项目', isDir: true })
+    expect(entries).toContainEqual({ name: '图.md', isDir: false })
+  })
+  test('空目录也出现在 entries（显式 mkdir）', async () => {
+    await fs.mkdir('/ws/空目录')
+    expect(await fs.readDirEntries('/ws')).toContainEqual({ name: '空目录', isDir: true })
+  })
+  test('深层目录推导：文件路径隐含中间目录', async () => {
+    await fs.writeTextFileAtomic('/ws/a/b/c.md', 'x')
+    const root = await fs.readDirEntries('/ws')
+    expect(root).toContainEqual({ name: 'a', isDir: true })
+    expect(await fs.readDirEntries('/ws/a')).toContainEqual({ name: 'b', isDir: true })
+  })
+})
