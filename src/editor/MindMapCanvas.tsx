@@ -71,8 +71,9 @@ const ASSOCIATIVE_KEYS = [
  *  resolveLinkOffsets 回填控制点差值（引擎现存优先，保存链重建不回退用户刚拖的弯；失联回退 sidecar）。
  *  offsets 数组必须稠密（引擎拖控制点路径直读 offsets[targetIndex][1] 无判空，稀疏数组拖弯即崩，
  *  见 engine-api.md「M5d 核验 (d)」）：有落位时空洞按 addLine 同款算式补引擎默认差值；
- *  节点几何不可得（防御）则整节点放弃写 offsets（渲染仍按默认曲线画）。 */
-function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adjust?: LinkAdjust): void {
+ *  节点几何不可得（防御）则整节点放弃写 offsets（渲染仍按默认曲线画）。
+ *  具名导出供 rebuildLinks.test 直测恢复胶水层（组件本体仍由 E2E 覆盖，不变）。 */
+export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adjust?: LinkAdjust): void {
   const run = (): void => {
     const root = mm.renderer?.root as EngineNodeInstance | null | undefined
     if (!root) return
