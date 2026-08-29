@@ -14,12 +14,11 @@ import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
-import CloseGuardDialog from '../components/CloseGuardDialog'
 import EditorCaption from '../components/EditorCaption'
+import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
-import ZenDialog from '../components/ZenDialog'
 
 interface Props {
   mdPath: string
@@ -260,33 +259,20 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
       <EditorCaption name={name} dirty={dirty} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
-      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming（守卫先收起、确认框随即接管，故 !guarding 门闩） */}
-      {guard.guarding && (
-        <CloseGuardDialog mapName={name} onChoice={(c) => void guard.onGuardChoice(c)} />
-      )}
-      {flow.confirming && !guard.guarding && (
-        <ZenDialog
-          title={`保存将丢弃 ${flow.ignored.length} 个未映射的内容块`}
-          onClose={flow.confirmCancel}
-          actions={
-            <>
-              <button type="button" data-testid="ignored-confirm-cancel" onClick={flow.confirmCancel}>
-                取消
-              </button>
-              <button
-                type="button"
-                data-testid="ignored-confirm-save"
-                onClick={() => {
-                  flow.confirmProceed()
-                  void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
-                }}
-              >
-                继续保存
-              </button>
-            </>
-          }
-        />
-      )}
+      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming
+          （守卫先收起、确认框随即接管，故 !guarding 门闩）；两框 JSX 已迁 EditorDialogs（M5b Task 1） */}
+      <EditorDialogs
+        guarding={guard.guarding}
+        mapName={name}
+        onGuardChoice={(c) => void guard.onGuardChoice(c)}
+        confirmingIgnored={flow.confirming && !guard.guarding}
+        ignored={flow.ignored}
+        onIgnoredConfirm={() => {
+          flow.confirmProceed()
+          void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
+        }}
+        onIgnoredCancel={flow.confirmCancel}
+      />
     </div>
   )
 }
