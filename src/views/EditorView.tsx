@@ -19,6 +19,7 @@ import type { RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
+import { useActiveSelection } from '../hooks/useActiveSelection'
 import CloseGuardDialog from '../components/CloseGuardDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
@@ -61,7 +62,6 @@ export default function EditorView({
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
-  const activeUidRef = useRef<string | null>(null)
   // 布局双状态（spec §3.7）：initialLayout 是画布挂载期布局（引擎构造参数，只在打开时来自 sidecar）；
   // layout 是当前激活布局（按钮点亮）。运行中切换走 mm.setLayout 即时重排、不重挂载画布，
   // 故二者分开：switchLayout 只更新 layout/layoutRef，不动 initialLayout
@@ -70,7 +70,6 @@ export default function EditorView({
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
-  const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
@@ -90,6 +89,9 @@ export default function EditorView({
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
   const flow = useIgnoredFlow({ clearPendingAutosave: pipeline.clearPendingAutosave })
 
+  // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
+  const selection = useActiveSelection()
+
   /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
    *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
   const flashStamp = (kind: 'saved' | 'copied'): void => {
@@ -105,11 +107,10 @@ export default function EditorView({
       const mm = mmRef.current
       if (!mm) return
       const full = mm.getData()
-      const active = activeUidRef.current ? findSubtreeByUid(full, activeUidRef.current) : null
-      if (activeUidRef.current && !active) {
-        activeUidRef.current = null
-        setActiveUid(null)
-      }
+      selection.clearStaleIfMissing(full)
+      const active = selection.activeUidRef.current
+        ? findSubtreeByUid(full, selection.activeUidRef.current)
+        : null
       await writeClipboard(serialize(engineTreeToZen(active ?? full).tree))
       flashStamp('copied')
     } catch (e) {
@@ -125,7 +126,7 @@ export default function EditorView({
     const lines = splitMultilineText(raw)
     if (lines.length === 0) return
     const mm = mmRef.current
-    const uid = activeUidRef.current
+    const uid = selection.activeUidRef.current
     if (!mm || !uid) return
     const node = mm.renderer?.findNodeByUid(uid)
     if (!node) return
@@ -260,10 +261,7 @@ export default function EditorView({
             theme={engineThemeName(resolvedTheme)}
             onReady={(mm) => (mmRef.current = mm)}
             onDataChange={pipeline.onTreeDataChange}
-            onActiveChange={(uid) => {
-              activeUidRef.current = uid
-              setActiveUid(uid)
-            }}
+            onActiveChange={selection.handleActiveChange}
             onEditorPaste={applyMultilinePaste}
           />
         )}
@@ -287,9 +285,9 @@ export default function EditorView({
         <button
           type="button"
           data-testid="btn-copy"
-          data-scope={activeUid ? 'branch' : 'full'}
+          data-scope={selection.activeUid ? 'branch' : 'full'}
           title={
-            activeUid
+            selection.activeUid
               ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
               : '复制整图为 Markdown（Ctrl+Shift+C）'
           }
