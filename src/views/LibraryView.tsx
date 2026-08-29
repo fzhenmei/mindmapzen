@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
@@ -41,16 +41,17 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   // 新建目录的父目录（DirectoryTree onCreateDir 传入；''=工作区根）
   const [dirParent, setDirParent] = useState('')
 
-  /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用 */
-  const reloadTree = async () => {
+  /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
+   *  useCallback 固定身份（体仅引用稳定的 setTree 与模块导入，无反应式依赖，无陈旧闭包） */
+  const reloadTree = useCallback(async () => {
     const { adapter, workspaceDir: ws } = useAppStore.getState()
     if (!ws) return
     setTree(await readDirTree(adapter, ws))
-  }
+  }, [])
 
   useEffect(() => {
     void reloadTree()
-  }, [workspaceDir])
+  }, [workspaceDir, reloadTree])
 
   const closeDialog = () => {
     setDialog(null)
