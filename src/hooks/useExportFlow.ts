@@ -2,7 +2,7 @@
 // 自 EditorView 拆出（EditorView 行数护栏 ≤300）。导出先经 pickSavePath 选目标路径
 //（取消即静默放弃），复制图直接走 writeImage；成功复用印记（导出=「已存」/复制图=「已复制」），
 // 失败经 setError 出中文横幅。
-import { useState, type MutableRefObject } from 'react'
+import { useState, type RefObject } from 'react'
 import { copyPngToClipboard, exportPngToFile, exportSvgToFile } from '../services/exportImage'
 import type { MindMapHandle } from '../types/engine'
 import type { ExportPorts } from '../types/ports'
@@ -28,7 +28,7 @@ export interface ExportFlow {
 }
 
 export function useExportFlow(
-  mmRef: MutableRefObject<MindMapHandle | null>,
+  mmRef: RefObject<MindMapHandle | null>,
   adapter: WriteBytesDeps,
   mapName: string,
   ports: ExportPorts,
@@ -37,13 +37,14 @@ export function useExportFlow(
 ): ExportFlow {
   const [open, setOpen] = useState(false)
 
-  // pickSavePath 返回 null = 用户取消保存对话框：静默放弃（不写盘/不盖印/不报错）
+  // pickSavePath 返回 null = 用户取消保存对话框：静默放弃（不写盘/不盖印/不报错）；
+  // 对话框插件异常与其他导出错误同路进 catch——不挪进 try 会成为未处理拒绝、无横幅
   const runExport = async (kind: 'png' | 'svg'): Promise<void> => {
     const mm = mmRef.current
     if (!mm) return
-    const savePath = await ports.pickSavePath(`${mapName}.${kind}`)
-    if (savePath === null) return
     try {
+      const savePath = await ports.pickSavePath(`${mapName}.${kind}`)
+      if (savePath === null) return
       if (kind === 'png') await exportPngToFile(mm, savePath, adapter.writeBytes.bind(adapter))
       else await exportSvgToFile(mm, savePath, adapter.writeBytes.bind(adapter))
       onSuccess('saved')

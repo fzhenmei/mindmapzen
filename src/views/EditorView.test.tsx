@@ -1307,3 +1307,16 @@ test('Esc 关闭导出对话框：无任何导出动作', async () => {
   expect(writeImage).not.toHaveBeenCalled()
   expect(handle.doExport?.png).not.toHaveBeenCalled()
 })
+
+test('保存对话框异常（pickSavePath 抛错）：中文横幅提示且不写盘不盖印', async () => {
+  const pickSavePath = vi.fn(async () => {
+    throw new Error('对话框插件崩溃')
+  })
+  await renderReady({ pickSavePath, writeImage: vi.fn() })
+  fireEvent.click(screen.getByTestId('btn-export'))
+  fireEvent.click(screen.getByTestId('export-png'))
+  await waitFor(() => expect(useAppStore.getState().error).toContain('导出失败'))
+  expect(useAppStore.getState().error).toContain('对话框插件崩溃')
+  expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+  expect(await fs.exists('/ws/a.png')).toBe(false)
+})

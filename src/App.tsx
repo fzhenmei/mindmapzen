@@ -4,7 +4,7 @@ import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
 import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
 import type { ExportPorts, RegisterCloseGuard } from './types/ports'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
@@ -108,7 +108,6 @@ const exportPorts: ExportPorts = E2E
     }
   : {
       async pickSavePath(defaultName) {
-        const { save } = await import('@tauri-apps/plugin-dialog')
         return save({ defaultPath: defaultName })
       },
       async writeImage(bytes) {
