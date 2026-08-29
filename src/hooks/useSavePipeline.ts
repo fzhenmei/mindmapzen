@@ -17,6 +17,7 @@ export interface SavePipelineOpts {
   dirtyRef: MutableRefObject<boolean>
   onDirtyChange: (dirty: boolean) => void // 脏标记同步（markDirty / clearDirty）
   onError: (msg: string) => void // 保存失败横幅（setError）
+  onSaved?: () => void // md+sidecar 落盘成功后回调（M5b Task 3：双链重建随保存链）
 }
 
 export interface SavePipeline {
@@ -63,6 +64,7 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       const { tree, collapsed } = engineTreeToZen(snapshot)
       await adapter.writeTextFileAtomic(mdPath, serialize(tree))
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed))
+      opts.onSaved?.()
       // 记录落盘快照：引擎节流补发的同值 data_change 到达时据此免置脏（见 onTreeDataChange）
       lastSavedDataRef.current = JSON.stringify(snapshot)
       if (dataRevRef.current !== rev) {

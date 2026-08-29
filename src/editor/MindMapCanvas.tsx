@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
+import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
 import type { EngineNode, MindMapHandle } from '../types/engine'
+import type { ResolvedLink } from '../services/links'
 import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
 
@@ -9,12 +11,75 @@ import { registerZenThemes } from './engineThemes'
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
 MindMap.usePlugin(Drag)
 
+// 节点连线插件（M5b Task 3）：[[..]] 双链由 rebuildEngineLinks 直写 targets 数据后驱动重绘
+// eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
+MindMap.usePlugin(AssociativeLine)
+
 // 主题注册必须先于任何实例构造：构造 opt.theme 未注册时引擎静默回退默认主题
 // （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）
 registerZenThemes()
 
 // 改变折叠态的引擎命令（与引擎 Render.js 注册的四个展开类命令对齐）：命令完成即改变需持久化的数据
 const EXPAND_COMMANDS = new Set(['SET_NODE_EXPAND', 'EXPAND_ALL', 'UNEXPAND_ALL', 'UNEXPAND_TO_LEVEL'])
+
+/** 渲染树节点实例的最小结构（MindMapNode）：getData() 无参返回 nodeData.data 活引用（引擎核验 M5b Task 3） */
+interface EngineNodeInstance {
+  getData(key?: string): unknown
+  children?: EngineNodeInstance[]
+}
+
+/** 关联线宿主数据键全集（AssociativeLine 写/读；重建时全清——连线完全由 [[..]] 派生） */
+const ASSOCIATIVE_KEYS = [
+  'associativeLineTargets',
+  'associativeLinePoint',
+  'associativeLineTargetControlOffsets',
+  'associativeLineText',
+  'associativeLineStyle',
+] as const
+
+/** 按 [[名称]] 双链重建关联线：清空全树连线数据后按 toNode uid 直写 targets，再驱动渲染器重绘。
+ *  刻意不走 ADD_ASSOCIATIVE_LINE/SET_NODE_DATA 命令：命令会进历史并触发 data_change → 宿主置脏 →
+ *  自动保存循环；而连线是 md 派生数据（engineTreeToZen 只读 text/note/expand，不落盘），无需入历史。
+ *  渲染器数据驱动：node_tree_render_end/data_change 时插件按 data.associativeLineTargets 自动重绘，
+ *  故后续文本编辑引起的重排无需再触发本函数。自环丢弃（引擎 UI completeCreateLine 同语义）。 */
+function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[]): void {
+  const run = (): void => {
+    const root = mm.renderer?.root as EngineNodeInstance | null | undefined
+    if (!root) return
+    const byPath = new Map<string, EngineNodeInstance>()
+    const walk = (node: EngineNodeInstance, parentPath: string): void => {
+      const text = node.getData('text')
+      const path = parentPath === '' ? '/' + String(text) : parentPath + '/' + String(text)
+      byPath.set(path, node)
+      const data = node.getData() as Record<string, unknown> | undefined
+      if (data) for (const key of ASSOCIATIVE_KEYS) delete data[key]
+      for (const child of node.children ?? []) walk(child, path)
+    }
+    walk(root, '')
+    const targets = new Map<EngineNodeInstance, string[]>()
+    for (const { fromPath, toPath } of links) {
+      const from = byPath.get(fromPath)
+      const to = byPath.get(toPath)
+      const uid = to?.getData('uid')
+      if (!from || !to || from === to || typeof uid !== 'string') continue
+      const list = targets.get(from) ?? []
+      if (!list.includes(uid)) list.push(uid)
+      targets.set(from, list)
+    }
+    targets.forEach((uids, from) => {
+      const data = from.getData() as Record<string, unknown> | undefined
+      if (data) data.associativeLineTargets = uids
+    })
+    ;(mm as unknown as { associativeLine?: { renderAllLines(): void } }).associativeLine?.renderAllLines()
+  }
+  // 引擎构造后首帧渲染经 Render.render 的 setTimeout(0) 异步完成，root 未就绪时一次性挂监听等渲染结束
+  if (mm.renderer?.root) run()
+  else
+    mm.on('node_tree_render_end', function onEnd() {
+      mm.off('node_tree_render_end', onEnd)
+      run()
+    })
+}
 
 interface Props {
   tree: EngineNode
@@ -73,6 +138,8 @@ export default function MindMapCanvas({
       cbRef.current.onActiveChange?.(typeof uid === 'string' ? uid : null)
     }
     mm.on('node_active', onActive)
+    // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在 onReady 与保存成功后经 mmRef 调用
+    ;(mm as MindMapHandle).rebuildLinks = (links) => rebuildEngineLinks(mm, links)
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；

@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
 import { readSidecar } from '../services/sidecar'
 import { splitMultilineText } from '../services/multiline'
+import { resolveAllLinks } from '../services/links'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { engineThemeName } from '../editor/engineThemes'
@@ -60,6 +61,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     dirtyRef,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
     onError: setError,
+    // 落盘成功后按最新树重建双链（M5b Task 3）：[[..]] 是文本派生标记，保存链（含 5s 自动保存）是统一重建时机
+    onSaved: () => {
+      const mm = mmRef.current
+      mm?.rebuildLinks?.(resolveAllLinks(engineTreeToZen(mm.getData()).tree))
+    },
   })
 
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
@@ -232,7 +238,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
             tree={engineTree}
             layout={layoutToEngine(initialLayout)}
             theme={engineThemeName(resolvedTheme)}
-            onReady={(mm) => (mmRef.current = mm)}
+            onReady={(mm) => {
+              mmRef.current = mm
+              // 初始双链：此时引擎首帧尚未渲染且 getData() 未初始化，用打开时解析的 engineTree 作源；
+              // rebuildLinks 内部等待首帧渲染完成后落线
+              mm.rebuildLinks?.(resolveAllLinks(engineTreeToZen(engineTree).tree))
+            }}
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
             onEditorPaste={applyMultilinePaste}

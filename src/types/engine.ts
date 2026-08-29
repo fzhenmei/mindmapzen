@@ -1,4 +1,6 @@
 // src/types/engine.ts —— 引擎节点最小结构类型，避免依赖引擎包类型
+import type { ResolvedLink } from '../services/links'
+
 export interface EngineNode {
   data: { text: string; expand?: boolean; [k: string]: unknown }
   children?: EngineNode[]
@@ -40,6 +42,12 @@ export interface EngineView {
 export interface MindMapHandle {
   getData(): EngineNode
   execCommand(cmd: string, ...args: unknown[]): void
+  /** 事件订阅/退订（引擎 EventEmitter 委托，index.js:345/355；MindMapCanvas 经此等首帧渲染完成） */
+  on(event: string, cb: (...args: unknown[]) => void): void
+  off(event: string, cb: (...args: unknown[]) => void): void
+  /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
+   *  内部等待首帧渲染完成后按 links 清空并重建关联线 */
+  rebuildLinks?(links: ResolvedLink[]): void
   /** 运行中切换布局并即时重排（引擎 index.js:436 setLayout(layout, notRender=false)）；不重挂载画布 */
   setLayout(name: string): void
   /** 运行中切换主题（引擎 index.js:379 setTheme(theme)）：清选中→重绘→view_theme_change；不重挂载画布 */

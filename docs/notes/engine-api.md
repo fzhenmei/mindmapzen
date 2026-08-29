@@ -209,3 +209,42 @@
 ### d.ts 影响
 
 `EngineRenderer` 增 `reRenderNodeCheckChange(node: unknown, notRender?: boolean): void`（Render.js:1997）；备注读取走节点实例 `getData('note')`（MindMapNode.js:1029，未进类型——`findNodeByUid` 返回 `unknown`，调用点结构断言）。
+
+## M5b 核验（Task 3，节点连线）
+
+对 [[..]] 双链 → 引擎关联线接线的关键引擎事实核验（路径相对 `node_modules/simple-mind-map`，版本 0.14.0-fix.3；插件入口为 `src/plugins/AssociativeLine.js`，插件实例挂 `mindMap.associativeLine`，instanceName 见 :763）。
+
+### (a) 建线命令 `ADD_ASSOCIATIVE_LINE` —— 成立
+
+- `AssociativeLine.js:99` 注册：`this.mindMap.command.add('ADD_ASSOCIATIVE_LINE', this.addLine)`，实现 `addLine(fromNode, toNode)`（:578 起）：目标无 uid 时先经 SET_NODE_DATA 补生成，再把目标 uid 追加进 fromNode 的 `associativeLineTargets`
+
+### (b) `removeAllLines` 只删 SVG，不删数据 —— 真“清空”须删键后重绘
+
+- `renderAllLines`（:210）每次先 `removeAllLines()`（仅移除 SVG 元素）再按节点 data 里的 `associativeLineTargets` 重建；要删一条线必须从节点 data 删 uid/样式键后触发重绘。宿主重建语义 = 清空全树 5 个关联线键（`associativeLineTargets`/`associativeLinePoint`/`associativeLineTargetControlOffsets`/`associativeLineText`/`associativeLineStyle`）后按 md 重写
+
+### (c) 连线数据是节点 data 普通键 —— 会进 getData 但不泄入 md；命令层同 uid 去重
+
+- 上述 5 键均挂在节点 `data` 上（addLine :633/:645 等），`getCopyData()`/`getData()` 会带上；但 `engineTreeToZen` 只读 text/note/expand，天然不泄入 md（连线是纯派生数据，不落盘）
+- `addLine` 对同 from 节点重复目标 uid 去重（:592 `sameLine` 检查）防双建；宿主直写路径在 rebuildEngineLinks 内自行去重（Map + includes）
+
+### (d) 无 `.smm-associative-line` 类 —— 容器类名与主题键实况
+
+- 容器是引擎主入口 `index.js:200-201` 创建的 group：`this.associativeLineDraw = this.draw.group(); addClass('smm-associative-line-container')`；每条线由 drawLine（:261 起）直挂 2 个 path——可见线（stroke 主题色）+ 透明点击线（`color: 'transparent'`，宽为 activeWidth），箭头在 marker defs 内、文字为 group，均非直挂 path
+- 线色/线宽走主题根键 `associativeLineColor`/`associativeLineWidth`（`src/theme/default.js:43-45`），经 SVG.js 属性着色；CSS 直染会波及透明点击线，不可取
+
+### (e) 首帧渲染异步 —— onReady 时 root 为 null
+
+- `Render.render` 经 `setTimeout(0)` 去抖（`Render.js:553-559`），引擎构造同步完成后首帧仍未落：`renderer.root` 为 null。首帧前的双链重建须一次性挂 `node_tree_render_end`（Render.js:171 等处 emit）等渲染结束再落线
+
+### (f) `getData()` 首命令前数据未初始化
+
+- 初始重建（onReady）不用 `mm.getData()` 作解析源，改用 EditorView 打开时自持的 engineTree；运行中（保存链 onSaved）才用 getData 取最新树
+
+### (g) `getData()` 无参返回活引用 —— 直写 + renderAllLines 绕过命令系统
+
+- `MindMapNode.js:1029-1031`：`getData(key)` 无参返回 `this.nodeData.data` 本体。直写关联线键后调 `associativeLine.renderAllLines()`：不 execCommand → 不进历史、不触发 data_change → 无置脏/自动保存循环
+- 插件已订阅 `node_tree_render_end`/`data_change`（AssociativeLine.js:89/91）自动重绘，后续文本编辑引起的重排无需再触发重建
+
+### (h) `[[x]]` 是普通文本 —— serialize/parse 字面保留
+
+- md 层对 `[[..]]` 无任何特殊处理，roundtrip 属性测试无需改动；双链语义仅在 links.ts 解析与引擎渲染层

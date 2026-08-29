@@ -41,3 +41,8 @@ declare module 'simple-mind-map/src/plugins/Drag.js' {
   const Drag: unknown
   export default Drag
 }
+
+declare module 'simple-mind-map/src/plugins/AssociativeLine.js' {
+  const AssociativeLine: unknown
+  export default AssociativeLine
+}

@@ -37,6 +37,9 @@ vi.mock('../editor/MindMapCanvas', () => ({
     fakeHandle = {
       getData: () => fakeTree,
       execCommand: vi.fn(),
+      // 事件订阅/退订（M5b Task 3 进 MindMapHandle）：假画布无引擎事件源，空桩即可
+      on: vi.fn(),
+      off: vi.fn(),
       setLayout: vi.fn(),
       setTheme: vi.fn(),
       resize: vi.fn(),
