@@ -1,0 +1,57 @@
+/* 青松工作台 · Tailwind v4 主题（M12a Task 1 spike）
+ *
+ * spike 裁定（零视觉变更）：分层导入 tailwindcss/theme.css + utilities.css，**不引 preflight**——
+ * 其 `ol,ul { list-style: none }` 会抹掉 .zen-banner ul 的项目符号、`svg { display: block }` 会挪动
+ * 内联图标基线，均违反本里程碑「现有 UI 全不动」验收线。分层顺序与官方 index.css 一致；
+ * preflight 留待 M12b 全 UI 重构时随新样式启用。tokens.css/App.css 均未分层（unlayered），
+ * 级联上恒压过 Tailwind 各层，并存无冲突。
+ */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme static {
+  /* 色彩令牌：spec §2 表逐字（十六进制照抄），晨松（亮）为默认。
+   * static：禁用 v4 按需摇树——令牌表是公开接口（Task 4 冒烟经 getComputedStyle 断言
+   * --color-background 双主题值），不依赖是否有工具类恰好消费它。 */
+  --color-background: #F7F8F7;
+  --color-surface: #FFFFFF;
+  --color-foreground: #1F2328;
+  --color-muted-foreground: #64707A;
+  --color-primary: #1D7A6B;
+  --color-primary-hover: #16655A;
+  --color-primary-soft: #E3F2EE;
+  --color-brand: #B5453C; /* 朱砂：仅品牌/文件徽章/破坏性 */
+  --color-border: #E4E7E6;
+  --color-ring: #1D7A6B; /* 焦点环 2px */
+
+  /* 圆角：控件 6px / 卡片·弹层 8px / 命令栏 10px */
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-dock: 10px;
+
+  /* 阴影两档：卡片几乎无影 / 弹层轻影 */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.1);
+
+  /* 双声道字体：UI 中文界面声道 / 文件（等宽）声道 */
+  --font-ui:
+    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    sans-serif;
+  --font-file: 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* 夜航（暗）主题：仅色彩令牌有暗列（spec §2），同键覆盖驱动全部 Tailwind 工具类。
+ * 此块不入 layer——unlayered 恒胜 @layer theme 中的默认值。 */
+:root[data-theme='dark'] {
+  --color-background: #14181A;
+  --color-surface: #1B2022;
+  --color-foreground: #D6DBDA;
+  --color-muted-foreground: #8B9599;
+  --color-primary: #4CBFA8;
+  --color-primary-hover: #5ED4BC;
+  --color-primary-soft: #1D3B36;
+  --color-brand: #C96A5F;
+  --color-border: #2A3033;
+  --color-ring: #4CBFA8;
+}
