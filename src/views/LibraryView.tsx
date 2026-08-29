@@ -211,14 +211,18 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 title={`选中「${m.name}」（双击打开）`}
               >
                 <span className="map-name">{m.name}</span>
-                <span className="badge-md">.md</span>
+                <span className="badge-md" aria-hidden="true">
+                  .md
+                </span>
                 {/* 「全部」视图显示所在层小字，帮助定位目录归属 */}
                 {selectedDir === '' && (
                   <span className="map-reldir" data-testid="map-reldir">
                     {m.relDir === '' ? '根' : m.relDir}
                   </span>
                 )}
-                <span className="map-time">{new Date(m.modifiedAt).toLocaleString('zh-CN')}</span>
+                <span className="map-time" aria-hidden="true">
+                  {new Date(m.modifiedAt).toLocaleString('zh-CN')}
+                </span>
               </button>
               <div className="map-card-actions">
                 <button

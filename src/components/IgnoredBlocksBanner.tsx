@@ -14,8 +14,8 @@ export default function IgnoredBlocksBanner({ blocks }: Readonly<{ blocks: Ignor
       </button>
       {open && (
         <ul data-testid="ignored-list">
-          {blocks.map((b, i) => (
-            <li key={i}>
+          {blocks.map((b) => (
+            <li key={b.type + b.excerpt}>
               {describeIgnoredType(b.type)}：{b.excerpt}
             </li>
           ))}
