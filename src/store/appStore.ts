@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { DEFAULT_COPY_SETTINGS, type CopySettingKey, type CopySettings, type FsAdapter, type LayoutKind, type MapInfo, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
+import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
 
 interface AppState {
@@ -87,6 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshMaps: async () => {
     const { adapter, workspaceDir } = get()
     if (!workspaceDir) return
+    // 案头刷新即清扫原子写孤儿 tmp（编辑器内不触发此路径，无在途写冲突）
+    await sweepTmpOrphans(adapter, workspaceDir).catch(() => {})
     set({ maps: await listMaps(adapter, workspaceDir) })
   },
 
