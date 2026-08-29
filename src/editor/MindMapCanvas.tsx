@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
+import Export from 'simple-mind-map/src/plugins/Export.js'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { handleEngineKeyDown } from './engineKeyboard'
@@ -14,6 +15,11 @@ MindMap.usePlugin(Drag)
 // 节点连线插件（M5b Task 3）：[[..]] 双链由 rebuildEngineLinks 直写 targets 数据后驱动重绘
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
 MindMap.usePlugin(AssociativeLine)
+
+// 导出插件（M5b Task 5）：实例构造时挂 mindMap.doExport（instanceName，engine-api.md「M5b 核验 (b)」）；
+// png()/svg() 返回 base64 data URL 字符串，由 services/exportImage 解码写盘/入剪贴板
+// eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
+MindMap.usePlugin(Export)
 
 // 主题注册必须先于任何实例构造：构造 opt.theme 未注册时引擎静默回退默认主题
 // （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）

@@ -114,3 +114,13 @@ export const IconFolder = ({ size }: IconProps) =>
     <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3l1.5 2H12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 12 14H4a1.5 1.5 0 0 1-1.5-1.5z" />,
     size,
   )
+/** 导出图片（M5b）：相框轮廓 + 山形折线 + 日点 */
+export const IconImage = ({ size }: IconProps) =>
+  base(
+    <>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" />
+      <path d="M4.5 11l2.5-3 2 2.2 1.5-1.7L13 11.5" />
+      <circle cx="5.8" cy="5.8" r="0.9" fill="currentColor" stroke="none" />
+    </>,
+    size,
+  )

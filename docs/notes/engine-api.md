@@ -248,3 +248,31 @@
 ### (h) `[[x]]` 是普通文本 —— serialize/parse 字面保留
 
 - md 层对 `[[..]]` 无任何特殊处理，roundtrip 属性测试无需改动；双链语义仅在 links.ts 解析与引擎渲染层
+
+## M5b 核验（Task 5，导出与复制为图片）
+
+路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3），插件入口 `src/plugins/Export.js`。
+
+### (a) `doExport.png()/svg()` 返回 **base64 data URL 字符串，不是 Blob** —— 与计划假设相反
+
+- `png(...args)`（Export.js:353-356）委托 `_image('image/png', ...)`（:333-346）：`getSvgData` 取 svg 串 → `fixSvgStrAndToBlob(str)` → `svgToPng(svgUrl, ...)` 最终 `resolve(canvas.toDataURL(format))`（:254）——**png() 返回 `data:image/png;base64,...` 字符串**（canvas.toDataURL 直出，不经 readBlob）
+- `svg(name)`（:400-408）返回 `await this.fixSvgStrAndToBlob(str)`——**函数名有误导**：`fixSvgStrAndToBlob`（:411-422）内部 `new Blob` 后经 `readBlob(blob)`（src/utils/index.js:441-451）`FileReader.readAsDataURL` —— **返回的也是 data URL 字符串**（`data:image/svg+xml;base64,...`）
+- 结论：宿主侧转换函数做 `dataUrlToBytes(dataUrl)`（`atob` 解码 base64 段 → Uint8Array），非 `blobToBytes`；png 链路依赖 `document.createElement('canvas')`（svgToPng :145），jsdom 不可用——组件测试走 fake mm，真链路由 E2E chromium 覆盖
+- `svg(name)` 会把 `name` 写入 svg 首元素前的 `<title>`（:403）；png 链路的 name 参数未被使用（仅 `export()` 的浏览器下载文件名用）
+
+### (b) 插件挂载 —— `MindMap.usePlugin(Export)` → 实例构造时挂 `mindMap.doExport`
+
+- `Export.instanceName = 'doExport'`（Export.js:458）；`usePlugin`（index.js:822-829）仅入模块级 pluginList，实例构造时 `initPlugin`（:744-749）执行 `this[plugin.instanceName] = new plugin({ mindMap, pluginOpt })`
+- 与 Drag/AssociativeLine 同款接线：MindMapCanvas 模块顶层 `MindMap.usePlugin(Export)` 即可，构造出的每个实例都带 `doExport`
+- **不可走 `export(type, isDownload=true, name)`**（:24-34）：默认 `isDownload=true` 会触发 `downloadFile`（浏览器下载），Tauri 桌面端直接调 `doExport.png()`/`doExport.svg()` 方法取返回值
+
+### (c) Tauri 侧核验（writeFile/writeImage/save）
+
+- plugin-fs `writeFile(path: string | URL, data: Uint8Array | ReadableStream<Uint8Array>, options?)`（dist-js/index.d.ts:721）——二进制写盘直接用，经 FsAdapter 新增 `writeBytes` 收口（`writeTextFileAtomic` 只收字符串）
+- plugin-clipboard-manager `writeImage(image: string | Image | Uint8Array | ArrayBuffer | number[])`（index.d.ts:52）——传 Uint8Array
+- plugin-dialog `save(options?: SaveDialogOptions): Promise<string | null>`（index.d.ts:319），`defaultPath` 选项指定默认文件名；用户取消返回 null
+- **capabilities 补充（与计划"无需改"相反）**：`dialog:default` 已含 `allow-save`；但 `fs:default` 不含 write-file、`clipboard-manager:default` 启用空集——`src-tauri/capabilities/default.json` 须补 `fs:allow-write-file`（scope `**`，同既有 fs 项）与 `clipboard-manager:allow-write-image`，否则运行时被权限拦截
+
+### d.ts 影响
+
+`src/types/simple-mind-map.d.ts` 增 `declare module 'simple-mind-map/src/plugins/Export.js'`；`MindMapHandle`（src/types/engine.ts）增可选 `doExport?: { png(name?: string): Promise<string>; svg(name?: string): Promise<string> }`。

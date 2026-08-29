@@ -28,6 +28,12 @@ export interface EngineRenderer {
   root?: NodeBox | null
 }
 
+/** 导出插件实例面（MindMapHandle.doExport，M5b Task 5）：返回 data URL 字符串（非 Blob），见上方 doExport 注释 */
+export interface EngineExport {
+  png(name?: string): Promise<string>
+  svg(name?: string): Promise<string>
+}
+
 /** 引擎视图（MindMapHandle.view）：x/y/scale 为可直接赋值的变换状态，改后须调 transform() 生效（View.js） */
 export interface EngineView {
   reset(): void
@@ -45,6 +51,10 @@ export interface MindMapHandle {
   /** 事件订阅/退订（引擎 EventEmitter 委托，index.js:345/355；MindMapCanvas 经此等首帧渲染完成） */
   on(event: string, cb: (...args: unknown[]) => void): void
   off(event: string, cb: (...args: unknown[]) => void): void
+  /** 导出插件（M5b Task 5，usePlugin(Export) 后挂载，instanceName='doExport'）：
+   *  png()/svg() 返回 base64 data URL 字符串而非 Blob（canvas.toDataURL / readBlob，engine-api.md「M5b 核验 (a)」）；
+   *  svg 的 name 会写入 svg 首元素前的 <title>，png 的 name 未被引擎使用 */
+  doExport?: EngineExport
   /** 双链重建（M5b Task 3）：宿主侧方法——MindMapCanvas 装配时挂到引擎实例（非引擎原生 API）；
    *  内部等待首帧渲染完成后按 links 清空并重建关联线 */
   rebuildLinks?(links: ResolvedLink[]): void

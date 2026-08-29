@@ -66,6 +66,26 @@ describe('MemoryFsAdapter', () => {
   test('ensureDir 解析成功且无副作用', async () => {
     await expect(fs.ensureDir()).resolves.toBeUndefined()
   })
+
+  test('writeBytes 存二进制且 readBytes 逐字节还原；exists 对二进制文件成立', async () => {
+    const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47])
+    await fs.writeBytes('/ws/a.png', bytes)
+    expect([...(await fs.readBytes('/ws/a.png'))]).toEqual([...bytes])
+    expect(await fs.exists('/ws/a.png')).toBe(true)
+    // 覆盖写：后写胜出
+    await fs.writeBytes('/ws/a.png', Uint8Array.from([1, 2]))
+    expect(await fs.readBytes('/ws/a.png')).toHaveLength(2)
+  })
+
+  test('writeBytes 的文件出现在 readDir 与 readDirEntries（推导语义同文本文件）', async () => {
+    await fs.writeBytes('/ws/a.png', Uint8Array.of(1))
+    expect(await fs.readDir('/ws')).toEqual(['a.png'])
+    expect(await fs.readDirEntries('/ws')).toContainEqual({ name: 'a.png', isDir: false })
+  })
+
+  test('readBytes 读不存在的二进制文件报错', async () => {
+    await expect(fs.readBytes('/ws/无.png')).rejects.toThrow('文件不存在')
+  })
 })
 
 describe('目录能力（M5a）', () => {

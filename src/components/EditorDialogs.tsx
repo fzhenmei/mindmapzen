@@ -4,7 +4,9 @@
 // SaveStamp 不入容器——它是浮层非对话框。
 import { useState } from 'react'
 import type { IgnoredBlock } from '../types/tree'
+import type { ExportActions } from '../hooks/useExportFlow'
 import CloseGuardDialog from './CloseGuardDialog'
+import ExportDialog from './ExportDialog'
 import ZenDialog from './ZenDialog'
 
 interface EditorDialogsProps {
@@ -21,6 +23,8 @@ interface EditorDialogsProps {
   noteDraft: string | null
   onNoteSave(value: string): void
   onNoteCancel(): void
+  /** 导出对话框（M5b Task 5）：非 null 时打开（开态与互斥门闩由调用方组合传入） */
+  exportActions: ExportActions | null
 }
 
 /** 备注对话框：textarea 本地受控（draft 仅为初值），保存回传编辑值 */
@@ -68,6 +72,7 @@ export default function EditorDialogs({
   noteDraft,
   onNoteSave,
   onNoteCancel,
+  exportActions,
 }: Readonly<EditorDialogsProps>) {
   return (
     <>
@@ -91,6 +96,7 @@ export default function EditorDialogs({
       {noteDraft !== null && (
         <NoteDialog draft={noteDraft} onSave={onNoteSave} onCancel={onNoteCancel} />
       )}
+      {exportActions !== null && <ExportDialog actions={exportActions} />}
     </>
   )
 }

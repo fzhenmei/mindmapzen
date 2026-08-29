@@ -70,6 +70,8 @@ export interface Sidecar {
 export interface FsAdapter {
   readTextFile(p: string): Promise<string>
   writeTextFileAtomic(p: string, contents: string): Promise<void>
+  /** 二进制写盘（M5b Task 5 导出 PNG/SVG）：整文件覆盖写，无原子换名（导出非事实源，非原子可接受） */
+  writeBytes(p: string, bytes: Uint8Array): Promise<void>
   readDir(p: string): Promise<string[]>            // 返回文件/目录名列表
   statModified(p: string): Promise<number>          // mtime 毫秒
   rename(a: string, b: string): Promise<void>       // 目标存在则替换

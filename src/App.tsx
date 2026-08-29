@@ -6,7 +6,7 @@ import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open } from '@tauri-apps/plugin-dialog'
 import { openPath } from '@tauri-apps/plugin-opener'
-import type { RegisterCloseGuard } from './types/ports'
+import type { ExportPorts, RegisterCloseGuard } from './types/ports'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
@@ -88,6 +88,35 @@ const writeClipboard: WriteClipboard = E2E
     }
   : writeClipboardViaTauri
 
+/** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；
+ *  E2E web 模式记录到 harness 桩（__zenE2e.savePaths/exportedBytes，固定路径走内存 FS 落盘） */
+const exportPorts: ExportPorts = E2E
+  ? {
+      async pickSavePath(defaultName) {
+        const z = (window as unknown as Record<string, unknown>).__zenE2e as {
+          savePaths: string[]
+        }
+        const path = `/ws/导出/${defaultName}`
+        z.savePaths.push(path)
+        return path
+      },
+      async writeImage(bytes) {
+        ;(
+          (window as unknown as Record<string, unknown>).__zenE2e as { exportedBytes: number | null }
+        ).exportedBytes = bytes.length
+      },
+    }
+  : {
+      async pickSavePath(defaultName) {
+        const { save } = await import('@tauri-apps/plugin-dialog')
+        return save({ defaultPath: defaultName })
+      },
+      async writeImage(bytes) {
+        const { writeImage } = await import('@tauri-apps/plugin-clipboard-manager')
+        await writeImage(bytes)
+      },
+    }
+
 export default function App() {
   const { route, currentMdPath, setAdapter, init } = useAppStore()
   useEffect(() => {
@@ -130,6 +159,7 @@ export default function App() {
         mdPath={currentMdPath}
         openInEditor={(p) => void openPath(p)}
         writeClipboard={writeClipboard}
+        exportPorts={exportPorts}
         registerCloseGuard={registerCloseGuard}
         exitApp={exitApp}
       />

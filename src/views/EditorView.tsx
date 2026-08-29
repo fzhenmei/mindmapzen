@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
 import { readSidecar } from '../services/sidecar'
-import { splitMultilineText } from '../services/multiline'
+import { applyMultilinePaste } from '../services/multiline'
 import { resolveAllLinks } from '../services/links'
 import { applyCopySettings } from '../services/copyFilter'
 import type { WriteClipboard } from '../services/clipboard'
@@ -11,12 +11,13 @@ import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
-import type { RegisterCloseGuard } from '../types/ports'
+import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useNoteEdit } from '../hooks/useNoteEdit'
+import { useExportFlow } from '../hooks/useExportFlow'
 import EditorCaption from '../components/EditorCaption'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
@@ -28,13 +29,15 @@ interface Props {
   openInEditor: (path: string) => void
   /** 剪贴板写入端口：生产为 Tauri 插件实现，测试注入内存实现 */
   writeClipboard: WriteClipboard
+  /** 导出与复制图片端口（M5b）：生产为 Tauri save 对话框 + writeImage，测试注入记录桩 */
+  exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
   registerCloseGuard: RegisterCloseGuard
   /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
   exitApp: () => void
 }
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard, registerCloseGuard, exitApp }: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
@@ -84,6 +87,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
     setStamp({ kind, seq: stampSeqRef.current })
   }
 
+  // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
+  const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
+
   /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
    *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中。
    *  后处理（M5b Task 4）：按 settings 剥备注引用块/双链括号（getState 取实时值——键盘闭包绑定首渲染） */
@@ -99,25 +105,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
       flashStamp('copied')
     } catch (e) {
       setError('复制失败：' + String(e))
-    }
-  }
-
-  /** 多行粘贴执行（spec §3.6）：首行替换被编辑节点文本，其余行逐个插入其子节点。
-   *  顺序上必须先关引擎编辑框再 SET_NODE_TEXT：INSERT_CHILD_NODE 内部会调 hideEditTextBox，
-   *  以编辑框内粘贴前的旧文本提交覆盖首行（TextEdit.js:492，引擎核验笔记）。
-   *  无引擎实例/无激活 uid/uid 未命中渲染树均静默放弃（无目标语义） */
-  const applyMultilinePaste = (raw: string): void => {
-    const lines = splitMultilineText(raw)
-    if (lines.length === 0) return
-    const mm = mmRef.current
-    const uid = selection.activeUidRef.current
-    if (!mm || !uid) return
-    const node = mm.renderer?.findNodeByUid(uid)
-    if (!node) return
-    mm.renderer?.textEdit.hideEditTextBox()
-    mm.execCommand('SET_NODE_TEXT', node, lines[0])
-    for (const line of lines.slice(1)) {
-      mm.execCommand('INSERT_CHILD_NODE', false, [node], { text: line })
     }
   }
 
@@ -247,7 +234,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
             }}
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
-            onEditorPaste={applyMultilinePaste}
+            onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
           />
         )}
       </div>
@@ -258,11 +245,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
           if (await explicitSave()) await backToLibrary() // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         }}
         onCopyClick={() => void doCopy()}
-        copied={false}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
         onNoteClick={noteEdit.openNoteDialog}
         noteEnabled={selection.activeUid !== null}
+        onExportClick={exportFlow.openExport}
         onZoomOut={() => mmRef.current?.view.narrow()}
         onZoomIn={() => mmRef.current?.view.enlarge()}
         onCenterRoot={() => mmRef.current && centerRoot(mmRef.current)}
@@ -294,6 +281,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, regis
         noteDraft={!guard.guarding && !flow.confirming ? noteEdit.noteDraft : null}
         onNoteSave={noteEdit.saveNote}
         onNoteCancel={noteEdit.cancelNote}
+        // 导出框同样让位互斥（guarding/confirming 优先，actions 稳定引用无重渲负担）
+        exportActions={
+          exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null
+        }
       />
     </div>
   )

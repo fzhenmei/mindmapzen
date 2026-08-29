@@ -16,6 +16,10 @@ export async function installE2eHarness(): Promise<void> {
     },
     // 剪贴板桩：App E2E 装配的 writeClipboard 将复制内容记录于此，供 spec 断言
     lastCopied: null as string | null,
+    // 导出端口桩（M5b Task 5）：App E2E 装配的 pickSavePath 记录导出路径；
+    // writeImage 记录图片字节长度（exportedBytes > 0 断言）
+    savePaths: [] as string[],
+    exportedBytes: null as number | null,
     // 导入文件桩：固定返回内置样例（含 1 个忽略块「忽略段。」），App E2E 分支读取
     async pickMdFile(): Promise<{ name: string; text: string } | null> {
       return { name: '外部图', text: '# 外部图\n\n忽略段。\n\n## A\n' }

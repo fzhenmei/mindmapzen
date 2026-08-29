@@ -46,3 +46,8 @@ declare module 'simple-mind-map/src/plugins/AssociativeLine.js' {
   const AssociativeLine: unknown
   export default AssociativeLine
 }
+
+declare module 'simple-mind-map/src/plugins/Export.js' {
+  const Export: unknown
+  export default Export
+}
