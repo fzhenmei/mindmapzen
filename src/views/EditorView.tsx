@@ -17,6 +17,7 @@ import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useNoteEdit } from '../hooks/useNoteEdit'
+import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
@@ -85,9 +86,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
   const nodePos = useNodeActions(mmRef, selection.activeUid)
+  const undoRedo = useUndoRedo() // 回退/重做（v1.1）：back_forward 历史态驱动按钮禁用，命令走引擎 BACK/FORWARD
 
-  /** 盖印记（Task 7 修复）：seq 自增 → key 变化强制重挂载——到期前重复触发重置 1.2s 计时，
-   *  到期后（onDone 已置 null）再次触发也全新挂载，同会话可反复盖印 */
+  /** 盖印记（Task 7）：seq 自增 → key 变化强制重挂载（到期前重置计时 / 到期后再触发也全新挂载） */
   const flashStamp = (kind: 'saved' | 'copied'): void => {
     stampSeqRef.current += 1
     setStamp({ kind, seq: stampSeqRef.current })
@@ -96,9 +97,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
 
-  /** 复制范围解析：有选中节点→该 uid 子树（序列化从 H1 重计层级，spec §3.1）；否则整图。
-   *  陈旧 uid 兜底（M4 缓期项清偿）：uid 未命中渲染树（如撤销删除）时清选中回退整图，不留幽灵选中。
-   *  后处理（M5b Task 4）：按 settings 剥备注引用块/双链括号（getState 取实时值——键盘闭包绑定首渲染） */
+  /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
+   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值） */
   const doCopy = async (): Promise<void> => {
     try {
       const mm = mmRef.current
@@ -114,8 +114,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     }
   }
 
-  /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」——
-   *  干净状态下保存是 no-op（无用户可感知的写盘），不印记 */
+  /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」；干净状态下保存是 no-op，不印记 */
   const saveAndStamp = async (): Promise<boolean> => {
     const wasDirty = dirtyRef.current
     const ok = await pipeline.saveNow()
@@ -123,9 +122,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return ok
   }
 
-  /** 显式保存统一入口（spec §3.5 实施细化）：有未映射块且本会话未确认过 → 经 flow 门弹确认挂起本次保存，
-   *  返回 false 与「保存失败」同义（调用方留在原界面）；确认后由对话框回调直接落盘。
-   *  自动保存（5s 防抖）不经此入口：每 5 秒弹窗极扰人，裁定静默丢弃（内容打开时横幅已知情）；印记只属显式保存 */
+  /** 显式保存统一入口（spec §3.5）：有未映射块且本会话未确认过 → 经 flow 门弹确认挂起本次保存，返回 false
+   *  与「保存失败」同义（留在原界面）；自动保存不经此入口（每 5 秒弹窗扰人，静默丢弃，横幅已知情） */
   const explicitSave = async (): Promise<boolean> => {
     if (!flow.gateExplicitSave()) return false
     return saveAndStamp()
@@ -232,6 +230,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
               mmRef.current = mm
               // 连线净化（M5d Task 2）：等首帧渲染后建注册表 → 剥离显示文本 → 按注册表落初始连线
               purify(mm)
+              undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
             }}
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
@@ -253,6 +252,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           pipeline.clearPendingAutosave()
           if (await explicitSave()) await backToLibrary() // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         }}
+        undoRedo={undoRedo}
         onCopyClick={() => void doCopy()}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}

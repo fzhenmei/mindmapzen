@@ -27,6 +27,9 @@ let fakeHandle: MindMapHandle
 // vi.mock 工厂被提升到 import 之前，linkRegistry 须经工厂内动态 import 引入
 vi.mock('../editor/MindMapCanvas', async () => {
   const { harvestRegistry, stripTreeTexts, registryToLinks } = await import('../editor/linkRegistry')
+  // 迷你事件源（v1.1 撤销/重做）：假画布的 on/off 落进工厂级注册表，测试经 __emitHistory 驱动
+  // useUndoRedo 订阅的 back_forward 历史态（listeners 跨重渲染持久——bind 注册在 ready 实例上）
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>()
   /** rebuildEngineLinks 的 targets 落位镜像（免 offsets/重绘——单测只关心数据面）：
    *  全清后按解析结果重写（同生产「连线完全派生、重建即全清」语义） */
   const writeFakeTargets = (tree: EngineNode, reg: { byUid: Map<string, string[]> }): void => {
@@ -75,8 +78,12 @@ vi.mock('../editor/MindMapCanvas', async () => {
         png: vi.fn(async () => pngDataUrl),
         svg: vi.fn(async () => svgDataUrl),
       },
-      // 事件订阅/退订（M5b Task 3 进 MindMapHandle）：假画布无引擎事件源，空桩即可
-      on: vi.fn(),
+      // 事件订阅/退订（M5b Task 3 进 MindMapHandle；v1.1 起写进工厂级注册表供 back_forward 驱动）
+      on: (ev: string, cb: (...args: unknown[]) => void) => {
+        const list = listeners.get(ev) ?? []
+        list.push(cb)
+        listeners.set(ev, list)
+      },
       off: vi.fn(),
       setLayout: vi.fn(),
       setTheme: vi.fn(),
@@ -102,6 +109,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
       },
     }
     ;(globalThis as unknown as Record<string, unknown>).__emitReady = () => onReady(fakeHandle)
+    // v1.1 撤销/重做：向 back_forward 订阅者广播历史态（引擎 Command.js addHistory/back/forward 同款载荷）
+    ;(globalThis as unknown as Record<string, unknown>).__emitHistory = (index: number, length: number) =>
+      (listeners.get('back_forward') ?? []).forEach((cb) => cb(index, length))
     ;(globalThis as unknown as Record<string, unknown>).__emitChange = () => onDataChange()
     ;(globalThis as unknown as Record<string, unknown>).__emitActive = (uid: string | null) =>
       onActiveChange?.(uid)
@@ -1562,4 +1572,61 @@ test('保存对话框异常（pickSavePath 抛错）：中文横幅提示且不�
   expect(useAppStore.getState().error).toContain('对话框插件崩溃')
   expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
   expect(await fs.exists('/ws/a.png')).toBe(false)
+})
+
+// ---- 回退/重做（v1.1，想法5）：砚栏按钮禁用态随 back_forward 历史态切换，点击走引擎命令 ----
+
+test('回退/重做按钮：初始双禁用；历史态事件驱动启用；点击执行 BACK/FORWARD', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle // ready 时刻实例即 mmRef 所持：点击经 bind 捕获的同一引用执行命令
+  expect(screen.getByTestId('btn-undo')).toBeDisabled()
+  expect(screen.getByTestId('btn-redo')).toBeDisabled()
+  expect(screen.getByTestId('btn-undo')).toHaveAttribute('aria-label', '回退（Ctrl+Z）')
+  expect(screen.getByTestId('btn-redo')).toHaveAttribute('aria-label', '重做（Ctrl+Y）')
+  // 栈中间态（载荷 activeHistoryIndex=1 / history.length=3，即基线+两编辑且回退过一步）：双钮可用
+  act(() => {
+    ;(globalThis as unknown as Record<string, (i: number, l: number) => void>).__emitHistory!(1, 3)
+  })
+  expect(screen.getByTestId('btn-undo')).toBeEnabled()
+  expect(screen.getByTestId('btn-redo')).toBeEnabled()
+  fireEvent.click(screen.getByTestId('btn-undo'))
+  expect(handle.execCommand).toHaveBeenCalledWith('BACK')
+  fireEvent.click(screen.getByTestId('btn-redo'))
+  expect(handle.execCommand).toHaveBeenCalledWith('FORWARD')
+})
+
+test('栈态边界：回退到基线（index=0）撤销钮禁用重做可用；清史（0,0）双禁用', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={vi.fn()}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (i: number, l: number) => void>).__emitHistory!(0, 2)
+  })
+  expect(screen.getByTestId('btn-undo')).toBeDisabled() // 栈底：无更早快照可回退
+  expect(screen.getByTestId('btn-redo')).toBeEnabled()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (i: number, l: number) => void>).__emitHistory!(0, 0)
+  })
+  expect(screen.getByTestId('btn-undo')).toBeDisabled()
+  expect(screen.getByTestId('btn-redo')).toBeDisabled()
 })
