@@ -153,6 +153,22 @@ describe('案头目录（M5a）', () => {
     expect(await screen.findByTestId('dir-node-新层')).toBeInTheDocument()
   })
 
+  test('移动对话框内建目录后取消：目录已落盘须进左树（onCancel 重读）', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    const dlg = await screen.findByTestId('move-dialog')
+    fireEvent.input(within(dlg).getByTestId('move-newdir-input'), { target: { value: '临时层' } })
+    fireEvent.click(within(dlg).getByTestId('move-newdir-add'))
+    // 取消移动：目录已 mkdir 落盘，左树须重读纳入（否则左树陈旧，直到下次工作区切换）
+    fireEvent.click(within(dlg).getByTestId('move-cancel'))
+    expect(await screen.findByTestId('dir-node-临时层')).toBeInTheDocument()
+    expect(screen.queryByTestId('move-dialog')).not.toBeInTheDocument()
+  })
+
   test('新建目录', async () => {
     const dirFs = new MemoryFsAdapter()
     useAppStore.getState().setAdapter(dirFs)

@@ -44,15 +44,18 @@ describe('moveMap', () => {
     expect(await fs.exists('/ws/d2/' + info.name + '.md')).toBe(true)
   })
   test('同目录自碰撞守卫：fromRel/toRel 归一后相同则早返回原 MapInfo，不改名不落时间戳后缀', async () => {
-    // 同目录下源文件自身会被重名循环撞上，若无守卫将误改名为 a-YYYYMMDD-HHmm
-    await fs.writeTextFileAtomic('/ws/a.md', '# a\n')
-    await fs.writeTextFileAtomic('/ws/a.zen.json', '{}')
-    // toRel 带首尾斜杠（'/a/'）也须归一命中守卫
+    // 真实碰撞路径：源文件须真在 fromRel 所指子目录 a 内（/ws/a/a.md），toRel 带首尾斜杠（'/a/'）归一后相同；
+    // 若无守卫，重名循环第一步 fs.exists('/ws/a/a.md') 就撞上源文件自身，导图会被静默误改名 a-YYYYMMDD-HHmm
+    await fs.mkdir('/ws/a')
+    await fs.writeTextFileAtomic('/ws/a/a.md', '# a\n')
+    await fs.writeTextFileAtomic('/ws/a/a.zen.json', '{}')
     const info = await moveMap(fs, '/ws', 'a', 'a', '/a/')
     expect(info.name).toBe('a')
     expect(info.relDir).toBe('a')
     expect(info.mdPath).toBe('/ws/a/a.md')
-    expect(await fs.exists('/ws/a.md')).toBe(true)
-    expect(await fs.exists('/ws/a.zen.json')).toBe(true)
+    // 目录内恰两文件原位未动：无带时间戳后缀的误改名副本
+    expect((await fs.readDirEntries('/ws/a')).map((e) => e.name).sort()).toEqual(['a.md', 'a.zen.json'])
+    expect(await fs.exists('/ws/a/a.md')).toBe(true)
+    expect(await fs.exists('/ws/a/a.zen.json')).toBe(true)
   })
 })

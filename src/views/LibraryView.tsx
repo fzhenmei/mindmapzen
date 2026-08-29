@@ -41,9 +41,15 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   // 新建目录的父目录（DirectoryTree onCreateDir 传入；''=工作区根）
   const [dirParent, setDirParent] = useState('')
 
+  /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用 */
+  const reloadTree = async () => {
+    const { adapter, workspaceDir: ws } = useAppStore.getState()
+    if (!ws) return
+    setTree(await readDirTree(adapter, ws))
+  }
+
   useEffect(() => {
-    if (!workspaceDir) return
-    void readDirTree(useAppStore.getState().adapter, workspaceDir).then(setTree)
+    void reloadTree()
   }, [workspaceDir])
 
   const closeDialog = () => {
@@ -364,7 +370,12 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           mapName={target.name}
           tree={tree}
           fromRel={target.relDir}
-          onCancel={closeDialog}
+          onCancel={() => {
+            // 取消也重读左树：对话框内联新建的目录已真实落盘，不能只留在对话框暂存列表
+            // （Esc 经 ZenDialog onClose 同走 onCancel，语义一致）
+            closeDialog()
+            void reloadTree()
+          }}
           onMove={(toRel) => void moveTarget(toRel)}
         />
       )}
