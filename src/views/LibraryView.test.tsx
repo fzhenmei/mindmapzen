@@ -270,9 +270,10 @@ describe('案头三区与交互（M5d）', () => {
     await useAppStore.getState().setWorkspace('/ws')
   })
 
-  test('工具栏：印章 + 品牌名、设置/导入/新建均纯图标（M5c 起 ZenTooltip 承担提示，title 退役防双提示）；工作区路径移到树根 tooltip', async () => {
+  test('命令栏：印章 + 工作区名面包屑、设置/导入/新建均纯图标（M5c 起 ZenTooltip 承担提示，title 退役防双提示）；工作区路径移到树根 tooltip', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
-    expect(screen.getByText('Mind Map Zen')).toBeInTheDocument()
+    // M12b 案头三区：左面包屑为工作区名（品牌名归开屏页）
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('ws')
     // v0.7.0 验收纯图标化 + M5c：视觉提示改 ZenTooltip（悬停浮签），语义名归 aria-label（title 移除）
     expect(screen.getByTestId('btn-settings').textContent).toBe('')
     expect(screen.getByTestId('btn-import').textContent).toBe('')
@@ -294,7 +295,9 @@ describe('案头三区与交互（M5d）', () => {
     const card = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
     expect(screen.queryByTestId('preview-outline')).not.toBeInTheDocument()
     fireEvent.click(card)
-    expect(card.className).toContain('selected')
+    // M12b 选中态转 utility：青松描边 + 浅底（旧 'selected' 类退役）
+    expect(card.className).toContain('border-primary')
+    expect(card.className).toContain('bg-primary-soft')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('想法A')
     // 单击只选中不进纸面
     expect(useAppStore.getState().route).toBe('library')
@@ -309,7 +312,8 @@ describe('案头三区与交互（M5d）', () => {
     // 文件行图标（IconFile）
     expect(screen.getByTestId('file-node-甲').querySelector('svg')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('file-node-甲'))
-    expect(screen.getByTestId('file-node-甲').className).toContain('active')
+    // M12b 选中态转 utility（旧 'active' 类退役）
+    expect(screen.getByTestId('file-node-甲').className).toContain('bg-primary-soft')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('甲')
   })
 

@@ -15,6 +15,7 @@ import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import PreviewPane from '../components/PreviewPane'
 import { IconFolder, IconImport, IconPencil, IconPlus, IconTrash, IconSettings } from '../components/icons'
+import { cn } from '../lib/utils'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -30,6 +31,15 @@ interface ImportPreview {
   tree: ZenNode
   blocks: IgnoredBlock[]
 }
+
+/** 命令栏图标钮（spec §3 案头命令栏 48px / 钮 32px 等距 8px）：与 ui/button icon 尺寸同规；
+ *  ThemeToggle 命令栏内同款（其文件内另持一份，皮肤演进随 ui/button 收敛） */
+const ICON_BTN =
+  'inline-flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/** 卡片浮动操作钮（悬停显现，26px 与旧皮肤同尺寸） */
+const CARD_ACTION_BTN =
+  'inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-control bg-surface text-muted-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary'
 
 /** 案头（导图列表页，M5d 三区）：图标工具栏 + 左目录树（含文件行）+ 中卡片网格 + 右大纲预览；
  *  交互语义：卡片/树文件单击=选中并预览，双击或预览「打开」=进纸面；卡片按 selectedDir 精确过滤 */
@@ -177,7 +187,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     const renderRight = () => {
       if (maps.length === 0)
         return (
-          <div className="library-empty" data-testid="library-empty">
+          <div
+            className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground"
+            data-testid="library-empty"
+          >
             <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
               <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
               <path
@@ -194,41 +207,55 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         )
       if (visibleMaps.length === 0)
         return (
-          <div className="dir-empty-state" data-testid="dir-empty-state">
+          <div
+            className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+            data-testid="dir-empty-state"
+          >
             这一层还没有导图
           </div>
         )
       return (
-        <div className="map-grid">
+        <div className="grid flex-1 min-w-0 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-start gap-2.5 overflow-y-auto px-1 pb-6 pt-1">
           {visibleMaps.map((m) => (
-            <div key={m.mdPath} className="map-card">
+            <div key={m.mdPath} className="map-card group relative">
               <button
                 type="button"
                 data-testid="map-item"
-                className={selectedMap === m.mdPath ? 'map-card-main selected' : 'map-card-main'}
+                className={cn(
+                  'flex w-full cursor-pointer flex-col items-start gap-1.5 rounded-card border bg-surface p-4 text-left shadow-card transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-primary',
+                  // selected：语义状态钩子（E2E toHaveClass 断言），视觉由 utility 承担
+                  selectedMap === m.mdPath ? 'selected border-primary bg-primary-soft' : 'border-border',
+                )}
                 onClick={() => setSelectedMap(m.mdPath)}
                 onDoubleClick={() => void store.openMap(m.mdPath)}
                 title={`选中「${m.name}」（双击打开）`}
               >
-                <span className="map-name">{m.name}</span>
-                <span className="badge-md" aria-hidden="true">
+                <span className="max-w-full truncate text-sm font-medium text-foreground">{m.name}</span>
+                <span
+                  className="rounded-control bg-primary-soft px-1.5 py-0.5 font-file text-[11px] text-primary"
+                  aria-hidden="true"
+                >
                   .md
                 </span>
                 {/* 「全部」视图显示所在层小字，帮助定位目录归属 */}
                 {selectedDir === '' && (
-                  <span className="map-reldir" data-testid="map-reldir">
+                  <span
+                    className="max-w-full truncate font-file text-[11px] text-muted-foreground"
+                    data-testid="map-reldir"
+                  >
                     {m.relDir === '' ? '根' : m.relDir}
                   </span>
                 )}
-                <span className="map-time" aria-hidden="true">
+                <span className="font-file text-xs text-muted-foreground" aria-hidden="true">
                   {new Date(m.modifiedAt).toLocaleString('zh-CN')}
                 </span>
               </button>
-              <div className="map-card-actions">
+              <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                   type="button"
                   data-testid="btn-move"
                   title="移动到目录"
+                  className={CARD_ACTION_BTN}
                   onClick={() => {
                     setTarget(m)
                     setDialog('move')
@@ -240,6 +267,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                   type="button"
                   data-testid="btn-rename"
                   title="重命名"
+                  className={CARD_ACTION_BTN}
                   onClick={() => {
                     setTarget(m)
                     setDialog('rename')
@@ -251,6 +279,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                   type="button"
                   data-testid="btn-delete"
                   title="删除"
+                  className={CARD_ACTION_BTN}
                   onClick={() => {
                     setTarget(m)
                     setDialog('delete')
@@ -265,20 +294,21 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
       )
     }
     return (
-      <div className="library-body">
+      <div className="flex min-h-0 flex-1 gap-3 p-4">
         <button
           type="button"
           data-testid="dir-panel-toggle"
-          className="dir-panel-toggle"
+          className="w-5 shrink-0 self-stretch rounded-control border border-border bg-surface font-file text-sm leading-none text-muted-foreground transition-colors duration-150 hover:border-primary hover:text-primary"
           aria-label={dirCollapsed ? '展开目录' : '折叠目录'}
           title={dirCollapsed ? '展开目录' : '折叠目录'}
           onClick={() => setDirCollapsed(!dirCollapsed)}
         >
           {dirCollapsed ? '›' : '‹'}
         </button>
-        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构；树含导图文件行（M5d） */}
+        {/* 左树独立于卡片空态存在：空工作区也可先建目录组织结构；树含导图文件行（M5d）。
+            案头三区（M12b）：树 240px（行高由 DirectoryTree 的 h-8 提供） */}
         {!dirCollapsed && (
-          <aside className="dir-panel" data-testid="dir-panel">
+          <aside className="w-60 shrink-0 overflow-y-auto pr-2" data-testid="dir-panel">
             <DirectoryTree
               tree={tree}
               files={files}
@@ -303,13 +333,24 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     )
   }
 
+  /** 命令栏图标钮（M12b）：设置/导入/新建三枚同构——ZenTooltip 悬浮提示 + aria-label 语义名
+   *  （title 退役防双提示），testid 逐枚保留（E2E 兼容） */
+  const headerBtn = (label: string, testid: string, Icon: typeof IconSettings, onClick: () => void) => (
+    <ZenTooltip label={label}>
+      <button type="button" data-testid={testid} className={ICON_BTN} aria-label={label} onClick={onClick}>
+        <Icon />
+      </button>
+    </ZenTooltip>
+  )
+
   return (
-    <div className="library">
-      {/* 工具栏区（M5d spec §3，无工作区的开屏态隐藏）：左印章+品牌名 / 右设置+导入+新建(纯图标)+主题 */}
+    <div className="library flex h-full flex-col bg-background">
+      {/* 命令栏（M12b spec §3 案头三区）：48px 通栏，左面包屑（印章+工作区名）/ 右图标钮
+          32px 等距 8px（设置/导入/新建/主题）；无工作区的开屏态隐藏 */}
       {workspaceDir && (
-        <header className="library-header">
-          <div className="desk-brand">
-            <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
               <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
               <path
                 d="M17 25l5 5 10-12"
@@ -320,46 +361,15 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 strokeLinejoin="round"
               />
             </svg>
-            <h1>Mind Map Zen</h1>
+            <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
           </div>
-          {/* 设置入口（M5b Task 4 内容，M5d 改齿轮图标）：复制行为两开关。
-              M5c 接 ZenTooltip（title 退役防双提示，aria-label 保留语义名） */}
-          <ZenTooltip label="设置">
-            <button
-              type="button"
-              data-testid="btn-settings"
-              className="icon-btn"
-              aria-label="设置"
-              onClick={() => setDialog('settings')}
-            >
-              <IconSettings />
-            </button>
-          </ZenTooltip>
-          {/* 导入/新建（v0.7.0 验收纯图标化）：图标 + ZenTooltip 悬浮提示（testid 不变，E2E 兼容） */}
-          <ZenTooltip label="导入 .md">
-            <button
-              type="button"
-              data-testid="btn-import"
-              className="icon-btn"
-              aria-label="导入 .md"
-              onClick={() => void startImport()}
-            >
-              <IconImport />
-            </button>
-          </ZenTooltip>
-          <ZenTooltip label="新建导图">
-            <button
-              type="button"
-              data-testid="btn-new"
-              className="icon-btn"
-              aria-label="新建导图"
-              onClick={() => setDialog('new')}
-            >
-              <IconPlus />
-            </button>
-          </ZenTooltip>
-          {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-2">
+            {headerBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
+            {headerBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
+            {headerBtn('新建导图', 'btn-new', IconPlus, () => setDialog('new'))}
+            {/* 主题三态切换（命令栏常驻；编辑器右下角挂载见 M4 Task 4） */}
+            <ThemeToggle />
+          </div>
         </header>
       )}
       {error && <div className="error-banner">{error}</div>}
