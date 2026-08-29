@@ -73,4 +73,12 @@ describe('workspace', () => {
     expect(await fs.exists('/ws/a.zen.json')).toBe(false)
     expect(fs.removeLog.sort()).toEqual(['/ws/a.md', '/ws/a.zen.json'])
   })
+
+  test('listMaps 填充 relDir（子目录文件 → 相对目录段）', async () => {
+    await fs.mkdir('/ws/sub')
+    await fs.writeTextFileAtomic('/ws/sub/c.md', '# c\n')
+    const list = await listMaps(fs, '/ws')
+    const c = list.find((m) => m.name === 'c')
+    expect(c?.relDir).toBe('sub')
+  })
 })

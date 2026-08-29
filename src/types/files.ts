@@ -1,5 +1,6 @@
 // src/types/files.ts —— 文件系统抽象与工作区文件公共类型
-export interface MapInfo { name: string; mdPath: string; modifiedAt: number }
+/** 导图条目：relDir = 相对工作区的目录段（'' = 根；不含首尾斜杠，'/' 分隔） */
+export interface MapInfo { name: string; mdPath: string; relDir: string; modifiedAt: number }
 
 /** 语义布局三态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用） */
 export type LayoutKind = 'mindmap' | 'logic' | 'org'

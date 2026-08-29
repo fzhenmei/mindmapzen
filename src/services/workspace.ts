@@ -1,7 +1,8 @@
 import type { FsAdapter, LayoutKind, MapInfo, Sidecar } from '../types/files'
 import { writeSidecar } from './sidecar'
 
-const INVALID = /[\\/:*?"<>|]/
+/** 导图/目录名的非法字符集（desk.ts 的 createDir 等按段复用） */
+export const INVALID = /[\\/:*?"<>|]/
 
 /** 新建/导入导图时随 .md 一并落盘的默认 sidecar（主题/布局/画布均为初始值）。
  *  M4 缓期项清偿：导出供 importMap.ts 复用（原各自持有一份字面副本） */
@@ -15,20 +16,32 @@ export const DEFAULT_SIDECAR: Sidecar = {
 }
 
 export async function listMaps(fs: FsAdapter, wsDir: string): Promise<MapInfo[]> {
-  const names = await fs.readDir(wsDir)
-  const entries: Array<{ name: string; index: number; modifiedAt: number }> = []
-  for (const [index, name] of names.entries()) {
-    if (!name.endsWith('.md')) continue
-    entries.push({ name, index, modifiedAt: await fs.statModified(joinPath(wsDir, name)) })
+  // M5a：递归列出工作区（含子目录）.md；relDir = mdPath 去掉 wsDir 前缀后的目录段（'/' 分隔归一）
+  const found: Array<{ relDir: string; fileName: string; index: number; modifiedAt: number }> = []
+  const walk = async (dir: string, relDir: string): Promise<void> => {
+    for (const e of await fs.readDirEntries(dir)) {
+      if (e.isDir) {
+        await walk(joinPath(dir, e.name), relDir === '' ? e.name : `${relDir}/${e.name}`)
+        continue
+      }
+      if (!e.name.endsWith('.md')) continue
+      found.push({ relDir, fileName: e.name, index: found.length, modifiedAt: await fs.statModified(joinPath(dir, e.name)) })
+    }
   }
-  // mtime 降序；同一毫秒并列时，目录列表靠后者视为较新（内存 FS 中即更晚创建），保证排序稳定
-  entries.sort((a, b) => b.modifiedAt - a.modifiedAt || b.index - a.index)
-  return entries.map((e) => ({
-    name: e.name.replace(/\.md$/, ''),
-    mdPath: joinPath(wsDir, e.name),
+  await walk(wsDir, '')
+  // mtime 降序；同一毫秒并列时，遍历序靠后者视为较新（内存 FS 中即更晚创建），保证排序稳定
+  found.sort((a, b) => b.modifiedAt - a.modifiedAt || b.index - a.index)
+  return found.map((e) => ({
+    name: e.fileName.replace(/\.md$/, ''),
+    mdPath: relToDir(wsDir, e.relDir, e.fileName),
+    relDir: e.relDir,
     modifiedAt: e.modifiedAt,
   }))
 }
+
+/** 工作区 + 相对目录段 + 文件名 → 绝对路径（relDir 为空即根下） */
+const relToDir = (wsDir: string, relDir: string, fileName: string): string =>
+  relDir === '' ? joinPath(wsDir, fileName) : joinPath(wsDir, `${relDir}/${fileName}`)
 
 export async function createMap(
   fs: FsAdapter,
@@ -43,7 +56,7 @@ export async function createMap(
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
   await fs.writeTextFileAtomic(mdPath, '# 根主题\n')
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
-  return { name: trimmed, mdPath, modifiedAt: await fs.statModified(mdPath) }
+  return { name: trimmed, mdPath, relDir: '', modifiedAt: await fs.statModified(mdPath) }
 }
 
 export async function renameMap(fs: FsAdapter, wsDir: string, oldName: string, newName: string): Promise<void> {
