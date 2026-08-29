@@ -1,6 +1,7 @@
 import fc from 'fast-check'
 import { expect, test } from 'vitest'
 import { parse, serialize } from './mdTree'
+import { extractTargets, injectMarkers, stripMarkers } from './linkMarkers'
 import type { ZenNode } from '../types/tree'
 
 // 文本不含换行（标题/列表行内不可能有），其余字符不做限制以暴露边界。
@@ -13,6 +14,12 @@ const textArb = fc
   .string({ minLength: 0, maxLength: 12 })
   .filter((t) => !t.includes('\n') && !t.includes('\r') && t === t.trim())
 
+// —— M5c Task 2 生成器扩展（M5d 终审欠账）：textArb 以 1/3 概率混入三类片段 ——
+// 句中标记 / 句尾标记 / 无标记，覆盖净化链原始输入的三种形态（随机串几乎不可能自发产出
+// 合法 [[..]] 标记，必须定向混入才能驱动 strip/inject/extract 的属性覆盖）。
+const snippetArb = fc.constantFrom('前缀 [[目标A]] 后缀', '文本 [[目标B]]', '无标记文本')
+const markerTextArb = fc.oneof(textArb, textArb, snippetArb)
+
 // brief 原文的 letrec 写法在 fast-check v4 下不会自动限深(深度控制需在 oneof 上配 depthSize),
 // fc.array(tie('node')) 会无限递归栈溢出,故改为显式深度封顶的标准写法。
 // 封顶 6 层:根为 H1、子节点依次至 H6,不触发列表层(列表层由下方手工深层用例覆盖)。
@@ -20,7 +27,7 @@ const textArb = fc
 // 12 会让 6 层树最坏膨胀到 12^5≈25 万节点,实测直接打挂 vitest worker。
 const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
   fc.record({
-    text: textArb,
+    text: markerTextArb,
     children:
       maxDepth <= 1
         ? fc.constant<ZenNode[]>([])
@@ -214,4 +221,96 @@ test('回归：列表层裸标记文本 roundtrip 恒等', () => {
     const r = parse(serialize(tree))
     expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
   }
+})
+
+// —— M5c Task 2：标记属性测试三断言（净化链 = stripMarkers / injectMarkers / serialize(linksByUid)）——
+// 模型对齐真实链路：md（含标记）→ parse → 净化 stripMarkers（显示层剥离）→ 保存时
+// serialize(tree, linksByUid) 句尾注入。三断言分别钉死：句尾规范化 / 幂等 / 开-存定点。
+
+/** 双链口径内的目标名池（不含 []/换行——含括号目标名超出 [[..]] 标记语法的表达能力，另属别维度） */
+const targetArb = fc.constantFrom('目标A', '目标B', '目标C', '甲', '/根/乙')
+const uidArb = fc
+  .string({ minLength: 1, maxLength: 6 })
+  .filter((s) => !s.includes('\n') && !s.includes('\r'))
+
+/** 带链接上下文的节点：uid 可选（注册表键，同 uid 允许重复——注册表合并语义）；targets 独立生成 */
+interface LinkedNode extends Omit<ZenNode, 'children'> {
+  targets: string[]
+  children: LinkedNode[]
+}
+const linkedNodeArb = (maxDepth: number): fc.Arbitrary<LinkedNode> =>
+  fc.record({
+    text: markerTextArb,
+    uid: fc.option(uidArb, { nil: undefined }),
+    targets: fc.array(targetArb, { maxLength: 3 }),
+    children:
+      maxDepth <= 1
+        ? fc.constant<LinkedNode[]>([])
+        : fc.array(linkedNodeArb(maxDepth - 1), { maxLength: 3 }),
+    note: fc.constantFrom('', '备注'),
+  })
+const linkedTreeArb = linkedNodeArb(6)
+
+/** 树内派生注册表：有 uid 且 targets 非空的节点建条目（目标去重，同 buildRegistry 语义） */
+const registryOf = (root: LinkedNode): Map<string, string[]> => {
+  const reg = new Map<string, string[]>()
+  const walk = (n: LinkedNode): void => {
+    if (n.uid !== undefined && n.targets.length > 0) reg.set(n.uid, [...new Set(n.targets)])
+    n.children.forEach(walk)
+  }
+  walk(root)
+  return reg
+}
+
+/** 净化（打开语义，stripTreeTexts 的树版）：文本剥离标记，uid 保留（注入查表键），'' 备注归一为无 */
+const purify = (n: LinkedNode): ZenNode => ({
+  text: stripMarkers(n.text),
+  children: n.children.map(purify),
+  ...(n.uid !== undefined ? { uid: n.uid } : {}),
+  ...(n.note === '' ? {} : { note: n.note }),
+})
+
+/** 收集树内全部节点文本 */
+const textsOf = (n: ZenNode): string[] => [n.text, ...n.children.flatMap(textsOf)]
+
+test('标记属性①句尾规范化：净化后注入序列化，重开每节点标记全在句尾（500 例）', () => {
+  fc.assert(
+    fc.property(linkedTreeArb, (linked) => {
+      const r = parse(serialize(purify(linked), registryOf(linked)))
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      for (const text of textsOf(r.tree)) {
+        // 剥掉句尾的标记串（含其前导空白）后，剩余前缀不得再含任何标记——“标记均在文本末”
+        const rest = text.replace(/(?:\s*\[\[[^\][]+\]\])+$/, '')
+        expect(extractTargets(rest)).toEqual([])
+      }
+    }),
+    { numRuns: 500 },
+  )
+})
+
+test('标记属性②幂等：strip∘inject∘strip === strip（500 例）', () => {
+  // 净化链核心不变量：注入再剥离不得改写已净化文本（显示文本在连线开-存循环中保持稳定）
+  fc.assert(
+    fc.property(markerTextArb, fc.array(targetArb, { maxLength: 3 }), (text, targets) => {
+      const once = stripMarkers(text)
+      expect(stripMarkers(injectMarkers(once, targets))).toBe(once)
+    }),
+    { numRuns: 500 },
+  )
+})
+
+test('标记属性③定点：parse(serialize(tree, links)) 再 serialize 同 links 结果恒等（500 例）', () => {
+  // 二次开-存定点：md 是连线唯一事实源——净化注入产出的 md 再开再存（同注册表）不得漂移
+  fc.assert(
+    fc.property(linkedTreeArb, (linked) => {
+      const reg = registryOf(linked)
+      const md1 = serialize(purify(linked), reg)
+      const r = parse(md1)
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      expect(serialize(r.tree, reg)).toBe(md1)
+    }),
+    { numRuns: 500 },
+  )
 })
