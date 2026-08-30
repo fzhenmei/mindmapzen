@@ -35,7 +35,12 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
     }
     let cancelled = false
     void (async () => {
-      const tags = (await import('lucide-static/tags.json')) as unknown as Record<string, string[]>
+      // Vite 的 JSON 动态导入返回 { default: 对象 } 命名空间（验收实案：直接当对象用
+      // 则 Object.keys 只得 ['default']，搜索恒空）——解包 default 再用
+      const mod = (await import('lucide-static/tags.json')) as unknown as {
+        default: Record<string, string[]>
+      }
+      const tags = mod.default
       if (cancelled) return
       const q = query.trim().toLowerCase()
       // 名字含 q 或任一标签含 q；上限 24 个防网格爆炸；精选图标 svg 直取
