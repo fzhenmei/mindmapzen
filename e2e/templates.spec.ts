@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
 // 默认空白路径由既有 smoke 用例零适配覆盖（直接输名称确认 = v1.5.0 行为），此处只测模板路径。
 // 注意 dev server 下可页面内动态 import 写内存 fs（周会模板用例）
 
-test('模板：内置「软件开发跟踪」实例化——根名替换、结构落盘、详情预览层级', async ({ page }) => {
+test('模板：内置「AI 协作开发」实例化——根名替换、结构落盘、详情预览层级', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
@@ -14,9 +14,9 @@ test('模板：内置「软件开发跟踪」实例化——根名替换、结�
   // 默认空白（肌肉记忆零变更的证据）：触发器直显空白导图
   await expect(page.getByTestId('template-select')).toHaveText(/空白导图/)
 
-  // 切换到「软件开发跟踪」
+  // 切换到「AI 协作开发」
   await page.getByTestId('template-select').click()
-  await page.getByRole('option', { name: /软件开发跟踪/ }).click()
+  await page.getByRole('option', { name: /AI 协作开发/ }).click()
   await page.getByTestId('input-name').fill('Mind Map Zen 规划')
   await page.getByTestId('btn-confirm').click()
 
@@ -30,15 +30,15 @@ test('模板：内置「软件开发跟踪」实例化——根名替换、结�
     ),
   )
   expect(md).toContain('# Mind Map Zen 规划\n')
-  expect(md).toContain('## 迭代 v0.1')
-  expect(md).toContain('### 已交付（待验收）')
-  expect(md).toContain('## 决策记录')
+  expect(md).toContain('## 想法池')
+  expect(md).toContain('## 待我验收')
+  expect(md).toContain('## 规范与决策')
 
   // 返回案头进详情态：md 预览渲染模板层级
   await page.getByTestId('btn-back').click()
   await page.getByTestId('dir-node-all').click()
   await page.getByTestId('map-item').filter({ hasText: 'Mind Map Zen 规划' }).click()
-  await expect(page.getByTestId('md-preview')).toContainText('已交付（待验收）')
+  await expect(page.getByTestId('md-preview')).toContainText('待我验收')
 })
 
 test('模板：工作区 templates/ 目录的用户模板可选可实例化', async ({ page }) => {

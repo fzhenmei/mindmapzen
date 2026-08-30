@@ -1,7 +1,9 @@
 // 内置模板注册表（M16）：md 文件经 Vite ?raw 静态引入（随应用打包，只读）。
 // 根节点文本在实例化时替换为用户输入名（createMapFromTemplate），故根标题即占位名。
+// v2.1：dev-tracking 退役，ai-collab 接任——用户定稿的人机分工版（想法五态追踪，
+// Bug/版本不入图；详见模板根备注与 manual-checklist）
 import blankMd from './blank.md?raw'
-import devTrackingMd from './dev-tracking.md?raw'
+import aiCollabMd from './ai-collab.md?raw'
 
 export interface BuiltinTemplate {
   id: string
@@ -16,9 +18,9 @@ export interface BuiltinTemplate {
 export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   { id: 'blank', name: '空白导图', desc: '一个根节点，从零开始', content: blankMd },
   {
-    id: 'dev-tracking',
-    name: '软件开发跟踪',
-    desc: '目标 / 迭代四态 / Bug / 想法池 / 决策记录',
-    content: devTrackingMd,
+    id: 'ai-collab',
+    name: 'AI 协作开发',
+    desc: '目标 / 想法五态 / 规范决策 · 人机分工',
+    content: aiCollabMd,
   },
 ]
