@@ -74,7 +74,9 @@
   --primary-foreground: #14181A;
   --secondary: #1D3B36;
   --secondary-foreground: #4CBFA8;
-  --muted: #1B2022;
+  /* muted 校准（M14b）：原 #1B2022 与 --card 同值，暗下列卡无层次；调暗一档
+     （卡亮于场，同官方暗主题构型），静音区块/骨架屏与卡片拉开 */
+  --muted: #15191B;
   --muted-foreground: #8B9599;
   --accent: #1D3B36;
   --accent-foreground: #4CBFA8;

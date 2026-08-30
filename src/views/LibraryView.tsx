@@ -185,8 +185,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     if (p !== undefined) void store.openMap(p)
   }
   // 树根显示工作区名（title 承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
-  // （尾部 `/\` 收敛用「首字符 + 零或多次」展开式，规避 Sonar S8786 回溯警告）
-  const workspaceName = workspaceDir?.replace(/[\\/][\\/]*$/, '').split(/[\\/]/).pop() ?? ''
+  const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
 
   /** 右侧内容三级态：工作区空 → 全局空态（官方 empty 模式：居中 muted + 行动钮）；
    *  选中层空 → 层空态；否则过滤后的卡片网格（官方 Card 解剖） */
@@ -220,9 +219,14 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             <Card
               data-testid="map-item"
               className={cn(
-                'cursor-pointer text-left transition-all duration-150 hover:-translate-y-px hover:border-primary',
-                // selected：语义状态钩子（E2E toHaveClass 断言），视觉由 utility 承担
-                selectedMap === m.mdPath ? 'selected border-primary bg-secondary' : '',
+                // 区块化悬停（M14b）：升影浮起取代描边——白卡浮于 inset 圆角浮层之上
+                'cursor-pointer text-left transition-all duration-150 hover:-translate-y-px hover:shadow-md',
+                // 静息卡面 = 官方 SectionCards 渐变手法逐字（自下而上 5% 青松晕 + 收细影）；
+                // selected：语义状态钩子（E2E toHaveClass 断言）——薄荷色块主导（bg-none
+                // 撤渐变让色块显形），描边 60% 透明只作收口
+                selectedMap === m.mdPath
+                  ? 'selected bg-none border-primary/60 bg-secondary shadow-sm'
+                  : 'bg-linear-to-t from-primary/5 to-card shadow-xs',
               )}
               onClick={() => setSelectedMap(m.mdPath)}
               onDoubleClick={() => void store.openMap(m.mdPath)}
@@ -304,7 +308,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   return (
     <div className="library flex h-full flex-col bg-background">
       <SidebarProvider className="min-h-0 flex-1">
-        <Sidebar data-testid="dir-panel">
+        {/* variant=inset（M14b 区块化）：官方机器承担分区——侧栏去 border-r 改留悬浮呼吸位，
+            wrapper 自动换 bg-sidebar 色场，SidebarInset 自动成 rounded-xl shadow-sm 白色浮层。
+            分区靠「色场 vs 圆角浮层」，不靠线条 */}
+        <Sidebar variant="inset" data-testid="dir-panel">
           {/* 侧栏头：朱砂方印 + 品名（spec §4：印标 + Mind Map Zen） */}
           <SidebarHeader>
             <div className="flex items-center gap-2 px-2">
@@ -344,7 +351,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          {/* 页首（官方 h-16）：折叠钮 | 分隔 | 面包屑（工作区名 h1）… 动作钮 + 主题 */}
+          {/* 页首（官方 SiteHeader 模式，border-b 为官方所留——inset 浮层内的结构性细线，
+              与「应用通栏黑线」不同物）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题 */}
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger data-testid="dir-panel-toggle" />
             <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />

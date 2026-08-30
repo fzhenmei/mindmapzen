@@ -83,8 +83,10 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
   const fileName = mdPath?.split(/[\\/]/).pop()?.replace(/\.md$/, '')
   const hint = HINTS[state.kind]
 
+  // M14b 区块化：辅助面板走「下陷静音区」——bg-muted 色块 + 去描边去影（cn 后置覆盖
+  // 官方卡类，页面组合层合法），与内容白卡（浮起）形成一沉一浮两种区块语义
   return (
-    <Card className="w-80 shrink-0" data-testid="preview-pane">
+    <Card className="w-80 shrink-0 border-none bg-muted shadow-none" data-testid="preview-pane">
       {fileName !== undefined && (
         <CardHeader>
           <CardDescription className="truncate font-file text-xs" title={fileName}>

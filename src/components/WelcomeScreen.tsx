@@ -15,14 +15,15 @@ interface Props {
   onCreateWorkspace(): void
 }
 
-/** 首次开屏页（M5d spec §2 → M14 spec §4 官方 authentication 模式）：
- *  全屏 grid 居中 + Card w-96 解剖（居中卡头：印标/CardTitle/CardDescription，
- *  主钮 size=lg 通栏在 CardContent，次钮 ghost 在 CardFooter）；
- *  命令栏在此态隐藏（由 LibraryView 控制） */
+/** 首次开屏页（M5d spec §2 → M14 spec §4 官方 authentication 模式 → M14b 区块化）：
+ *  官方 authentication 的 muted 底 + 自上而下轻渐变（from-background to-muted，
+ *  起点同底色无缝），白卡 + 官方 shadow-sm 浮于其上——分区靠色场不靠线条；
+ *  Card w-96 解剖（居中卡头：印标/CardTitle/CardDescription，主钮 size=lg 通栏在
+ *  CardContent，次钮 ghost 在 CardFooter）；命令栏在此态隐藏（由 LibraryView 控制） */
 export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
   return (
     <div
-      className="grid min-h-screen flex-1 place-items-center"
+      className="grid min-h-screen flex-1 place-items-center bg-linear-to-b from-background to-muted"
       data-testid="welcome-screen"
     >
       <Card className="w-96">

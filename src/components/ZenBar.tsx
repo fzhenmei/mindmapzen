@@ -93,7 +93,7 @@ export default function ZenBar({
     // zen-bar 类名保留为视觉冒烟钩子（skin 已全转 utility，App.css 无对应规则）
     <header
       data-testid="zen-bar"
-      className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-[10px] border border-border bg-card px-2.5 shadow-md"
+      className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-lg bg-card px-2.5 shadow-lg"
     >
       <Tip label="返回案头">
         <Button
