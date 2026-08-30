@@ -312,8 +312,8 @@ describe('案头三区与交互（M5d）', () => {
     // 文件行图标（IconFile）
     expect(screen.getByTestId('file-node-甲').querySelector('svg')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('file-node-甲'))
-    // M12b 选中态转 utility（旧 'active' 类退役）
-    expect(screen.getByTestId('file-node-甲').className).toContain('bg-secondary')
+    // M14 Task 3：文件行 = SidebarMenuButton，选中态走官方 isActive（data-active=true）
+    expect(screen.getByTestId('file-node-甲')).toHaveAttribute('data-active', 'true')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('甲')
   })
 

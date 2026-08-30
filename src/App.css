@@ -4,9 +4,9 @@ html, body, #root { height: 100%; }
 html, body { overflow: hidden; }
 .app { height: 100%; font-family: var(--font-sans); color: var(--foreground); background: var(--background); }
 
-/* ═══ 案头（M12b Task 3 青松三区重构）═══
- * 命令栏 48px / 树 240px 行 32px / 预览 280px 档案卡 / 卡片 8px 圆角 hover 青松边——
- * 皮肤已全部转 Tailwind utility（LibraryView/DirectoryTree/PreviewPane/WelcomeScreen 内联）。
+/* ═══ 案头（M14 Task 3 官方 Sidebar 化）═══
+ * 骨架已由 ui/sidebar 块承担（SidebarProvider/Sidebar/SidebarInset 官方布局），
+ * 卡片/预览为 ui/card 解剖，皮肤全在 Tailwind utility（组件与页面内联）。
  * M12b Task 5 起，对话框/浮签/移动树/设置行/备注框皮肤亦由 ui/* 组件与 utility 承担
  * （ui/dialog、ui/tooltip、ui/button、ui/input + 消费方内联），本文件不再有对应规则；
  * 此处仅保留 error-banner（color-mix 便利）。
