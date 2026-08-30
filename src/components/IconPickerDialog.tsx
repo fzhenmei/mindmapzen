@@ -90,7 +90,8 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
           placeholder="搜索 lucide 全集（名字或语义标签，如 flag / 时间）"
         />
         <ScrollArea className="h-72 rounded-md">
-          <div data-testid="icon-grid" className="grid grid-cols-8 gap-1 p-1">
+          {/* pr-3：给 Radix 覆盖式滚动条留位——否则最右列图标的选中环被滚动条遮挡（验收实案） */}
+          <div data-testid="icon-grid" className="grid grid-cols-8 gap-1 p-1 pr-3">
             {grid.map((g) => (
               <button
                 key={g.name}
