@@ -351,9 +351,9 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          {/* 页首（官方 SiteHeader 模式，border-b 为官方所留——inset 浮层内的结构性细线，
-              与「应用通栏黑线」不同物）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题 */}
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          {/* 页首（官方 SiteHeader 模式）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题。
+              无 border-b（M15 用户点名）：inset 圆角浮层已承担分区，页首与主区之间无线条 */}
+          <header className="flex h-16 shrink-0 items-center gap-2 px-4">
             <SidebarTrigger data-testid="dir-panel-toggle" />
             <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
             <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
