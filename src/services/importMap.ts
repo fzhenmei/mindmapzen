@@ -2,7 +2,7 @@ import type { FsAdapter, LayoutKind, MapInfo } from '../types/files'
 import type { ZenNode } from '../types/tree'
 import { serialize } from './mdTree'
 import { writeSidecar } from './sidecar'
-import { DEFAULT_SIDECAR, joinPath } from './workspace'
+import { DEFAULT_SIDECAR, joinPath, statTail } from './workspace'
 
 /** 导入 .md 复制入库（spec §8）：内容按规范序列化另存到工作区（非移动原文件），
  *  同名冲突自动加 `名称-YYYYMMDD-HHmm` 时间戳后缀；同一分钟内仍冲突（连续多次导入）
@@ -30,5 +30,5 @@ export async function commitImport(
   }
   await fs.writeTextFileAtomic(mdPath, serialize(tree))
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
-  return { name: finalName, mdPath, relDir: '', modifiedAt: await fs.statModified(mdPath) }
+  return { name: finalName, mdPath, relDir: '', ...(await statTail(fs, mdPath)) }
 }

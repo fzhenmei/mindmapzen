@@ -108,3 +108,28 @@ describe('目录能力（M5a）', () => {
     expect(await fs.readDirEntries('/ws/a')).toContainEqual({ name: 'b', isDir: true })
   })
 })
+
+describe('stat 元数据（M15）', () => {
+  test('文本文件：字节大小按 UTF-8 实长计（中文内容 ≠ 字符数）', async () => {
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根主题')
+    const s = await fs.stat('/ws/a.md')
+    expect(s.size).toBe(new TextEncoder().encode('# 根主题').length)
+    expect(s.createdAt).toBeGreaterThan(0)
+    expect(s.modifiedAt).toBeGreaterThanOrEqual(s.createdAt)
+  })
+
+  test('rename 保留 createdAt（同真实 FS birthtime 语义）', async () => {
+    await fs.writeTextFileAtomic('/ws/a.md', 'v1')
+    const before = await fs.stat('/ws/a.md')
+    await fs.rename('/ws/a.md', '/ws/b.md')
+    const after = await fs.stat('/ws/b.md')
+    expect(after.createdAt).toBe(before.createdAt)
+    expect(after.modifiedAt).toBeGreaterThanOrEqual(before.modifiedAt)
+  })
+
+  test('二进制条目走 bytes.length；缺失路径抛中文错误', async () => {
+    await fs.writeBytes('/ws/p.png', new Uint8Array([1, 2, 3]))
+    expect((await fs.stat('/ws/p.png')).size).toBe(3)
+    await expect(fs.stat('/ws/none.md')).rejects.toThrow('文件不存在')
+  })
+})

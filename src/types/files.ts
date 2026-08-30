@@ -1,6 +1,7 @@
 // src/types/files.ts —— 文件系统抽象与工作区文件公共类型
-/** 导图条目：relDir = 相对工作区的目录段（'' = 根；不含首尾斜杠，'/' 分隔） */
-export interface MapInfo { name: string; mdPath: string; relDir: string; modifiedAt: number }
+/** 导图条目：relDir = 相对工作区的目录段（'' = 根；不含首尾斜杠，'/' 分隔）；
+ *  createdAt/size（M15 资源管理器视图）= 创建时间毫秒与字节大小 */
+export interface MapInfo { name: string; mdPath: string; relDir: string; modifiedAt: number; createdAt: number; size: number }
 
 /** 语义布局三态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用） */
 export type LayoutKind = 'mindmap' | 'logic' | 'org'
@@ -86,6 +87,8 @@ export interface FsAdapter {
   writeBytes(p: string, bytes: Uint8Array): Promise<void>
   readDir(p: string): Promise<string[]>            // 返回文件/目录名列表
   statModified(p: string): Promise<number>          // mtime 毫秒
+  /** 元数据三件（M15 资源管理器视图）：字节大小 + 创建/修改时间毫秒（创建不可得时回退 mtime） */
+  stat(p: string): Promise<FileStat>
   rename(a: string, b: string): Promise<void>       // 目标存在则替换
   remove(p: string): Promise<void>                  // Tauri 实现移入回收站
   exists(p: string): Promise<boolean>
@@ -96,3 +99,6 @@ export interface FsAdapter {
 
 /** 目录项（readDirEntries 返回）：名字 + 是否目录 */
 export interface DirEntryInfo { name: string; isDir: boolean }
+
+/** 文件元数据（stat 返回，M15）：大小 + 创建/修改毫秒 */
+export interface FileStat { size: number; createdAt: number; modifiedAt: number }
