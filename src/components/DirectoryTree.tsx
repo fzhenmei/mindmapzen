@@ -1,22 +1,23 @@
 import type { DirNode } from '../services/desk'
-import { cn } from '../lib/utils'
+import {
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from './ui/sidebar'
 import { IconFile, IconFolder } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
-
-/** 树行（M12b spec §3 案头三区）：240px 树、行高 32px、等宽小字、青松悬停/选中 */
-const ROW =
-  'flex h-8 w-full cursor-pointer items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-control text-left font-file text-xs transition-colors duration-150 hover:bg-primary-soft hover:text-primary'
-const ROW_ACTIVE = 'bg-primary-soft text-primary'
-const ROW_NAME = 'min-w-0 flex-1 truncate'
 
 interface Props {
   /** 工作区目录树（desk.readDirTree 产出；根不在其中，「全部」项由本组件提供） */
   tree: DirNode[]
   /** 导图文件清单：目录节点展开时按 relDir 匹配渲染文件行（树成为完整文件视图） */
   files: TreeFile[]
-  /** 树根（「全部」）显示名 = 工作区名；tooltip 显示工作区全路径 */
+  /** 树根（「全部」）显示名 = 工作区名；title 显示工作区全路径 */
   rootLabel: string
   rootTooltip: string
   /** 当前选中目录（''=全部/工作区根视图） */
@@ -28,13 +29,14 @@ interface Props {
   onSelectFile: (f: TreeFile) => void
   /** 文件行双击：打开进纸面 */
   onOpenFile: (f: TreeFile) => void
-  /** 新建目录：rel 为父目录（''=在工作区根下建；具体名称由上层 NameDialog 收集） */
-  onCreateDir: (rel: string) => void
 }
 
-/** 案头左树：目录层级 + 文件行导航（等宽小字 + 按层缩进），目录驱动卡片网格按 selectedDir 过滤。
+/** 案头左树（M14 Task 3 Sidebar 化）：官方 SidebarContent/Group/Menu 骨架，目录与
+ *  文件行均为 SidebarMenuButton——选中态走官方 isActive（data-active=true +
+ *  data-[active=true]:bg-sidebar-accent 官方皮肤链），等宽文件声道与层级缩进保留。
  *  节点 testid 为 `dir-node-<name>`（重名目录跨层不唯一，测试与调用方按树内唯一名使用）；
- *  文件行 `file-node-<name>`；树根 `dir-node-all`（rel=''，显示工作区名）；「新建目录」`dir-create` */
+ *  文件行 `file-node-<name>`；树根 `dir-node-all`（rel=''，显示工作区名）。
+ *  「新建目录」随官方解剖上移 SidebarFooter（由 LibraryView 渲染，testid dir-create 不变） */
 export default function DirectoryTree({
   tree,
   files,
@@ -45,7 +47,6 @@ export default function DirectoryTree({
   onSelect,
   onSelectFile,
   onOpenFile,
-  onCreateDir,
 }: Readonly<Props>) {
   const isFileSelected = (f: TreeFile) =>
     selectedFile !== null && selectedFile.name === f.name && selectedFile.relDir === f.relDir
@@ -54,63 +55,61 @@ export default function DirectoryTree({
     files
       .filter((f) => f.relDir === relDir)
       .map((f) => (
-        <button
-          key={`file:${relDir}/${f.name}`}
-          type="button"
-          data-testid={`file-node-${f.name}`}
-          className={cn(ROW, isFileSelected(f) && ROW_ACTIVE)}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          title={`${f.name}.md`}
-          onClick={() => onSelectFile(f)}
-          onDoubleClick={() => onOpenFile(f)}
-        >
-          <IconFile />
-          <span className={ROW_NAME}>{f.name}</span>
-        </button>
+        <SidebarMenuItem key={`file:${relDir}/${f.name}`}>
+          <SidebarMenuButton
+            data-testid={`file-node-${f.name}`}
+            isActive={isFileSelected(f)}
+            className="font-file text-xs"
+            style={{ paddingLeft: 8 + depth * 14 }}
+            title={`${f.name}.md`}
+            onClick={() => onSelectFile(f)}
+            onDoubleClick={() => onOpenFile(f)}
+          >
+            <IconFile />
+            <span className="min-w-0 flex-1 truncate">{f.name}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
       ))
 
   const renderNodes = (nodes: DirNode[], depth: number) =>
     nodes.map((n) => (
-      <div key={n.path}>
-        <button
-          type="button"
+      <SidebarMenuItem key={n.path}>
+        <SidebarMenuButton
           data-testid={`dir-node-${n.name}`}
-          className={cn(ROW, selected === n.path && ROW_ACTIVE)}
+          isActive={selected === n.path}
+          className="font-file text-xs"
           style={{ paddingLeft: 8 + depth * 14 }}
           title={n.path}
           onClick={() => onSelect(n.path)}
         >
           <IconFolder />
-          <span className={ROW_NAME}>{n.name}</span>
-        </button>
+          <span className="min-w-0 flex-1 truncate">{n.name}</span>
+        </SidebarMenuButton>
         {renderNodes(n.children, depth + 1)}
         {renderFiles(n.path, depth + 1)}
-      </div>
+      </SidebarMenuItem>
     ))
-  const createDirTitle =
-    selected === '' ? '在工作区根下新建目录' : `在「${selected}」下新建目录`
+
   return (
-    <nav className="flex flex-col gap-0.5 font-file text-xs text-muted-foreground" aria-label="案头目录">
-      <button
-        type="button"
-        data-testid="dir-node-all"
-        className={cn(ROW, selected === '' && ROW_ACTIVE)}
-        title={rootTooltip}
-        onClick={() => onSelect('')}
-      >
-        <span className={ROW_NAME}>{rootLabel}</span>
-      </button>
-      {renderNodes(tree, 0)}
-      {renderFiles('', 0)}
-      <button
-        type="button"
-        data-testid="dir-create"
-        className="mt-2 h-8 cursor-pointer rounded-control px-2 text-left transition-colors duration-150 hover:text-primary"
-        title={createDirTitle}
-        onClick={() => onCreateDir(selected)}
-      >
-        新建目录
-      </button>
-    </nav>
+    <SidebarContent>
+      <SidebarGroup>
+        <SidebarGroupLabel>目录</SidebarGroupLabel>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              data-testid="dir-node-all"
+              isActive={selected === ''}
+              className="font-file text-xs"
+              title={rootTooltip}
+              onClick={() => onSelect('')}
+            >
+              <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {renderNodes(tree, 0)}
+          {renderFiles('', 0)}
+        </SidebarMenu>
+      </SidebarGroup>
+    </SidebarContent>
   )
 }

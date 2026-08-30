@@ -38,14 +38,14 @@ function NoteDialog({
   const title = '编辑节点备注'
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent data-testid="note-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="note-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <textarea
           data-testid="note-text"
           rows={4}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="w-full resize-y rounded-control border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="note-cancel" onClick={onCancel}>
@@ -79,7 +79,7 @@ export default function EditorDialogs({
       {guarding && <CloseGuardDialog mapName={mapName} onChoice={onGuardChoice} />}
       {confirmingIgnored && (
         <Dialog open onOpenChange={(o) => { if (!o) onIgnoredCancel() }}>
-          <DialogContent aria-label={ignoredTitle} className="w-90 gap-3 p-5">
+          <DialogContent aria-label={ignoredTitle}>
             <DialogTitle>{ignoredTitle}</DialogTitle>
             <DialogFooter>
               <Button variant="secondary" size="sm" data-testid="ignored-confirm-cancel" onClick={onIgnoredCancel}>

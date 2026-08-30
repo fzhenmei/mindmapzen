@@ -12,7 +12,7 @@ export default function CloseGuardDialog({ mapName, onChoice }: Readonly<Props>)
   const title = `「${mapName}」有未保存的修改`
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onChoice('cancel') }}>
-      <DialogContent data-testid="closeguard-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="closeguard-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="closeguard-cancel" onClick={() => onChoice('cancel')}>

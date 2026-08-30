@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../store/appStore'
 import { parse } from '../services/mdTree'
 import { stripMarkers } from '../services/linkMarkers'
+import { Button } from './ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from './ui/card'
 import type { ZenNode } from '../types/tree'
 
 /** 预览状态：未选择 / 载入中 / 读取或解析失败 / 大纲就绪 */
@@ -24,8 +26,8 @@ interface Props {
   mdPath: string | null
 }
 
-/** 大纲预览区（M5d spec §3 案头右列 → M12b「档案卡」）：卡片或树文件单击选中后显示导图大纲。
- *  M12b 案头三区：280px 固定卡片（rounded-card 边框 + surface 底），等宽头（文件名）+ 等宽大纲。
+/** 大纲预览区（M5d 案头右列 → M14 Task 3 官方 Card 解剖）：卡片或树文件单击选中后
+ *  显示导图大纲。w-80 右列，等宽头（文件名）+ 等宽大纲（CardHeader/CardContent 承担）。
  *  数据源 adapter.readTextFile + parse（不做引擎实例）；节点文本按连线净化规则隐藏 [[..]]
  *  （与画布显示层同口径，复用 stripMarkers）；有备注行尾 ✎ 角标、层级缩进 14px、等宽字。
  *  读取/解析失败显示「无法预览」，底部「打开」按钮仍可用（双击手势差异的兜底） */
@@ -77,40 +79,40 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
     walk(state.tree, 0, '0')
   }
 
-  // 档案卡等宽头：md 路径取基名去扩展（与卡片名同口径，纯展示派生，无数据流变更）
+  // 卡片等宽头：md 路径取基名去扩展（与卡片名同口径，纯展示派生，无数据流变更）
   const fileName = mdPath?.split(/[\\/]/).pop()?.replace(/\.md$/, '')
   const hint = HINTS[state.kind]
 
   return (
-    <aside
-      className="flex w-[280px] shrink-0 flex-col gap-3 rounded-card border border-border bg-surface p-3"
-      data-testid="preview-pane"
-    >
+    <Card className="w-80 shrink-0" data-testid="preview-pane">
       {fileName !== undefined && (
-        <div className="truncate font-file text-xs text-muted-foreground" title={fileName}>
-          {fileName}
-        </div>
+        <CardHeader>
+          <CardDescription className="truncate font-file text-xs" title={fileName}>
+            {fileName}
+          </CardDescription>
+        </CardHeader>
       )}
       {state.kind === 'tree' ? (
-        <div
+        <CardContent
           className="min-h-0 flex-1 overflow-y-auto font-file text-xs leading-6"
           data-testid="preview-outline"
         >
           {rows}
-        </div>
+        </CardContent>
       ) : (
-        <p className="pt-2 text-xs text-muted-foreground">{hint}</p>
+        <CardContent className="text-xs text-muted-foreground">{hint}</CardContent>
       )}
       {mdPath !== null && (
-        <button
-          type="button"
-          data-testid="btn-preview-open"
-          className="inline-flex h-8 w-full shrink-0 cursor-pointer items-center justify-center rounded-control bg-primary px-4 text-sm font-medium text-primary-soft transition-colors duration-150 hover:bg-primary-hover"
-          onClick={() => void useAppStore.getState().openMap(mdPath)}
-        >
-          打开
-        </button>
+        <CardFooter>
+          <Button
+            className="w-full"
+            data-testid="btn-preview-open"
+            onClick={() => void useAppStore.getState().openMap(mdPath)}
+          >
+            打开
+          </Button>
+        </CardFooter>
       )}
-    </aside>
+    </Card>
   )
 }

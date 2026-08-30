@@ -1,54 +1,158 @@
-/* 青松工作台 · Tailwind v4 主题（M12b Task 1 令牌层收口）
+/* 青松工作台 · shadcn canonical 令牌层（M14 Task 1 迁移）
  *
- * 三合一导入 `tailwindcss` = theme + preflight + utilities：preflight 自 M12b 起
- * 随全 UI 重构启用（M12a 曾分层避开，缘由见 git 历史）。唯一令牌源即下方 @theme——
- * tokens.css 已删除，旧 --paper/--ink 系退役，App.css 消费点已机械替换为 --color-* 新键
- * （替换表见任务报告）。preflight 的 ul{list-style:none}/h{font-weight:inherit} 由
- * App.css 消费处显式恢复（.zen-banner ul 等）；App.css 未分层（unlayered），
- * 级联上恒压过 Tailwind 各层。@source inline safelist 已删：bg-background 改由
- * index.html body 真实消费（工具类按需生成的源码依据）。
+ * 结构即官方 v4 theme.css：`:root` 语义变量全集（--background/--card/--primary/…，
+ * 值为 spec §2 青松值表逐字）+ 暗列 `:root[data-theme='dark']` 同键覆盖 +
+ * `@theme inline` 映射（--color-*: var(--background) 一一对应，bg-card/
+ * text-muted-foreground 等工具类可用）。主题切换机制不变：html[data-theme]
+ * （跟随系统/手动三态），不引入 .dark 类——官方组件源码的 dark: 前缀经下方
+ * @custom-variant dark 重绑到 data-theme 作用域，组件文件零改写（组件保真宪法）。
+ *
+ * 附加项目令牌：--sidebar 全族（sidebar 块要求）、--chart 系列、--font-file
+ * （等宽文件声道）。旧 --color-* 自造名（surface/primary-soft/brand 等）退役，
+ * 消费点类名机械跟随（替换表见任务报告）。旧 --paper/--ink 系退役史与
+ * preflight 说明见 git 历史（M12b Task 1）。
  */
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
-@theme static {
-  /* 色彩令牌：spec §2 表逐字（十六进制照抄），晨松（亮）为默认。
-   * static：禁用 v4 按需摇树——令牌表是公开接口（视觉冒烟经 getComputedStyle 断言
-   * --color-background 双主题值），不依赖是否有工具类恰好消费它。 */
-  --color-background: #F7F8F7;
-  --color-surface: #FFFFFF;
-  --color-foreground: #1F2328;
-  --color-muted-foreground: #64707A;
-  --color-primary: #1D7A6B;
-  --color-primary-hover: #16655A;
-  --color-primary-soft: #E3F2EE;
-  --color-brand: #B5453C; /* 朱砂：仅品牌/文件徽章/破坏性 */
-  --color-border: #E4E7E6;
-  --color-ring: #1D7A6B; /* 焦点环 2px */
-  --color-line: #64707A; /* 引擎连线（晨松雾灰），engineThemes 同值同源 */
+/* 官方 v4 动效基座（animate-in/fade-in-0/zoom-in-95 等官方组件动画类的
+ * Tailwind v4 官方替代插件），随组件官方源码一并引入（M14 Task 2） */
+/* 官方组件 dark: 类 → html[data-theme='dark'] 作用域：既不新增 .dark 类，
+ * 也不改写组件源码；等价于官方 @custom-variant dark 的本地化 */
+@custom-variant dark (&:is([data-theme='dark'] *, [data-theme='dark']));
 
-  /* 圆角：控件 6px / 卡片·弹层 8px / 命令栏 10px */
-  --radius-control: 6px;
-  --radius-card: 8px;
-  --radius-bar: 10px;
+:root {
+  --background: #F7F8F7;
+  --foreground: #1F2328;
+  --card: #FFFFFF;
+  --card-foreground: #1F2328;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2328;
+  --primary: #1D7A6B;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E3F2EE;
+  --secondary-foreground: #16655A;
+  --muted: #EEF1F0;
+  --muted-foreground: #64707A;
+  --accent: #E3F2EE;
+  --accent-foreground: #16655A;
+  --destructive: #B5453C;
+  --destructive-foreground: #FFFFFF;
+  --border: #E4E7E6;
+  --input: #E4E7E6;
+  --ring: #1D7A6B;
+  --chart-1: #1D7A6B;
+  --chart-2: #B5453C;
+  --chart-3: #64707A;
+  --chart-4: #16655A;
+  --chart-5: #1F2328;
+  --radius: 0.5rem;
+  --sidebar: #F2F4F3;
+  --sidebar-foreground: #1F2328;
+  --sidebar-primary: #1D7A6B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E3F2EE;
+  --sidebar-accent-foreground: #16655A;
+  --sidebar-border: #E4E7E6;
+  --sidebar-input: #E4E7E6;
+  --sidebar-ring: #1D7A6B;
+  --sidebar-muted: #EEF1F0;
+  --sidebar-muted-foreground: #64707A;
+}
 
-  /* 阴影两档：卡片几乎无影 / 弹层轻影 */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.1);
+/* 夜航（暗）主题：同键覆盖驱动全部官方工具类（unlayered 恒胜 @layer theme 映射）。
+ * 值为夜航列同源映射（spec §2）：surface→card、primary-soft→secondary/accent、
+ * brand→destructive、primary-hover 并入 hover:bg-primary/90 官方模式 */
+:root[data-theme='dark'] {
+  --background: #14181A;
+  --foreground: #D6DBDA;
+  --card: #1B2022;
+  --card-foreground: #D6DBDA;
+  --popover: #1B2022;
+  --popover-foreground: #D6DBDA;
+  --primary: #4CBFA8;
+  --primary-foreground: #14181A;
+  --secondary: #1D3B36;
+  --secondary-foreground: #4CBFA8;
+  --muted: #1B2022;
+  --muted-foreground: #8B9599;
+  --accent: #1D3B36;
+  --accent-foreground: #4CBFA8;
+  --destructive: #C96A5F;
+  --destructive-foreground: #14181A;
+  --border: #2A3033;
+  --input: #2A3033;
+  --ring: #4CBFA8;
+  --chart-1: #4CBFA8;
+  --chart-2: #C96A5F;
+  --chart-3: #8B9599;
+  --chart-4: #5ED4BC;
+  --chart-5: #D6DBDA;
+  --sidebar: #171B1D;
+  --sidebar-foreground: #D6DBDA;
+  --sidebar-primary: #4CBFA8;
+  --sidebar-primary-foreground: #14181A;
+  --sidebar-accent: #1D3B36;
+  --sidebar-accent-foreground: #4CBFA8;
+  --sidebar-border: #2A3033;
+  --sidebar-input: #2A3033;
+  --sidebar-ring: #4CBFA8;
+  --sidebar-muted: #1B2022;
+  --sidebar-muted-foreground: #8B9599;
+}
 
-  /* 动效（spec §2 基准 150ms；250ms 为次级过渡档，旧 --dur-1/2 收编） */
-  --duration-1: 150ms;
-  --duration-2: 250ms;
+/* @theme inline：官方 v4 映射逐字同构——工具类内联消费语义变量，
+ * 圆角阶梯 sm/md/lg/xl 由 --radius 推导（6px/8px 与旧 control/card 同值） */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-input: var(--sidebar-input);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
 
-  /* 双声道字体：UI 中文界面声道 / 文件（等宽）声道。
-   * --font-mono 为旧键收编（App.css 等宽消费点沿用旧名），与 --font-file 同栈 */
-  --font-ui:
-    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei',
-    sans-serif;
-  --font-file: 'Cascadia Code', 'Consolas', monospace;
+/* 字体双声道 + 页面级遗留阶梯（M14 保留项）：UI 中文声道 / 文件（等宽）声道。
+ * 此块为普通 @theme（变量入产物）：font-file 工具类与 App.css 的 var(--font-sans)
+ * 等消费点依赖真实 CSS 变量存在；间距/字号/时长阶梯仅 App.css（遗留皮肤文件）消费 */
+@theme {
+  --font-sans:
+    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Cascadia Code', 'Consolas', monospace;
-
-  /* 旧 tokens.css 收编：间距阶梯 4/8/12/16/24/32 与字号阶梯 12/13/15/18/22（正文 15 为 UI 基准字）。
-   * --font-size-* / --space-* 非 Tailwind v4 命名空间（v4 字号空间为 --text-*），仅输出 CSS 变量 */
+  --font-file: 'Cascadia Code', 'Consolas', monospace;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -60,20 +164,6 @@
   --font-size-base: 15px;
   --font-size-lg: 18px;
   --font-size-xl: 22px;
-}
-
-/* 夜航（暗）主题：仅色彩令牌有暗列（spec §2），同键覆盖驱动全部 Tailwind 工具类。
- * 此块不入 layer——unlayered 恒胜 @layer theme 中的默认值。 */
-:root[data-theme='dark'] {
-  --color-background: #14181A;
-  --color-surface: #1B2022;
-  --color-foreground: #D6DBDA;
-  --color-muted-foreground: #8B9599;
-  --color-primary: #4CBFA8;
-  --color-primary-hover: #5ED4BC;
-  --color-primary-soft: #1D3B36;
-  --color-brand: #C96A5F;
-  --color-border: #2A3033;
-  --color-ring: #4CBFA8;
-  --color-line: #8B9599;
+  --duration-1: 150ms;
+  --duration-2: 250ms;
 }

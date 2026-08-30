@@ -22,15 +22,15 @@ test('视觉冒烟 1：晨松亮主题——令牌就位且案头三区元素可
   const tokens = await page.evaluate(() => {
     const cs = getComputedStyle(document.documentElement)
     return {
-      background: cs.getPropertyValue('--color-background').trim(),
-      surface: cs.getPropertyValue('--color-surface').trim(),
-      primary: cs.getPropertyValue('--color-primary').trim(),
-      border: cs.getPropertyValue('--color-border').trim(),
+      background: cs.getPropertyValue('--background').trim(),
+      card: cs.getPropertyValue('--card').trim(),
+      primary: cs.getPropertyValue('--primary').trim(),
+      border: cs.getPropertyValue('--border').trim(),
     }
   })
   expect(tokens).toEqual({
     background: '#F7F8F7',
-    surface: '#FFFFFF',
+    card: '#FFFFFF',
     primary: '#1D7A6B',
     border: '#E4E7E6',
   })
@@ -58,12 +58,12 @@ test('视觉冒烟 2：夜航暗主题——令牌翻转与纸面停泊栏（spe
   const tokens = await page.evaluate(() => {
     const cs = getComputedStyle(document.documentElement)
     return {
-      background: cs.getPropertyValue('--color-background').trim(),
-      surface: cs.getPropertyValue('--color-surface').trim(),
-      primary: cs.getPropertyValue('--color-primary').trim(),
+      background: cs.getPropertyValue('--background').trim(),
+      card: cs.getPropertyValue('--card').trim(),
+      primary: cs.getPropertyValue('--primary').trim(),
     }
   })
-  expect(tokens).toEqual({ background: '#14181A', surface: '#1B2022', primary: '#4CBFA8' })
+  expect(tokens).toEqual({ background: '#14181A', card: '#1B2022', primary: '#4CBFA8' })
 
   // 纸面元素可见（M12b Task 4）：停泊命令栏 + 左下题签 + 右下主题钮
   await expect(page.getByTestId('zen-bar')).toBeVisible()
@@ -93,7 +93,7 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
   // 运行时注入探针 div：bg-background 经 theme.css @source inline safelist 入产物
-  // （工具类按需生成，无源码消费点的类不会产出）；text-foreground/rounded-card 由
+  // （工具类按需生成，无源码消费点的类不会产出）；text-foreground/rounded-lg 由
   // ui 组件消费自然存在。探针挂 body，读完即移除
   const read = () =>
     page.evaluate(() => {
@@ -101,14 +101,14 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
       if (!el) {
         el = document.createElement('div')
         el.id = 'zen-tw-probe'
-        el.className = 'bg-background text-foreground rounded-card'
+        el.className = 'bg-background text-foreground rounded-lg'
         document.body.appendChild(el)
       }
       const cs = getComputedStyle(el)
       return { bg: cs.backgroundColor, fg: cs.color, radius: cs.borderRadius }
     })
 
-  // 晨松：bg-background=#F7F8F7、text-foreground=#1F2328、rounded-card=8px（spec §2 表逐字）
+  // 晨松：bg-background=#F7F8F7、text-foreground=#1F2328、rounded-lg=8px（--radius 0.5rem）
   expect(await read()).toEqual({
     bg: 'rgb(247, 248, 247)',
     fg: 'rgb(31, 35, 40)',
@@ -125,4 +125,46 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
   })
 
   await page.evaluate(() => document.getElementById('zen-tw-probe')?.remove())
+})
+
+test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/卡片 computed style', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/?e2e=1')
+  await expect(page.getByTestId('btn-new')).toBeVisible()
+
+  // ① 案头侧栏宽 = 官方 16rem（256px）：SIDEBAR_WIDTH 常量经 w-(--sidebar-width) 落地
+  const sidebarWidth = await page.evaluate(
+    () => getComputedStyle(document.querySelector('[data-testid="dir-panel"]')!).width,
+  )
+  expect(sidebarWidth).toBe('256px')
+
+  // ② ui Dialog 内容内距 = 官方 p-6（24px）：新建对话框走 ui/dialog 官方解剖
+  await page.getByTestId('btn-new').click()
+  const dialog = page.locator('[data-slot="dialog-content"]')
+  await expect(dialog).toBeVisible()
+  const dialogPad = await page.evaluate((el) => getComputedStyle(el).padding, await dialog.elementHandle())
+  expect(dialogPad).toBe('24px')
+
+  // ③ ui Tooltip 内容内距 = 官方 px-3 py-1.5（12px/6px）：进纸面悬停命令栏钮使浮签现身
+  await page.getByTestId('input-name').fill('官方值锁')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('根主题').first()).toBeVisible()
+  await page.getByTestId('btn-save').hover()
+  const tip = page.locator('[data-slot="tooltip-content"]')
+  await expect(tip.first()).toBeVisible()
+  const tipPad = await page.evaluate((el) => getComputedStyle(el).padding, await tip.first().elementHandle())
+  expect(tipPad).toBe('6px 12px')
+
+  // ④ 卡片圆角 = 官方 rounded-xl，经 theme.css 圆角阶梯 calc(var(--radius) + 4px)：
+  //    --radius 0.5rem（8px，冒烟 3 已锁 rounded-lg）→ 卡面 12px；连令牌一并锁死
+  const radiusToken = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
+  )
+  expect(radiusToken).toBe('0.5rem')
+  await page.getByTestId('btn-back').click()
+  const card = page.getByTestId('map-item').first()
+  await expect(card).toBeVisible()
+  const cardRadius = await page.evaluate((el) => getComputedStyle(el).borderRadius, await card.elementHandle())
+  expect(cardRadius).toBe('12px')
 })

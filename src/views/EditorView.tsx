@@ -22,12 +22,12 @@ import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import EditorCaption from '../components/EditorCaption'
+import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
-
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
@@ -217,7 +217,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }
 
   return (
-    <div className="editor">
+    <div className="editor"><TooltipProvider>
       <div className="canvas-host">
         {engineTree && (
           <MindMapCanvas
@@ -295,6 +295,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null
         }
       />
-    </div>
+    </TooltipProvider></div>
   )
 }

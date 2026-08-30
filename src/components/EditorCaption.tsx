@@ -24,7 +24,7 @@ export default function EditorCaption({ name, dirty }: Readonly<Props>) {
               data-testid="dirty-badge"
               title="有未保存修改"
               aria-label="有未保存修改"
-              className="inline-block size-2 rounded-[2px] bg-brand"
+              className="inline-block size-2 rounded-[2px] bg-destructive"
             />
           </span>
         )}
