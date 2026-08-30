@@ -20,7 +20,7 @@ export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<
   return (
     <div
       data-testid="node-actions"
-      className="absolute z-[8] flex items-center gap-0.5 rounded-[10px] border border-border bg-card px-1.5 py-1 shadow-sm"
+      className="absolute z-[8] flex items-center gap-0.5 rounded-lg bg-card px-1.5 py-1 shadow-md"
       style={{ left: pos.left, top: pos.top }}
     >
       <Tooltip>
