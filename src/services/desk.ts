@@ -1,6 +1,6 @@
 // src/services/desk.ts —— 案头目录服务（M5a）：目录树读取、递归建目录、导图移动
 import type { FsAdapter, MapInfo } from '../types/files'
-import { INVALID, joinPath, normalizeRel, resolveDir } from './workspace'
+import { INVALID, joinPath, normalizeRel, resolveDir, statTail } from './workspace'
 
 /** 目录树节点：path 为工作区相对路径（不含首尾斜杠，'/' 分隔）；根不出现在树中（「全部」项由 UI 提供） */
 export interface DirNode { name: string; path: string; children: DirNode[] }
@@ -48,7 +48,7 @@ export async function moveMap(
   const fromDir = resolveDir(wsDir, fromRelNorm)
   if (fromRelNorm === toRelNorm) {
     const mdPath = joinPath(fromDir, name + '.md')
-    return { name, mdPath, relDir: toRelNorm, modifiedAt: await fs.statModified(mdPath) }
+    return { name, mdPath, relDir: toRelNorm, ...(await statTail(fs, mdPath)) }
   }
   const toDir = resolveDir(wsDir, toRelNorm)
   await fs.ensureDir(toDir)
@@ -67,5 +67,5 @@ export async function moveMap(
   if (await fs.exists(oldSidecar)) {
     await fs.rename(oldSidecar, joinPath(toDir, finalName + '.zen.json'))
   }
-  return { name: finalName, mdPath: newMdPath, relDir: toRelNorm, modifiedAt: await fs.statModified(newMdPath) }
+  return { name: finalName, mdPath: newMdPath, relDir: toRelNorm, ...(await statTail(fs, newMdPath)) }
 }

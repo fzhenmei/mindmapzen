@@ -12,14 +12,13 @@ import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
-import PreviewPane from '../components/PreviewPane'
-import { IconFolder, IconImport, IconPencil, IconPlus, IconTrash, IconSettings } from '../components/icons'
+import FileExplorer, { type MapAction } from '../components/FileExplorer'
+import FileDetail from '../components/FileDetail'
+import { IconImport, IconPlus, IconSettings } from '../components/icons'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../components/ui/dialog'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { Separator } from '../components/ui/separator'
-import { Badge } from '../components/ui/badge'
-import { Card, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import {
   Sidebar,
   SidebarFooter,
@@ -31,7 +30,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '../components/ui/sidebar'
-import { cn } from '../lib/utils'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
@@ -48,23 +46,25 @@ interface ImportPreview {
   blocks: IgnoredBlock[]
 }
 
-/** 案头（M14 Task 3 官方 Sidebar 化）：SidebarProvider 标准后台骨架——
- *  Sidebar（Header 印标+名 / Content 目录树 / Footer 新建目录）+ SidebarInset
- *  （header h-16 面包屑与动作钮 + main 内容区）。交互语义不变：卡片/树文件单击=选中并
- *  预览，双击或预览「打开」=进纸面；卡片按 selectedDir 精确过滤（spec §4 案头解剖） */
+/** 案头（M15 文件化三态）：SidebarProvider + inset 骨架；主区三态——
+ *  idle（进案头未选任何 → 空态引导）/ 目录态（FileExplorer 资源管理器大图标网格）/
+ *  详情态（FileDetail 摘要条 + markdown 预览）。交互语义：树/文件夹 tile 单击=选目录，
+ *  文件 tile/树文件行单击=选中进详情，双击=进纸面；悬停操作钮（移动/重命名/删除）沿旧口径 */
 export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
   const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | null>(null)
-  // 重命名/删除/移动对话框当前操作的导图（由所在卡片的按钮选定，而非 maps[0]）
+  // 重命名/删除/移动对话框当前操作的导图（由所在 tile 的按钮选定，而非 maps[0]）
   const [target, setTarget] = useState<MapInfo | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   // 案头左树（目录结构在 workspaceDir 变化与目录增删后重读）
   const [tree, setTree] = useState<DirNode[]>([])
   // 新建目录的父目录（''=工作区根）
   const [dirParent, setDirParent] = useState('')
-  // 选中导图（M5d 交互变更：单击卡片/树文件=选中并预览，双击/预览「打开」=进纸面）
+  // 选中导图（单击 tile/树文件行=选中进详情，双击=进纸面）
   const [selectedMap, setSelectedMap] = useState<string | null>(null)
+  // 三态初始位（M15）：进案头未选任何 → 空态引导；点目录/文件即离开 idle
+  const [idle, setIdle] = useState(true)
 
   /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
    *  useCallback 固定身份（体仅引用稳定的 setTree 与模块导入，无反应式依赖，无陈旧闭包） */
@@ -76,6 +76,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
 
   useEffect(() => {
     void reloadTree()
+    // 工作区切换回到三态初始位（新工作区未选任何）
+    setIdle(true)
   }, [workspaceDir, reloadTree])
 
   const closeDialog = () => {
@@ -168,8 +170,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     }
   }
 
-  // 卡片过滤在渲染层派生（store.maps 恒为工作区全量）：选中目录精确匹配，「全部」不过滤
-  const visibleMaps = selectedDir === '' ? maps : maps.filter((m) => m.relDir === selectedDir)
+  // 目录层导图（store.maps 恒为工作区全量）：资源管理器按当前层精确过滤
+  const visibleMaps = maps.filter((m) => m.relDir === selectedDir)
 
   // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
   const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
@@ -178,7 +180,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     maps.find((m) => m.name === f.name && m.relDir === f.relDir)?.mdPath
   const selectFile = (f: TreeFile) => {
     const p = mdPathOf(f)
-    if (p !== undefined) setSelectedMap(p)
+    if (p !== undefined) {
+      setSelectedMap(p)
+      setIdle(false)
+    }
   }
   const openFile = (f: TreeFile) => {
     const p = mdPathOf(f)
@@ -187,8 +192,9 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
   // 树根显示工作区名（title 承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
   const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
 
-  /** 右侧内容三级态：工作区空 → 全局空态（官方 empty 模式：居中 muted + 行动钮）；
-   *  选中层空 → 层空态；否则过滤后的卡片网格（官方 Card 解剖） */
+  /** 右侧内容（M15 三态）：工作区空 → 全局空态；详情态（选中文件）→ FileDetail；
+   *  idle（未选任何）→ 空态引导；目录态 → FileExplorer（文件夹 + 导图大图标 tile）。
+   *  map-item/选中/双击/悬停操作语义全沿旧口径，testid 不变 */
   const renderRight = () => {
     if (maps.length === 0)
       return (
@@ -203,80 +209,48 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </Button>
         </div>
       )
-    if (visibleMaps.length === 0)
+    if (selectedInfo !== null)
+      return (
+        <FileDetail
+          info={selectedInfo}
+          onBack={() => {
+            // 返回目录视图：清文件选中即回落到 selectedDir 的资源管理器态
+            setSelectedMap(null)
+            setIdle(false)
+          }}
+        />
+      )
+    if (idle)
       return (
         <div
-          className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground"
-          data-testid="dir-empty-state"
+          className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-muted-foreground"
+          data-testid="desk-idle"
         >
-          这一层还没有导图
+          <p className="text-sm">从左侧选择目录或导图，或新建一张</p>
+          <Button size="sm" data-testid="desk-idle-new" onClick={() => setDialog('new')}>
+            新建导图
+          </Button>
         </div>
       )
     return (
-      <div className="grid flex-1 min-w-0 auto-cols-min grid-cols-[repeat(auto-fill,minmax(240px,1fr))] content-start gap-4 overflow-y-auto pb-6">
-        {visibleMaps.map((m) => (
-          <div key={m.mdPath} className="map-card group relative">
-            <Card
-              data-testid="map-item"
-              className={cn(
-                // 区块化悬停（M14b）：升影浮起取代描边——白卡浮于 inset 圆角浮层之上
-                'cursor-pointer text-left transition-all duration-150 hover:-translate-y-px hover:shadow-md',
-                // 静息卡面 = 官方 SectionCards 渐变手法逐字（自下而上 5% 青松晕 + 收细影）；
-                // selected：语义状态钩子（E2E toHaveClass 断言）——薄荷色块主导（bg-none
-                // 撤渐变让色块显形），描边 60% 透明只作收口
-                selectedMap === m.mdPath
-                  ? 'selected bg-none border-primary/60 bg-secondary shadow-sm'
-                  : 'bg-linear-to-t from-primary/5 to-card shadow-xs',
-              )}
-              onClick={() => setSelectedMap(m.mdPath)}
-              onDoubleClick={() => void store.openMap(m.mdPath)}
-              title={`选中「${m.name}」（双击打开）`}
-            >
-              <CardHeader>
-                <CardTitle className="flex min-w-0 items-center gap-2">
-                  <span className="truncate">{m.name}</span>
-                  <Badge variant="secondary" className="font-file">
-                    .md
-                  </Badge>
-                </CardTitle>
-                {/* 「全部」视图显示所在层小字，帮助定位目录归属 */}
-                {selectedDir === '' && (
-                  <CardDescription className="truncate font-file" data-testid="map-reldir">
-                    {m.relDir === '' ? '根' : m.relDir}
-                  </CardDescription>
-                )}
-                <CardDescription className="font-file">
-                  {new Date(m.modifiedAt).toLocaleString('zh-CN')}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-            {/* 卡片浮动操作钮（悬停显现，官方 ghost icon-sm）：移动/重命名/删除三钮同构 */}
-            <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-              {(
-                [
-                  ['btn-move', '移动到目录', IconFolder, 'move'],
-                  ['btn-rename', '重命名', IconPencil, 'rename'],
-                  ['btn-delete', '删除', IconTrash, 'delete'],
-                ] as const
-              ).map(([testid, label, Icon, kind]) => (
-                <Button
-                  key={testid}
-                  variant="ghost"
-                  size="icon-sm"
-                  data-testid={testid}
-                  aria-label={label}
-                  onClick={() => {
-                    setTarget(m)
-                    setDialog(kind)
-                  }}
-                >
-                  <Icon />
-                </Button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <FileExplorer
+        dirRel={selectedDir}
+        tree={tree}
+        maps={visibleMaps}
+        onSelectDir={(rel) => {
+          setIdle(false)
+          store.setSelectedDir(rel)
+        }}
+        onSelectMap={(m) => {
+          setSelectedMap(m.mdPath)
+          setIdle(false)
+        }}
+        onOpenMap={(m) => void store.openMap(m.mdPath)}
+        onAction={(a: MapAction, m) => {
+          setTarget(m)
+          setDialog(a)
+        }}
+      />
     )
   }
 
@@ -326,9 +300,13 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             files={files}
             rootLabel={workspaceName}
             rootTooltip={workspaceDir}
-            selected={selectedDir}
+            selected={idle ? null : selectedDir}
             selectedFile={selectedInfo === null ? null : { name: selectedInfo.name, relDir: selectedInfo.relDir }}
-            onSelect={(rel) => store.setSelectedDir(rel)}
+            onSelect={(rel) => {
+              setSelectedMap(null)
+              setIdle(false)
+              store.setSelectedDir(rel)
+            }}
             onSelectFile={selectFile}
             onOpenFile={openFile}
           />
@@ -351,9 +329,9 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          {/* 页首（官方 SiteHeader 模式，border-b 为官方所留——inset 浮层内的结构性细线，
-              与「应用通栏黑线」不同物）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题 */}
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          {/* 页首（官方 SiteHeader 模式）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题。
+              无 border-b（M15 用户点名）：inset 圆角浮层已承担分区，页首与主区之间无线条 */}
+          <header className="flex h-16 shrink-0 items-center gap-2 px-4">
             <SidebarTrigger data-testid="dir-panel-toggle" />
             <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
             <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
@@ -366,11 +344,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
-          {/* 主区（官方 p-6）：中卡片网格 + 右列大纲预览（选中即预览，「打开」进纸面） */}
-          <main className="flex min-h-0 flex-1 gap-4 p-6">
-            {renderRight()}
-            <PreviewPane mdPath={selectedMap} />
-          </main>
+          {/* 主区（官方 p-6）：M15 三态（idle 空态引导 / 目录态资源管理器 / 详情态摘要+md 预览） */}
+          <main className="flex min-h-0 flex-1 p-6">{renderRight()}</main>
         </SidebarInset>
       </SidebarProvider>
 

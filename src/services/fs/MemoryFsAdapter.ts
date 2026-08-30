@@ -1,8 +1,9 @@
-import type { DirEntryInfo, FsAdapter } from '../../types/files'
+import type { DirEntryInfo, FileStat, FsAdapter } from '../../types/files'
 
-interface Entry { contents: string; modifiedAt: number }
-/** 二进制条目（writeBytes）：字节 + 写入时间（statModified 语义同文本条目） */
-interface BinaryEntry { bytes: Uint8Array; modifiedAt: number }
+/** 文本条目：createdAt = 首写时间（rename 保留，同真实 FS 的 birthtime 语义） */
+interface Entry { contents: string; modifiedAt: number; createdAt: number }
+/** 二进制条目（writeBytes）：字节 + 写入/创建时间（stat 语义同文本条目） */
+interface BinaryEntry { bytes: Uint8Array; modifiedAt: number; createdAt: number }
 
 // 与 TauriFsAdapter 同语义的唯一临时名（写 tmp → rename），测试替身须忠实模拟并发防撞行为
 let tmpSeq = 0
@@ -24,13 +25,13 @@ export class MemoryFsAdapter implements FsAdapter {
 
   async writeTextFileAtomic(p: string, contents: string): Promise<void> {
     const tmp = `${p}.tmp-${++tmpSeq}`
-    this.files.set(tmp, { contents, modifiedAt: Date.now() })
+    this.files.set(tmp, { contents, modifiedAt: Date.now(), createdAt: Date.now() })
     await this.rename(tmp, p)
   }
 
   async writeBytes(p: string, bytes: Uint8Array): Promise<void> {
     // 复制入册：调用方后续改动缓冲区不应影响已写内容（与真实文件系统语义一致）
-    this.binaries.set(p, { bytes: bytes.slice(), modifiedAt: Date.now() })
+    this.binaries.set(p, { bytes: bytes.slice(), modifiedAt: Date.now(), createdAt: Date.now() })
   }
 
   /** 读取二进制文件（writeBytes 的测试侧读回口，非 FsAdapter 接口成员） */
@@ -55,11 +56,27 @@ export class MemoryFsAdapter implements FsAdapter {
     return this.files.get(p)?.modifiedAt ?? this.binaries.get(p)?.modifiedAt ?? 0
   }
 
+  /** 元数据三件（M15）：size = 字节长（UTF-8 实长，中文内容与字符数不同）；缺失即抛（同真实 stat） */
+  async stat(p: string): Promise<FileStat> {
+    const e = this.files.get(p)
+    if (e) {
+      return {
+        size: new TextEncoder().encode(e.contents).length,
+        createdAt: e.createdAt,
+        modifiedAt: e.modifiedAt,
+      }
+    }
+    const b = this.binaries.get(p)
+    if (b) return { size: b.bytes.length, createdAt: b.createdAt, modifiedAt: b.modifiedAt }
+    throw new Error(`文件不存在：${p}`)
+  }
+
   async rename(a: string, b: string): Promise<void> {
     const e = this.files.get(a)
     if (!e) throw new Error(`文件不存在：${a}`)
     this.files.delete(a)
-    this.files.set(b, { ...e, modifiedAt: Date.now() })
+    // createdAt 保留（改名不改创建时间，同真实 FS birthtime）
+    this.files.set(b, { contents: e.contents, createdAt: e.createdAt, modifiedAt: Date.now() })
   }
 
   async remove(p: string): Promise<void> {

@@ -17,8 +17,9 @@ export const DEFAULT_SIDECAR: Sidecar = {
 }
 
 export async function listMaps(fs: FsAdapter, wsDir: string): Promise<MapInfo[]> {
-  // M5a：递归列出工作区（含子目录）.md；relDir = mdPath 去掉 wsDir 前缀后的目录段（'/' 分隔归一）
-  const found: Array<{ relDir: string; fileName: string; index: number; modifiedAt: number }> = []
+  // M5a：递归列出工作区（含子目录）.md；relDir = mdPath 去掉 wsDir 前缀后的目录段（'/' 分隔归一）；
+  // M15：每文件单次 stat 同时取 mtime/创建时间/大小（不再只 statModified）
+  const found: Array<{ relDir: string; fileName: string; index: number; stat: { modifiedAt: number; createdAt: number; size: number } }> = []
   const walk = async (dir: string, relDir: string): Promise<void> => {
     for (const e of await fs.readDirEntries(dir)) {
       if (e.isDir) {
@@ -26,18 +27,25 @@ export async function listMaps(fs: FsAdapter, wsDir: string): Promise<MapInfo[]>
         continue
       }
       if (!e.name.endsWith('.md')) continue
-      found.push({ relDir, fileName: e.name, index: found.length, modifiedAt: await fs.statModified(joinPath(dir, e.name)) })
+      found.push({ relDir, fileName: e.name, index: found.length, stat: await fs.stat(joinPath(dir, e.name)) })
     }
   }
   await walk(wsDir, '')
   // mtime 降序；同一毫秒并列时，遍历序靠后者视为较新（内存 FS 中即更晚创建），保证排序稳定
-  found.sort((a, b) => b.modifiedAt - a.modifiedAt || b.index - a.index)
+  found.sort((a, b) => b.stat.modifiedAt - a.stat.modifiedAt || b.index - a.index)
   return found.map((e) => ({
     name: e.fileName.replace(/\.md$/, ''),
     mdPath: relToDir(wsDir, e.relDir, e.fileName),
     relDir: e.relDir,
-    modifiedAt: e.modifiedAt,
+    ...e.stat,
   }))
+}
+
+/** stat → MapInfo 元数据尾段（M15）：单次 stat 填满 modifiedAt/createdAt/size 三元；
+ *  listMaps/createMap/importMap/moveMap 四构造点共用，防字段漂移 */
+export async function statTail(fs: FsAdapter, mdPath: string): Promise<Pick<MapInfo, 'modifiedAt' | 'createdAt' | 'size'>> {
+  const s = await fs.stat(mdPath)
+  return { modifiedAt: s.modifiedAt, createdAt: s.createdAt, size: s.size }
 }
 
 /** 工作区 + 相对目录段 + 文件名 → 绝对路径（relDir 为空即根下） */
@@ -57,7 +65,7 @@ export async function createMap(
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
   await fs.writeTextFileAtomic(mdPath, '# 根主题\n')
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
-  return { name: trimmed, mdPath, relDir: '', modifiedAt: await fs.statModified(mdPath) }
+  return { name: trimmed, mdPath, relDir: '', ...(await statTail(fs, mdPath)) }
 }
 
 /** 重命名导图（.md 与 .zen.json 同步改名）。relDir 为导图所在相对目录（'' = 工作区根）——

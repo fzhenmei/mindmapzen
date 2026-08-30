@@ -1,6 +1,6 @@
 import { exists, mkdir, readDir, readTextFile, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
-import type { FsAdapter } from '../../types/files'
+import type { FileStat, FsAdapter } from '../../types/files'
 
 // 临时名自增序号：内容保存与布局 sidecar 即时落盘可能并发写同一目标文件，
 // 固定 .tmp 会在 rename 上互抢（覆盖/误失败），唯一临时名保证互不干扰
@@ -26,6 +26,13 @@ export const tauriFsAdapter: FsAdapter = {
   async statModified(p) {
     const s = await stat(p)
     return s.mtime?.getTime() ?? 0
+  },
+  // plugin-fs stat：size 字节 + mtime/birthtime Date|null（M15 核验，dist-js index.d.ts）
+  async stat(p): Promise<FileStat> {
+    const s = await stat(p)
+    const modifiedAt = s.mtime?.getTime() ?? 0
+    // birthtime 跨平台不可得（如部分 Linux 文件系统）时回退 mtime，展示层语义保守
+    return { size: s.size, createdAt: s.birthtime?.getTime() ?? modifiedAt, modifiedAt }
   },
   async rename(a, b) {
     await rename(a, b)

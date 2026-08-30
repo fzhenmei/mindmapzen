@@ -29,6 +29,8 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
 
   // 返回文件库并重新打开（M5d 交互变更：单击=选中预览，双击=打开）
   await page.getByTestId('btn-back').click()
+  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
+  await page.getByTestId('dir-node-all').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
   await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('分支一').first()).toBeVisible()
