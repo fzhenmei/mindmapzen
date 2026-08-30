@@ -70,3 +70,14 @@ describe('moveMap', () => {
     expect(await fs.exists('/ws/a/a.zen.json')).toBe(true)
   })
 })
+
+describe('隐藏 git 内部目录（M20 验收）', () => {
+  test('readDirTree 不含 .git（启用版本管理后工作区的 git 内部仓库不进左树/内容区）', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws/.git/objects')
+    await fs.writeTextFileAtomic('/ws/.git/HEAD', 'ref: refs/heads/master\n')
+    await fs.mkdir('/ws/真目录')
+    const tree = await readDirTree(fs, '/ws')
+    expect(tree.map((n) => n.name)).toEqual(['真目录'])
+  })
+})
