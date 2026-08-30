@@ -339,6 +339,14 @@ export default function MindMapCanvas({
         | undefined
       node?.setIcon?.(icons)
     }
+    // 设节点插图（M19）：node.setImage（SET_NODE_IMAGE 命令，入历史）
+    ;(mm as MindMapHandle).execCommandImage = (uid, imgData) => {
+      const node = mm.renderer.findNodeByUid(uid) as
+        | { setImage?(d: unknown): void }
+        | null
+        | undefined
+      node?.setImage?.(imgData)
+    }
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；

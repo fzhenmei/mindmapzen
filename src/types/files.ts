@@ -85,6 +85,8 @@ export interface FsAdapter {
   writeTextFileAtomic(p: string, contents: string): Promise<void>
   /** 二进制写盘（M5b Task 5 导出 PNG/SVG）：整文件覆盖写，无原子换名（导出非事实源，非原子可接受） */
   writeBytes(p: string, bytes: Uint8Array): Promise<void>
+  /** 二进制整读（M19 插图：读图片字节转 dataURL/解析尺寸）；不存在抛错 */
+  readBytes(p: string): Promise<Uint8Array>
   readDir(p: string): Promise<string[]>            // 返回文件/目录名列表
   statModified(p: string): Promise<number>          // mtime 毫秒
   /** 元数据三件（M15 资源管理器视图）：字节大小 + 创建/修改时间毫秒（创建不可得时回退 mtime） */

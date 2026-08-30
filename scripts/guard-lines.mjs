@@ -2,10 +2,11 @@
 // （.npmrc script-shell=bash 在 PowerShell 下会路由到 WSL bash 导致 node not found）。
 // M5c：单文件 LIMIT 升级为配置数组——EditorView ≤300（M5a 旧限）+ LibraryView ≤520（M5d 终审欠账）。
 // M18：EditorView 300→320（图标管理器接线：hook + NodeActions 钮 + 对话框渲染的功能性增长）。
+// M19：EditorView 320→360（插图：打开链 imgMeta 构建 + useImageEdit 接线 + ImageDialog 渲染）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 320 },
+  { path: '../src/views/EditorView.tsx', limit: 360 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

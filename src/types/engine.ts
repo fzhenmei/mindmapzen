@@ -84,6 +84,10 @@ export interface MindMapHandle {
    *  （nodeCommandWraps.js:18 → SET_NODE_ICON 命令，入历史、触发重渲）；
    *  icons 为引擎 data.icon 形态（'zen_'+name） */
   execCommandIcon?(uid: string, icons: string[]): void
+  /** 设节点插图（M19）：宿主侧装配方法——node.setImage（nodeCommandWraps.js:12
+   *  → SET_NODE_IMAGE 命令，入历史、触发重渲）；imgData = { image, imageTitle,
+   *  imageSize }，image 为 imgMap 键（相对路径），image 清空即移除 */
+  execCommandImage?(uid: string, imgData: { image: string; imageTitle: string; imageSize: { width: number; height: number; custom: boolean } }): void
   /** 事件订阅/退订（引擎 EventEmitter 委托，index.js:345/355；MindMapCanvas 经此等首帧渲染完成） */
   on(event: string, cb: (...args: unknown[]) => void): void
   off(event: string, cb: (...args: unknown[]) => void): void

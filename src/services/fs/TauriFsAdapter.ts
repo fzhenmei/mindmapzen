@@ -1,4 +1,4 @@
-import { exists, mkdir, readDir, readTextFile, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, mkdir, readDir, readFile, readTextFile, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 import type { FileStat, FsAdapter } from '../../types/files'
 
@@ -18,6 +18,10 @@ export const tauriFsAdapter: FsAdapter = {
   // 二进制整文件覆盖写（M5b Task 5 导出）：plugin-fs writeFile 直收 Uint8Array（engine-api.md「M5b 核验 (c)」）
   async writeBytes(p, bytes) {
     await writeFile(p, bytes)
+  },
+  // 二进制整读（M19 插图）：plugin-fs readFile 返回 Uint8Array
+  async readBytes(p) {
+    return readFile(p)
   },
   async readDir(p) {
     const entries = await readDir(p)
