@@ -38,14 +38,16 @@ function NoteDialog({
   const title = '编辑节点备注'
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent data-testid="note-dialog" aria-label={title}>
+      {/* M17b 验收：备注常承载大段文字与 mermaid 图源——对话框放大（宽 max-w-3xl，
+          编辑区过半屏高，仍可 resize-y 微调），多利用屏幕空间 */}
+      <DialogContent data-testid="note-dialog" aria-label={title} className="sm:max-w-3xl">
         <DialogTitle>{title}</DialogTitle>
         <textarea
           data-testid="note-text"
           rows={4}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-[50vh] w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="note-cancel" onClick={onCancel}>
