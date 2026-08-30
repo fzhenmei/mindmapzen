@@ -15,6 +15,16 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* 官方 v4 base 层通配（M15 验收根因修复，此前漏抄）：Tailwind v4 裸 border 类不设
+ * 颜色（默认 currentColor=文字色≈黑）——本规则把全部元素边框色重置回 --border 令牌、
+ * 描边圈重置回 --ring。无此规则时官方组件全部 border（卡片/对话框/页首线/预览包裹线）
+ * 渲染为近黑文字色，即「纯黑线条」三轮反馈的真源 */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
 /* 官方 v4 动效基座（animate-in/fade-in-0/zoom-in-95 等官方组件动画类的
  * Tailwind v4 官方替代插件），随组件官方源码一并引入（M14 Task 2） */
 /* 官方组件 dark: 类 → html[data-theme='dark'] 作用域：既不新增 .dark 类，

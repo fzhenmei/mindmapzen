@@ -170,4 +170,16 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   await expect(card).toBeVisible()
   const cardRadius = await page.evaluate((el) => getComputedStyle(el).borderRadius, await card.elementHandle())
   expect(cardRadius).toBe('8px')
+
+  // ⑤ 边框色回归锁（M15 根因修复）：Tailwind v4 裸 border 类不设颜色（默认 currentColor
+  //    =文字色≈黑），官方靠 theme.css base 层通配重置回 --border——曾漏抄致全 app 边框
+  //    近黑（「纯黑线条」反馈真源）。锁计算值：进详情态，预览区包裹线必须等于令牌色
+  await page.getByTestId('map-item').first().click()
+  const frame = page.getByTestId('detail-preview-frame')
+  await expect(frame).toBeVisible()
+  const frameBorder = await page.evaluate(
+    (el) => getComputedStyle(el).borderColor,
+    await frame.elementHandle(),
+  )
+  expect(frameBorder).toBe('rgb(228, 231, 230)') // #E4E7E6（晨松 --border）
 })
