@@ -30,8 +30,8 @@ interface Props {
   /** 树根显示名 = 工作区名；title 显示工作区全路径 */
   rootLabel: string
   rootTooltip: string
-  /** 当前选中目录（''=工作区根） */
-  selected: string
+  /** 当前选中目录（''=工作区根；null = idle 态树无激活行，M15） */
+  selected: string | null
   /** 当前选中文件（tile 或文件行单击选中）：对应文件行高亮 */
   selectedFile: TreeFile | null
   onSelect: (rel: string) => void
