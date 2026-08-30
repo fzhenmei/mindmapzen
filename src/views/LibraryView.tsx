@@ -6,8 +6,6 @@ import { createDir, moveMap, readDirTree, type DirNode } from '../services/desk'
 import { parse } from '../services/mdTree'
 import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
-import ZenDialog from '../components/ZenDialog'
-import ZenTooltip from '../components/ZenTooltip'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
@@ -15,6 +13,9 @@ import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import PreviewPane from '../components/PreviewPane'
 import { IconFolder, IconImport, IconPencil, IconPlus, IconTrash, IconSettings } from '../components/icons'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../components/ui/dialog'
+import { Button } from '../components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { cn } from '../lib/utils'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
@@ -333,14 +334,17 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     )
   }
 
-  /** 命令栏图标钮（M12b）：设置/导入/新建三枚同构——ZenTooltip 悬浮提示 + aria-label 语义名
+  /** 命令栏图标钮（M12b）：设置/导入/新建三枚同构——ui/tooltip 悬浮提示 + aria-label 语义名
    *  （title 退役防双提示），testid 逐枚保留（E2E 兼容） */
   const headerBtn = (label: string, testid: string, Icon: typeof IconSettings, onClick: () => void) => (
-    <ZenTooltip label={label}>
-      <button type="button" data-testid={testid} className={ICON_BTN} aria-label={label} onClick={onClick}>
-        <Icon />
-      </button>
-    </ZenTooltip>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" data-testid={testid} className={ICON_BTN} aria-label={label} onClick={onClick}>
+          <Icon />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 
   return (
@@ -429,19 +433,20 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           onConfirm={(name) => void confirmCreateDir(name)}
         />
       )}
-      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——dialog（新建/重命名/删除/移动/新建目录）
+      {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——dialog（新建/重命名/删除/移动/新建目录）
           与 importPreview 互不并存：Radix Dialog 为 modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥 */}
       {dialog === 'delete' && target && (
-        <ZenDialog
-          title={`删除「${target.name}」？`}
-          onClose={closeDialog}
-          actions={
-            <>
-              <button type="button" onClick={closeDialog}>
+        <Dialog open onOpenChange={(o) => { if (!o) closeDialog() }}>
+          <DialogContent aria-label={`删除「${target.name}」？`} className="w-90 gap-3 p-5">
+            <DialogTitle>{`删除「${target.name}」？`}</DialogTitle>
+            <p className="text-sm">将移入回收站（.md 与 .zen.json 一起删除）。</p>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" onClick={closeDialog}>
                 取消
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
                 data-testid="btn-delete-confirm"
                 onClick={async () => {
                   closeDialog()
@@ -455,12 +460,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 }}
               >
                 删除
-              </button>
-            </>
-          }
-        >
-          <p>将移入回收站（.md 与 .zen.json 一起删除）。</p>
-        </ZenDialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
       {dialog === 'move' && target && (
         <MoveMapDialog
@@ -469,7 +472,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           fromRel={target.relDir}
           onCancel={() => {
             // 取消也重读左树：对话框内联新建的目录已真实落盘，不能只留在对话框暂存列表
-            // （Esc 经 ZenDialog onClose 同走 onCancel，语义一致）
+            // （Esc 经 ui Dialog onOpenChange(false) 同走 onCancel，语义一致）
             closeDialog()
             void reloadTree()
           }}
@@ -477,30 +480,27 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         />
       )}
       {importPreview && (
-        <ZenDialog
-          testid="import-preview"
-          title={`导入「${importPreview.name}」`}
-          onClose={() => setImportPreview(null)}
-          actions={
-            <>
-              <button type="button" data-testid="import-cancel" onClick={() => setImportPreview(null)}>
+        <Dialog open onOpenChange={(o) => { if (!o) setImportPreview(null) }}>
+          <DialogContent data-testid="import-preview" aria-label={`导入「${importPreview.name}」`} className="w-90 gap-3 p-5">
+            <DialogTitle>{`导入「${importPreview.name}」`}</DialogTitle>
+            <p className="text-sm">{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
+            <ul className="list-disc pl-5 text-xs text-muted-foreground">
+              {importPreview.blocks.map((b) => (
+                <li key={`${b.type}:${b.excerpt}`}>
+                  {describeIgnoredType(b.type)}：{b.excerpt}
+                </li>
+              ))}
+            </ul>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" data-testid="import-cancel" onClick={() => setImportPreview(null)}>
                 取消
-              </button>
-              <button type="button" data-testid="import-confirm" onClick={() => void confirmImport()}>
+              </Button>
+              <Button size="sm" data-testid="import-confirm" onClick={() => void confirmImport()}>
                 导入
-              </button>
-            </>
-          }
-        >
-          <p>{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
-          <ul className="ignored-preview-list">
-            {importPreview.blocks.map((b) => (
-              <li key={`${b.type}:${b.excerpt}`}>
-                {describeIgnoredType(b.type)}：{b.excerpt}
-              </li>
-            ))}
-          </ul>
-        </ZenDialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

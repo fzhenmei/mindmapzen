@@ -1,13 +1,14 @@
 // src/components/EditorDialogs.tsx —— 对话框容器（M5b Task 1 拆自 EditorView，零行为变化）：
 // 关闭守卫三态框与忽略块保存确认框的 JSX 原样迁入；后续 task 的对话框（备注/导出等）都进此容器。
-// 互斥门闩留 EditorView：confirmingIgnored 传入前已 && !guarding（ZenDialog 互斥约定——每视图至多一个）。
-// SaveStamp 不入容器——它是浮层非对话框。
+// 互斥门闩留 EditorView：confirmingIgnored 传入前已 && !guarding（ui Dialog 互斥约定——每视图至多一个）。
+// SaveStamp 不入容器——它是浮层非对话框。M12b Task 5 切 ui/dialog + ui/button。
 import { useState } from 'react'
 import type { IgnoredBlock } from '../types/tree'
 import type { ExportActions } from '../hooks/useExportFlow'
 import CloseGuardDialog from './CloseGuardDialog'
 import ExportDialog from './ExportDialog'
-import ZenDialog from './ZenDialog'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
+import { Button } from './ui/button'
 
 interface EditorDialogsProps {
   // 对话框的全部外部依赖，经 props 传入：
@@ -27,37 +28,35 @@ interface EditorDialogsProps {
   exportActions: ExportActions | null
 }
 
-/** 备注对话框：textarea 本地受控（draft 仅为初值），保存回传编辑值 */
+/** 备注对话框：textarea 本地受控（draft 仅为初值），保存回传编辑值（等宽文件声道） */
 function NoteDialog({
   draft,
   onSave,
   onCancel,
 }: Readonly<{ draft: string; onSave(value: string): void; onCancel(): void }>) {
   const [value, setValue] = useState(draft)
+  const title = '编辑节点备注'
   return (
-    <ZenDialog
-      testid="note-dialog"
-      title="编辑节点备注"
-      onClose={onCancel}
-      actions={
-        <>
-          <button type="button" data-testid="note-cancel" onClick={onCancel}>
+    <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent data-testid="note-dialog" aria-label={title} className="w-90 gap-3 p-5">
+        <DialogTitle>{title}</DialogTitle>
+        <textarea
+          data-testid="note-text"
+          rows={4}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-full resize-y rounded-control border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <DialogFooter>
+          <Button variant="secondary" size="sm" data-testid="note-cancel" onClick={onCancel}>
             取消
-          </button>
-          <button type="button" data-testid="note-save" onClick={() => onSave(value)}>
+          </Button>
+          <Button size="sm" data-testid="note-save" onClick={() => onSave(value)}>
             保存
-          </button>
-        </>
-      }
-    >
-      <textarea
-        data-testid="note-text"
-        className="note-textarea"
-        rows={4}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-      />
-    </ZenDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -74,24 +73,24 @@ export default function EditorDialogs({
   onNoteCancel,
   exportActions,
 }: Readonly<EditorDialogsProps>) {
+  const ignoredTitle = `保存将丢弃 ${ignored.length} 个未映射的内容块`
   return (
     <>
       {guarding && <CloseGuardDialog mapName={mapName} onChoice={onGuardChoice} />}
       {confirmingIgnored && (
-        <ZenDialog
-          title={`保存将丢弃 ${ignored.length} 个未映射的内容块`}
-          onClose={onIgnoredCancel}
-          actions={
-            <>
-              <button type="button" data-testid="ignored-confirm-cancel" onClick={onIgnoredCancel}>
+        <Dialog open onOpenChange={(o) => { if (!o) onIgnoredCancel() }}>
+          <DialogContent aria-label={ignoredTitle} className="w-90 gap-3 p-5">
+            <DialogTitle>{ignoredTitle}</DialogTitle>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" data-testid="ignored-confirm-cancel" onClick={onIgnoredCancel}>
                 取消
-              </button>
-              <button type="button" data-testid="ignored-confirm-save" onClick={onIgnoredConfirm}>
+              </Button>
+              <Button size="sm" data-testid="ignored-confirm-save" onClick={onIgnoredConfirm}>
                 继续保存
-              </button>
-            </>
-          }
-        />
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
       {noteDraft !== null && (
         <NoteDialog draft={noteDraft} onSave={onNoteSave} onCancel={onNoteCancel} />

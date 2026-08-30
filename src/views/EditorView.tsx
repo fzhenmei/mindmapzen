@@ -273,7 +273,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       <EditorCaption name={name} dirty={dirty} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
-      {/* 对话框互斥约定（ZenDialog）：本视图至多同时一个 ZenDialog——guarding 优先于 flow.confirming
+      {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——guarding 优先于 flow.confirming
           （守卫先收起、确认框随即接管，故 !guarding 门闩）；两框 JSX 已迁 EditorDialogs（M5b Task 1） */}
       <EditorDialogs
         guarding={guard.guarding}

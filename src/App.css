@@ -6,67 +6,14 @@ html, body { overflow: hidden; }
 
 /* ═══ 案头（M12b Task 3 青松三区重构）═══
  * 命令栏 48px / 树 240px 行 32px / 预览 280px 档案卡 / 卡片 8px 圆角 hover 青松边——
- * 皮肤已全部转 Tailwind utility（LibraryView/DirectoryTree/PreviewPane/WelcomeScreen 内联）；
- * 此处仅保留：error-banner（color-mix 便利）与移动对话框复用的树行（.dir-node，Task 5 切 ui/* 收编）。
+ * 皮肤已全部转 Tailwind utility（LibraryView/DirectoryTree/PreviewPane/WelcomeScreen 内联）。
+ * M12b Task 5 起，对话框/浮签/移动树/设置行/备注框皮肤亦由 ui/* 组件与 utility 承担
+ * （ui/dialog、ui/tooltip、ui/button、ui/input + 消费方内联），本文件不再有对应规则；
+ * 此处仅保留 error-banner（color-mix 便利）。
  * .library / .map-card / .preview-row 类名保留为测试钩子（visual-smoke 计算值 / desk.spec 定位 /
  * PreviewPane.test 内联缩进断言），视觉不再由本文件驱动 */
 .error-banner { background: color-mix(in srgb, var(--color-brand) 10%, var(--color-background)); color: var(--color-brand);
   border: 1px solid color-mix(in srgb, var(--color-brand) 30%, var(--color-background)); border-radius: var(--radius-control); padding: var(--space-2) var(--space-3); white-space: pre-wrap; }
-
-/* 移动导图对话框内嵌目录树（复用 .dir-tree/.dir-node，收窄并限制高度可滚；Task 5 转 ui/*） */
-.dir-tree { display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); font-size: var(--font-size-xs); }
-.dir-node { display: block; width: 100%; padding: var(--space-1) var(--space-2); border: none; border-radius: var(--radius-control);
-  background: none; color: var(--color-muted-foreground); font: inherit; text-align: left; cursor: pointer;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dir-node:hover { color: var(--color-primary); background: var(--color-primary-soft); }
-.dir-node.active { color: var(--color-primary); background: var(--color-primary-soft); }
-.move-tree { max-height: 40vh; overflow-y: auto; border: 1px solid var(--color-border);
-  border-radius: var(--radius-control); padding: 6px; }
-.move-newdir { display: flex; gap: 6px; }
-.move-newdir input { flex: 1; min-width: 0; }
-.move-newdir button { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control);
-  background: var(--color-surface); color: var(--color-foreground); font: inherit; cursor: pointer; white-space: nowrap; }
-.move-newdir button:hover { color: var(--color-primary); border-color: var(--color-primary); }
-
-/* 浮签（ZenTooltip：Radix Tooltip 原语 + 令牌皮肤，M5c）——反白小墨签，
-   取代图标按钮的原生 title（无样式/延迟不可控/双提示）；亮暗主题各自反白 */
-.zen-tooltip { padding: var(--space-1) 10px; border-radius: var(--radius-control);
-  background: var(--color-foreground); color: var(--color-background); font-size: var(--font-size-xs); line-height: 1.6;
-  box-shadow: var(--shadow-card); max-width: 260px; z-index: 20; }
-
-/* 对话框（ZenDialog 统一外壳：Radix Dialog 原语 + 令牌皮肤，M6 想法4 迁移）
-   遮罩为独立 Overlay 元素（原 ::backdrop 样式原值平移：双主题通用字面值） */
-.zen-dialog-overlay { position: fixed; inset: 0; background: rgba(38, 36, 31, 0.32); backdrop-filter: blur(2px); }
-/* Content 定位平移（原 [open] 态的固定居中）：Radix Content 无默认定位，transform 配方居中；
-   全局 * { margin: 0 } 对 transform 定位无影响（原 margin:auto 方案随原生 <dialog> 一并退役） */
-.zen-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; gap: var(--space-3);
-  border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: var(--space-5);
-  width: 360px; max-width: 90vw; max-height: 85vh; overflow: auto;
-  background: var(--color-surface); color: var(--color-foreground); box-shadow: var(--shadow-overlay); }
-/* 取消权出口（想法4）：右上角 ✕ 关闭（ZenDialog dismissable 时渲染） */
-.zen-dialog-close { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: var(--font-size-sm); line-height: 1; cursor: pointer;
-  border: none; border-radius: var(--radius-control); background: transparent; color: var(--color-muted-foreground); }
-.zen-dialog-close:hover { color: var(--color-foreground); background: color-mix(in srgb, var(--color-foreground) 8%, transparent); }
-.zen-dialog h3 { font-size: var(--font-size-lg); font-weight: 600; }
-.zen-dialog-body { font-size: var(--font-size-sm); color: var(--color-foreground); display: flex; flex-direction: column; gap: 10px; }
-.zen-dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.zen-dialog-actions button { padding: 6px 14px; border-radius: var(--radius-control);
-  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-foreground); cursor: pointer; }
-.zen-dialog input { padding: var(--space-2) 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); font: inherit; background: var(--color-background); color: var(--color-foreground); }
-/* 设置对话框（M5b）：开关行——checkbox 走 primary 色（覆盖上面 .zen-dialog input 的文本框样式） */
-.setting-row { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; user-select: none; }
-.setting-row input { width: auto; padding: 0; accent-color: var(--color-primary); cursor: pointer; }
-/* 设置对话框（M5d）：更换工作区行——当前路径与按钮两端对齐，非可点标签去掉手型 */
-.setting-workspace { cursor: default; justify-content: space-between; }
-/* 节点备注对话框（M5b）：4 行等宽 textarea（行数由组件 rows=4 提供），可纵向拉伸 */
-.zen-dialog textarea.note-textarea { width: 100%; padding: var(--space-2) 10px; border: 1px solid var(--color-border);
-  border-radius: var(--radius-control); font-family: var(--font-mono); font-size: var(--font-size-sm); line-height: 1.6;
-  background: var(--color-background); color: var(--color-foreground); resize: vertical; }
-/* 导入预览：忽略块列表（沿用编辑器 Banner 配色） */
-.ignored-preview-list { padding-left: 20px; color: var(--color-muted-foreground); font-size: var(--font-size-xs); list-style: disc; /* preflight 后显式恢复 */ }
 
 /* 编辑器 */
 .editor { position: relative; height: 100%; background: var(--color-background); }

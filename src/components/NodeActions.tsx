@@ -3,7 +3,7 @@
 // 不必记快捷键即可加备注/拉连线。M12b Task 4 换青松皮肤：surface 实底 + 细边 + 卡片影，
 // z-index 8 低于命令栏 10/横幅 9；钮 28px 隶属节点语境（小于命令栏钮 32px）。
 import type { NodeActionPos } from '../hooks/useNodeActions'
-import ZenTooltip from './ZenTooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { IconLink, IconPencil } from './icons'
 
 interface Props {
@@ -26,28 +26,34 @@ export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<
       className="absolute z-[8] flex items-center gap-0.5 rounded-bar border border-border bg-surface px-1.5 py-1 shadow-card"
       style={{ left: pos.left, top: pos.top }}
     >
-      <ZenTooltip label="编辑该节点备注（Shift+F2）">
-        <button
-          type="button"
-          data-testid="node-action-note"
-          aria-label="编辑该节点备注（Shift+F2）"
-          className={ACTION_BTN}
-          onClick={onNoteClick}
-        >
-          <IconPencil />
-        </button>
-      </ZenTooltip>
-      <ZenTooltip label="创建连线：点此钮后再点目标节点">
-        <button
-          type="button"
-          data-testid="node-action-link"
-          aria-label="创建连线：点此钮后再点目标节点"
-          className={ACTION_BTN}
-          onClick={onLinkClick}
-        >
-          <IconLink />
-        </button>
-      </ZenTooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            data-testid="node-action-note"
+            aria-label="编辑该节点备注（Shift+F2）"
+            className={ACTION_BTN}
+            onClick={onNoteClick}
+          >
+            <IconPencil />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>编辑该节点备注（Shift+F2）</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            data-testid="node-action-link"
+            aria-label="创建连线：点此钮后再点目标节点"
+            className={ACTION_BTN}
+            onClick={onLinkClick}
+          >
+            <IconLink />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>创建连线：点此钮后再点目标节点</TooltipContent>
+      </Tooltip>
     </div>
   )
 }

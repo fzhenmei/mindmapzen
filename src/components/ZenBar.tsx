@@ -2,11 +2,12 @@
 // 底部居中 40px 全不透明（spec §3：旧「静置淡化、悬停浮现」隐身游戏随青松工作台退役）。
 // 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑）不在此处，
 // 仍由 EditorView 的 window keydown effect 承担（命令栏只是按钮路径）。
-// M5c：全部图标按钮接 ZenTooltip（视觉提示），title 退役防双提示；语义名由 aria-label 承担。
+// M12b Task 5：全部图标按钮接 ui/tooltip（视觉提示），title 退役防双提示；语义名由 aria-label 承担。
+import type { ReactNode } from 'react'
 import type { LayoutKind } from '../editor/layoutMap'
 import type { UndoRedo } from '../hooks/useUndoRedo'
 import { cn } from '../lib/utils'
-import ZenTooltip from './ZenTooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import {
   IconArrowLeft,
   IconCopy,
@@ -56,6 +57,17 @@ interface Props {
 const BAR_BTN =
   'inline-flex size-8 items-center justify-center rounded-control text-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
 
+/** 浮签包装（本文件局部）：ui Tooltip 组合的简写——13 枚图标钮同构，
+ *  label 为视觉提示，语义名由触发钮自身 aria-label 承担（二者职责分离，同 ZenTooltip 旧约） */
+function Tip({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** 纸面命令栏：返回/回退/重做/复制/保存/备注/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
@@ -84,13 +96,13 @@ export default function ZenBar({
       data-testid="zen-bar"
       className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-bar border border-border bg-surface px-2.5 shadow-overlay"
     >
-      <ZenTooltip label="返回案头">
+      <Tip label="返回案头">
         <button type="button" data-testid="btn-back" aria-label="返回案头" className={BAR_BTN} onClick={onBack}>
           <IconArrowLeft />
         </button>
-      </ZenTooltip>
+      </Tip>
       <span className="mx-1 h-4 w-px shrink-0 bg-border" />
-      <ZenTooltip label="回退（Ctrl+Z）">
+      <Tip label="回退（Ctrl+Z）">
         <button
           type="button"
           data-testid="btn-undo"
@@ -101,8 +113,8 @@ export default function ZenBar({
         >
           <IconUndo />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="重做（Ctrl+Y）">
+      </Tip>
+      <Tip label="重做（Ctrl+Y）">
         <button
           type="button"
           data-testid="btn-redo"
@@ -113,9 +125,9 @@ export default function ZenBar({
         >
           <IconRedo />
         </button>
-      </ZenTooltip>
+      </Tip>
       <span className="mx-1 h-4 w-px shrink-0 bg-border" />
-      <ZenTooltip label={copyLabel}>
+      <Tip label={copyLabel}>
         <button
           type="button"
           data-testid="btn-copy"
@@ -126,8 +138,8 @@ export default function ZenBar({
         >
           <IconCopy />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="保存（Ctrl+S）">
+      </Tip>
+      <Tip label="保存（Ctrl+S）">
         <button
           type="button"
           data-testid="btn-save"
@@ -137,8 +149,8 @@ export default function ZenBar({
         >
           <IconSave />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="编辑选中节点的备注（Shift+F2）">
+      </Tip>
+      <Tip label="编辑选中节点的备注（Shift+F2）">
         <button
           type="button"
           data-testid="btn-note"
@@ -149,8 +161,8 @@ export default function ZenBar({
         >
           <IconNote />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="导出或复制为图片">
+      </Tip>
+      <Tip label="导出或复制为图片">
         <button
           type="button"
           data-testid="btn-export"
@@ -160,9 +172,9 @@ export default function ZenBar({
         >
           <IconImage />
         </button>
-      </ZenTooltip>
+      </Tip>
       <span className="mx-1 h-4 w-px shrink-0 bg-border" />
-      <ZenTooltip label="缩小（Ctrl+滚轮）">
+      <Tip label="缩小（Ctrl+滚轮）">
         <button
           type="button"
           data-testid="btn-zoom-out"
@@ -172,8 +184,8 @@ export default function ZenBar({
         >
           <IconMinus />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="放大（Ctrl+滚轮）">
+      </Tip>
+      <Tip label="放大（Ctrl+滚轮）">
         <button
           type="button"
           data-testid="btn-zoom-in"
@@ -183,8 +195,8 @@ export default function ZenBar({
         >
           <IconPlus />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="根居中：保持缩放回根">
+      </Tip>
+      <Tip label="根居中：保持缩放回根">
         <button
           type="button"
           data-testid="btn-center-root"
@@ -194,12 +206,12 @@ export default function ZenBar({
         >
           <IconCrosshair />
         </button>
-      </ZenTooltip>
-      <ZenTooltip label="适配整图">
+      </Tip>
+      <Tip label="适配整图">
         <button type="button" data-testid="btn-fit" aria-label="适配整图" className={BAR_BTN} onClick={onFit}>
           <IconFrame />
         </button>
-      </ZenTooltip>
+      </Tip>
       <span className="mx-1 h-4 w-px shrink-0 bg-border" />
       <fieldset aria-label="布局切换" className="inline-flex min-w-0 gap-0.5">
         {(
@@ -209,7 +221,7 @@ export default function ZenBar({
             ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
           ] as const
         ).map(([kind, label, icon]) => (
-          <ZenTooltip key={kind} label={label}>
+          <Tip key={kind} label={label}>
             <button
               type="button"
               data-testid={`layout-${kind}`}
@@ -220,7 +232,7 @@ export default function ZenBar({
             >
               {icon}
             </button>
-          </ZenTooltip>
+          </Tip>
         ))}
       </fieldset>
     </header>
