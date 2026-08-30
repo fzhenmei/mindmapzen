@@ -61,7 +61,7 @@ describe('appStore', () => {
     const s = useAppStore.getState()
     expect(s.route).toBe('editor')
     expect(s.currentMdPath).toBe('/ws/新图.md')
-    expect(await fs.readTextFile('/ws/新图.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/新图.md')).toBe('# 新图\n')
   })
 
   test('createAndOpen 重名抛中文错误（M16 起抛错语义，由对话框就地显示）', async () => {
