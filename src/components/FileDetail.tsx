@@ -53,8 +53,9 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
 
   return (
     // file-detail testid 兼作视觉冒烟回归锁（borderColor 必须等于 --border，防 currentColor 复发）；
+    // gap-0 压掉官方节间 gap-6（验收：底线与 muted 内容区之间的白色间隙去掉）；
     // overflow-hidden 让 muted 内容区不戳出底部圆角
-    <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 overflow-hidden pb-0">
+    <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden pb-0">
       {/* border-b 分割线（官方条件类 [.border-b]:pb-6 自动补卡头底距） */}
       <CardHeader className="border-b">
         <CardTitle className="truncate font-file text-base" title={`${info.name}.md`}>
