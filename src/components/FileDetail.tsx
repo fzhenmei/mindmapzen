@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { formatFileSize } from '../services/fileSize'
+import { buildImageMetaFromSrcs } from '../services/imageAssets'
+import { extractImageMarker } from '../services/imageMarkers'
 import type { MapInfo } from '../types/files'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
@@ -35,14 +37,29 @@ type DetailState =
  *  预览区显示「无法预览」——打开按钮兜底 */
 export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) {
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
+  // 插图解析表（M19）：md 行级收集 ![alt](src) → 字节转 dataURL（预览渲染用；
+  // webview 解析不了工作区相对路径）。失败宽容空表（img 原样渲染为占位）
+  const [imgMap, setImgMap] = useState<ReadonlyMap<string, string>>(new Map())
 
   useEffect(() => {
     let cancelled = false
     setState({ kind: 'loading' })
+    setImgMap(new Map())
     void (async () => {
       try {
-        const text = await useAppStore.getState().adapter.readTextFile(info.mdPath)
-        if (!cancelled) setState({ kind: 'text', text })
+        const { adapter, workspaceDir } = useAppStore.getState()
+        const text = await adapter.readTextFile(info.mdPath)
+        if (cancelled) return
+        setState({ kind: 'text', text })
+        if (workspaceDir === null) return
+        const srcs = new Set(
+          text
+            .split('\n')
+            .map((l) => extractImageMarker(l)?.src)
+            .filter((s): s is string => s !== undefined),
+        )
+        const meta = await buildImageMetaFromSrcs(adapter, workspaceDir, srcs)
+        if (!cancelled) setImgMap(new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
       } catch {
         if (!cancelled) setState({ kind: 'error' })
       }
@@ -134,7 +151,7 @@ export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) 
       {/* bg-muted 下陷底与卡头区分；-mx-6 edge-to-edge 使 muted 底铺满卡宽、贴卡边 */}
       <CardContent className="-mx-6 flex min-h-0 flex-1 flex-col bg-muted">
         {state.kind === 'text' ? (
-          <MarkdownPreview text={state.text} />
+          <MarkdownPreview text={state.text} imgMap={imgMap} />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
             {state.kind === 'loading' ? '…' : '无法预览'}

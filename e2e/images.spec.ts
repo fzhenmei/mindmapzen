@@ -81,3 +81,27 @@ test('插图：手写/AI 改 md 标记 → 打开即渲染；文件缺失宽容�
   expect(md).toContain('# 手写插图 ![配图](assets/hand.png)')
   expect(md).toContain('## 缺失 ![丢图](assets/gone.png)')
 })
+
+// M19 验收补：详情态 markdown 预览渲染图片（相对路径经 imgMap 解析为 dataURL）
+test('插图：详情态预览显示图片（imgMap dataURL 解析）', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await expect(page.getByTestId('btn-new')).toBeVisible()
+  await page.evaluate(async () => {
+    const z = (window as unknown as {
+      __zenE2e: { writeFile(p: string, t: string): Promise<void>; writeBytes(p: string, b64: string): Promise<void> }
+    }).__zenE2e
+    await z.writeBytes(
+      '/ws/assets/prev.png',
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    )
+    await z.writeFile('/ws/预览图.md', '# 预览图 ![配图](assets/prev.png)\n')
+  })
+  await page.getByTestId('dir-node-all').click()
+  await page.getByTestId('map-item').filter({ hasText: '预览图' }).click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  // 预览 img 渲染且 src 已解析为 dataURL（未解析会是 404 的相对路径）
+  const img = page.getByTestId('md-preview').locator('img')
+  await expect(img).toBeVisible()
+  await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/)
+})
