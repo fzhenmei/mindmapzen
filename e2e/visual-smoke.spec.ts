@@ -156,15 +156,18 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   const tipPad = await page.evaluate((el) => getComputedStyle(el).padding, await tip.first().elementHandle())
   expect(tipPad).toBe('6px 12px')
 
-  // ④ 卡片圆角 = 官方 rounded-xl，经 theme.css 圆角阶梯 calc(var(--radius) + 4px)：
-  //    --radius 0.5rem（8px，冒烟 3 已锁 rounded-lg）→ 卡面 12px；连令牌一并锁死
+  // ④ 导图 tile 圆角 = rounded-lg（8px，页面组合层指定），经 theme.css 圆角阶梯 var(--radius)：
+  //    --radius 0.5rem 连令牌一并锁死。（M15：卡面 Card 12px 断言随卡片网格退役，
+  //    tile 为 ui Button ghost 纵向解剖 + 圆角阶梯消费）
   const radiusToken = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
   )
   expect(radiusToken).toBe('0.5rem')
   await page.getByTestId('btn-back').click()
+  // M15：返回案头为 idle 空态，先点树根进根目录资源管理器态
+  await page.getByTestId('dir-node-all').click()
   const card = page.getByTestId('map-item').first()
   await expect(card).toBeVisible()
   const cardRadius = await page.evaluate((el) => getComputedStyle(el).borderRadius, await card.elementHandle())
-  expect(cardRadius).toBe('12px')
+  expect(cardRadius).toBe('8px')
 })

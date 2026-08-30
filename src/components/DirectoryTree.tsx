@@ -108,8 +108,8 @@ export default function DirectoryTree({
         </SidebarMenuSubItem>
       )
     return (
-      <Collapsible asChild defaultOpen className="group/collapsible">
-        <SidebarMenuSubItem key={key}>
+      <Collapsible key={key} asChild defaultOpen className="group/collapsible">
+        <SidebarMenuSubItem>
           <div className="relative">
             <SidebarMenuSubButton
               asChild

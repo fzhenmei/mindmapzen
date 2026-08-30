@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { DirNode } from '../services/desk'
 import { formatFileSize } from '../services/fileSize'
 import type { MapInfo } from '../types/files'
@@ -6,6 +7,11 @@ import { IconFile, IconFolder, IconPencil, IconTrash } from './icons'
 
 /** 文件 tile 悬停动作三态（LibraryView 的对话框流复用） */
 export type MapAction = 'move' | 'rename' | 'delete'
+
+/** 单击选中与双击打开的消歧窗口（ms）：单击进详情态会卸载 tile 网格，若立即切换，
+ *  双击的第二击落空、打开手势被打断——单击延时执行，窗口内第二击到来即取消（文件
+ *  管理器标准手法）。窗口取 220ms：双击判定阈值内、单击响应无感 */
+const CLICK_DISAMBIGUATE_MS = 220
 
 interface Props {
   /** 当前目录相对路径（'' = 工作区根） */
@@ -36,6 +42,36 @@ export default function FileExplorer({
   onOpenMap,
   onAction,
 }: Readonly<Props>) {
+  // 挂起的单击（消歧窗口内未决）：双击到来即取消；组件卸载一并清掉防漏网选中
+  const pendingClick = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (pendingClick.current !== null) window.clearTimeout(pendingClick.current)
+    },
+    [],
+  )
+
+  /** tile 单击：窗口内首击挂起等待，第二击（双击前半）到来即取消交由 onDoubleClick */
+  const scheduleSelect = (m: MapInfo) => {
+    if (pendingClick.current !== null) {
+      window.clearTimeout(pendingClick.current)
+      pendingClick.current = null
+      return
+    }
+    pendingClick.current = window.setTimeout(() => {
+      pendingClick.current = null
+      onSelectMap(m)
+    }, CLICK_DISAMBIGUATE_MS)
+  }
+
+  /** tile 双击：取消挂起单击后直接打开 */
+  const openNow = (m: MapInfo) => {
+    if (pendingClick.current !== null) {
+      window.clearTimeout(pendingClick.current)
+      pendingClick.current = null
+    }
+    onOpenMap(m)
+  }
   // 本层子目录：dirRel='' 取树顶层，否则按 path 前缀下钻
   const childDirs =
     dirRel === ''
@@ -78,8 +114,8 @@ export default function FileExplorer({
             variant="ghost"
             data-testid="map-item"
             className="flex h-auto w-full flex-col items-center gap-1.5 rounded-lg p-3 text-center"
-            onClick={() => onSelectMap(m)}
-            onDoubleClick={() => onOpenMap(m)}
+            onClick={() => scheduleSelect(m)}
+            onDoubleClick={() => openNow(m)}
             title={`选中「${m.name}」（双击打开）`}
           >
             <span className="text-muted-foreground">
