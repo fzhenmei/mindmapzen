@@ -12,6 +12,9 @@ export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode
     const nodes: DirNode[] = []
     for (const e of await fs.readDirEntries(dir)) {
       if (!e.isDir) continue
+      // .git 不进案头目录树（M20 启用版本管理后工作区会出现；git 内部仓库非用户内容，
+      // 左树与内容区文件夹 tile 同源本过滤）。只精确匹配 .git——不过滤其他点开头目录
+      if (e.name === '.git') continue
       const path = rel === '' ? e.name : `${rel}/${e.name}`
       nodes.push({ name: e.name, path, children: await walk(joinPath(dir, e.name), path) })
     }
