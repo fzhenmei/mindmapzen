@@ -7,6 +7,7 @@ import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
+import type { GitRun } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
 import type { ExportPorts, RegisterCloseGuard } from './types/ports'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
@@ -119,6 +120,23 @@ const writeClipboard: WriteClipboard = E2E
     }
   : writeClipboardViaTauri
 
+/** git 命令端口（M20 版本管理）：生产走 Tauri git_exec（Rust Command 调系统 git）；
+ *  E2E web 模式记录命令到 harness 桩（__zenE2e.gitCalls，可配置应答） */
+const gitRun: GitRun = E2E
+  ? (async (cwd, args) => {
+      const z = (window as unknown as Record<string, unknown>).__zenE2e as {
+        gitCalls: string[]
+        gitAnswers?: Array<{ match: string; ok: boolean; out?: string; err?: string }>
+      }
+      z.gitCalls.push(`${cwd} $ ${args.join(' ')}`)
+      const hit = z.gitAnswers?.find((a) => args.join(' ').startsWith(a.match))
+      return hit === undefined ? { ok: true, out: '', err: '' } : { ok: hit.ok, out: hit.out ?? '', err: hit.err ?? '' }
+    })
+  : async (cwd, args) => {
+      const { invoke } = await import('@tauri-apps/api/core')
+      return invoke<{ ok: boolean; out: string; err: string }>('git_exec', { cwd, args })
+    }
+
 /** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；
  *  E2E web 模式记录到 harness 桩（__zenE2e.savePaths/exportedBytes，固定路径走内存 FS 落盘） */
 const exportPorts: ExportPorts = E2E
@@ -150,6 +168,7 @@ const exportPorts: ExportPorts = E2E
 export default function App() {
   const { route, currentMdPath, setAdapter, init } = useAppStore()
   useEffect(() => {
+    useAppStore.setState({ gitRun })
     void (async () => {
       try {
         // E2E 模式：跳过 Tauri 适配器/路径注入（harness 已完成），直接初始化
@@ -175,6 +194,16 @@ export default function App() {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅启动时执行
   }, [])
+
+  // 版本管理定时备份（M20 想法8 免命令）：启用且在工作区内每 10 分钟幂等检查一次
+  const gitEnabled = useAppStore((s) => s.gitConfig.enabled)
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+  useEffect(() => {
+    if (!gitEnabled || workspaceDir === null) return
+    void useAppStore.getState().backupNow() // 启用即先备份一次
+    const timer = window.setInterval(() => void useAppStore.getState().backupNow(), 10 * 60 * 1000)
+    return () => window.clearInterval(timer)
+  }, [gitEnabled, workspaceDir])
 
   // auto 模式下跟随系统切换（显式亮/暗不受影响）；E2E web 模式 matchMedia 同样可用，无冲突
   useEffect(() => {

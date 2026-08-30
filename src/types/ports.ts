@@ -14,3 +14,10 @@ export interface ExportPorts {
   /** 图片写入系统剪贴板（plugin-clipboard-manager writeImage 收 Uint8Array） */
   writeImage(bytes: Uint8Array): Promise<void>
 }
+
+/** git 命令端口（M20 版本管理）：生产为 Tauri git_exec（cwd 限定工作区），
+ *  测试注入记录桩（断言命令序列与决策） */
+export type GitRun = (
+  cwd: string,
+  args: readonly string[],
+) => Promise<{ ok: boolean; out: string; err: string }>

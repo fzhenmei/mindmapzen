@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 interface SettingsDialogProps {
   onClose(): void
@@ -22,7 +24,19 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const settings = useAppStore((s) => s.settings)
   const setSetting = useAppStore((s) => s.setSetting)
   const workspaceDir = useAppStore((s) => s.workspaceDir) // 更换工作区行显示当前路径
+  // 版本管理（M20 想法8）：启用开关/远程配置/状态/手动备份
+  const gitConfig = useAppStore((s) => s.gitConfig)
+  const setGitConfig = useAppStore((s) => s.setGitConfig)
+  const backupNow = useAppStore((s) => s.backupNow)
+  const lastBackup = useAppStore((s) => s.lastBackup)
+  const gitStatus = useAppStore((s) => s.gitStatus)
+  const [remoteUrl, setRemoteUrl] = useState(gitConfig.remoteUrl ?? '')
+  const [token, setToken] = useState(gitConfig.token ?? '')
   const title = '设置'
+  // 打开时刷新仓库状态（最近提交/未推送）
+  useEffect(() => {
+    void useAppStore.getState().refreshGitStatus()
+  }, [])
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent data-testid="settings-dialog" aria-label={title}>
@@ -48,6 +62,50 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
             />
             <span>复制时保留双链标记</span>
           </label>
+          <div className="mt-1 flex flex-col gap-2 border-t pt-2.5" data-testid="git-section">
+            <label className={SETTING_ROW}>
+              <input
+                type="checkbox"
+                data-testid="git-enabled-toggle"
+                className="cursor-pointer accent-primary"
+                checked={gitConfig.enabled}
+                onChange={(e) => void setGitConfig({ enabled: e.target.checked })}
+              />
+              <span>版本管理（自动提交到工作区 git 仓库）</span>
+            </label>
+            {gitConfig.enabled && (
+              <>
+                <Input
+                  data-testid="git-remote-input"
+                  value={remoteUrl}
+                  onChange={(e) => setRemoteUrl(e.target.value)}
+                  onBlur={() => void setGitConfig({ remoteUrl: remoteUrl.trim() === '' ? null : remoteUrl.trim() })}
+                  placeholder="远程仓库 HTTPS 地址（留空仅本地提交）"
+                  className="text-xs"
+                />
+                <Input
+                  data-testid="git-token-input"
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  onBlur={() => void setGitConfig({ token: token.trim() === '' ? null : token.trim() })}
+                  placeholder="访问令牌（PAT，私有仓库需要）"
+                  className="text-xs"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground" data-testid="git-status" title={gitStatus.lastCommit ?? undefined}>
+                    {gitStatus.lastCommit !== null
+                      ? `最近提交：${gitStatus.lastCommit}${gitStatus.aheadCount ? ` · 未推送 ${gitStatus.aheadCount}` : ''}`
+                      : '尚无提交'}
+                    {lastBackup !== null ? ` · ${lastBackup}` : ''}
+                  </span>
+                  <Button variant="secondary" size="sm" data-testid="git-backup-now" onClick={() => void backupNow()}>
+                    立即备份
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
           {onChangeWorkspace && (
             <div className="flex items-center justify-between gap-2">
               <span>工作区：{workspaceDir ?? '未设置'}</span>

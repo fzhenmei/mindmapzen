@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS } from '../types/files'
+import { DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG } from '../types/files'
 import { loadConfig, saveConfig } from './config'
 
 describe('配置读写', () => {
@@ -15,15 +15,15 @@ describe('配置读写', () => {
   })
   test('保存后可读回', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS })
-    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
   })
 })
 
 describe('preferredLayout（验收轮三：记住默认布局）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, preferredLayout: 'logic', theme: 'auto', settings: DEFAULT_COPY_SETTINGS })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, preferredLayout: 'logic', theme: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
     expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('logic')
   })
   test('非法值与缺失回退 null', async () => {
@@ -38,7 +38,7 @@ describe('preferredLayout（验收轮三：记住默认布局）', () => {
 describe('theme（M4 禅意视觉）', () => {
   test('theme 往返与非法回退 auto', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'dark', settings: DEFAULT_COPY_SETTINGS })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'dark', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('dark')
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'x' }))
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('auto')
@@ -51,6 +51,7 @@ describe('settings（M5b Task 4：复制行为）', () => {
     await saveConfig(fs, '/cfg.json', {
       workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto',
       settings: { copyIncludeNote: true, copyIncludeLinks: false },
+      git: DEFAULT_GIT_CONFIG,
     })
     expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
   })
