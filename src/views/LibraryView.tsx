@@ -36,11 +36,11 @@ interface ImportPreview {
 /** 命令栏图标钮（spec §3 案头命令栏 48px / 钮 32px 等距 8px）：与 ui/button icon 尺寸同规；
  *  ThemeToggle 命令栏内同款（其文件内另持一份，皮肤演进随 ui/button 收敛） */
 const ICON_BTN =
-  'inline-flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** 卡片浮动操作钮（悬停显现，26px 与旧皮肤同尺寸） */
 const CARD_ACTION_BTN =
-  'inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-control bg-surface text-muted-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary'
+  'inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-md bg-card text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary'
 
 /** 案头（导图列表页，M5d 三区）：图标工具栏 + 左目录树（含文件行）+ 中卡片网格 + 右大纲预览；
  *  交互语义：卡片/树文件单击=选中并预览，双击或预览「打开」=进纸面；卡片按 selectedDir 精确过滤 */
@@ -193,10 +193,10 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             data-testid="library-empty"
           >
             <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
-              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
               <path
                 d="M17 25l5 5 10-12"
-                stroke="var(--color-background)"
+                stroke="var(--background)"
                 strokeWidth="3"
                 fill="none"
                 strokeLinecap="round"
@@ -223,9 +223,9 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
                 type="button"
                 data-testid="map-item"
                 className={cn(
-                  'flex w-full cursor-pointer flex-col items-start gap-1.5 rounded-card border bg-surface p-4 text-left shadow-card transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-primary',
+                  'flex w-full cursor-pointer flex-col items-start gap-1.5 rounded-lg border bg-card p-4 text-left shadow-sm transition-[border-color,transform] duration-150 hover:-translate-y-px hover:border-primary',
                   // selected：语义状态钩子（E2E toHaveClass 断言），视觉由 utility 承担
-                  selectedMap === m.mdPath ? 'selected border-primary bg-primary-soft' : 'border-border',
+                  selectedMap === m.mdPath ? 'selected border-primary bg-secondary' : 'border-border',
                 )}
                 onClick={() => setSelectedMap(m.mdPath)}
                 onDoubleClick={() => void store.openMap(m.mdPath)}
@@ -233,7 +233,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
               >
                 <span className="max-w-full truncate text-sm font-medium text-foreground">{m.name}</span>
                 <span
-                  className="rounded-control bg-primary-soft px-1.5 py-0.5 font-file text-[11px] text-primary"
+                  className="rounded-md bg-secondary px-1.5 py-0.5 font-file text-[11px] text-primary"
                   aria-hidden="true"
                 >
                   .md
@@ -299,7 +299,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         <button
           type="button"
           data-testid="dir-panel-toggle"
-          className="w-5 shrink-0 self-stretch rounded-control border border-border bg-surface font-file text-sm leading-none text-muted-foreground transition-colors duration-150 hover:border-primary hover:text-primary"
+          className="w-5 shrink-0 self-stretch rounded-md border border-border bg-card font-file text-sm leading-none text-muted-foreground transition-colors duration-150 hover:border-primary hover:text-primary"
           aria-label={dirCollapsed ? '展开目录' : '折叠目录'}
           title={dirCollapsed ? '展开目录' : '折叠目录'}
           onClick={() => setDirCollapsed(!dirCollapsed)}
@@ -352,13 +352,13 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
       {/* 命令栏（M12b spec §3 案头三区）：48px 通栏，左面包屑（印章+工作区名）/ 右图标钮
           32px 等距 8px（设置/导入/新建/主题）；无工作区的开屏态隐藏 */}
       {workspaceDir && (
-        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4">
+        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
           <div className="flex min-w-0 items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
-              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
+              <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
               <path
                 d="M17 25l5 5 10-12"
-                stroke="var(--color-background)"
+                stroke="var(--background)"
                 strokeWidth="3.5"
                 fill="none"
                 strokeLinecap="round"

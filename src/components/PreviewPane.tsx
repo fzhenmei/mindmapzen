@@ -25,7 +25,7 @@ interface Props {
 }
 
 /** 大纲预览区（M5d spec §3 案头右列 → M12b「档案卡」）：卡片或树文件单击选中后显示导图大纲。
- *  M12b 案头三区：280px 固定卡片（rounded-card 边框 + surface 底），等宽头（文件名）+ 等宽大纲。
+ *  M12b 案头三区：280px 固定卡片（rounded-lg 边框 + surface 底），等宽头（文件名）+ 等宽大纲。
  *  数据源 adapter.readTextFile + parse（不做引擎实例）；节点文本按连线净化规则隐藏 [[..]]
  *  （与画布显示层同口径，复用 stripMarkers）；有备注行尾 ✎ 角标、层级缩进 14px、等宽字。
  *  读取/解析失败显示「无法预览」，底部「打开」按钮仍可用（双击手势差异的兜底） */
@@ -83,7 +83,7 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
 
   return (
     <aside
-      className="flex w-[280px] shrink-0 flex-col gap-3 rounded-card border border-border bg-surface p-3"
+      className="flex w-[280px] shrink-0 flex-col gap-3 rounded-lg border border-border bg-card p-3"
       data-testid="preview-pane"
     >
       {fileName !== undefined && (
@@ -105,7 +105,7 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
         <button
           type="button"
           data-testid="btn-preview-open"
-          className="inline-flex h-8 w-full shrink-0 cursor-pointer items-center justify-center rounded-control bg-primary px-4 text-sm font-medium text-primary-soft transition-colors duration-150 hover:bg-primary-hover"
+          className="inline-flex h-8 w-full shrink-0 cursor-pointer items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90"
           onClick={() => void useAppStore.getState().openMap(mdPath)}
         >
           打开

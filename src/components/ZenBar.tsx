@@ -55,7 +55,7 @@ interface Props {
 
 /** 命令栏钮（spec §2 命令栏钮 32px）：与案头命令栏/ui button icon 同规的青松皮肤 */
 const BAR_BTN =
-  'inline-flex size-8 items-center justify-center rounded-control text-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
+  'inline-flex size-8 items-center justify-center rounded-md text-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
 
 /** 浮签包装（本文件局部）：ui Tooltip 组合的简写——13 枚图标钮同构，
  *  label 为视觉提示，语义名由触发钮自身 aria-label 承担（二者职责分离，同 ZenTooltip 旧约） */
@@ -94,7 +94,7 @@ export default function ZenBar({
     // zen-bar 类名保留为视觉冒烟钩子（skin 已全转 utility，App.css 无对应规则）
     <header
       data-testid="zen-bar"
-      className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-bar border border-border bg-surface px-2.5 shadow-overlay"
+      className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-[10px] border border-border bg-card px-2.5 shadow-md"
     >
       <Tip label="返回案头">
         <button type="button" data-testid="btn-back" aria-label="返回案头" className={BAR_BTN} onClick={onBack}>
@@ -225,7 +225,7 @@ export default function ZenBar({
             <button
               type="button"
               data-testid={`layout-${kind}`}
-              className={cn(BAR_BTN, layout === kind && 'bg-primary-soft text-primary')}
+              className={cn(BAR_BTN, layout === kind && 'bg-secondary text-primary')}
               aria-pressed={layout === kind}
               aria-label={label}
               onClick={() => onSwitchLayout(kind)}

@@ -13,10 +13,10 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
       data-testid="welcome-screen"
     >
       <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
-        <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--color-brand)" />
+        <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
         <path
           d="M17 25l5 5 10-12"
-          stroke="var(--color-background)"
+          stroke="var(--background)"
           strokeWidth="3"
           fill="none"
           strokeLinecap="round"
@@ -29,7 +29,7 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
         <button
           type="button"
           data-testid="btn-welcome-create"
-          className="inline-flex h-9 cursor-pointer items-center justify-center rounded-control bg-primary px-6 text-sm font-medium text-primary-soft transition-colors duration-150 hover:bg-primary-hover"
+          className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90"
           onClick={onCreateWorkspace}
         >
           创建工作区

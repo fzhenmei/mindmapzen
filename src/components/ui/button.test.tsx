@@ -9,26 +9,26 @@ test('default variant：主色实底 + 青松字 + 焦点环 + testid ui-button'
   expect(btn).toHaveRole('button')
   expect(btn).toHaveAccessibleName('保存')
   expect(btn.className).toContain('bg-primary')
-  expect(btn.className).toContain('text-primary-soft')
-  expect(btn.className).toContain('rounded-control')
+  expect(btn.className).toContain('text-primary-foreground')
+  expect(btn.className).toContain('rounded-md')
   expect(btn.className).toContain('focus-visible:ring-ring')
 })
 
 test('四 variant 各自渲染对应令牌皮肤', () => {
   const { rerender } = render(<Button variant="secondary">钮</Button>)
-  expect(screen.getByTestId('ui-button').className).toContain('bg-surface')
+  expect(screen.getByTestId('ui-button').className).toContain('bg-card')
   rerender(
     <Button variant="ghost" data-testid="ui-button">
       钮
     </Button>,
   )
-  expect(screen.getByTestId('ui-button').className).toContain('hover:bg-primary-soft')
+  expect(screen.getByTestId('ui-button').className).toContain('hover:bg-secondary')
   rerender(
     <Button variant="destructive" data-testid="ui-button">
       钮
     </Button>,
   )
-  expect(screen.getByTestId('ui-button').className).toContain('bg-brand')
+  expect(screen.getByTestId('ui-button').className).toContain('bg-destructive')
 })
 
 test('三 size 各自渲染（default h-8 / sm h-7 / icon size-8）', () => {

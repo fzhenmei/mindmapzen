@@ -2,7 +2,7 @@
 html, body, #root { height: 100%; }
 /* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在树/卡片网格/大纲内 */
 html, body { overflow: hidden; }
-.app { height: 100%; font-family: var(--font-ui); color: var(--color-foreground); background: var(--color-background); }
+.app { height: 100%; font-family: var(--font-sans); color: var(--foreground); background: var(--background); }
 
 /* ═══ 案头（M12b Task 3 青松三区重构）═══
  * 命令栏 48px / 树 240px 行 32px / 预览 280px 档案卡 / 卡片 8px 圆角 hover 青松边——
@@ -12,17 +12,17 @@ html, body { overflow: hidden; }
  * 此处仅保留 error-banner（color-mix 便利）。
  * .library / .map-card / .preview-row 类名保留为测试钩子（visual-smoke 计算值 / desk.spec 定位 /
  * PreviewPane.test 内联缩进断言），视觉不再由本文件驱动 */
-.error-banner { background: color-mix(in srgb, var(--color-brand) 10%, var(--color-background)); color: var(--color-brand);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, var(--color-background)); border-radius: var(--radius-control); padding: var(--space-2) var(--space-3); white-space: pre-wrap; }
+.error-banner { background: color-mix(in srgb, var(--destructive) 10%, var(--background)); color: var(--destructive);
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--background)); border-radius: 6px; padding: var(--space-2) var(--space-3); white-space: pre-wrap; }
 
 /* 编辑器 */
-.editor { position: relative; height: 100%; background: var(--color-background); }
+.editor { position: relative; height: 100%; background: var(--background); }
 .editor-loading, .editor-error { height: 100%; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-5); }
 .editor-error h2 { font-size: var(--font-size-lg); font-weight: 600; /* preflight 重置标题默认粗体，显式恢复 */ }
-.error-detail { color: var(--color-brand); }
-.raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--color-background);
-  border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: var(--space-3); white-space: pre-wrap; font-size: var(--font-size-xs); }
+.error-detail { color: var(--destructive); }
+.raw-preview { max-width: 640px; max-height: 40vh; overflow: auto; background: var(--background);
+  border: 1px solid var(--border); border-radius: 6px; padding: var(--space-3); white-space: pre-wrap; font-size: var(--font-size-xs); }
 .canvas-host { position: absolute; inset: 0; overflow: hidden; }
 /* 纸面命令栏/浮动操作条/题签（M12b Task 4 底部停泊换肤）：皮肤全转 Tailwind utility
  * （ZenBar/NodeActions/EditorCaption 内联），App.css 不再有对应规则；zen-bar/editor-caption/
@@ -30,16 +30,16 @@ html, body { overflow: hidden; }
 /* 印记（Task 7）：保存成功朱砂印 / 已复制墨青印，右上角 250ms 缩放定影，1.2s 后由组件卸载。
    top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞 */
 .save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: var(--space-1) 10px;
-  font-size: var(--font-size-sm); border-radius: var(--radius-control); animation: stamp-in var(--duration-2) ease-out; }
-.stamp-seal { color: var(--color-brand); border: 1.5px solid var(--color-brand); border-radius: 4px; transform: rotate(-3deg); }
-.stamp-ink { color: var(--color-primary); border: 1.5px solid var(--color-primary); border-radius: 4px; }
+  font-size: var(--font-size-sm); border-radius: 6px; animation: stamp-in var(--duration-2) ease-out; }
+.stamp-seal { color: var(--destructive); border: 1.5px solid var(--destructive); border-radius: 4px; transform: rotate(-3deg); }
+.stamp-ink { color: var(--primary); border: 1.5px solid var(--primary); border-radius: 4px; }
 @keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
 /* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于画布上方居中（命令栏已停泊底部，M12b Task 4） */
 .zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); max-width: 70vw;
-  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-brand) 25%, var(--color-surface));
-  border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: var(--space-2) 14px; font-size: var(--font-size-sm); }
-.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--color-muted-foreground); font-size: var(--font-size-xs);
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--destructive) 25%, var(--card));
+  border-radius: 8px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); padding: var(--space-2) 14px; font-size: var(--font-size-sm); }
+.zen-banner ul { flex-basis: 100%; margin: 2px 0; padding-left: 20px; color: var(--muted-foreground); font-size: var(--font-size-xs);
   list-style: disc; /* preflight 抹掉浏览器默认项目符号，显式恢复 */ }
 /* 全局动效豁免（终审修复 2，Global Constraints）：reduce 下所有过渡/悬停位移关闭，收敛为单一 @media 块。
    案头/纸面均已转 Tailwind utility（M12b Task 3/4）：本文件未分层，级联恒胜 utilities 层，

@@ -27,7 +27,7 @@ export function DialogContent({ className, children, ...props }: ComponentProps<
       <DialogPrimitive.Content
         data-testid="ui-dialog-content"
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-card border border-border bg-surface p-6 font-ui text-foreground shadow-overlay',
+          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-6 font-sans text-foreground shadow-md',
           className,
         )}
         {...props}
@@ -36,7 +36,7 @@ export function DialogContent({ className, children, ...props }: ComponentProps<
         <DialogPrimitive.Close
           data-testid="ui-dialog-close"
           aria-label="关闭"
-          className="absolute right-4 top-4 rounded-control p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           ✕
         </DialogPrimitive.Close>

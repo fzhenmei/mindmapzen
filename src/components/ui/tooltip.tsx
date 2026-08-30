@@ -27,7 +27,7 @@ export function TooltipContent({
         data-testid="ui-tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'z-50 rounded-control bg-surface px-2 py-1 font-ui text-xs text-foreground shadow-overlay',
+          'z-50 rounded-md bg-card px-2 py-1 font-sans text-xs text-foreground shadow-md',
           className,
         )}
         {...props}

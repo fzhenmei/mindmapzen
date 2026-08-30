@@ -30,9 +30,9 @@ test('受控打开：Content/Title/Description 经 Portal 渲染，皮肤为青�
   expect(screen.getByRole('dialog')).toBeInTheDocument()
   expect(screen.getByText('导出确认')).toHaveProperty('tagName', 'H2')
   expect(screen.getByTestId('ui-dialog-title').id).toBe(content.getAttribute('aria-labelledby'))
-  expect(content.className).toContain('bg-surface')
-  expect(content.className).toContain('rounded-card')
-  expect(content.className).toContain('shadow-overlay')
+  expect(content.className).toContain('bg-card')
+  expect(content.className).toContain('rounded-lg')
+  expect(content.className).toContain('shadow-md')
 })
 
 test('Trigger 点击打开；Esc 关闭（onOpenChange false）', () => {

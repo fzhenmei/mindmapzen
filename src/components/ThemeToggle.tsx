@@ -8,7 +8,7 @@ const LABEL: Record<ThemePref, string> = { auto: '主题：跟随系统', light:
 
 /** 命令栏图标钮（M12b 案头命令栏）：与 LibraryView ICON_BTN 同规（ui/button icon 尺寸） */
 const ICON_BTN =
-  'inline-flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** 主题三态切换（testid btn-theme；M4 起换 IconTheme 图标，testid/aria-label 不变）。
  *  单击目标由 nextVisibleTheme 决定（验收修复 1）：跳过与当前解析结果相同的候选，

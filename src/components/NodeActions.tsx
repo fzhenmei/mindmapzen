@@ -17,13 +17,13 @@ interface Props {
 
 /** 浮动条钮（28px）：青松 hover 同命令栏，无禁用态（有锚点即可用） */
 const ACTION_BTN =
-  'inline-flex size-7 items-center justify-center rounded-control text-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'inline-flex size-7 items-center justify-center rounded-md text-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<Props>) {
   return (
     <div
       data-testid="node-actions"
-      className="absolute z-[8] flex items-center gap-0.5 rounded-bar border border-border bg-surface px-1.5 py-1 shadow-card"
+      className="absolute z-[8] flex items-center gap-0.5 rounded-[10px] border border-border bg-card px-1.5 py-1 shadow-sm"
       style={{ left: pos.left, top: pos.top }}
     >
       <Tooltip>

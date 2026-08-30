@@ -10,13 +10,13 @@ type ButtonVariant = 'default' | 'secondary' | 'ghost' | 'destructive'
 type ButtonSize = 'sm' | 'default' | 'icon'
 
 const buttonBase =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control font-ui text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-sans text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50'
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  default: 'bg-primary text-primary-soft hover:bg-primary-hover',
-  secondary: 'border border-border bg-surface text-foreground hover:border-primary hover:text-primary',
-  ghost: 'text-foreground hover:bg-primary-soft hover:text-primary',
-  destructive: 'bg-brand text-white hover:opacity-90',
+  default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+  secondary: 'border border-border bg-card text-foreground hover:border-primary hover:text-primary',
+  ghost: 'text-foreground hover:bg-secondary hover:text-primary',
+  destructive: 'bg-destructive text-white hover:opacity-90',
 }
 
 const buttonSizes: Record<ButtonSize, string> = {

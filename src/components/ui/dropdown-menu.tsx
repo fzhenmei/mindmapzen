@@ -20,7 +20,7 @@ export function DropdownMenuContent({
         data-testid="ui-dropdown-content"
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-32 rounded-card border border-border bg-surface p-1 font-ui text-sm text-foreground shadow-overlay',
+          'z-50 min-w-32 rounded-lg border border-border bg-card p-1 font-sans text-sm text-foreground shadow-md',
           className,
         )}
         {...props}
@@ -37,7 +37,7 @@ export function DropdownMenuItem({
     <DropdownMenuPrimitive.Item
       data-testid="ui-dropdown-item"
       className={cn(
-        'flex cursor-default select-none items-center gap-2 rounded-control px-2 py-1.5 outline-none transition-colors duration-150 focus:bg-primary-soft focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 focus:bg-secondary focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
       {...props}

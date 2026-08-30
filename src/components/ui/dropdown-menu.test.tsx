@@ -16,8 +16,8 @@ test('Trigger pointerdown 打开菜单，条目经 Portal 渲染且为青松皮�
   expect(screen.queryByTestId('ui-dropdown-content')).not.toBeInTheDocument()
   fireEvent.pointerDown(screen.getByRole('button', { name: '文件' }), { button: 0 })
   const content = screen.getByTestId('ui-dropdown-content')
-  expect(content.className).toContain('bg-surface')
-  expect(content.className).toContain('rounded-card')
+  expect(content.className).toContain('bg-card')
+  expect(content.className).toContain('rounded-lg')
   expect(screen.getByText('新建导图')).toBeInTheDocument()
 })
 

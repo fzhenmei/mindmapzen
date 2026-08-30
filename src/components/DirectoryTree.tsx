@@ -7,8 +7,8 @@ export interface TreeFile { name: string; relDir: string }
 
 /** 树行（M12b spec §3 案头三区）：240px 树、行高 32px、等宽小字、青松悬停/选中 */
 const ROW =
-  'flex h-8 w-full cursor-pointer items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-control text-left font-file text-xs transition-colors duration-150 hover:bg-primary-soft hover:text-primary'
-const ROW_ACTIVE = 'bg-primary-soft text-primary'
+  'flex h-8 w-full cursor-pointer items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-md text-left font-file text-xs transition-colors duration-150 hover:bg-secondary hover:text-primary'
+const ROW_ACTIVE = 'bg-secondary text-primary'
 const ROW_NAME = 'min-w-0 flex-1 truncate'
 
 interface Props {
@@ -105,7 +105,7 @@ export default function DirectoryTree({
       <button
         type="button"
         data-testid="dir-create"
-        className="mt-2 h-8 cursor-pointer rounded-control px-2 text-left transition-colors duration-150 hover:text-primary"
+        className="mt-2 h-8 cursor-pointer rounded-md px-2 text-left transition-colors duration-150 hover:text-primary"
         title={createDirTitle}
         onClick={() => onCreateDir(selected)}
       >

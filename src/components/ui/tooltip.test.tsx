@@ -23,6 +23,6 @@ test('悬停后浮签经 Portal 显示，皮肤为青松令牌类', async () => 
   fireEvent.pointerMove(screen.getByRole('button', { name: '钮' }), { pointerType: 'mouse' })
   const tip = await waitFor(() => screen.getByTestId('ui-tooltip-content'))
   expect(tip).toHaveTextContent('保存（Ctrl+S）')
-  expect(tip.className).toContain('bg-surface')
-  expect(tip.className).toContain('rounded-control')
+  expect(tip.className).toContain('bg-card')
+  expect(tip.className).toContain('rounded-md')
 })

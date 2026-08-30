@@ -20,8 +20,8 @@ interface Props {
 /** 内嵌目录树行（M12b Task 5 换肤）：与案头左树（DirectoryTree ROW）同规格——
  *  32px 行高、等宽文件声道、青松悬停/选中；禁用项为当前所在层（灰且不可点） */
 const TREE_ROW =
-  'flex h-8 w-full cursor-pointer items-center overflow-hidden whitespace-nowrap rounded-control text-left font-file text-xs transition-colors duration-150 hover:bg-primary-soft hover:text-primary disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground'
-const TREE_ROW_ACTIVE = 'bg-primary-soft text-primary'
+  'flex h-8 w-full cursor-pointer items-center overflow-hidden whitespace-nowrap rounded-md text-left font-file text-xs transition-colors duration-150 hover:bg-secondary hover:text-primary disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground'
+const TREE_ROW_ACTIVE = 'bg-secondary text-primary'
 
 /** 移动导图对话框（M12b Task 5 切 ui/dialog）：ui Dialog 外壳 + 目录树单选 + 新目录内联创建。
  *  树节点复用 `dir-node-<name>` testid（与案头左树同名，测试需 within(move-dialog) 圈定），
@@ -72,7 +72,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
       <DialogContent data-testid="move-dialog" aria-label={title} className="w-90 gap-3 p-5">
         <DialogTitle>{title}</DialogTitle>
-        <div className="flex max-h-[40vh] flex-col gap-0.5 overflow-y-auto rounded-control border border-border p-1.5 font-file text-xs">
+        <div className="flex max-h-[40vh] flex-col gap-0.5 overflow-y-auto rounded-md border border-border p-1.5 font-file text-xs">
           <button
             type="button"
             data-testid="dir-node-root"
@@ -100,7 +100,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
             新建
           </Button>
         </div>
-        {error && <p className="text-sm text-brand">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="move-cancel" onClick={onCancel}>
             取消

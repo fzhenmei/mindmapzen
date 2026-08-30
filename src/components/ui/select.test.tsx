@@ -18,13 +18,13 @@ test('键盘打开后条目经 Portal 渲染且为青松皮肤', async () => {
     </Select>,
   )
   const trigger = screen.getByTestId('ui-select-trigger')
-  expect(trigger.className).toContain('bg-surface')
+  expect(trigger.className).toContain('bg-card')
   expect(trigger.className).toContain('focus:ring-ring')
   fireEvent.focus(trigger)
   fireEvent.keyDown(trigger, { key: 'ArrowDown' })
   const content = await screen.findByTestId('ui-select-content')
-  expect(content.className).toContain('bg-surface')
-  expect(content.className).toContain('rounded-card')
+  expect(content.className).toContain('bg-card')
+  expect(content.className).toContain('rounded-lg')
   expect(screen.getByRole('option', { name: '晨松' })).toBeInTheDocument()
 })
 

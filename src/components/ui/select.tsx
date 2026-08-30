@@ -18,7 +18,7 @@ export function SelectTrigger({
     <SelectPrimitive.Trigger
       data-testid="ui-select-trigger"
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-control border border-border bg-surface px-3 font-ui text-sm text-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-border bg-card px-3 font-sans text-sm text-foreground transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50',
         className,
       )}
       {...props}
@@ -42,7 +42,7 @@ export function SelectContent({
         position={position}
         sideOffset={sideOffset}
         className={cn(
-          'z-50 max-h-96 min-w-32 overflow-hidden rounded-card border border-border bg-surface font-ui text-sm text-foreground shadow-overlay',
+          'z-50 max-h-96 min-w-32 overflow-hidden rounded-lg border border-border bg-card font-sans text-sm text-foreground shadow-md',
           className,
         )}
         {...props}
@@ -62,7 +62,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-testid="ui-select-item"
       className={cn(
-        'relative flex w-full cursor-default select-none items-center rounded-control py-1.5 pl-2 pr-8 outline-none transition-colors duration-150 data-[state=checked]:font-medium data-[highlighted]:bg-primary-soft data-[highlighted]:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-2 pr-8 outline-none transition-colors duration-150 data-[state=checked]:font-medium data-[highlighted]:bg-secondary data-[highlighted]:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
       {...props}

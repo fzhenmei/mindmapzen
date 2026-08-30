@@ -22,15 +22,15 @@ test('视觉冒烟 1：晨松亮主题——令牌就位且案头三区元素可
   const tokens = await page.evaluate(() => {
     const cs = getComputedStyle(document.documentElement)
     return {
-      background: cs.getPropertyValue('--color-background').trim(),
-      surface: cs.getPropertyValue('--color-surface').trim(),
-      primary: cs.getPropertyValue('--color-primary').trim(),
-      border: cs.getPropertyValue('--color-border').trim(),
+      background: cs.getPropertyValue('--background').trim(),
+      card: cs.getPropertyValue('--card').trim(),
+      primary: cs.getPropertyValue('--primary').trim(),
+      border: cs.getPropertyValue('--border').trim(),
     }
   })
   expect(tokens).toEqual({
     background: '#F7F8F7',
-    surface: '#FFFFFF',
+    card: '#FFFFFF',
     primary: '#1D7A6B',
     border: '#E4E7E6',
   })
@@ -58,12 +58,12 @@ test('视觉冒烟 2：夜航暗主题——令牌翻转与纸面停泊栏（spe
   const tokens = await page.evaluate(() => {
     const cs = getComputedStyle(document.documentElement)
     return {
-      background: cs.getPropertyValue('--color-background').trim(),
-      surface: cs.getPropertyValue('--color-surface').trim(),
-      primary: cs.getPropertyValue('--color-primary').trim(),
+      background: cs.getPropertyValue('--background').trim(),
+      card: cs.getPropertyValue('--card').trim(),
+      primary: cs.getPropertyValue('--primary').trim(),
     }
   })
-  expect(tokens).toEqual({ background: '#14181A', surface: '#1B2022', primary: '#4CBFA8' })
+  expect(tokens).toEqual({ background: '#14181A', card: '#1B2022', primary: '#4CBFA8' })
 
   // 纸面元素可见（M12b Task 4）：停泊命令栏 + 左下题签 + 右下主题钮
   await expect(page.getByTestId('zen-bar')).toBeVisible()
@@ -93,7 +93,7 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
   // 运行时注入探针 div：bg-background 经 theme.css @source inline safelist 入产物
-  // （工具类按需生成，无源码消费点的类不会产出）；text-foreground/rounded-card 由
+  // （工具类按需生成，无源码消费点的类不会产出）；text-foreground/rounded-lg 由
   // ui 组件消费自然存在。探针挂 body，读完即移除
   const read = () =>
     page.evaluate(() => {
@@ -101,14 +101,14 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
       if (!el) {
         el = document.createElement('div')
         el.id = 'zen-tw-probe'
-        el.className = 'bg-background text-foreground rounded-card'
+        el.className = 'bg-background text-foreground rounded-lg'
         document.body.appendChild(el)
       }
       const cs = getComputedStyle(el)
       return { bg: cs.backgroundColor, fg: cs.color, radius: cs.borderRadius }
     })
 
-  // 晨松：bg-background=#F7F8F7、text-foreground=#1F2328、rounded-card=8px（spec §2 表逐字）
+  // 晨松：bg-background=#F7F8F7、text-foreground=#1F2328、rounded-lg=8px（--radius 0.5rem）
   expect(await read()).toEqual({
     bg: 'rgb(247, 248, 247)',
     fg: 'rgb(31, 35, 40)',

@@ -23,7 +23,7 @@ export function ToggleGroupItem({
     <ToggleGroupPrimitive.Item
       data-testid="ui-toggle-item"
       className={cn(
-        'inline-flex h-8 items-center justify-center gap-1 rounded-control border border-border bg-surface px-3 font-ui text-sm text-foreground transition-colors duration-150 hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:border-primary data-[state=on]:bg-primary-soft data-[state=on]:text-primary',
+        'inline-flex h-8 items-center justify-center gap-1 rounded-md border border-border bg-card px-3 font-sans text-sm text-foreground transition-colors duration-150 hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:border-primary data-[state=on]:bg-secondary data-[state=on]:text-primary',
         className,
       )}
       {...props}

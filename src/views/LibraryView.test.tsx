@@ -297,7 +297,7 @@ describe('案头三区与交互（M5d）', () => {
     fireEvent.click(card)
     // M12b 选中态转 utility：青松描边 + 浅底（旧 'selected' 类退役）
     expect(card.className).toContain('border-primary')
-    expect(card.className).toContain('bg-primary-soft')
+    expect(card.className).toContain('bg-secondary')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('想法A')
     // 单击只选中不进纸面
     expect(useAppStore.getState().route).toBe('library')
@@ -313,7 +313,7 @@ describe('案头三区与交互（M5d）', () => {
     expect(screen.getByTestId('file-node-甲').querySelector('svg')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('file-node-甲'))
     // M12b 选中态转 utility（旧 'active' 类退役）
-    expect(screen.getByTestId('file-node-甲').className).toContain('bg-primary-soft')
+    expect(screen.getByTestId('file-node-甲').className).toContain('bg-secondary')
     expect(await screen.findByTestId('preview-outline')).toHaveTextContent('甲')
   })
 
