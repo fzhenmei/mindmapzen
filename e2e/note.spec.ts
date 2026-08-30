@@ -8,10 +8,10 @@ test('节点备注：对话框编辑保存后 md 含引用块，重开持久', a
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('备注测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('备注测试').first()).toBeVisible()
 
   // 建子节点「要点」：引擎「插入→渲染→弹编辑框」异步链路，先等框弹出再输入
-  await page.getByText('根主题').first().click()
+  await page.getByText('备注测试').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('要点')
@@ -35,7 +35,7 @@ test('节点备注：对话框编辑保存后 md 含引用块，重开持久', a
       '/ws/备注测试.md',
     ),
   )
-  expect(md).toBe('# 根主题\n\n## 要点\n> 第一行\n> 第二行\n')
+  expect(md).toBe('# 备注测试\n\n## 要点\n> 第一行\n> 第二行\n')
 
   // 返回案头重开：引用块解析回 data.note，引擎渲染备注角标（.smm-node-note）
   await page.getByTestId('btn-back').click()

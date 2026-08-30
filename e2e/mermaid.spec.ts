@@ -63,10 +63,10 @@ test('mermaid：画布备注悬停窗渲染成图，移出隐藏', async ({ page
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('悬停图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('悬停图').first()).toBeVisible()
 
   // 选中根 → 备注对话框写入 mermaid 备注
-  await page.getByText('根主题').first().click()
+  await page.getByText('悬停图').first().click()
   await page.getByTestId('btn-note').click()
   await page.getByTestId('note-text').fill('流程说明：\n```mermaid\ngraph LR\n  A --> B\n```')
   await page.getByTestId('note-save').click()

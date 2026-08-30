@@ -14,10 +14,10 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('折叠图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('折叠图').first()).toBeVisible()
 
   // 三层图：根主题 → 分支甲 → 叶一（与冒烟用例同款录入链路：Tab → 等编辑框 → 输入 → 点空白提交）
-  await page.getByText('根主题').first().click()
+  await page.getByText('折叠图').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('分支甲')
@@ -52,7 +52,7 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
     ),
   )
   const sidecar = JSON.parse(sidecarRaw) as { collapsed: string[] }
-  expect(sidecar.collapsed).toContain('/根主题/分支甲')
+  expect(sidecar.collapsed).toContain('/折叠图/分支甲')
 
   // 返回文件库 → 重新打开 → 折叠应保持（apply 侧）
   await page.getByTestId('btn-back').click()
@@ -60,7 +60,7 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
   await page.getByTestId('dir-node-all').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
   await page.getByTestId('map-item').dblclick()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('折叠图').first()).toBeVisible()
   await expect(page.getByText('叶一')).toHaveCount(0)
 })
 
@@ -74,9 +74,9 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('竞态图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('竞态图').first()).toBeVisible()
 
-  await page.getByText('根主题').first().click()
+  await page.getByText('竞态图').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('分支甲')
@@ -104,7 +104,7 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
   await page.getByTestId('dir-node-all').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
   await page.getByTestId('map-item').dblclick()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('竞态图').first()).toBeVisible()
 
   // 同一 JS 任务连发「展开点击 + Ctrl+S」（引擎 data_change 尾随节流 100ms 窗内）：
   // 修复后展开命令同步置脏，Ctrl+S 落盘 collapsed:[]；修复前 !dirty 早退，sidecar 残留旧值

@@ -12,14 +12,14 @@ test('回退与重做：撤销建子编辑回打开基线并随保存落盘，�
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('撤销测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('撤销测试').first()).toBeVisible()
 
   // 打开即基线种子（净化尾部播入）：尚无编辑，双钮禁用
   await expect(page.getByTestId('btn-undo')).toBeDisabled()
   await expect(page.getByTestId('btn-redo')).toBeDisabled()
 
   // 建子节点「要点」：点根激活 → Tab 插入（引擎原生）→ 输入文本 → 点画布空白提交
-  await page.getByText('根主题').first().click()
+  await page.getByText('撤销测试').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('要点')
@@ -44,7 +44,7 @@ test('回退与重做：撤销建子编辑回打开基线并随保存落盘，�
       '/ws/撤销测试.md',
     ),
   )
-  expect(mdAfterUndo).toBe('# 根主题\n')
+  expect(mdAfterUndo).toBe('# 撤销测试\n')
 
   // 连续重做到栈顶：插入与文本全部恢复
   for (let i = 0; i < 5; i++) {
@@ -60,7 +60,7 @@ test('回退与重做：撤销建子编辑回打开基线并随保存落盘，�
       '/ws/撤销测试.md',
     ),
   )
-  expect(mdAfterRedo).toBe('# 根主题\n\n## 要点\n')
+  expect(mdAfterRedo).toBe('# 撤销测试\n\n## 要点\n')
 })
 
 // v1.1 修复回归（审查裁定①）：引擎构造器自播种子（addHistoryOnInit 默认 true，index.js:163-166，
@@ -75,16 +75,16 @@ test('回退不切回含标记态：含连线文件重开后撤销至栈底，[[
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('撤销连线')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('撤销连线').first()).toBeVisible()
 
   // 建子节点 A（文本含 [[B]]）与 B（同 links.spec 的建图流程）
-  await page.getByText('根主题').first().click()
+  await page.getByText('撤销连线').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('A [[B]]')
   await page.getByRole('application').click({ position: { x: 15, y: 15 } })
   await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
-  await page.getByText('根主题').first().click()
+  await page.getByText('撤销连线').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('B')
@@ -107,7 +107,7 @@ test('回退不切回含标记态：含连线文件重开后撤销至栈底，[[
   await expect(page.getByTestId('btn-undo')).toBeDisabled()
 
   // 编辑一条（插入子节点并输入文本）后回退到栈底（=打开基线）
-  await page.getByText('根主题').first().click()
+  await page.getByText('撤销连线').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('要点')

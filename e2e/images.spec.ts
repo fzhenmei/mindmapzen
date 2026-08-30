@@ -9,10 +9,10 @@ test('插图：选图流——复制入 assets/、落盘行尾标记、画布渲
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('插图图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('插图图').first()).toBeVisible()
 
   // 选中根 → 浮动条「插图」钮 → 对话框（未设置占位）
-  await page.getByText('根主题').first().click()
+  await page.getByText('插图图').first().click()
   await page.getByTestId('node-action-image').click()
   await expect(page.getByTestId('image-dialog')).toBeVisible()
   await expect(page.getByTestId('image-preview')).toContainText('未设置插图')
@@ -42,12 +42,12 @@ test('插图：选图流——复制入 assets/、落盘行尾标记、画布渲
       '/ws/插图图.md',
     ),
   )
-  expect(md).toContain('# 根主题 ![选图](assets/选图.png)')
+  expect(md).toContain('# 插图图 ![选图](assets/选图.png)')
 
   // 重开：预览（imgMap 构建自磁盘字节）+ 对话框现状
   await page.getByTestId('dir-node-all').click()
   await page.getByTestId('map-item').filter({ hasText: '插图图' }).dblclick()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('插图图').first()).toBeVisible()
   await expect(page.locator('.canvas-host image').first()).toBeVisible()
 })
 

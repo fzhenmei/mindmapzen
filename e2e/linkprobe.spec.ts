@@ -4,16 +4,17 @@ import { expect, test, type Page } from '@playwright/test'
  *  每个用例建 A（左上）与 B（右下）两张独立图外，全部走真实 UI。 */
 const LINE_PATHS = '.smm-associative-line-container > path'
 
-async function buildAB(page: Page) {
+async function buildAB(page: Page): Promise<string> {
   await page.goto('/?e2e=1')
   await page.getByTestId('btn-new').click()
-  await page.getByTestId('input-name').fill(`探针${Date.now()}`)
+  const name = `探针${Date.now()}`
+  await page.getByTestId('input-name').fill(name)
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText(name).first()).toBeVisible()
 
   // 建子节点 A（根的左子）与 B（根的右子）——布局自动左右分开
   for (const t of ['甲', '乙']) {
-    await page.getByText('根主题').first().click()
+    await page.getByText(name).first().click()
     await page.keyboard.press('Tab')
     await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
     await page.keyboard.type(t)
@@ -22,6 +23,7 @@ async function buildAB(page: Page) {
   }
   await page.keyboard.press('Control+s')
   await page.waitForTimeout(300)
+  return name
 }
 
 async function state(page: Page): Promise<Record<string, unknown>> {
@@ -70,10 +72,10 @@ test.describe('连线时序探针', () => {
   })
 
   test('场景D：目标为根节点', async ({ page }) => {
-    await buildAB(page)
+    const rootName = await buildAB(page)
     await page.getByText('甲').first().click()
     await page.getByTestId('node-action-link').click()
-    await page.getByText('根主题').first().click({ timeout: 2_000 }).catch(() => {})
+    await page.getByText(rootName).first().click({ timeout: 2_000 }).catch(() => {})
     console.log('D-state', JSON.stringify(await state(page)))
     console.log('D-lines', await page.locator(LINE_PATHS).count())
   })
@@ -139,9 +141,9 @@ test('场景G：源节点上按下后微移再抬（建线按钮前的抖动使�
 })
 
 test('场景H：目标名不唯一（两节点同名，连其中之一）', async ({ page }) => {
-  await buildAB(page)
+  const rootName = await buildAB(page)
   // 再建一个与乙同名的节点（根→Tab→丙 改名为 乙）
-  await page.getByText('根主题').first().click()
+  await page.getByText(rootName).first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('乙')

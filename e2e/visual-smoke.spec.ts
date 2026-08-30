@@ -48,7 +48,7 @@ test('视觉冒烟 2：夜航暗主题——令牌翻转与纸面停泊栏（spe
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('夜航图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('夜航图').first()).toBeVisible()
 
   // 纸面一次点击切换（auto 亮解析 → 跳过 light 直达 dark）
   await page.getByTestId('btn-theme').click()
@@ -149,7 +149,7 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   // ③ ui Tooltip 内容内距 = 官方 px-3 py-1.5（12px/6px）：进纸面悬停命令栏钮使浮签现身
   await page.getByTestId('input-name').fill('官方值锁')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('官方值锁').first()).toBeVisible()
   await page.getByTestId('btn-save').hover()
   const tip = page.locator('[data-slot="tooltip-content"]')
   await expect(tip.first()).toBeVisible()

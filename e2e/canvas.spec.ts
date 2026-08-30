@@ -7,7 +7,7 @@ test('窗口尺寸变化画布跟随重算', async ({ page }) => {
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('自适应')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('自适应').first()).toBeVisible()
 
   const svg = page.locator('.canvas-host svg').first()
   const widthBefore = parseInt((await svg.getAttribute('width')) ?? '0', 10)

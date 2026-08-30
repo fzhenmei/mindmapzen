@@ -11,7 +11,7 @@ describe('workspace', () => {
   test('createMap 写入占位根并出现在列表', async () => {
     const info = await createMap(fs, '/ws', '新想法')
     expect(info.name).toBe('新想法')
-    expect(await fs.readTextFile('/ws/新想法.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/新想法.md')).toBe('# 新想法\n')
     expect((await listMaps(fs, '/ws')).map((m) => m.name)).toEqual(['新想法'])
   })
 
@@ -88,7 +88,7 @@ describe('workspace', () => {
     expect(await fs.exists('/ws/sub/a.md')).toBe(false)
     expect(await fs.exists('/ws/sub/a.zen.json')).toBe(false)
     // 根下同名图未被越层命中：内容与 sidecar 原样
-    expect(await fs.readTextFile('/ws/a.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# a\n')
     expect(await fs.exists('/ws/a.zen.json')).toBe(true)
   })
 
@@ -102,7 +102,7 @@ describe('workspace', () => {
     expect(await fs.exists('/ws/sub/a.md')).toBe(false)
     expect(await fs.exists('/ws/sub/a.zen.json')).toBe(false)
     // 根下同名图未被越层删除
-    expect(await fs.readTextFile('/ws/a.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# a\n')
     expect(await fs.exists('/ws/a.zen.json')).toBe(true)
   })
 
