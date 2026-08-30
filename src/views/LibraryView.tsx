@@ -12,6 +12,7 @@ import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
+import NewMapDialog from '../components/NewMapDialog'
 import FileExplorer, { type MapAction } from '../components/FileExplorer'
 import FileDetail from '../components/FileDetail'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
@@ -189,8 +190,14 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     const p = mdPathOf(f)
     if (p !== undefined) void store.openMap(p)
   }
-  // 树根显示工作区名（title 承担原页首路径职能）；开屏态（无工作区）不进树，占位空串
-  const workspaceName = workspaceDir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+  // 树根显示工作区名（title 承担原页首路径职能）；开屏态（无工作区）不进树，占位空串。
+  // 尾部分隔符收敛用字符串修剪（anchored class 正则无 ^ 锚最坏 O(n²)，Sonar S8786）
+  const trimSeparators = (p: string): string => {
+    let s = p
+    while (s.endsWith('/') || s.endsWith('\\')) s = s.slice(0, -1)
+    return s
+  }
+  const workspaceName = workspaceDir ? trimSeparators(workspaceDir).split(/[\\/]/).pop() ?? '' : ''
 
   /** 右侧内容（M15 三态）：工作区空 → 全局空态；详情态（选中文件）→ FileDetail；
    *  idle（未选任何）→ 空态引导；目录态 → FileExplorer（文件夹 + 导图大图标 tile）。
@@ -349,14 +356,14 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         </SidebarInset>
       </SidebarProvider>
 
+      {/* 新建导图（M16 换 NewMapDialog）：名称 + 模板选择；三个入口（页首 btn-new/
+          空态 library-empty-new/idle 态 desk-idle-new）共用本对话框 */}
       {dialog === 'new' && (
-        <NameDialog
-          title="新建导图"
-          confirmText="创建"
+        <NewMapDialog
           onCancel={() => setDialog(null)}
-          onConfirm={async (name) => {
+          onConfirm={async (name, templateContent) => {
             setDialog(null)
-            await store.createAndOpen(name)
+            await store.createAndOpen(name, templateContent)
           }}
         />
       )}

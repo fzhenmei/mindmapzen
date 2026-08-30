@@ -30,8 +30,8 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
   if (!wsDir) return builtin
   const dir = joinPath(wsDir, TEMPLATES_DIR)
   const names = await collectMdNames(fs, dir, '')
-  const user = await Promise.all(
-    names.map(async ({ relPath, fileName }) => {
+  const user: Array<TemplateInfo | null> = await Promise.all(
+    names.map(async ({ relPath, fileName }): Promise<TemplateInfo | null> => {
       try {
         const content = await fs.readTextFile(joinPath(dir, relPath === '' ? fileName : `${relPath}/${fileName}`))
         return {
@@ -40,7 +40,7 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
           desc: relPath === '' ? '工作区模板' : `工作区模板 · ${relPath}`,
           source: 'user',
           content,
-        } satisfies TemplateInfo
+        }
       } catch {
         return null // 单个模板读取失败跳过
       }
