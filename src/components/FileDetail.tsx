@@ -48,7 +48,7 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="file-detail">
       {/* 摘要条：文件事实一屏可读（等宽文件声道）；底无线——上下层分区由预览区
           的 md 内容自身承担，摘要条用留白收尾 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 pt-4 pb-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-6 pt-4 pb-2">
         <span className="font-file text-sm font-semibold" title={`${info.name}.md`}>
           {info.name}.md
         </span>
@@ -100,10 +100,12 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
         </div>
       </div>
       {/* 预览区：md 内容自渲染；包裹边框线（M15 验收）+ 白卡面与摘要条分层。
+          flex flex-col 使内层 md-preview 的 flex-1 生效（否则内容自然高度撑破
+          overflow-hidden 被裁，滚动条无从出现——验收：大文件看不全的根因）。
           testid 为视觉冒烟回归锁（borderColor 必须等于 --border，防 currentColor 复发） */}
       <div
         data-testid="detail-preview-frame"
-        className="mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-lg border bg-card"
+        className="mx-6 mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card"
       >
         {state.kind === 'text' ? (
           <MarkdownPreview text={state.text} />
