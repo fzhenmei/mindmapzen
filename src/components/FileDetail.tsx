@@ -23,10 +23,12 @@ type DetailState =
 
 /** 案头文件详情态（M15 → 官方 Card 解剖）：CardHeader = 标题（CardTitle）+ 元信息
  *  （CardDescription）+ 按钮组（CardAction 官方右上动作位）；CardContent = markdown
- *  渲染区。滚动区 edge-to-edge：CardContent 以 -mx-6 抵消官方 px-6 卡内距（官方文档
- *  `-mx-(--card-spacing)` 技巧的现行等价物——卡内距即 px-6，--card-spacing 变量尚未
- *  落进官方源码），滚动条贴卡边；Card 根压 pb-0 让内容区延到卡底（垂直同口径，
- *  尾距由 MarkdownPreview 自带 pb-6 承担）。读取失败时卡头仍完整（元数据来自 store），
+ *  渲染区。分节（验收）：CardHeader 加 border-b（官方 [.border-b]:pb-6 条件类自动补
+ *  底距），内容区 bg-muted 下陷底与卡头（bg-card）区分。滚动区 edge-to-edge：
+ *  CardContent 以 -mx-6 抵消官方 px-6 卡内距（官方文档 `-mx-(--card-spacing)` 技巧
+ *  的现行等价物——卡内距即 px-6，--card-spacing 变量尚未落进官方源码），滚动条与
+ *  muted 底贴卡边；Card 根压 pb-0 + overflow-hidden 让内容区延到卡底（尾距由
+ *  MarkdownPreview 自带 pb-6 承担）。读取失败时卡头仍完整（元数据来自 store），
  *  预览区显示「无法预览」——打开按钮兜底 */
 export default function FileDetail({ info, onBack }: Readonly<Props>) {
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
@@ -50,9 +52,11 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
   const dt = (ms: number) => new Date(ms).toLocaleString('zh-CN')
 
   return (
-    // file-detail testid 兼作视觉冒烟回归锁（borderColor 必须等于 --border，防 currentColor 复发）
-    <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 pb-0">
-      <CardHeader>
+    // file-detail testid 兼作视觉冒烟回归锁（borderColor 必须等于 --border，防 currentColor 复发）；
+    // overflow-hidden 让 muted 内容区不戳出底部圆角
+    <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 overflow-hidden pb-0">
+      {/* border-b 分割线（官方条件类 [.border-b]:pb-6 自动补卡头底距） */}
+      <CardHeader className="border-b">
         <CardTitle className="truncate font-file text-base" title={`${info.name}.md`}>
           {info.name}.md
         </CardTitle>
@@ -98,7 +102,8 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
           </div>
         </CardAction>
       </CardHeader>
-      <CardContent className="-mx-6 flex min-h-0 flex-1 flex-col">
+      {/* bg-muted 下陷底与卡头区分；-mx-6 edge-to-edge 使 muted 底铺满卡宽、贴卡边 */}
+      <CardContent className="-mx-6 flex min-h-0 flex-1 flex-col bg-muted">
         {state.kind === 'text' ? (
           <MarkdownPreview text={state.text} />
         ) : (
