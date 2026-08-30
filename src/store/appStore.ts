@@ -108,15 +108,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSelectedDir: (rel) => set({ selectedDir: rel }),
 
+  /** 抛错语义（M16 验收）：输入类错误（空名/非法字符/重名）抛给调用方，由
+   *  新建对话框就地显示、不关框——不再吞进全局 error-banner */
   createAndOpen: async (name, templateContent) => {
     const { adapter, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
-    try {
-      const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent)
-      set({ currentMdPath: info.mdPath, route: 'editor', error: null })
-    } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) })
-    }
+    const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent)
+    set({ currentMdPath: info.mdPath, route: 'editor', error: null })
   },
 
   /** 记住用户偏好的默认布局（新建/导入/无 sidecar 导图的初始布局），持久化到应用配置 */

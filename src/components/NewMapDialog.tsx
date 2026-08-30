@@ -14,8 +14,9 @@ import { useAppStore } from '../store/appStore'
 
 interface Props {
   onCancel(): void
-  /** 确认：名称 + 选中模板的 md（undefined = 空白，传内置 blank 亦同效） */
-  onConfirm(name: string, templateContent?: string): void
+  /** 确认（M16 抛错语义）：resolve = 成功（调用方在成功路径上关框）；抛错 = 对话框
+   *  就地显示 error.message、不关框——输入类错误不再散落到全局 banner */
+  onConfirm(name: string, templateContent?: string): void | Promise<void>
 }
 
 /** 新建导图对话框（M16）：名称输入 + 模板选择（ui Select，内置 + 工作区 templates/）。
@@ -25,6 +26,7 @@ export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
   const [name, setName] = useState('')
   const [templates, setTemplates] = useState<readonly TemplateInfo[]>([])
   const [picked, setPicked] = useState<string>('builtin:blank')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -37,10 +39,20 @@ export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
     }
   }, [])
 
-  const confirm = () => {
+  const confirm = async () => {
+    setError(null)
+    if (name.trim() === '') {
+      setError('名称不能为空')
+      return
+    }
     const tpl = templates.find((t) => t.key === picked)
     // 空白模板走 createMap 缺省路径（与旧行为同一落盘内容）
-    onConfirm(name.trim(), tpl !== undefined && tpl.key !== 'builtin:blank' ? tpl.content : undefined)
+    const content = tpl !== undefined && tpl.key !== 'builtin:blank' ? tpl.content : undefined
+    try {
+      await onConfirm(name.trim(), content)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   return (
@@ -52,10 +64,15 @@ export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') confirm()
+            if (e.key === 'Enter') void confirm()
           }}
           autoFocus
         />
+        {error !== null && (
+          <p data-testid="dialog-error" role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <Select value={picked} onValueChange={setPicked}>
           <SelectTrigger data-testid="template-select" aria-label="选择模板" className="w-full">
             <SelectValue placeholder="选择模板" />
@@ -73,7 +90,7 @@ export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
           <Button variant="secondary" size="sm" onClick={onCancel}>
             取消
           </Button>
-          <Button size="sm" data-testid="btn-confirm" onClick={confirm}>
+          <Button size="sm" data-testid="btn-confirm" onClick={() => void confirm()}>
             创建
           </Button>
         </DialogFooter>

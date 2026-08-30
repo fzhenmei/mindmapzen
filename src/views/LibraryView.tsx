@@ -140,17 +140,13 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     }
   }
 
-  /** 新建目录（desk.createDir 递归，'/' 分隔逐段校验）成功后重读左树 */
+  /** 新建目录（desk.createDir 递归，'/' 分隔逐段校验）成功后重读左树。
+   *  M16 抛错语义：错误抛给 NameDialog 框内显示，成功路径才关框 */
   const confirmCreateDir = async (name: string) => {
-    if (!workspaceDir || name === '') return
+    if (!workspaceDir) return
+    await createDir(store.adapter, workspaceDir, dirParent === '' ? name : `${dirParent}/${name}`)
+    setTree(await readDirTree(store.adapter, workspaceDir))
     setDialog(null)
-    try {
-      await createDir(store.adapter, workspaceDir, dirParent === '' ? name : `${dirParent}/${name}`)
-      setTree(await readDirTree(store.adapter, workspaceDir))
-      store.setError(null)
-    } catch (e) {
-      store.setError(e instanceof Error ? e.message : String(e))
-    }
   }
 
   /** 移动导图：两文件同移到目标层；同目录无操作（对话框已禁该项，服务层亦有守卫，此处双保险）。
@@ -362,8 +358,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
         <NewMapDialog
           onCancel={() => setDialog(null)}
           onConfirm={async (name, templateContent) => {
-            setDialog(null)
             await store.createAndOpen(name, templateContent)
+            setDialog(null)
           }}
         />
       )}
@@ -390,15 +386,11 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           confirmText="重命名"
           onCancel={closeDialog}
           onConfirm={async (name) => {
+            // M16 抛错语义：renameMap 失败抛给对话框框内显示，成功才关框
+            await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
+            await store.refreshMaps()
+            pruneSelectedMap()
             closeDialog()
-            try {
-              await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
-              await store.refreshMaps()
-              pruneSelectedMap()
-              store.setError(null)
-            } catch (e) {
-              store.setError(e instanceof Error ? e.message : String(e))
-            }
           }}
         />
       )}

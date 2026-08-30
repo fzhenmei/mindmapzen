@@ -103,6 +103,29 @@ test('新建流程：输入名称后创建并进入编辑器', async () => {
   expect(await fs.exists('/ws/想法B.md')).toBe(true)
 })
 
+// M16 验收：输入类错误在对话框内提示、不关框（通常做法）
+test('新建空名：对话框保留、错误框内提示（不关框、不进全局 banner）', async () => {
+  await useAppStore.getState().setWorkspace('/ws')
+  render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+  fireEvent.click(screen.getByTestId('btn-new'))
+  fireEvent.click(screen.getByTestId('btn-confirm'))
+  expect(await screen.findByTestId('dialog-error')).toHaveTextContent('名称不能为空')
+  // 对话框未关闭（输入框仍在）
+  expect(screen.getByTestId('input-name')).toBeInTheDocument()
+  expect(useAppStore.getState().error).toBeNull()
+})
+
+test('新建重名：服务错误框内显示、对话框保留', async () => {
+  await useAppStore.getState().setWorkspace('/ws') // /ws 已预置 想法A.md
+  render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+  fireEvent.click(screen.getByTestId('btn-new'))
+  fireEvent.input(screen.getByTestId('input-name'), { target: { value: '想法A' } })
+  fireEvent.click(screen.getByTestId('btn-confirm'))
+  expect(await screen.findByTestId('dialog-error')).toHaveTextContent('已存在同名导图')
+  expect(screen.getByTestId('input-name')).toBeInTheDocument()
+  expect(useAppStore.getState().route).toBe('library')
+})
+
 test('删除需二次确认', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />)

@@ -64,10 +64,9 @@ describe('appStore', () => {
     expect(await fs.readTextFile('/ws/新图.md')).toBe('# 根主题\n')
   })
 
-  test('createAndOpen 重名设置中文错误', async () => {
+  test('createAndOpen 重名抛中文错误（M16 起抛错语义，由对话框就地显示）', async () => {
     await useAppStore.getState().setWorkspace('/ws')
-    await useAppStore.getState().createAndOpen('已有')
-    expect(useAppStore.getState().error).toContain('已存在同名导图')
+    await expect(useAppStore.getState().createAndOpen('已有')).rejects.toThrow('已存在同名导图')
     expect(useAppStore.getState().route).toBe('library')
   })
 
