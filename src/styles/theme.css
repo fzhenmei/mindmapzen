@@ -82,8 +82,10 @@
   --accent-foreground: #4CBFA8;
   --destructive: #C96A5F;
   --destructive-foreground: #14181A;
-  --border: #2A3033;
-  --input: #2A3033;
+  /* border 调亮（M15 验收）：原 #2A3033 在夜航面板上视觉近黑，用户嫌「纯黑线条」；
+     升至深灰 #384044——仍是分隔语义但明显非黑（input 同源联动） */
+  --border: #384044;
+  --input: #384044;
   --ring: #4CBFA8;
   --chart-1: #4CBFA8;
   --chart-2: #C96A5F;
@@ -96,8 +98,8 @@
   --sidebar-primary-foreground: #14181A;
   --sidebar-accent: #1D3B36;
   --sidebar-accent-foreground: #4CBFA8;
-  --sidebar-border: #2A3033;
-  --sidebar-input: #2A3033;
+  --sidebar-border: #384044;
+  --sidebar-input: #384044;
   --sidebar-ring: #4CBFA8;
   --sidebar-muted: #1B2022;
   --sidebar-muted-foreground: #8B9599;
