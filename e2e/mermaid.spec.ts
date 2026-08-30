@@ -54,3 +54,33 @@ test('mermaid：备注围栏在详情态预览渲染成 SVG；语法错误降级
   expect(md).toContain('> ```mermaid')
   expect(md).toContain('> graph LR')
 })
+
+// M17b：画布备注悬停窗渲染 mermaid（引擎 customNoteContentShow 官方通道接管）
+test('mermaid：画布备注悬停窗渲染成图，移出隐藏', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('悬停图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('根主题').first()).toBeVisible()
+
+  // 选中根 → 备注对话框写入 mermaid 备注
+  await page.getByText('根主题').first().click()
+  await page.getByTestId('btn-note').click()
+  await page.getByTestId('note-text').fill('流程说明：\n```mermaid\ngraph LR\n  A --> B\n```')
+  await page.getByTestId('note-save').click()
+
+  // 悬停备注角标（必在节点 group 内——直接 hover 文本元素在画布 transform 下坐标
+  // 可能落偏，角标是更稳的命中目标）→ 悬停窗出现并渲染 SVG（mermaid 懒加载留 15s）
+  const noteIcon = page.locator('.smm-node-note').first()
+  await expect(noteIcon).toBeVisible()
+  await noteIcon.hover()
+  const tip = page.getByTestId('zen-note-tip')
+  await expect(tip).toBeVisible()
+  await expect(tip).toContainText('流程说明：')
+  await expect(tip.getByTestId('zen-note-tip-mermaid').locator('svg')).toBeVisible({ timeout: 15_000 })
+
+  // 移出节点 → 悬停窗隐藏
+  await page.getByTestId('btn-save').hover()
+  await expect(tip).toBeHidden()
+})
