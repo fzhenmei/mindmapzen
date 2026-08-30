@@ -11,12 +11,21 @@ type PreviewState =
   | { kind: 'error' }
   | { kind: 'tree'; tree: ZenNode }
 
+/** 未就绪提示文案（查表替代嵌套三元，Sonar S3358；tree 态不渲染提示） */
+const HINTS: Record<PreviewState['kind'], string> = {
+  empty: '选择导图预览',
+  loading: '…',
+  error: '无法预览',
+  tree: '',
+}
+
 interface Props {
   /** 当前选中导图的 md 路径（null = 未选择） */
   mdPath: string | null
 }
 
-/** 大纲预览区（M5d spec §3 案头右列）：卡片或树文件单击选中后显示导图大纲树。
+/** 大纲预览区（M5d spec §3 案头右列 → M12b「档案卡」）：卡片或树文件单击选中后显示导图大纲。
+ *  M12b 案头三区：280px 固定卡片（rounded-card 边框 + surface 底），等宽头（文件名）+ 等宽大纲。
  *  数据源 adapter.readTextFile + parse（不做引擎实例）；节点文本按连线净化规则隐藏 [[..]]
  *  （与画布显示层同口径，复用 stripMarkers）；有备注行尾 ✎ 角标、层级缩进 14px、等宽字。
  *  读取/解析失败显示「无法预览」，底部「打开」按钮仍可用（双击手势差异的兜底） */
@@ -50,10 +59,14 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
   if (state.kind === 'tree') {
     const walk = (node: ZenNode, depth: number, key: string) => {
       rows.push(
-        <div key={key} className="preview-row" style={{ paddingLeft: depth * 14 }}>
-          <span className="preview-text">{stripMarkers(node.text)}</span>
+        <div
+          key={key}
+          className="preview-row flex items-baseline gap-1 overflow-hidden text-muted-foreground"
+          style={{ paddingLeft: depth * 14 }}
+        >
+          <span className="min-w-0 flex-1 truncate">{stripMarkers(node.text)}</span>
           {node.note !== undefined && node.note !== '' && (
-            <span className="preview-note" title="有备注">
+            <span className="shrink-0 text-primary" title="有备注">
               ✎
             </span>
           )}
@@ -64,22 +77,35 @@ export default function PreviewPane({ mdPath }: Readonly<Props>) {
     walk(state.tree, 0, '0')
   }
 
+  // 档案卡等宽头：md 路径取基名去扩展（与卡片名同口径，纯展示派生，无数据流变更）
+  const fileName = mdPath?.split(/[\\/]/).pop()?.replace(/\.md$/, '')
+  const hint = HINTS[state.kind]
+
   return (
-    <aside className="preview-panel" data-testid="preview-pane">
+    <aside
+      className="flex w-[280px] shrink-0 flex-col gap-3 rounded-card border border-border bg-surface p-3"
+      data-testid="preview-pane"
+    >
+      {fileName !== undefined && (
+        <div className="truncate font-file text-xs text-muted-foreground" title={fileName}>
+          {fileName}
+        </div>
+      )}
       {state.kind === 'tree' ? (
-        <div className="preview-outline" data-testid="preview-outline">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto font-file text-xs leading-6"
+          data-testid="preview-outline"
+        >
           {rows}
         </div>
       ) : (
-        <p className="preview-hint">
-          {state.kind === 'empty' ? '选择导图预览' : state.kind === 'loading' ? '…' : '无法预览'}
-        </p>
+        <p className="pt-2 text-xs text-muted-foreground">{hint}</p>
       )}
       {mdPath !== null && (
         <button
           type="button"
           data-testid="btn-preview-open"
-          className="btn-primary"
+          className="inline-flex h-8 w-full shrink-0 cursor-pointer items-center justify-center rounded-control bg-primary px-4 text-sm font-medium text-primary-soft transition-colors duration-150 hover:bg-primary-hover"
           onClick={() => void useAppStore.getState().openMap(mdPath)}
         >
           打开

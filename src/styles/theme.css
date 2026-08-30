@@ -1,23 +1,18 @@
-/* 青松工作台 · Tailwind v4 主题（M12a Task 1 spike）
+/* 青松工作台 · Tailwind v4 主题（M12b Task 1 令牌层收口）
  *
- * spike 裁定（零视觉变更）：分层导入 tailwindcss/theme.css + utilities.css，**不引 preflight**——
- * 其 `ol,ul { list-style: none }` 会抹掉 .zen-banner ul 的项目符号、`svg { display: block }` 会挪动
- * 内联图标基线，均违反本里程碑「现有 UI 全不动」验收线。分层顺序与官方 index.css 一致；
- * preflight 留待 M12b 全 UI 重构时随新样式启用。tokens.css/App.css 均未分层（unlayered），
- * 级联上恒压过 Tailwind 各层，并存无冲突。
+ * 三合一导入 `tailwindcss` = theme + preflight + utilities：preflight 自 M12b 起
+ * 随全 UI 重构启用（M12a 曾分层避开，缘由见 git 历史）。唯一令牌源即下方 @theme——
+ * tokens.css 已删除，旧 --paper/--ink 系退役，App.css 消费点已机械替换为 --color-* 新键
+ * （替换表见任务报告）。preflight 的 ul{list-style:none}/h{font-weight:inherit} 由
+ * App.css 消费处显式恢复（.zen-banner ul 等）；App.css 未分层（unlayered），
+ * 级联上恒压过 Tailwind 各层。@source inline safelist 已删：bg-background 改由
+ * index.html body 真实消费（工具类按需生成的源码依据）。
  */
-@layer theme, base, components, utilities;
-@import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/utilities.css' layer(utilities);
-
-/* safelist（M12a Task 4）：bg-background 当前无源码消费点，按需生成不会产出该工具类；
- * 视觉冒烟第三用例运行时注入此类断言「工具类 → @theme 令牌 → data-theme 覆盖」链路。
- * M12b 全 UI 重构接入 bg-background 后可移除（v4.1+ 语法） */
-@source inline('bg-background');
+@import 'tailwindcss';
 
 @theme static {
   /* 色彩令牌：spec §2 表逐字（十六进制照抄），晨松（亮）为默认。
-   * static：禁用 v4 按需摇树——令牌表是公开接口（Task 4 冒烟经 getComputedStyle 断言
+   * static：禁用 v4 按需摇树——令牌表是公开接口（视觉冒烟经 getComputedStyle 断言
    * --color-background 双主题值），不依赖是否有工具类恰好消费它。 */
   --color-background: #F7F8F7;
   --color-surface: #FFFFFF;
@@ -29,21 +24,42 @@
   --color-brand: #B5453C; /* 朱砂：仅品牌/文件徽章/破坏性 */
   --color-border: #E4E7E6;
   --color-ring: #1D7A6B; /* 焦点环 2px */
+  --color-line: #64707A; /* 引擎连线（晨松雾灰），engineThemes 同值同源 */
 
   /* 圆角：控件 6px / 卡片·弹层 8px / 命令栏 10px */
   --radius-control: 6px;
   --radius-card: 8px;
-  --radius-dock: 10px;
+  --radius-bar: 10px;
 
   /* 阴影两档：卡片几乎无影 / 弹层轻影 */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-overlay: 0 4px 16px rgba(0, 0, 0, 0.1);
 
-  /* 双声道字体：UI 中文界面声道 / 文件（等宽）声道 */
+  /* 动效（spec §2 基准 150ms；250ms 为次级过渡档，旧 --dur-1/2 收编） */
+  --duration-1: 150ms;
+  --duration-2: 250ms;
+
+  /* 双声道字体：UI 中文界面声道 / 文件（等宽）声道。
+   * --font-mono 为旧键收编（App.css 等宽消费点沿用旧名），与 --font-file 同栈 */
   --font-ui:
     'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei',
     sans-serif;
   --font-file: 'Cascadia Code', 'Consolas', monospace;
+  --font-mono: 'Cascadia Code', 'Consolas', monospace;
+
+  /* 旧 tokens.css 收编：间距阶梯 4/8/12/16/24/32 与字号阶梯 12/13/15/18/22（正文 15 为 UI 基准字）。
+   * --font-size-* / --space-* 非 Tailwind v4 命名空间（v4 字号空间为 --text-*），仅输出 CSS 变量 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
 }
 
 /* 夜航（暗）主题：仅色彩令牌有暗列（spec §2），同键覆盖驱动全部 Tailwind 工具类。
@@ -59,4 +75,5 @@
   --color-brand: #C96A5F;
   --color-border: #2A3033;
   --color-ring: #4CBFA8;
+  --color-line: #8B9599;
 }

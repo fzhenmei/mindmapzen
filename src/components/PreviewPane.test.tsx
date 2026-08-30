@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe } from 'vitest'
 import PreviewPane from './PreviewPane'
 import { useAppStore } from '../store/appStore'
@@ -29,7 +29,8 @@ describe('大纲预览区（M5d）', () => {
     expect(outline).toHaveTextContent('叶子')
     expect(outline).toHaveTextContent('分支二')
     // 层级缩进：根 0 / 一级 14px / 二级 28px
-    expect(screen.getByText('图A').closest('.preview-row')).toHaveStyle({ paddingLeft: '0px' })
+    // M12b 档案卡新增等宽头（同为文件名），大纲行断言圈定 outline 内取
+    expect(within(outline).getByText('图A').closest('.preview-row')).toHaveStyle({ paddingLeft: '0px' })
     expect(screen.getByText('分支一').closest('.preview-row')).toHaveStyle({ paddingLeft: '14px' })
     expect(screen.getByText('叶子').closest('.preview-row')).toHaveStyle({ paddingLeft: '28px' })
     // 有备注 → 行尾 ✎；无备注行无角标

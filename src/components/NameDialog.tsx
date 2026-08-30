@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import ZenDialog from './ZenDialog'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 interface Props {
   title: string
@@ -9,30 +11,23 @@ interface Props {
   onCancel: () => void
 }
 
-/** 命名对话框：ZenDialog 外壳，Esc/✕/遮罩点击 → onCancel */
+/** 命名对话框（M12b Task 5 切 ui/dialog + ui/input）：Esc/✕/遮罩点击 → onCancel */
 export default function NameDialog({ title, initial = '', confirmText, onConfirm, onCancel }: Readonly<Props>) {
   const [value, setValue] = useState(initial)
   return (
-    <ZenDialog
-      title={title}
-      onClose={onCancel}
-      actions={
-        <>
-          <button type="button" onClick={onCancel}>
+    <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent aria-label={title} className="w-90 gap-3 p-5">
+        <DialogTitle>{title}</DialogTitle>
+        <Input data-testid="input-name" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
             取消
-          </button>
-          <button type="button" data-testid="btn-confirm" onClick={() => onConfirm(value.trim())}>
+          </Button>
+          <Button size="sm" data-testid="btn-confirm" onClick={() => onConfirm(value.trim())}>
             {confirmText}
-          </button>
-        </>
-      }
-    >
-      <input
-        data-testid="input-name"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        autoFocus
-      />
-    </ZenDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

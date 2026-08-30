@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import ZenDialog from './ZenDialog'
 import { createDir, type DirNode } from '../services/desk'
 import { useAppStore } from '../store/appStore'
+import { cn } from '../lib/utils'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 
 interface Props {
   /** 待移动导图名（标题展示用） */
@@ -14,7 +17,13 @@ interface Props {
   onCancel: () => void
 }
 
-/** 移动导图对话框：ZenDialog 外壳 + 目录树单选 + 新目录内联创建。
+/** 内嵌目录树行（M12b Task 5 换肤）：与案头左树（DirectoryTree ROW）同规格——
+ *  32px 行高、等宽文件声道、青松悬停/选中；禁用项为当前所在层（灰且不可点） */
+const TREE_ROW =
+  'flex h-8 w-full cursor-pointer items-center overflow-hidden whitespace-nowrap rounded-control text-left font-file text-xs transition-colors duration-150 hover:bg-primary-soft hover:text-primary disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground'
+const TREE_ROW_ACTIVE = 'bg-primary-soft text-primary'
+
+/** 移动导图对话框（M12b Task 5 切 ui/dialog）：ui Dialog 外壳 + 目录树单选 + 新目录内联创建。
  *  树节点复用 `dir-node-<name>` testid（与案头左树同名，测试需 within(move-dialog) 圈定），
  *  根目录目标为 `dir-node-root`；新建目录 `move-newdir-input`/`move-newdir-add`——建在工作区根下，
  *  建成即自动选中（随后 move-confirm 可直接移入，外层会 reloadTree 纳入正式树） */
@@ -46,7 +55,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
         <button
           type="button"
           data-testid={`dir-node-${n.name}`}
-          className={selected === n.path ? 'dir-node active' : 'dir-node'}
+          className={cn(TREE_ROW, selected === n.path && TREE_ROW_ACTIVE)}
           style={{ paddingLeft: 8 + depth * 14 }}
           disabled={n.path === fromRel}
           title={n.path === fromRel ? '已在当前目录' : n.path}
@@ -58,55 +67,54 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
       </div>
     ))
 
+  const title = `移动「${mapName}」`
   return (
-    <ZenDialog
-      testid="move-dialog"
-      title={`移动「${mapName}」`}
-      onClose={onCancel}
-      actions={
-        <>
-          <button type="button" data-testid="move-cancel" onClick={onCancel}>
-            取消
-          </button>
+    <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent data-testid="move-dialog" aria-label={title} className="w-90 gap-3 p-5">
+        <DialogTitle>{title}</DialogTitle>
+        <div className="flex max-h-[40vh] flex-col gap-0.5 overflow-y-auto rounded-control border border-border p-1.5 font-file text-xs">
           <button
             type="button"
+            data-testid="dir-node-root"
+            className={cn(TREE_ROW, selected === '' && TREE_ROW_ACTIVE)}
+            disabled={fromRel === ''}
+            title={fromRel === '' ? '已在当前目录' : '移动到工作区根'}
+            onClick={() => setSelected('')}
+          >
+            根目录
+          </button>
+          {renderNodes([...tree, ...extraDirs], 0)}
+        </div>
+        <div className="flex gap-1.5">
+          <Input
+            data-testid="move-newdir-input"
+            className="min-w-0 flex-1"
+            value={newDirName}
+            placeholder="新目录名"
+            onChange={(e) => setNewDirName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void addNewDir()
+            }}
+          />
+          <Button variant="secondary" size="sm" data-testid="move-newdir-add" onClick={() => void addNewDir()}>
+            新建
+          </Button>
+        </div>
+        {error && <p className="text-sm text-brand">{error}</p>}
+        <DialogFooter>
+          <Button variant="secondary" size="sm" data-testid="move-cancel" onClick={onCancel}>
+            取消
+          </Button>
+          <Button
+            size="sm"
             data-testid="move-confirm"
             disabled={selected === null || selected === fromRel}
             onClick={() => onMove(selected!)}
           >
             移动
-          </button>
-        </>
-      }
-    >
-      <div className="dir-tree move-tree">
-        <button
-          type="button"
-          data-testid="dir-node-root"
-          className={selected === '' ? 'dir-node active' : 'dir-node'}
-          disabled={fromRel === ''}
-          title={fromRel === '' ? '已在当前目录' : '移动到工作区根'}
-          onClick={() => setSelected('')}
-        >
-          根目录
-        </button>
-        {renderNodes([...tree, ...extraDirs], 0)}
-      </div>
-      <div className="move-newdir">
-        <input
-          data-testid="move-newdir-input"
-          value={newDirName}
-          placeholder="新目录名"
-          onChange={(e) => setNewDirName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void addNewDir()
-          }}
-        />
-        <button type="button" data-testid="move-newdir-add" onClick={() => void addNewDir()}>
-          新建
-        </button>
-      </div>
-      {error && <p className="error-detail">{error}</p>}
-    </ZenDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

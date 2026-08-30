@@ -1,8 +1,15 @@
 import type { DirNode } from '../services/desk'
+import { cn } from '../lib/utils'
 import { IconFile, IconFolder } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
+
+/** 树行（M12b spec §3 案头三区）：240px 树、行高 32px、等宽小字、青松悬停/选中 */
+const ROW =
+  'flex h-8 w-full cursor-pointer items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-control text-left font-file text-xs transition-colors duration-150 hover:bg-primary-soft hover:text-primary'
+const ROW_ACTIVE = 'bg-primary-soft text-primary'
+const ROW_NAME = 'min-w-0 flex-1 truncate'
 
 interface Props {
   /** 工作区目录树（desk.readDirTree 产出；根不在其中，「全部」项由本组件提供） */
@@ -51,14 +58,14 @@ export default function DirectoryTree({
           key={`file:${relDir}/${f.name}`}
           type="button"
           data-testid={`file-node-${f.name}`}
-          className={isFileSelected(f) ? 'dir-node file-node active' : 'dir-node file-node'}
+          className={cn(ROW, isFileSelected(f) && ROW_ACTIVE)}
           style={{ paddingLeft: 8 + depth * 14 }}
           title={`${f.name}.md`}
           onClick={() => onSelectFile(f)}
           onDoubleClick={() => onOpenFile(f)}
         >
           <IconFile />
-          <span className="file-node-name">{f.name}</span>
+          <span className={ROW_NAME}>{f.name}</span>
         </button>
       ))
 
@@ -68,13 +75,13 @@ export default function DirectoryTree({
         <button
           type="button"
           data-testid={`dir-node-${n.name}`}
-          className={selected === n.path ? 'dir-node dir-folder active' : 'dir-node dir-folder'}
+          className={cn(ROW, selected === n.path && ROW_ACTIVE)}
           style={{ paddingLeft: 8 + depth * 14 }}
           title={n.path}
           onClick={() => onSelect(n.path)}
         >
           <IconFolder />
-          <span className="dir-folder-name">{n.name}</span>
+          <span className={ROW_NAME}>{n.name}</span>
         </button>
         {renderNodes(n.children, depth + 1)}
         {renderFiles(n.path, depth + 1)}
@@ -83,22 +90,22 @@ export default function DirectoryTree({
   const createDirTitle =
     selected === '' ? '在工作区根下新建目录' : `在「${selected}」下新建目录`
   return (
-    <nav className="dir-tree" aria-label="案头目录">
+    <nav className="flex flex-col gap-0.5 font-file text-xs text-muted-foreground" aria-label="案头目录">
       <button
         type="button"
         data-testid="dir-node-all"
-        className={selected === '' ? 'dir-node active' : 'dir-node'}
+        className={cn(ROW, selected === '' && ROW_ACTIVE)}
         title={rootTooltip}
         onClick={() => onSelect('')}
       >
-        {rootLabel}
+        <span className={ROW_NAME}>{rootLabel}</span>
       </button>
       {renderNodes(tree, 0)}
       {renderFiles('', 0)}
       <button
         type="button"
         data-testid="dir-create"
-        className="dir-create-btn"
+        className="mt-2 h-8 cursor-pointer rounded-control px-2 text-left transition-colors duration-150 hover:text-primary"
         title={createDirTitle}
         onClick={() => onCreateDir(selected)}
       >

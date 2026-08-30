@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
+import { describe, expect, test, vi } from 'vitest'
 import {
   Dialog,
   DialogClose,
@@ -68,4 +69,38 @@ test('DialogClose 点击触发关闭（受控 state 流转整环）', () => {
   expect(screen.getByTestId('ui-dialog-content')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '取消' }))
   expect(screen.queryByTestId('ui-dialog-content')).not.toBeInTheDocument()
+})
+
+// 迁移自 ZenDialog.test（M12b Task 5 旧组件删除）：取消权出口的等价断言——
+// Content 内建 ✕ 与遮罩外点击均经 onOpenChange(false) 交还调用方（消费方 onClose 同义）。
+describe('取消权出口（自 ZenDialog.test 迁移）', () => {
+  test('内建 ✕ 按钮触发 onOpenChange(false)', () => {
+    const onOpenChange = vi.fn()
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogTitle>标题</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    )
+    fireEvent.click(screen.getByTestId('ui-dialog-close'))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  test('遮罩外点击触发 onOpenChange(false)', async () => {
+    const onOpenChange = vi.fn()
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogTitle>标题</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    )
+    // Radix 的 pointerdown-outside 监听经 setTimeout(0) 注册：让出一个宏任务再派发；
+    // 且左键外点击判定延迟到后续 click（deferPointerDownOutside），需补 click 手势
+    await new Promise((r) => setTimeout(r, 0))
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
 })

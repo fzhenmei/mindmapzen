@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { disableBrowserContextMenu } from './services/contextMenuGuard'
-import './styles/tokens.css'
 import './styles/theme.css'
 import './App.css'
 
