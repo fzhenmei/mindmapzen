@@ -15,7 +15,7 @@ import PreviewPane from '../components/PreviewPane'
 import { IconFolder, IconImport, IconPencil, IconPlus, IconTrash, IconSettings } from '../components/icons'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../components/ui/dialog'
 import { Button } from '../components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { cn } from '../lib/utils'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
@@ -349,6 +349,8 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
 
   return (
     <div className="library flex h-full flex-col bg-background">
+      {/* 官方 Tooltip 需 Provider 祖先（Radix 硬约束）：视图根一次包齐 */}
+      <TooltipProvider>
       {/* 命令栏（M12b spec §3 案头三区）：48px 通栏，左面包屑（印章+工作区名）/ 右图标钮
           32px 等距 8px（设置/导入/新建/主题）；无工作区的开屏态隐藏 */}
       {workspaceDir && (
@@ -502,6 +504,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           </DialogContent>
         </Dialog>
       )}
+      </TooltipProvider>
     </div>
   )
 }

@@ -2,24 +2,25 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { ToggleGroup, ToggleGroupItem } from './toggle-group'
 
-// type=single 时 Radix 把组渲染为 radiogroup、条目为 radio（roving tabindex），按 role 查询
+// ToggleGroup（官方源码重置）：type=single 时 Radix 把组渲染为 radiogroup、条目为 radio
+// （roving tabindex），按 role 查询；未选中默认皮肤与选中 accent 皮肤均为官方 toggle 类。
 
-test('渲染多钮组，未选中态为 surface 皮肤', () => {
+test('渲染多钮组，未选中态为官方默认皮肤', () => {
   render(
     <ToggleGroup type="single">
       <ToggleGroupItem value="list">列表</ToggleGroupItem>
       <ToggleGroupItem value="grid">网格</ToggleGroupItem>
     </ToggleGroup>,
   )
-  const group = screen.getByTestId('ui-toggle-group')
-  expect(group).toHaveAttribute('role', 'radiogroup')
-  expect(group.className).toContain('inline-flex')
+  const group = screen.getByRole('radiogroup')
+  expect(group).toHaveAttribute('data-slot', 'toggle-group')
   const item = screen.getByRole('radio', { name: '列表' })
-  expect(item.className).toContain('bg-card')
+  expect(item.className).toContain('rounded-md')
+  expect(item.className).toContain('hover:bg-muted')
   expect(item).toHaveAttribute('data-state', 'off')
 })
 
-test('type=single 点击选中：state=on + 青松选中皮肤 + 再点取消', () => {
+test('type=single 点击选中：state=on + 官方 accent 选中类 + 再点取消', () => {
   function Harness() {
     const [v, setV] = useState('list')
     return (
@@ -33,7 +34,7 @@ test('type=single 点击选中：state=on + 青松选中皮肤 + 再点取消', 
   fireEvent.click(screen.getByRole('radio', { name: '网格' }))
   const grid = screen.getByRole('radio', { name: '网格' })
   expect(grid).toHaveAttribute('data-state', 'on')
-  expect(grid.className).toContain('data-[state=on]:bg-secondary')
+  expect(grid.className).toContain('data-[state=on]:bg-accent')
   expect(screen.getByRole('radio', { name: '列表' })).toHaveAttribute('data-state', 'off')
   fireEvent.click(grid)
   expect(screen.getByRole('radio', { name: '网格' })).toHaveAttribute('data-state', 'off')

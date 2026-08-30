@@ -1,5 +1,5 @@
 import { useAppStore } from '../store/appStore'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { IconTheme } from './icons'
 import { nextVisibleTheme } from '../services/theme'
 import type { ThemePref } from '../types/files'
@@ -16,7 +16,8 @@ const ICON_BTN =
 export default function ThemeToggle() {
   const themePref = useAppStore((s) => s.themePref)
   return (
-    <Tooltip>
+    <TooltipProvider>
+      <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -30,7 +31,8 @@ export default function ThemeToggle() {
           <IconTheme />
         </button>
       </TooltipTrigger>
-      <TooltipContent>{`${LABEL[themePref]}（点击切换）`}</TooltipContent>
-    </Tooltip>
+        <TooltipContent>{`${LABEL[themePref]}（点击切换）`}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }

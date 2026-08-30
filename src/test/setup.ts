@@ -32,3 +32,14 @@ if (typeof HTMLElement.prototype.releasePointerCapture !== 'function') {
 if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = (): void => {}
 }
+
+// jsdom 未实现 ResizeObserver：Radix Tooltip/Popper 系（ui/tooltip、select、dropdown 等
+// 官方源码）依赖其测量浮层。守卫式空桩（不覆盖可能的真实实现），回调永不触发。
+if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
+  class ResizeObserverStub implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub
+}

@@ -13,7 +13,10 @@
  * preflight 说明见 git 历史（M12b Task 1）。
  */
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
+/* 官方 v4 动效基座（animate-in/fade-in-0/zoom-in-95 等官方组件动画类的
+ * Tailwind v4 官方替代插件），随组件官方源码一并引入（M14 Task 2） */
 /* 官方组件 dark: 类 → html[data-theme='dark'] 作用域：既不新增 .dark 类，
  * 也不改写组件源码；等价于官方 @custom-variant dark 的本地化 */
 @custom-variant dark (&:is([data-theme='dark'] *, [data-theme='dark']));
