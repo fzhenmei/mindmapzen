@@ -4,6 +4,8 @@ import { formatFileSize } from '../services/fileSize'
 import type { MapInfo } from '../types/files'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { IconArrowLeft, IconOpen } from './icons'
 import MarkdownPreview from './MarkdownPreview'
 
 interface Props {
@@ -63,22 +65,41 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
           修改 {dt(info.modifiedAt)}
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" data-testid="btn-detail-back" onClick={onBack}>
-            返回目录
-          </Button>
+          {/* 图标钮（M15 验收）：ghost 返回 / 实底打开（主动作），Tooltip 承担文字语义 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                data-testid="btn-detail-back"
+                aria-label="返回目录"
+                onClick={onBack}
+              >
+                <IconArrowLeft />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>返回目录</TooltipContent>
+          </Tooltip>
           <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
-          <Button
-            type="button"
-            size="sm"
-            data-testid="btn-detail-open"
-            onClick={() => void useAppStore.getState().openMap(info.mdPath)}
-          >
-            打开
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                data-testid="btn-detail-open"
+                aria-label="打开导图"
+                onClick={() => void useAppStore.getState().openMap(info.mdPath)}
+              >
+                <IconOpen />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>打开导图</TooltipContent>
+          </Tooltip>
         </div>
       </div>
-      {/* 预览区：md 内容自渲染；muted 顶面区块与摘要条分层（一沉一浮） */}
-      <div className="mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-lg bg-card">
+      {/* 预览区：md 内容自渲染；包裹边框线（M15 验收）+ 白卡面与摘要条分层 */}
+      <div className="mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-lg border bg-card">
         {state.kind === 'text' ? (
           <MarkdownPreview text={state.text} />
         ) : (

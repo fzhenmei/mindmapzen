@@ -114,6 +114,16 @@ export const IconFolder = ({ size }: IconProps) =>
     <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3l1.5 2H12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 12 14H4a1.5 1.5 0 0 1-1.5-1.5z" />,
     size,
   )
+/** 打开/外开（M15 案头文件详情）：方框角 + 右上外开斜箭头 */
+export const IconOpen = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M6 3H4A1.5 1.5 0 0 0 2.5 4.5v7A1.5 1.5 0 0 0 4 13h7a1.5 1.5 0 0 0 1.5-1.5v-2" />
+      <path d="M9 2.5h4.5V7" />
+      <path d="M13.5 2.5 8 8" />
+    </>,
+    size,
+  )
 /** 导图文件（M5d 案头目录树文件行）：文档轮廓 + 右上折角 */
 export const IconFile = ({ size }: IconProps) =>
   base(

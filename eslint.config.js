@@ -16,6 +16,9 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
+      // 解构剔除模式豁免（如 MarkdownPreview 丢弃 react-markdown 的 node 属性）：
+      // 被 rest 收集的兄弟键允许未使用（no-unused-vars 的官方逃生口）
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
 )
