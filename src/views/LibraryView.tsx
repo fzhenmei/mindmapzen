@@ -221,6 +221,11 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
             setSelectedMap(null)
             setIdle(false)
           }}
+          onAction={(a, m) => {
+            // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
+            setTarget(m)
+            setDialog(a)
+          }}
         />
       )
     if (idle)
