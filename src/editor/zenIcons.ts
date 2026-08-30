@@ -71,8 +71,13 @@ import wrench from 'lucide-static/icons/wrench.svg?raw'
 import x from 'lucide-static/icons/x.svg?raw'
 import zap from 'lucide-static/icons/zap.svg?raw'
 
-/** 精选集（64，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
-export const CURATED_ICONS: Readonly<Record<string, string>> = {
+/** 规范化 lucide svg：剥前导许可注释与空白，确保以 <svg 开头——引擎按此前缀分流
+ *  SVG/图片渲染（nodeCreateContents.js /^<svg/.test(src)），lucide-static 文件自带
+ *  `<!-- @license -->` 头注释，不剥则被当图片 URL 加载显示为碎图（M18 验收实案） */
+const normalizeSvg = (raw: string): string => raw.replace(/^\s*<!--[\s\S]*?-->\s*/, '')
+
+/** 精选集原始表（64，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
+const RAW_CURATED: Readonly<Record<string, string>> = {
   flag, star, 'alert-triangle': alertTriangle, check, x, clock, flame, heart, bookmark, pin,
   tag, lightbulb, target, rocket, bug, lock, key, eye, search, calendar,
   'message-circle': messageCircle, paperclip, 'trash-2': trash2, pencil, copy, save, download,
@@ -84,18 +89,23 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = {
   package: packageIcon, box, edit,
 }
 
+/** 精选集（规范化后对外）：值恒以 <svg 开头 */
+export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
+)
+
 /** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项） */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
   return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
 }
 
 /** 懒加载任一 lucide 图标（全集 2048 个，动态 import 模板 → Vite 按文件拆 chunk）；
- *  名字不存在返回 null（调用方宽容丢弃） */
+ *  返回前同样规范化（剥许可注释）；名字不存在返回 null（调用方宽容丢弃） */
 export async function loadIconSvg(name: string): Promise<string | null> {
   if (!/^[a-z0-9-]+$/.test(name)) return null
   try {
     const mod = (await import(`lucide-static/icons/${name}.svg?raw`)) as { default: string }
-    return mod.default
+    return normalizeSvg(mod.default)
   } catch {
     return null
   }
