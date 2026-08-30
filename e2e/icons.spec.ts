@@ -24,6 +24,13 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
   await page.getByTestId('icon-save').click()
   await expect(page.getByTestId('icon-dialog')).toBeHidden()
 
+  // 渲染断言（M18 验收实案）：lucide svg 文件带许可注释头，引擎按 /^<svg/ 前缀分流
+  // SVG/图片渲染——未剥注释时被当图片 URL 加载显示碎图（image 元素）。碎图回归锁
+  // 的本质是 image 产物为零 + lucide svg 在场（引擎重渲可能令 svg 多份，属合法现象）
+  await expect(page.locator('.canvas-host svg.lucide').first()).toBeVisible()
+  await expect(page.locator('.canvas-host svg.lucide.lucide-flag').first()).toBeVisible()
+  await expect(page.locator('.canvas-host image')).toHaveCount(0)
+
   // 返回案头（显式保存链）→ md 句尾落标记
   await page.getByTestId('btn-back').click()
   const md = await page.evaluate(() =>
