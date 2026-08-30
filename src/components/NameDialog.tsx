@@ -16,7 +16,7 @@ export default function NameDialog({ title, initial = '', confirmText, onConfirm
   const [value, setValue] = useState(initial)
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <Input data-testid="input-name" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
         <DialogFooter>

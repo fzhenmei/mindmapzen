@@ -25,7 +25,7 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const title = '设置'
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent data-testid="settings-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="settings-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <div className="flex flex-col gap-2.5 text-sm">
           <label className={SETTING_ROW}>

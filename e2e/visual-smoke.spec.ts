@@ -126,3 +126,45 @@ test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题
 
   await page.evaluate(() => document.getElementById('zen-tw-probe')?.remove())
 })
+
+test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/卡片 computed style', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/?e2e=1')
+  await expect(page.getByTestId('btn-new')).toBeVisible()
+
+  // ① 案头侧栏宽 = 官方 16rem（256px）：SIDEBAR_WIDTH 常量经 w-(--sidebar-width) 落地
+  const sidebarWidth = await page.evaluate(
+    () => getComputedStyle(document.querySelector('[data-testid="dir-panel"]')!).width,
+  )
+  expect(sidebarWidth).toBe('256px')
+
+  // ② ui Dialog 内容内距 = 官方 p-6（24px）：新建对话框走 ui/dialog 官方解剖
+  await page.getByTestId('btn-new').click()
+  const dialog = page.locator('[data-slot="dialog-content"]')
+  await expect(dialog).toBeVisible()
+  const dialogPad = await page.evaluate((el) => getComputedStyle(el).padding, await dialog.elementHandle())
+  expect(dialogPad).toBe('24px')
+
+  // ③ ui Tooltip 内容内距 = 官方 px-3 py-1.5（12px/6px）：进纸面悬停命令栏钮使浮签现身
+  await page.getByTestId('input-name').fill('官方值锁')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('根主题').first()).toBeVisible()
+  await page.getByTestId('btn-save').hover()
+  const tip = page.locator('[data-slot="tooltip-content"]')
+  await expect(tip.first()).toBeVisible()
+  const tipPad = await page.evaluate((el) => getComputedStyle(el).padding, await tip.first().elementHandle())
+  expect(tipPad).toBe('6px 12px')
+
+  // ④ 卡片圆角 = 官方 rounded-xl，经 theme.css 圆角阶梯 calc(var(--radius) + 4px)：
+  //    --radius 0.5rem（8px，冒烟 3 已锁 rounded-lg）→ 卡面 12px；连令牌一并锁死
+  const radiusToken = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
+  )
+  expect(radiusToken).toBe('0.5rem')
+  await page.getByTestId('btn-back').click()
+  const card = page.getByTestId('map-item').first()
+  await expect(card).toBeVisible()
+  const cardRadius = await page.evaluate((el) => getComputedStyle(el).borderRadius, await card.elementHandle())
+  expect(cardRadius).toBe('12px')
+})

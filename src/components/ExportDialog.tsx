@@ -11,7 +11,7 @@ export default function ExportDialog({ actions }: Readonly<{ actions: ExportActi
   const title = '导出或复制图片'
   return (
     <Dialog open onOpenChange={(o) => { if (!o) actions.onClose() }}>
-      <DialogContent data-testid="export-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="export-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="export-cancel" onClick={actions.onClose}>

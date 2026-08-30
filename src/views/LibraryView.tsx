@@ -443,7 +443,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           与 importPreview 互不并存：Radix Dialog 为 modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥 */}
       {dialog === 'delete' && target && (
         <Dialog open onOpenChange={(o) => { if (!o) closeDialog() }}>
-          <DialogContent aria-label={`删除「${target.name}」？`} className="w-90 gap-3 p-5">
+          <DialogContent aria-label={`删除「${target.name}」？`}>
             <DialogTitle>{`删除「${target.name}」？`}</DialogTitle>
             <p className="text-sm">将移入回收站（.md 与 .zen.json 一起删除）。</p>
             <DialogFooter>
@@ -487,7 +487,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
       )}
       {importPreview && (
         <Dialog open onOpenChange={(o) => { if (!o) setImportPreview(null) }}>
-          <DialogContent data-testid="import-preview" aria-label={`导入「${importPreview.name}」`} className="w-90 gap-3 p-5">
+          <DialogContent data-testid="import-preview" aria-label={`导入「${importPreview.name}」`}>
             <DialogTitle>{`导入「${importPreview.name}」`}</DialogTitle>
             <p className="text-sm">{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
             <ul className="list-disc pl-5 text-xs text-muted-foreground">

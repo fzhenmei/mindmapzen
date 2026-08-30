@@ -1,4 +1,7 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* 全局复位由 Tailwind v4 preflight 承担（@layer base 内的通配选择器，语义与旧手写行一致：
+   margin/padding 归零 + box-sizing:border-box）。此处不再手写未分层通配复位——未分层规则
+   级联恒胜 @layer utilities，曾令全部 padding 工具类（px、py、p 前缀族）计算值为 0
+   （M14 官方值回归锁暴露：按钮实宽塌成文字宽、对话框/浮签内距失效）。 */
 html, body, #root { height: 100%; }
 /* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在树/卡片网格/大纲内 */
 html, body { overflow: hidden; }

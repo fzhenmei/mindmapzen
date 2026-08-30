@@ -38,7 +38,7 @@ function NoteDialog({
   const title = '编辑节点备注'
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent data-testid="note-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="note-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <textarea
           data-testid="note-text"
@@ -79,7 +79,7 @@ export default function EditorDialogs({
       {guarding && <CloseGuardDialog mapName={mapName} onChoice={onGuardChoice} />}
       {confirmingIgnored && (
         <Dialog open onOpenChange={(o) => { if (!o) onIgnoredCancel() }}>
-          <DialogContent aria-label={ignoredTitle} className="w-90 gap-3 p-5">
+          <DialogContent aria-label={ignoredTitle}>
             <DialogTitle>{ignoredTitle}</DialogTitle>
             <DialogFooter>
               <Button variant="secondary" size="sm" data-testid="ignored-confirm-cancel" onClick={onIgnoredCancel}>

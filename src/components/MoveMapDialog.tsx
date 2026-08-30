@@ -70,7 +70,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
   const title = `移动「${mapName}」`
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent data-testid="move-dialog" aria-label={title} className="w-90 gap-3 p-5">
+      <DialogContent data-testid="move-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <div className="flex max-h-[40vh] flex-col gap-0.5 overflow-y-auto rounded-md border border-border p-1.5 font-file text-xs">
           <button
