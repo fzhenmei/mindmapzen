@@ -314,3 +314,20 @@ test('标记属性③定点：parse(serialize(tree, links)) 再 serialize 同 li
     { numRuns: 500 },
   )
 })
+
+// —— M17 备注即宿主：note 含 ```mermaid 围栏（多行备注）的定点 roundtrip ——
+// md 事实源零改动的前提证明：序列化逐行 `> ` 前缀 ↔ 解析逐行剥标记，围栏原样保留
+test('note 含 mermaid 围栏：serialize→parse 逐字还原（备注即宿主 M17）', () => {
+  const tree: ZenNode = {
+    text: '流程节点',
+    note: '先看这段说明\n```mermaid\ngraph LR\n  A --> B\n  B --> C\n```',
+    children: [],
+  }
+  const md = serialize(tree)
+  expect(md).toContain('> 先看这段说明')
+  expect(md).toContain('> ```mermaid')
+  expect(md).toContain('> graph LR')
+  const r = parse(md)
+  expect(r.ok).toBe(true)
+  if (r.ok) expect(r.tree.note).toBe(tree.note)
+})

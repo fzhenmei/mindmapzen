@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { stripMarkers } from '../services/linkMarkers'
+import MermaidBlock from './MermaidBlock'
 
 /** 元素映射（模块级常量，S6478：不在组件内定义）：全走令牌类名，无第三方排版插件。
  *  层级视觉（M15 验收）：导图 md 的标题层级即树——字号阶梯拉开（24/20/16/14/13/12px）
@@ -74,11 +75,20 @@ const MD_COMPONENTS: Components = {
     </a>
   ),
   hr: () => <hr className="my-4 border-border/60" />,
-  code: ({ node: _node, children, ...p }) => (
-    <code className="rounded bg-muted px-1 py-0.5 font-file text-xs" {...p}>
-      {children}
-    </code>
-  ),
+  // code 分流（M17 备注即宿主）：围栏 ```mermaid → MermaidBlock 渲染小图（懒加载）；
+  // 行内与其他语言 code 维持等宽小字（className 语言标记形如 language-mermaid）。
+  // children 为 ReactNode 数组（文本片段），显式拼接非 String()（防 [object Object]）
+  code: ({ node: _node, className, children, ...p }) => {
+    const raw = (Array.isArray(children) ? children : [children])
+      .map((c) => (typeof c === 'string' ? c : ''))
+      .join('')
+    if (/language-mermaid/.test(className ?? '')) return <MermaidBlock code={raw.replace(/\n$/, '')} />
+    return (
+      <code className="rounded bg-muted px-1 py-0.5 font-file text-xs" {...p}>
+        {children}
+      </code>
+    )
+  },
   pre: ({ node: _node, children, ...p }) => (
     <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 font-file text-xs leading-6" {...p}>
       {children}
