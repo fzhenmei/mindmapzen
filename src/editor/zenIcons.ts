@@ -100,13 +100,46 @@ export function toEngineIconList(): Array<{ type: string; list: Array<{ name: st
   return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
 }
 
-/** 懒加载任一 lucide 图标（全集 2048 个，动态 import 模板 → Vite 按文件拆 chunk）；
- *  返回前同样规范化（剥许可注释）；名字不存在返回 null（调用方宽容丢弃） */
+/** lucide 节点结构（icon-nodes.json：[tag, attrs, children?] 三元组递归） */
+type LucideNode = [tag: string, attrs: Record<string, string>, children?: LucideNode[]]
+
+/** 节点数组 → svg 字符串（lucide 官方 24×24 stroke 骨架 + 递归序列化；
+ *  attrs 值做引号转义——lucide 数据本身安全，转义为纵深防御） */
+function nodesToSvg(children: readonly LucideNode[]): string {
+  const walk = ([tag, attrs, kids]: LucideNode): string => {
+    const a = Object.entries(attrs ?? {})
+      .map(([k, v]) => ` ${k}="${String(v).replaceAll('"', '&quot;')}"`)
+      .join('')
+    return kids !== undefined && kids.length > 0
+      ? `<${tag}${a}>${kids.map(walk).join('')}</${tag}>`
+      : `<${tag}${a}/>`
+  }
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ' +
+    'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    `stroke-linejoin="round">${children.map(walk).join('')}</svg>`
+  )
+}
+
+// 全集节点数据懒加载缓存（icon-nodes.json 单 chunk；Vite JSON 动态导入返回 { default }，
+// 实案：M18 初版用包内 URL 模板动态 import——运行时无法解析，搜索命中的非精选图标全挂）
+let nodesCache: Promise<Record<string, readonly LucideNode[]>> | null = null
+const loadNodes = (): Promise<Record<string, readonly LucideNode[]>> => {
+  nodesCache ??= import('lucide-static/icon-nodes.json').then(
+    (m) => (m as unknown as { default: Record<string, readonly LucideNode[]> }).default,
+  )
+  return nodesCache
+}
+
+/** 懒加载任一 lucide 图标（全集 1790）：精选直取；其余查 icon-nodes.json 序列化。
+ *  名字不存在返回 null（调用方宽容丢弃） */
 export async function loadIconSvg(name: string): Promise<string | null> {
   if (!/^[a-z0-9-]+$/.test(name)) return null
+  if (CURATED_ICONS[name] !== undefined) return CURATED_ICONS[name]
   try {
-    const mod = (await import(`lucide-static/icons/${name}.svg?raw`)) as { default: string }
-    return normalizeSvg(mod.default)
+    const nodes = await loadNodes()
+    const kids = nodes[name]
+    return kids === undefined ? null : nodesToSvg(kids)
   } catch {
     return null
   }
