@@ -150,6 +150,10 @@ beforeEach(async () => {
     dirty: false,
     error: null,
     settings: { copyIncludeNote: false, copyIncludeLinks: true },
+    // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
+    // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
+    // 泄漏的偏好会让后续用例的布局点击命中已激活项而 no-op——统一回默认
+    preferredLayout: 'mindmap',
   })
 })
 
@@ -1255,8 +1259,8 @@ test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', as
   expect((globalThis as unknown as Record<string, unknown>).__lastLayoutProp).toBe(
     layoutToEngine('logic'),
   )
-  expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByTestId('layout-mindmap')).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByTestId('layout-logic')).toHaveAttribute('data-state', 'on')
+  expect(screen.getByTestId('layout-mindmap')).toHaveAttribute('data-state', 'off')
 })
 
 test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不写 .md 不置脏', async () => {
@@ -1319,7 +1323,7 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
     useAppStore.setState({ preferredLayout: 'logic' })
     render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} />)
     await screen.findByTestId('fake-canvas')
-    expect(screen.getByTestId('layout-logic')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('layout-logic')).toHaveAttribute('data-state', 'on')
   })
 
   test('切换布局会记住偏好', async () => {
