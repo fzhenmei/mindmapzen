@@ -1,6 +1,7 @@
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { extractTargets, injectMarkers } from './linkMarkers'
+import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -26,13 +27,17 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   assertNoNewline(tree)
   const lines: string[] = []
 
-  /** 序列化文本：查注册表注入句尾标记（显示层剥离的净化语义下，md 仍是连线唯一事实源） */
+  /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
+   *  图标标记（M18）同口径句尾注入（zen.icons ⇄ ::name 互逆） */
   function textOf(node: ZenNode): string {
     const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
-    if (targets === undefined || targets.length === 0) return node.text
-    const existing = new Set(extractTargets(node.text))
-    const missing = targets.filter((t) => !existing.has(t))
-    return missing.length > 0 ? injectMarkers(node.text, missing) : node.text
+    let text = node.text
+    if (targets !== undefined && targets.length > 0) {
+      const existing = new Set(extractTargets(text))
+      const missing = targets.filter((t) => !existing.has(t))
+      if (missing.length > 0) text = injectMarkers(text, missing)
+    }
+    return injectIconMarkers(text, node.icons ?? [])
   }
 
   /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
@@ -112,6 +117,15 @@ function listItemText(md: string, item: MNode): string {
   )
 }
 
+/** 建节点（M18 图标）：行尾 ::name 标记提取进 icons（文本剥离、序列化注入互逆）；
+ *  无标记快速路径零开销（heading 与列表项共用） */
+function makeNode(raw: string): ZenNode {
+  const icons = extractIconMarkers(raw)
+  const node: ZenNode = { text: stripIconMarkers(raw), children: [] }
+  if (icons.length > 0) node.icons = icons
+  return node
+}
+
 /** 引用块备注文本：按源码行剥掉行首 `>` 标记（保留原文换行/空行/嵌套 `>`，与序列化侧 `> `+行 逐字互逆） */
 function blockquoteText(md: string, block: MNode): string {
   const lines = md.split('\n')
@@ -135,7 +149,7 @@ function visitList(md: string, list: MNode, parentNode: ZenNode, state: OutlineS
   for (const item of list.children ?? []) {
     if (item.type !== 'listItem') continue
     const para = item.children?.find((c) => c.type === 'paragraph')
-    const node: ZenNode = { text: listItemText(md, item), children: [] }
+    const node = makeNode(listItemText(md, item))
     parentNode.children.push(node)
     state.lastNode = node
     for (const sub of item.children ?? []) {
@@ -155,7 +169,7 @@ function attachHeading(
   stack: { depth: number; node: ZenNode }[],
 ): void {
   while (stack.length > 1 && (stack.at(-1)?.depth ?? 0) >= depth) stack.pop()
-  const node: ZenNode = { text: headingText(md, block), children: [] }
+  const node = makeNode(headingText(md, block))
   stack.at(-1)?.node.children.push(node)
   stack.push({ depth, node })
 }
@@ -179,7 +193,7 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
     return null
   }
   if (d !== 1) return NO_ROOT_ERROR
-  state.root = { text: headingText(md, block), children: [] }
+  state.root = makeNode(headingText(md, block))
   state.stack.push({ depth: 1, node: state.root })
   state.lastNode = state.root
   return null
@@ -224,7 +238,8 @@ export function parse(md: string): ParseResult {
 }
 
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
- *  note 透传进 data（undefined 不设键——引擎以 truthy 判定备注角标显隐） */
+ *  note 透传进 data（undefined 不设键——引擎以 truthy 判定备注角标显隐）；
+ *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18） */
 export function zenToEngineTree(
   tree: ZenNode,
   collapsed: ReadonlySet<string> = new Set(),
@@ -232,7 +247,12 @@ export function zenToEngineTree(
 ): EngineNode {
   const path = parentPath === '' ? '/' + tree.text : parentPath + '/' + tree.text
   return {
-    data: { text: tree.text, expand: !collapsed.has(path), ...(tree.note !== undefined ? { note: tree.note } : {}) },
+    data: {
+      text: tree.text,
+      expand: !collapsed.has(path),
+      ...(tree.note !== undefined ? { note: tree.note } : {}),
+      ...(tree.icons !== undefined && tree.icons.length > 0 ? { icon: tree.icons.map((n) => `zen_${n}`) } : {}),
+    },
     children: tree.children.map((c) => zenToEngineTree(c, collapsed, path)),
   }
 }
@@ -248,11 +268,16 @@ export function engineTreeToZen(
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const note = typeof root.data.note === 'string' ? root.data.note : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
+  // 图标收集（M18）：data.icon 仅收 'zen_' 前缀项（引擎其他图标源不受影响），剥前缀还原 kebab 名
+  const icons = Array.isArray(root.data.icon)
+    ? root.data.icon.filter((n): n is string => typeof n === 'string' && n.startsWith('zen_')).map((n) => n.slice(4))
+    : []
   return {
     tree: {
       text: root.data.text,
       ...(note !== undefined ? { note } : {}),
       ...(uid !== undefined ? { uid } : {}),
+      ...(icons.length > 0 ? { icons } : {}),
       children: subs.map((s) => s.tree),
     },
     collapsed: [...own, ...subs.flatMap((s) => s.collapsed)],

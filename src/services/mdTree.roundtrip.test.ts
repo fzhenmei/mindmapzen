@@ -331,3 +331,25 @@ test('note 含 mermaid 围栏：serialize→parse 逐字还原（备注即宿主
   expect(r.ok).toBe(true)
   if (r.ok) expect(r.tree.note).toBe(tree.note)
 })
+
+// —— M18 图标：句尾 ::name 标记的 parse⇄serialize 定点 roundtrip ——
+test('图标标记：parse 提取进 icons（文本剥离）、serialize 句尾注入互逆（M18）', async () => {
+  const md = ['# 根 ::flag', '', '## 待办 ::star ::flag', '', '### 普通节点', ''].join('\n')
+  const r = parse(md)
+  expect(r.ok).toBe(true)
+  if (!r.ok) return
+  expect(r.tree.icons).toEqual(['flag'])
+  expect(r.tree.text).toBe('根')
+  expect(r.tree.children[0]?.icons).toEqual(['star', 'flag'])
+  expect(r.tree.children[0]?.text).toBe('待办')
+  expect(r.tree.children[0]?.children[0]?.icons).toBeUndefined()
+  // serialize 注回（保序）；引擎转换：zen.icons ⇄ data.icon（zen_ 前缀）
+  const out = serialize(r.tree)
+  expect(out).toContain('# 根 ::flag')
+  expect(out).toContain('## 待办 ::star ::flag')
+  const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+  const engine = zenToEngineTree(r.tree)
+  expect(engine.data.icon).toEqual(['zen_flag'])
+  const back = engineTreeToZen(engine)
+  expect(back.tree.icons).toEqual(['flag'])
+})
