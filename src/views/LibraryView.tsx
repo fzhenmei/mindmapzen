@@ -4,6 +4,7 @@ import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { createDir, moveMap, readDirTree, type DirNode } from '../services/desk'
 import { parse } from '../services/mdTree'
+import { parseXmind } from '../services/xmindImport'
 import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
@@ -34,10 +35,16 @@ import {
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
+/** 导入源统一载荷（M21：md 文本 / xmind 字节双流，一个对话框入口按 kind 分流；
+ *  可辨识联合——分支内 text/bytes 精确收窄） */
+export type PickedImport =
+  | { name: string; kind: 'md'; text: string }
+  | { name: string; kind: 'xmind'; bytes: Uint8Array }
+
 interface Props {
   pickDirectory: () => Promise<string | null>
-  /** 选择外部 .md 文件：生产为 Tauri 对话框单选 + adapter 读取，测试注入桩；取消返回 null */
-  pickMdFile: () => Promise<{ name: string; text: string } | null>
+  /** 选择外部导入源（.md 文本 / .xmind 字节）：生产为 Tauri 对话框单选 + adapter 读取，测试注入桩；取消返回 null */
+  pickImportFile: () => Promise<PickedImport | null>
 }
 
 /** 导入预览挂起态：解析成功但存在忽略块，待用户确认后才入库（取消则丢弃） */
@@ -51,7 +58,7 @@ interface ImportPreview {
  *  idle（进案头未选任何 → 空态引导）/ 目录态（FileExplorer 资源管理器大图标网格）/
  *  详情态（FileDetail 摘要条 + markdown 预览）。交互语义：树/文件夹 tile 单击=选目录，
  *  文件 tile/树文件行单击=选中进详情，双击=进纸面；悬停操作钮（移动/重命名/删除）沿旧口径 */
-export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Props>) {
+export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
   const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | null>(null)
@@ -106,22 +113,34 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
     }
   }
 
-  /** 导入 .md：复制入库（内容按规范序列化另存，不移动原文件）；有忽略块先预览确认 */
+  /** 导入（.md / .xmind）：复制入库（内容按规范序列化另存，不移动原文件）；
+   *  有未映射内容先预览确认（md 解析忽略块 / xmind 游离主题等摘要，同一通道） */
   const startImport = async () => {
     if (!workspaceDir) return
     try {
-      const picked = await pickMdFile()
+      const picked = await pickImportFile()
       if (picked === null) return
-      const r = parse(picked.text)
-      if (!r.ok) {
-        store.setError('导入失败：' + r.error)
+      // 统一产出 { tree, blocks }：md 走 parse；xmind 走 ZIP 解析（M21）
+      let tree: ZenNode
+      let blocks: IgnoredBlock[]
+      if (picked.kind === 'md') {
+        const r = parse(picked.text)
+        if (!r.ok) {
+          store.setError('导入失败：' + r.error)
+          return
+        }
+        tree = r.tree
+        blocks = r.ignoredBlocks
+      } else {
+        const r = parseXmind(picked.bytes)
+        tree = r.tree
+        blocks = r.warnings
+      }
+      if (blocks.length > 0) {
+        setImportPreview({ name: picked.name, tree, blocks })
         return
       }
-      if (r.ignoredBlocks.length > 0) {
-        setImportPreview({ name: picked.name, tree: r.tree, blocks: r.ignoredBlocks })
-        return
-      }
-      const info = await commitImport(store.adapter, workspaceDir, picked.name, r.tree, store.preferredLayout)
+      const info = await commitImport(store.adapter, workspaceDir, picked.name, tree, store.preferredLayout)
       await store.openMap(info.mdPath)
     } catch (e) {
       store.setError('导入失败：' + String(e))

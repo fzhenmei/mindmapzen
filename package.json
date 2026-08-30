@@ -1,7 +1,7 @@
 {
   "name": "mind-map-zen",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.37.0",
     "lucide-static": "^1.37.0",
     "mermaid": "^11.17.2",
