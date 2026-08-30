@@ -6,7 +6,8 @@ import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
-import { IconArrowLeft, IconOpen } from './icons'
+import { IconArrowLeft, IconFolder, IconOpen, IconPencil, IconTrash } from './icons'
+import type { MapAction } from './FileExplorer'
 import MarkdownPreview from './MarkdownPreview'
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
   info: MapInfo
   /** 返回目录视图（回到该图所在目录的资源管理器态） */
   onBack(): void
+  /** 悬停操作（M16 详情态补全，与资源管理器 tile 同构）：移动/重命名/删除，对话框流在 LibraryView */
+  onAction(a: MapAction, m: MapInfo): void
 }
 
 type DetailState =
@@ -30,7 +33,7 @@ type DetailState =
  *  muted 底贴卡边；Card 根压 pb-0 + overflow-hidden 让内容区延到卡底（尾距由
  *  MarkdownPreview 自带 pb-6 承担）。读取失败时卡头仍完整（元数据来自 store），
  *  预览区显示「无法预览」——打开按钮兜底 */
-export default function FileDetail({ info, onBack }: Readonly<Props>) {
+export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) {
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
 
   useEffect(() => {
@@ -84,6 +87,31 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
               </TooltipTrigger>
               <TooltipContent>返回目录</TooltipContent>
             </Tooltip>
+            <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+            {/* 详情态就地操作（M16 补全，testid 与资源管理器 tile 同名——两态互斥渲染不冲突） */}
+            {(
+              [
+                ['btn-move', '移动到目录', IconFolder, 'move'],
+                ['btn-rename', '重命名', IconPencil, 'rename'],
+                ['btn-delete', '删除', IconTrash, 'delete'],
+              ] as const
+            ).map(([testid, label, Icon, action]) => (
+              <Tooltip key={testid}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    data-testid={testid}
+                    aria-label={label}
+                    onClick={() => onAction(action, info)}
+                  >
+                    <Icon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            ))}
             <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
             <Tooltip>
               <TooltipTrigger asChild>

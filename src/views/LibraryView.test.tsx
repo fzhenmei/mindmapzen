@@ -380,6 +380,23 @@ describe('案头三区与交互（M5d）', () => {
     await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
   })
 
+  test('详情态就地操作：删除按钮在摘要条可用，确认后删除并回目录态', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
+    fireEvent.click(await screen.findByTestId('dir-node-all'))
+    const tileOf = (name: string) =>
+      screen.getAllByTestId('map-item').find((el) => el.textContent!.includes(name))!
+    fireEvent.click(tileOf('想法A'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    // 详情态摘要条的三枚操作钮与 tile 同 testid（两态互斥渲染）
+    fireEvent.click(screen.getByTestId('btn-delete'))
+    expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1)) // 只剩 项目/甲
+    // 选中失联 → 详情态清空，回落资源管理器
+    await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
+    expect(useAppStore.getState().maps.some((m) => m.name === '想法A')).toBe(false)
+  })
+
   test('树文件行双击打开进纸面', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickMdFile={vi.fn()} />)
     fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
