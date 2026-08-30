@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import { DEFAULT_COPY_SETTINGS, type CopySettingKey, type CopySettings, type FsAdapter, type LayoutKind, type MapInfo, type ThemePref } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type MapInfo, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
+import { checkAndBackup, gitStatusInfo, type GitStatusInfo } from '../services/gitBackup'
+import type { GitRun } from '../types/ports'
 
 interface AppState {
   route: 'library' | 'editor'
@@ -24,6 +26,14 @@ interface AppState {
   resolvedTheme: ResolvedTheme
   /** 复制行为设置（M5b Task 4：init 自配置，切换时持久化；EditorView 复制时按此后处理） */
   settings: CopySettings
+  /** 版本管理配置（M20 想法8）：init 自配置，setGitConfig 持久化 */
+  gitConfig: GitConfig
+  /** git 命令端口（M20）：App 装配注入（生产 Tauri git_exec / E2E harness 桩）；null 时备份为 no-op */
+  gitRun: GitRun | null
+  /** 最近备份结果摘要（状态显示）；null = 从未执行 */
+  lastBackup: string | null
+  /** 仓库状态（设置页显示） */
+  gitStatus: GitStatusInfo
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -37,6 +47,12 @@ interface AppState {
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
   setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
+  /** 版本管理配置变更（M20）：即时生效 + load-merge-save 持久化 */
+  setGitConfig: (patch: Partial<GitConfig>) => Promise<void>
+  /** 立即备份（M20 幂等）：App 定时器与设置页手动钮共用；端口未注入/未启用/无工作区 no-op */
+  backupNow: () => Promise<void>
+  /** 刷新仓库状态（设置页打开时） */
+  refreshGitStatus: () => Promise<void>
   markDirty: () => void
   clearDirty: () => void
   backToLibrary: () => Promise<void>
@@ -57,6 +73,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   themePref: 'auto',
   resolvedTheme: 'light',
   settings: DEFAULT_COPY_SETTINGS,
+  gitConfig: DEFAULT_GIT_CONFIG,
+  gitRun: null,
+  lastBackup: null,
+  gitStatus: { lastCommit: null, aheadCount: null },
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -66,7 +86,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved, settings: cfg.settings })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir })
@@ -142,6 +162,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ settings })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, settings })
+  },
+
+  /** 版本管理（M20）：配置 load-merge-save 持久化 */
+  setGitConfig: async (patch) => {
+    const { adapter, configPath } = get()
+    const gitConfig = { ...get().gitConfig, ...patch }
+    set({ gitConfig })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, git: gitConfig })
+  },
+
+  backupNow: async () => {
+    const { gitRun, gitConfig, workspaceDir } = get()
+    if (gitRun === null || !gitConfig.enabled || workspaceDir === null) return
+    const r = await checkAndBackup(workspaceDir, gitConfig, gitRun)
+    // 状态摘要：提交消息 / 跳过原因 / 致命错误（中文）
+    const summary =
+      r.fatal !== null
+        ? `备份失败：${r.fatal}`
+        : r.committed
+          ? `已提交${r.push.kind === 'ok' ? '并推送' : r.push.kind === 'error' ? '（推送失败：' + r.push.message + '）' : ''}`
+          : `无变更`
+    set({ lastBackup: summary })
+    await get().refreshGitStatus()
+  },
+
+  refreshGitStatus: async () => {
+    const { gitRun, workspaceDir } = get()
+    if (gitRun === null || workspaceDir === null) return
+    set({ gitStatus: await gitStatusInfo(workspaceDir, gitRun) })
   },
 
   openMap: async (mdPath) => {

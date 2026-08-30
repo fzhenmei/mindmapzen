@@ -52,13 +52,36 @@ export interface AppConfig {
   theme: ThemePref
   /** 复制行为设置（设置页两开关） */
   settings: CopySettings
+  /** 版本管理（M20 想法8）：自动 commit + 远程备份 */
+  git: GitConfig
 }
+/** 版本管理配置（M20）：宽容解析见 config.ts（parseGitConfig） */
+export interface GitConfig {
+  enabled: boolean
+  /** HTTPS 远程地址；null = 仅本地提交 */
+  remoteUrl: string | null
+  /** 访问令牌（PAT）；null = 无 */
+  token: string | null
+}
+export const DEFAULT_GIT_CONFIG: GitConfig = { enabled: false, remoteUrl: null, token: null }
+/** 宽容解析 git 配置：逐字段回退默认（旧配置无 git 字段兼容） */
+export function parseGitConfig(v: unknown): GitConfig {
+  if (typeof v !== 'object' || v === null) return DEFAULT_GIT_CONFIG
+  const o = v as Record<string, unknown>
+  return {
+    enabled: typeof o.enabled === 'boolean' ? o.enabled : DEFAULT_GIT_CONFIG.enabled,
+    remoteUrl: typeof o.remoteUrl === 'string' && o.remoteUrl !== '' ? o.remoteUrl : null,
+    token: typeof o.token === 'string' && o.token !== '' ? o.token : null,
+  }
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: null,
   lastOpened: null,
   preferredLayout: null,
   theme: 'auto',
   settings: DEFAULT_COPY_SETTINGS,
+  git: DEFAULT_GIT_CONFIG,
 }
 /** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
  *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，

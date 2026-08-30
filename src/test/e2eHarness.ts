@@ -23,6 +23,9 @@ export async function installE2eHarness(): Promise<void> {
       await fs.writeTextFileAtomic(path, text)
       await useAppStore.getState().refreshMaps()
     },
+    // git 命令桩（M20 版本管理）：记录命令序列供断言；gitAnswers 可配置应答（缺省恒 ok）
+    gitCalls: [] as string[],
+    gitAnswers: [] as Array<{ match: string; ok: boolean; out?: string; err?: string }>,
     // 二进制写（M19 插图：预置图片字节），同样不刷新清单（图片非导图）
     async writeBytes(path: string, base64: string): Promise<void> {
       const bin = atob(base64)
