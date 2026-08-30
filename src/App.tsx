@@ -6,6 +6,7 @@ import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboar
 import LibraryView from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
+import { readFile } from '@tauri-apps/plugin-fs'
 import { openPath } from '@tauri-apps/plugin-opener'
 import type { ExportPorts, RegisterCloseGuard } from './types/ports'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
@@ -49,6 +50,25 @@ const pickMdFile = async (): Promise<{ name: string; text: string } | null> => {
   const name = picked.split(/[\\/]/).pop()!.replace(/\.md$/, '')
   const text = await useAppStore.getState().adapter.readTextFile(picked)
   return { name, text }
+}
+
+/** 生产选图（M19 插图）：Tauri 对话框单选图片 + plugin-fs readFile 读字节。
+ *  E2E web 模式读 harness 桩（固定 1×1 PNG 字节）。 */
+const pickImageFile = async (): Promise<{ name: string; bytes: Uint8Array } | null> => {
+  if (E2E) {
+    return (
+      (window as unknown as { __zenE2e?: { pickImageFile(): Promise<{ name: string; bytes: Uint8Array } | null> } })
+        .__zenE2e?.pickImageFile() ?? null
+    )
+  }
+  const picked = await open({
+    multiple: false,
+    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+  })
+  if (typeof picked !== 'string') return null
+  const name = picked.split(/[\\/]/).pop()!
+  const bytes = await readFile(picked)
+  return { name, bytes }
 }
 
 /** 生产关闭守卫：Tauri onCloseRequested → handler。动态 import 不阻塞渲染；
@@ -179,6 +199,7 @@ export default function App() {
         exportPorts={exportPorts}
         registerCloseGuard={registerCloseGuard}
         exitApp={exitApp}
+        pickImageFile={pickImageFile}
       />
     )
   }

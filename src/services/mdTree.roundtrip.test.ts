@@ -353,3 +353,44 @@ test('图标标记：parse 提取进 icons（文本剥离）、serialize 句尾�
   const back = engineTreeToZen(engine)
   expect(back.tree.icons).toEqual(['flag'])
 })
+
+// —— M19 插图：行尾 ![alt](src) 的 parse⇄serialize 与引擎 imgMap 转换 ——
+test('插图标记：parse 提取进 image、serialize 注回、imgMap 转换（M19）', async () => {
+  const md = ['# 根 ![配图](assets/x.png)', '', '## 子 ::flag ![图二](assets/y.png)', '', '## 普通节点', ''].join('\n')
+  const r = parse(md)
+  expect(r.ok).toBe(true)
+  if (!r.ok) return
+  expect(r.tree.image).toEqual({ src: 'assets/x.png', alt: '配图' })
+  expect(r.tree.text).toBe('根')
+  const child = r.tree.children[0]!
+  expect(child.icons).toEqual(['flag'])
+  expect(child.image).toEqual({ src: 'assets/y.png', alt: '图二' })
+  expect(child.text).toBe('子')
+  expect(r.tree.children[1]?.image).toBeUndefined()
+  const out = serialize(r.tree)
+  expect(out).toContain('# 根 ![配图](assets/x.png)')
+  expect(out).toContain('## 子 ::flag ![图二](assets/y.png)')
+  const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+  const meta = new Map([
+    ['assets/x.png', { dataUrl: 'data:image/png;base64,AAA', size: { width: 100, height: 60 } }],
+    ['assets/y.png', { dataUrl: 'data:image/png;base64,BBB', size: { width: 50, height: 50 } }],
+  ])
+  const engine = zenToEngineTree(r.tree, new Set(), '', meta)
+  expect(engine.data.imgMap).toEqual({ 'assets/x.png': 'data:image/png;base64,AAA', 'assets/y.png': 'data:image/png;base64,BBB' })
+  expect(engine.data.image).toBe('assets/x.png')
+  expect(engine.data.imageSize).toEqual({ width: 100, height: 60, custom: false })
+  // meta 缺失的宽容：普通节点无图不受影响；y 子节点有 meta
+  expect(engine.children?.[0]?.data.image).toBe('assets/y.png')
+  const back = engineTreeToZen(engine)
+  expect(back.tree.image).toEqual({ src: 'assets/x.png', alt: '配图' })
+})
+
+test('插图 meta 缺失：节点不设 image（宽容跳过，md 标记仍在树里）', async () => {
+  const md = '# 图 ![缺失](assets/gone.png)\n'
+  const r = parse(md)
+  if (!r.ok) return
+  const { zenToEngineTree } = await import('./mdTree')
+  const engine = zenToEngineTree(r.tree) // 不传 imgMeta
+  expect(engine.data.image).toBeUndefined()
+  expect(engine.data.imgMap).toBeUndefined()
+})

@@ -2,6 +2,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { extractTargets, injectMarkers } from './linkMarkers'
 import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
+import { extractImageMarker, injectImageMarker, stripImageMarker } from './imageMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -28,7 +29,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   const lines: string[] = []
 
   /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
-   *  图标标记（M18）同口径句尾注入（zen.icons ⇄ ::name 互逆） */
+   *  图标（M18 ::name）与插图（M19 ![alt](src)）同口径句尾注入（图片最尾） */
   function textOf(node: ZenNode): string {
     const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
     let text = node.text
@@ -37,7 +38,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
       const missing = targets.filter((t) => !existing.has(t))
       if (missing.length > 0) text = injectMarkers(text, missing)
     }
-    return injectIconMarkers(text, node.icons ?? [])
+    return injectImageMarker(injectIconMarkers(text, node.icons ?? []), node.image ?? null)
   }
 
   /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
@@ -117,12 +118,15 @@ function listItemText(md: string, item: MNode): string {
   )
 }
 
-/** 建节点（M18 图标）：行尾 ::name 标记提取进 icons（文本剥离、序列化注入互逆）；
- *  无标记快速路径零开销（heading 与列表项共用） */
+/** 建节点（M18 图标 / M19 插图）：行尾标记提取进结构化字段（文本剥离、序列化注入互逆）；
+ *  行尾约定顺序：`文本 ::icon ![alt](src)`（图片最尾）；无标记快速路径零开销 */
 function makeNode(raw: string): ZenNode {
-  const icons = extractIconMarkers(raw)
-  const node: ZenNode = { text: stripIconMarkers(raw), children: [] }
+  const image = extractImageMarker(raw)
+  const stripped = stripImageMarker(raw)
+  const icons = extractIconMarkers(stripped)
+  const node: ZenNode = { text: stripIconMarkers(stripped), children: [] }
   if (icons.length > 0) node.icons = icons
+  if (image !== null) node.image = image
   return node
 }
 
@@ -237,23 +241,47 @@ export function parse(md: string): ParseResult {
   return { ok: true, tree: state.root, ignoredBlocks: state.ignored }
 }
 
+/** 插图渲染元数据（M19）：src（md 事实源键）→ dataURL 与真实尺寸（构建见 services/imageAssets.ts） */
+export interface ImageMetaEntry {
+  dataUrl: string
+  size: { width: number; height: number }
+}
+
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
  *  note 透传进 data（undefined 不设键——引擎以 truthy 判定备注角标显隐）；
- *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18） */
+ *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
+ *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
+ *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
+ *  画布渲 dataURL，免 asset 协议）；meta 缺失的 src 宽容跳过（不设 image，md 标记保留） */
 export function zenToEngineTree(
   tree: ZenNode,
   collapsed: ReadonlySet<string> = new Set(),
   parentPath = '',
+  imgMeta?: ReadonlyMap<string, ImageMetaEntry>,
 ): EngineNode {
   const path = parentPath === '' ? '/' + tree.text : parentPath + '/' + tree.text
+  const imgEntry = tree.image !== undefined ? imgMeta?.get(tree.image.src) : undefined
+  // imgMap 挂根节点 data（引擎按 renderTree.data.imgMap 全局查表）
+  const rootImgMap: Record<string, string> = {}
+  if (parentPath === '' && imgMeta !== undefined && imgMeta.size > 0) {
+    for (const [src, e] of imgMeta) rootImgMap[src] = e.dataUrl
+  }
   return {
     data: {
       text: tree.text,
       expand: !collapsed.has(path),
       ...(tree.note !== undefined ? { note: tree.note } : {}),
       ...(tree.icons !== undefined && tree.icons.length > 0 ? { icon: tree.icons.map((n) => `zen_${n}`) } : {}),
+      ...(tree.image !== undefined && imgEntry !== undefined
+        ? {
+            image: tree.image.src,
+            imageTitle: tree.image.alt,
+            imageSize: { ...imgEntry.size, custom: false },
+          }
+        : {}),
+      ...(parentPath === '' && Object.keys(rootImgMap).length > 0 ? { imgMap: rootImgMap } : {}),
     },
-    children: tree.children.map((c) => zenToEngineTree(c, collapsed, path)),
+    children: tree.children.map((c) => zenToEngineTree(c, collapsed, path, imgMeta)),
   }
 }
 
@@ -272,12 +300,18 @@ export function engineTreeToZen(
   const icons = Array.isArray(root.data.icon)
     ? root.data.icon.filter((n): n is string => typeof n === 'string' && n.startsWith('zen_')).map((n) => n.slice(4))
     : []
+  // 插图收集（M19）：data.image（src 键）+ imageTitle（alt）；imgMap 不回写（引擎根 data 临时物）
+  const image =
+    typeof root.data.image === 'string' && root.data.image !== ''
+      ? { src: root.data.image, alt: typeof root.data.imageTitle === 'string' ? root.data.imageTitle : '' }
+      : undefined
   return {
     tree: {
       text: root.data.text,
       ...(note !== undefined ? { note } : {}),
       ...(uid !== undefined ? { uid } : {}),
       ...(icons.length > 0 ? { icons } : {}),
+      ...(image !== undefined ? { image } : {}),
       children: subs.map((s) => s.tree),
     },
     collapsed: [...own, ...subs.flatMap((s) => s.collapsed)],
