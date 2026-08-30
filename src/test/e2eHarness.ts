@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import type { PickedImport } from '../views/LibraryView'
 
 /** 仅 E2E 使用（?e2e=1）：以内存文件系统启动并暴露读取钩子。
  *  末尾自动 setWorkspace('/ws')，规避 web 模式下无 Tauri 目录选择对话框的问题。
@@ -30,7 +31,7 @@ export async function installE2eHarness(): Promise<void> {
     async writeBytes(path: string, base64: string): Promise<void> {
       const bin = atob(base64)
       const bytes = new Uint8Array(bin.length)
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.codePointAt(i)!
       await fs.writeBytes(path, bytes)
     },
     // 剪贴板桩：App E2E 装配的 writeClipboard 将复制内容记录于此，供 spec 断言
@@ -39,9 +40,12 @@ export async function installE2eHarness(): Promise<void> {
     // writeImage 记录图片字节长度（exportedBytes > 0 断言）
     savePaths: [] as string[],
     exportedBytes: null as number | null,
-    // 导入文件桩：固定返回内置样例（含 1 个忽略块「忽略段。」），App E2E 分支读取
-    async pickMdFile(): Promise<{ name: string; text: string } | null> {
-      return { name: '外部图', text: '# 外部图\n\n忽略段。\n\n## A\n' }
+    // 导入文件桩：默认返回 md 内置样例（含 1 个忽略块「忽略段。」）；M21 起支持
+    // xmind 用例覆写 __zenE2e.pickImportStub（返回 PickedImport 或 null）
+    async pickImportFile(): Promise<PickedImport | null> {
+      const stub = (this as unknown as { pickImportStub?: PickedImport | null }).pickImportStub
+      if (stub !== undefined) return stub
+      return { name: '外部图', kind: 'md', text: '# 外部图\n\n忽略段。\n\n## A\n' }
     },
     // 选图桩（M19 插图）：固定 1×1 透明 PNG 字节（IHDR 宽高 1×1，尺寸解析链路真实可跑）
     async pickImageFile(): Promise<{ name: string; bytes: Uint8Array } | null> {

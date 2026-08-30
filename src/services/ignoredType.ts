@@ -9,6 +9,11 @@ const ZH: Record<string, string> = {
   html: 'HTML',
   list: '列表',
   listItem: '列表项',
+  // XMind 导入摘要（M21，见 xmindImport.ts warnings）
+  游离主题: '游离主题',
+  标签: '标签',
+  标记: '标记',
+  多画布: '多画布',
 }
 
 export function describeIgnoredType(type: string): string {

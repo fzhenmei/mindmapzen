@@ -3,13 +3,12 @@ import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
-import LibraryView from './views/LibraryView'
+import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
-import type { GitRun } from './types/ports'
+import type { ExportPorts, GitRun, RegisterCloseGuard } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
-import type { ExportPorts, RegisterCloseGuard } from './types/ports'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
@@ -31,26 +30,28 @@ const pickDirectory = async (): Promise<string | null> => {
   return typeof dir === 'string' ? dir : null
 }
 
-/** 生产导入文件选择：Tauri 对话框单选 .md + adapter 读取。
- *  E2E web 模式无 Tauri 对话框：读取 harness 预置桩（固定内置样例）。 */
-const pickMdFile = async (): Promise<{ name: string; text: string } | null> => {
+/** 生产导入文件选择（M21：md / xmind 双流）：Tauri 对话框单选 + 按扩展分流读取
+ *  （md 文本 / xmind 字节）。E2E web 模式无 Tauri 对话框：读 harness 桩
+ *  （缺省 md 内置样例；xmind 用例可覆写 __zenE2e.pickImportStub）。 */
+const pickImportFile = async (): Promise<PickedImport | null> => {
   if (E2E) {
-    return (
-      (
-        window as unknown as {
-          __zenE2e?: { pickMdFile(): Promise<{ name: string; text: string } | null> }
-        }
-      ).__zenE2e?.pickMdFile() ?? null
-    )
+    const z = (window as unknown as {
+      __zenE2e?: { pickImportFile(): Promise<PickedImport | null> }
+    }).__zenE2e
+    return z?.pickImportFile() ?? null
   }
   const picked = await open({
     multiple: false,
-    filters: [{ name: 'Markdown', extensions: ['md'] }],
+    filters: [{ name: '导图文件', extensions: ['md', 'xmind'] }],
   })
   if (typeof picked !== 'string') return null
-  const name = picked.split(/[\\/]/).pop()!.replace(/\.md$/, '')
+  const fileName = picked.split(/[\\/]/).pop()!
+  if (fileName.toLowerCase().endsWith('.xmind')) {
+    const bytes = await readFile(picked)
+    return { name: fileName.replace(/\.xmind$/i, ''), kind: 'xmind', bytes }
+  }
   const text = await useAppStore.getState().adapter.readTextFile(picked)
-  return { name, text }
+  return { name: fileName.replace(/\.md$/i, ''), kind: 'md', text }
 }
 
 /** 生产选图（M19 插图）：Tauri 对话框单选图片 + plugin-fs readFile 读字节。
@@ -232,5 +233,5 @@ export default function App() {
       />
     )
   }
-  return <LibraryView pickDirectory={pickDirectory} pickMdFile={pickMdFile} />
+  return <LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} />
 }
