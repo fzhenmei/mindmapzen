@@ -25,7 +25,7 @@ import edit from 'lucide-static/icons/edit.svg?raw'
 import externalLink from 'lucide-static/icons/external-link.svg?raw'
 import eye from 'lucide-static/icons/eye.svg?raw'
 import fileText from 'lucide-static/icons/file-text.svg?raw'
-import fire from 'lucide-static/icons/fire.svg?raw'
+import flame from 'lucide-static/icons/flame.svg?raw'
 import flag from 'lucide-static/icons/flag.svg?raw'
 import folder from 'lucide-static/icons/folder.svg?raw'
 import gift from 'lucide-static/icons/gift.svg?raw'
@@ -73,7 +73,7 @@ import zap from 'lucide-static/icons/zap.svg?raw'
 
 /** 精选集（64，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
 export const CURATED_ICONS: Readonly<Record<string, string>> = {
-  flag, star, 'alert-triangle': alertTriangle, check, x, clock, fire, heart, bookmark, pin,
+  flag, star, 'alert-triangle': alertTriangle, check, x, clock, flame, heart, bookmark, pin,
   tag, lightbulb, target, rocket, bug, lock, key, eye, search, calendar,
   'message-circle': messageCircle, paperclip, 'trash-2': trash2, pencil, copy, save, download,
   upload, settings, user, users, home, folder, 'file-text': fileText, image, link,

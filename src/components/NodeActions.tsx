@@ -5,7 +5,7 @@
 import type { NodeActionPos } from '../hooks/useNodeActions'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { IconLink, IconPencil } from './icons'
+import { IconLink, IconPencil, IconSmile } from './icons'
 
 interface Props {
   /** 锚点（useNodeActions 产出；仅在有值时由父级渲染本组件） */
@@ -14,9 +14,11 @@ interface Props {
   onNoteClick(): void
   /** 发起连线（引擎建线态 → 点目标节点经 linkBridge 落 [[..]] 文本） */
   onLinkClick(): void
+  /** 图标管理器（M18 想法9：节点签名图标的唯一增删 UI 通道） */
+  onIconClick(): void
 }
 
-export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<Props>) {
+export default function NodeActions({ pos, onNoteClick, onLinkClick, onIconClick }: Readonly<Props>) {
   return (
     <div
       data-testid="node-actions"
@@ -37,6 +39,21 @@ export default function NodeActions({ pos, onNoteClick, onLinkClick }: Readonly<
           </Button>
         </TooltipTrigger>
         <TooltipContent>编辑该节点备注（Shift+F2）</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="node-action-icon"
+            aria-label="节点图标"
+            onClick={onIconClick}
+          >
+            <IconSmile />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>节点图标</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>

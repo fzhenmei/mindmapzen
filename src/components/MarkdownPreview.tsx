@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { stripMarkers } from '../services/linkMarkers'
+import { stripIconMarkers } from '../services/iconMarkers'
 import MermaidBlock from './MermaidBlock'
 
 /** 元素映射（模块级常量，S6478：不在组件内定义）：全走令牌类名，无第三方排版插件。
@@ -119,10 +120,10 @@ interface Props {
 /** markdown 预览（M15 文件详情态下层）：react-markdown + remark-gfm 渲染真实 md，
  *  样式与层级视觉见模块级 MD_COMPONENTS 注释 */
 export default function MarkdownPreview({ text }: Readonly<Props>) {
-  // 连线标记按行剥离（标记永不跨行，与序列化口径一致）
+  // 连线/图标标记按行剥离（标记永不跨行，与画布显示层同口径——md 原文仍是唯一事实源）
   const display = text
     .split('\n')
-    .map((l) => stripMarkers(l))
+    .map((l) => stripIconMarkers(stripMarkers(l)))
     .join('\n')
   return (
     <div data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">

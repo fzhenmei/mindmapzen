@@ -7,31 +7,32 @@ test('mermaid：备注围栏在详情态预览渲染成 SVG；语法错误降级
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
-  // 页面内写入含 mermaid 备注的导图（好图 + 坏图各一）
+  // 页面内写入含 mermaid 备注的导图（好图 + 坏图各一）——harness 通道（防裸
+  // import 模块双实例，见 e2eHarness.writeFile 注释）
   await page.evaluate(async () => {
-    const m = await import('/src/store/appStore.ts')
-    const s = m.useAppStore.getState()
-    const good = [
-      '# 架构图解',
-      '',
-      '## 核心链路',
-      '',
-      '> 这条链路是主数据流：',
-      '> ```mermaid',
-      '> graph LR',
-      '>   A[画布] --> B{md 事实源}',
-      '>   B --> C[AI 协作]',
-      '> ```',
-      '',
-      '## 坏图',
-      '',
-      '> ```mermaid',
-      '> 这不是合法的 mermaid',
-      '> ```',
-      '',
-    ].join('\n')
-    await s.adapter.writeTextFileAtomic('/ws/架构图解.md', good)
-    await m.useAppStore.getState().refreshMaps()
+    const z = (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e
+    await z.writeFile(
+      '/ws/架构图解.md',
+      [
+        '# 架构图解',
+        '',
+        '## 核心链路',
+        '',
+        '> 这条链路是主数据流：',
+        '> ```mermaid',
+        '> graph LR',
+        '>   A[画布] --> B{md 事实源}',
+        '>   B --> C[AI 协作]',
+        '> ```',
+        '',
+        '## 坏图',
+        '',
+        '> ```mermaid',
+        '> 这不是合法的 mermaid',
+        '> ```',
+        '',
+      ].join('\n'),
+    )
   })
 
   // 详情态：好图渲染出 SVG

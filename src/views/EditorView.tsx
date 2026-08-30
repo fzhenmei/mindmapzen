@@ -21,6 +21,8 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
+import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import IconPickerDialog from '../components/IconPickerDialog'
 import EditorCaption from '../components/EditorCaption'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
@@ -83,6 +85,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
   const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
+  // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
+  const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
 
   // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
   const nodePos = useNodeActions(mmRef, selection.activeUid)
@@ -244,6 +248,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           pos={nodePos}
           onNoteClick={noteEdit.openNoteDialog}
           onLinkClick={() => startLinkFromActive(mmRef.current)}
+          onIconClick={() =>
+            iconPick.openPicker(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeIconsOf(mmRef.current, selection.activeUidRef.current))
+          }
         />
       )}
       {/* 浮动砚栏（M5a 拆分至 ZenBar）：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
@@ -295,6 +302,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null
         }
       />
+      {/* 图标管理器（M18）：互斥优先级同上（guarding > confirming > 图标） */}
+      {iconPick.open && !guard.guarding && !flow.confirming && (
+        <IconPickerDialog
+          nodeText={iconPick.nodeText}
+          current={iconPick.icons}
+          onCancel={iconPick.close}
+          onConfirm={iconPick.apply}
+        />
+      )}
     </TooltipProvider></div>
   )
 }

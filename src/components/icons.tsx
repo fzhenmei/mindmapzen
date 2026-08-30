@@ -108,6 +108,16 @@ export const IconNote = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 节点图标入口（M18）：笑脸（圆脸 + 双点 + 弧口） */
+export const IconSmile = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M5.6 9.2c.5 1 1.3 1.6 2.4 1.6s1.9-.6 2.4-1.6" />
+      <path d="M5.8 6.2h.01M10.2 6.2h.01" />
+    </>,
+    size,
+  )
 /** 目录（M5a 案头移动导图用）：经典双栏文件夹轮廓 */
 export const IconFolder = ({ size }: IconProps) =>
   base(

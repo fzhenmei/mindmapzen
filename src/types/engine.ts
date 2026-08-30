@@ -78,6 +78,12 @@ export interface EngineCommand {
 export interface MindMapHandle {
   getData(): EngineNode
   execCommand(cmd: string, ...args: unknown[]): void
+  /** 引擎 opts 引用（构造入参原对象；iconList 等运行时可变项经此增补，M18） */
+  opt?: { iconList?: Array<{ type: string; list: Array<{ name: string; icon: string }> }> }
+  /** 设节点图标（M18）：宿主侧装配方法——按 uid 定位渲染节点 → node.setIcon
+   *  （nodeCommandWraps.js:18 → SET_NODE_ICON 命令，入历史、触发重渲）；
+   *  icons 为引擎 data.icon 形态（'zen_'+name） */
+  execCommandIcon?(uid: string, icons: string[]): void
   /** 事件订阅/退订（引擎 EventEmitter 委托，index.js:345/355；MindMapCanvas 经此等首帧渲染完成） */
   on(event: string, cb: (...args: unknown[]) => void): void
   off(event: string, cb: (...args: unknown[]) => void): void
