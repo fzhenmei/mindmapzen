@@ -43,9 +43,11 @@ const MD_COMPONENTS: Components = {
       {children}
     </p>
   ),
+  // 引用块（节点备注）：bg-card 上浮于内容区 muted 下陷底（原 bg-muted/60 在 muted
+  // 底上隐身，M15 分节改版连带换肤）+ 青松左条（语义装饰非分区线）
   blockquote: ({ node: _node, children, ...p }) => (
     <blockquote
-      className="mt-2 rounded-md border-l-2 border-primary/40 bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground"
+      className="mt-2 rounded-md border-l-2 border-primary/40 bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-xs"
       {...p}
     >
       {children}
