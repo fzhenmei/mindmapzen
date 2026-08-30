@@ -13,6 +13,7 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
+import { createImgTooltip, engineImgMapGet } from './imgTooltip'
 import { toEngineIconList } from './zenIcons'
 import {
   normalizeEngineOffsets,
@@ -339,14 +340,33 @@ export default function MindMapCanvas({
         | undefined
       node?.setIcon?.(icons)
     }
-    // 设节点插图（M19）：node.setImage（SET_NODE_IMAGE 命令，入历史）
+    // 设节点插图（M19）：node.setImage → SET_NODE_IMAGE 命令（Render.js:1760 setNodeImage
+    // 解构 { url, title, width, height, custom } 后落 data.image/imageTitle/imageSize——
+    // 装配层做形态转换；image 置空即移除）
     ;(mm as MindMapHandle).execCommandImage = (uid, imgData) => {
       const node = mm.renderer.findNodeByUid(uid) as
         | { setImage?(d: unknown): void }
         | null
         | undefined
-      node?.setImage?.(imgData)
+      node?.setImage?.({
+        url: imgData.image,
+        title: imgData.imageTitle,
+        width: imgData.imageSize.width,
+        height: imgData.imageSize.height,
+        custom: imgData.imageSize.custom,
+      })
     }
+    // 悬停看大图（M19 验收）：引擎 createImgNode 在图片元素上发 node_img_mouseenter/
+    // mouseleave（nodeCreateContents.js:81-84），经 imgTooltip 浮层显示原图（dataURL）
+    const imgTip = createImgTooltip()
+    mm.on('node_img_mouseenter', (...args: unknown[]) => {
+      const node = args[0] as { getData?(): { image?: unknown } } | null | undefined
+      const raw = node?.getData?.().image
+      if (typeof raw !== 'string' || raw === '') return
+      const url = engineImgMapGet(mm, raw)
+      if (url !== null) imgTip.show(url, args[2] as MouseEvent)
+    })
+    mm.on('node_img_mouseleave', () => imgTip.hide())
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；
@@ -401,6 +421,7 @@ export default function MindMapCanvas({
       mm.off('afterExecCommand', syncExpand)
       mm.destroy()
       tip.destroy()
+      imgTip.destroy()
       tipRef.current = null
       mmRef.current = null
     }

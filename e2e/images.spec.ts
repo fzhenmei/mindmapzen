@@ -21,10 +21,19 @@ test('插图：选图流——复制入 assets/、落盘行尾标记、画布渲
   await page.getByTestId('image-pick').click()
   await expect(page.getByTestId('image-preview').locator('img')).toBeVisible()
 
-  // 画布渲染：引擎图片元素在场（svg image，imgMap dataURL 源）
-  await expect(page.locator('.canvas-host image').first()).toBeVisible()
+  // 画布即时渲染：引擎图片元素 href 必须 dataURL（M19 验收实案：SET_NODE_IMAGE 命令
+  // 期望 {url,title,width,height,custom} 形态，传错形态时 image 元素缺位/空源——锁死）
+  const canvasImg = page.locator('.canvas-host image').first()
+  await expect(canvasImg).toBeVisible()
+  await expect(canvasImg).toHaveAttribute('href', /^data:image\/png;base64,/)
+
+  // 先关对话框（模态遮罩挡画布 hover），再验证悬停大图浮层（像 Note 一样悬停查看）
   await page.getByTestId('image-dialog').getByRole('button', { name: '关闭' }).click()
   await expect(page.getByTestId('image-dialog')).toBeHidden()
+  await canvasImg.hover()
+  await expect(page.getByTestId('zen-img-tip')).toBeVisible()
+  await page.getByTestId('btn-save').hover()
+  await expect(page.getByTestId('zen-img-tip')).toBeHidden()
 
   // 返回（显式保存）→ md 行尾标记落盘；assets/ 字节在盘
   await page.getByTestId('btn-back').click()
