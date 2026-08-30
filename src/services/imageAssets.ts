@@ -35,8 +35,17 @@ export async function buildImageMeta(
   wsDir: string,
   tree: ZenNode,
 ): Promise<Map<string, ImageMetaEntry>> {
+  return buildImageMetaFromSrcs(fs, wsDir, collectImageSrcs(tree))
+}
+
+/** 同上，按 src 集合构建（FileDetail 预览用：md 文本行级收集，无需 parse 成树） */
+export async function buildImageMetaFromSrcs(
+  fs: FsAdapter,
+  wsDir: string,
+  srcs: Iterable<string>,
+): Promise<Map<string, ImageMetaEntry>> {
   const map = new Map<string, ImageMetaEntry>()
-  for (const src of collectImageSrcs(tree)) {
+  for (const src of srcs) {
     try {
       const bytes = await fs.readBytes(joinPath(wsDir, src))
       const mime = mimeOf(src)

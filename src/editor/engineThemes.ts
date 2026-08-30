@@ -12,6 +12,10 @@ export const ENGINE_THEME_PAPER = {
   // 由 SVG.js 属性着色（CSS 直染会波及透明点击线）；取值与 @theme --color-line 同源（M12b Task 1 键）
   associativeLineColor: '#64707A',
   associativeLineWidth: 1.5,
+  // 节点插图缩略上限（M19 验收：大图会把导图搞得没法看）——96px 缩略 + 悬停浮层看
+  // 原图（imgTooltip）；引擎 default 200×100 偏大，主题显式收敛
+  imgMaxWidth: 96,
+  imgMaxHeight: 96,
   lineStyle: 'curve',
   rootLineKeepSameInCurve: true,
   paddingX: 14,

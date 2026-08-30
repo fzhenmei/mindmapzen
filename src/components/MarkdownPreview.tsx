@@ -1,3 +1,4 @@
+import { useMemo, type ComponentProps, type ReactElement } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { stripMarkers } from '../services/linkMarkers'
@@ -112,22 +113,35 @@ const MD_COMPONENTS: Components = {
   ),
 }
 
+/** 插图渲染器工厂（M19）：src 命中 imgMap 换 dataURL（相对路径在 webview 下 404）；
+ *  未命中（外链 http 等）原样；限幅圆角。工厂形态避免组件内定义组件（Sonar S6478） */
+const imgRenderer =
+  (imgMap?: ReadonlyMap<string, string>) =>
+  ({ src, alt, ...p }: ComponentProps<'img'>): ReactElement => {
+    const resolved = typeof src === 'string' && imgMap?.has(src) ? imgMap.get(src) : src
+    return <img src={resolved} alt={alt ?? ''} className="my-2 max-w-full rounded-md" {...p} />
+  }
+
 interface Props {
   /** 导图 md 原文（渲染前逐行过 stripMarkers——[[..]] 连线标记与画布显示层同口径隐藏） */
   text: string
+  /** 插图相对路径 → dataURL（M19：webview 解析不了工作区相对路径，FileDetail 构建传入；
+   *  未命中的 src（外链 http 等）原样渲染） */
+  imgMap?: ReadonlyMap<string, string>
 }
 
 /** markdown 预览（M15 文件详情态下层）：react-markdown + remark-gfm 渲染真实 md，
- *  样式与层级视觉见模块级 MD_COMPONENTS 注释 */
-export default function MarkdownPreview({ text }: Readonly<Props>) {
+ *  样式与层级视觉见模块级 MD_COMPONENTS 注释。img 经 imgMap 解析工作区相对路径（M19） */
+export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
   // 连线/图标标记按行剥离（标记永不跨行，与画布显示层同口径——md 原文仍是唯一事实源）
   const display = text
     .split('\n')
     .map((l) => stripIconMarkers(stripMarkers(l)))
     .join('\n')
+  const components = useMemo(() => ({ ...MD_COMPONENTS, img: imgRenderer(imgMap) }), [imgMap])
   return (
     <div data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {display}
       </ReactMarkdown>
     </div>
