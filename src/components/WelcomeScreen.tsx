@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from './ui/card'
+import AppLogo from './AppLogo'
 
 interface Props {
   /** 创建工作区入口（主按钮）与「选择已有文件夹」（次链接）语义同一：
@@ -26,17 +27,7 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
     >
       <Card className="w-96">
         <CardHeader className="text-center">
-          <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true" className="mx-auto">
-            <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
-            <path
-              d="M17 25l5 5 10-12"
-              stroke="var(--background)"
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <AppLogo size={48} className="mx-auto" />
           <CardTitle className="text-2xl font-semibold tracking-tight">Mind Map Zen</CardTitle>
           <CardDescription>想法落成 .md</CardDescription>
         </CardHeader>

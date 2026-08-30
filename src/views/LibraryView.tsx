@@ -9,6 +9,7 @@ import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
+import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import PreviewPane from '../components/PreviewPane'
@@ -196,17 +197,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-muted-foreground"
           data-testid="library-empty"
         >
-          <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
-            <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
-            <path
-              d="M17 25l5 5 10-12"
-              stroke="var(--background)"
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <AppLogo size={48} />
           <p className="text-sm">空白的纸。新建一张导图，让想法落成 .md。</p>
           <Button size="sm" data-testid="library-empty-new" onClick={() => setDialog('new')}>
             新建导图
@@ -317,17 +308,7 @@ export default function LibraryView({ pickDirectory, pickMdFile }: Readonly<Prop
           {/* 侧栏头：朱砂方印 + 品名（spec §4：印标 + Mind Map Zen） */}
           <SidebarHeader>
             <div className="flex items-center gap-2 px-2">
-              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
-                <rect x="8" y="8" width="32" height="32" rx="4" fill="var(--destructive)" />
-                <path
-                  d="M17 25l5 5 10-12"
-                  stroke="var(--background)"
-                  strokeWidth="3.5"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <AppLogo size={16} className="shrink-0" />
               <span className="truncate text-sm font-semibold text-sidebar-foreground">Mind Map Zen</span>
             </div>
           </SidebarHeader>
