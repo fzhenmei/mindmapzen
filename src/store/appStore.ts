@@ -31,7 +31,8 @@ interface AppState {
   exitWorkspace: () => Promise<void>
   refreshMaps: () => Promise<void>
   setSelectedDir: (rel: string) => void
-  createAndOpen: (name: string) => Promise<void>
+  /** 模板 md 可选参（M16）：传入即以模板实例化（根名替换为 name） */
+  createAndOpen: (name: string, templateContent?: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
@@ -107,11 +108,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSelectedDir: (rel) => set({ selectedDir: rel }),
 
-  createAndOpen: async (name) => {
+  createAndOpen: async (name, templateContent) => {
     const { adapter, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
     try {
-      const info = await createMap(adapter, workspaceDir, name, preferredLayout)
+      const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent)
       set({ currentMdPath: info.mdPath, route: 'editor', error: null })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })

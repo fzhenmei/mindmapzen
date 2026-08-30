@@ -1,4 +1,5 @@
 import type { FsAdapter, LayoutKind, MapInfo, Sidecar } from '../types/files'
+import { parse, serialize } from './mdTree'
 import { writeSidecar } from './sidecar'
 
 /** 导图/目录名的非法字符集（desk.ts 的 createDir 等按段复用） */
@@ -57,13 +58,21 @@ export async function createMap(
   wsDir: string,
   name: string,
   layout: LayoutKind = 'mindmap',
+  /** 模板 md（M16）：parse → 根节点文本替换为用户输入名 → serialize 落盘。
+   *  缺省/解析失败回退 '# 根主题\n'（模板不合法不阻断创建） */
+  templateContent?: string,
 ): Promise<MapInfo> {
   const trimmed = name.trim()
   if (trimmed === '') throw new Error('名称不能为空')
   if (INVALID.test(trimmed)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
   const mdPath = joinPath(wsDir, trimmed + '.md')
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
-  await fs.writeTextFileAtomic(mdPath, '# 根主题\n')
+  let content = '# 根主题\n'
+  if (templateContent !== undefined) {
+    const r = parse(templateContent)
+    if (r.ok) content = serialize({ ...r.tree, text: trimmed })
+  }
+  await fs.writeTextFileAtomic(mdPath, content)
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
   return { name: trimmed, mdPath, relDir: '', ...(await statTail(fs, mdPath)) }
 }
