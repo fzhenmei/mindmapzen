@@ -6,8 +6,8 @@ test('复制 md：整图与选中子树', async ({ page }) => {
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('复制测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
-  await page.getByText('根主题').first().click()
+  await expect(page.getByText('复制测试').first()).toBeVisible()
+  await page.getByText('复制测试').first().click()
   await page.keyboard.press('Tab')
   // 适配（同冒烟用例）：引擎「插入子节点 → 渲染 → 打开编辑框」异步链路，先等编辑框弹出再输入
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
@@ -30,7 +30,7 @@ test('复制 md：整图与选中子树', async ({ page }) => {
           (window as unknown as { __zenE2e: { lastCopied: string | null } }).__zenE2e.lastCopied,
       ),
     )
-    .toBe('# 根主题\n\n## 分支甲\n')
+    .toBe('# 复制测试\n\n## 分支甲\n')
   // 选中「分支甲」后复制 → 子树从 H1 重计（data-scope='branch' 确认选中态已同步）
   await page.getByText('分支甲').first().click()
   await expect(page.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'branch')

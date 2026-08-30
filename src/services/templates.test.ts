@@ -48,13 +48,13 @@ describe('createMap 模板实例化（workspace 联测）', () => {
     expect(md).toBe('# mind-map-zen\n\n## 目标\n\n### 一句话定位\n')
   })
 
-  test('不传模板 = 旧行为（# 根主题）；非法模板回退空图不阻断', async () => {
+  test('不传模板 = 空白导图（根节点=文件名）；非法模板回退空白不阻断', async () => {
     const { createMap } = await import('./workspace')
     await createMap(fs, '/ws', '普通图')
-    expect(await fs.readTextFile('/ws/普通图.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/普通图.md')).toBe('# 普通图\n')
     // 无标题的文本（parse 失败）
     await createMap(fs, '/ws', '坏模板图', 'mindmap', '这段 md 没有标题')
-    expect(await fs.readTextFile('/ws/坏模板图.md')).toBe('# 根主题\n')
+    expect(await fs.readTextFile('/ws/坏模板图.md')).toBe('# 坏模板图\n')
   })
 
   test(`${TEMPLATES_DIR} 目录在案头清单中正常可见（不隐藏，模板即普通导图）`, async () => {

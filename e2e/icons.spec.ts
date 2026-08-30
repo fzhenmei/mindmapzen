@@ -10,10 +10,10 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('图标图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('图标图').first()).toBeVisible()
 
   // 选中根节点 → 浮动条「图标」钮 → 管理器
-  await page.getByText('根主题').first().click()
+  await page.getByText('图标图').first().click()
   await page.getByTestId('node-action-icon').click()
   await expect(page.getByTestId('icon-dialog')).toBeVisible()
 
@@ -38,13 +38,13 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
       '/ws/图标图.md',
     ),
   )
-  expect(md).toContain('# 根主题 ::flag ::star')
+  expect(md).toContain('# 图标图 ::flag ::star')
 
   // 重开：管理器现状高亮（parse 提取回 icons）
   await page.getByTestId('dir-node-all').click()
   await page.getByTestId('map-item').filter({ hasText: '图标图' }).dblclick()
-  await expect(page.getByText('根主题').first()).toBeVisible()
-  await page.getByText('根主题').first().click()
+  await expect(page.getByText('图标图').first()).toBeVisible()
+  await page.getByText('图标图').first().click()
   await page.getByTestId('node-action-icon').click()
   await expect(page.getByTestId('icon-item-flag')).toHaveClass(/ring/)
   await expect(page.getByTestId('icon-item-star')).toHaveClass(/ring/)
@@ -58,7 +58,7 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
       '/ws/图标图.md',
     ),
   )
-  expect(md2).toContain('# 根主题 ::flag')
+  expect(md2).toContain('# 图标图 ::flag')
   expect(md2).not.toContain('::star')
 })
 

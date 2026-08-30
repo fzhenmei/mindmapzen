@@ -19,17 +19,17 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('连线测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('连线测试').first()).toBeVisible()
 
   // 建子节点 A（文本含 [[B]]）与 B：引擎「插入→渲染→弹编辑框」异步链路，先等框弹出再输入
-  await page.getByText('根主题').first().click()
+  await page.getByText('连线测试').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('A [[B]]')
   await page.getByRole('application').click({ position: { x: 15, y: 15 } })
   await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
 
-  await page.getByText('根主题').first().click()
+  await page.getByText('连线测试').first().click()
   await page.keyboard.press('Tab')
   await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
   await page.keyboard.type('B')
@@ -46,7 +46,7 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
       '/ws/连线测试.md',
     ),
   )
-  expect(md).toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
+  expect(md).toBe('# 连线测试\n\n## A [[B]]\n\n## B\n')
 
   // 返回案头重开：onReady 净化（建注册表 + 显示剥离）后按注册表重建，连线复现
   await page.getByTestId('btn-back').click()
@@ -68,11 +68,11 @@ test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('操作条测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('操作条测试').first()).toBeVisible()
 
   // 建叶节点 A 与 B：引擎「插入→渲染→弹编辑框」异步链路，先等框弹出再输入
   for (const label of ['A', 'B']) {
-    await page.getByText('根主题').first().click()
+    await page.getByText('操作条测试').first().click()
     await page.keyboard.press('Tab')
     await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
     await page.keyboard.type(label)
@@ -106,7 +106,7 @@ test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框
       '/ws/操作条测试.md',
     ),
   )
-  expect(md).toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
+  expect(md).toBe('# 操作条测试\n\n## A [[B]]\n\n## B\n')
 })
 
 // v0.7.0 验收修复（删线复活回归）：引擎 Del（removeLine 修剪 targets → data_change 置脏）→
@@ -118,11 +118,11 @@ test('节点连线：删除后不复活（自动保存移除 md 标记，重开�
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('删线测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('删线测试').first()).toBeVisible()
 
   // 建叶节点 A 与 B：引擎「插入→渲染→弹编辑框」异步链路，先等框弹出再输入
   for (const label of ['A', 'B']) {
-    await page.getByText('根主题').first().click()
+    await page.getByText('删线测试').first().click()
     await page.keyboard.press('Tab')
     await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
     await page.keyboard.type(label)
@@ -140,7 +140,7 @@ test('节点连线：删除后不复活（自动保存移除 md 标记，重开�
   await page.keyboard.press('Control+s')
   await expect
     .poll(() => readMd(page, '/ws/删线测试.md'), { timeout: 10_000 })
-    .toBe('# 根主题\n\n## A [[B]]\n\n## B\n')
+    .toBe('# 删线测试\n\n## A [[B]]\n\n## B\n')
 
   // 激活连线并删除：同一次 evaluate 内同步完成，规避引擎节流时序竞态——
   // ① headless 下 bbox 中心未必落在贝塞尔曲线上，真实坐标点击命中不稳：对透明点击线
@@ -169,7 +169,7 @@ test('节点连线：删除后不复活（自动保存移除 md 标记，重开�
   // 自动保存（5s 防抖）后 md 标记移除（注册表按引擎现态替换重建，不残留陈旧条目）
   await expect
     .poll(() => readMd(page, '/ws/删线测试.md'), { timeout: 15_000 })
-    .toBe('# 根主题\n\n## A\n\n## B\n')
+    .toBe('# 删线测试\n\n## A\n\n## B\n')
 
   // 重开不复活：md 是唯一事实源，无标记即无线
   await page.getByTestId('btn-back').click()

@@ -59,7 +59,8 @@ export async function createMap(
   name: string,
   layout: LayoutKind = 'mindmap',
   /** 模板 md（M16）：parse → 根节点文本替换为用户输入名 → serialize 落盘。
-   *  缺省/解析失败回退 '# 根主题\n'（模板不合法不阻断创建） */
+   *  缺省 = 空白导图，根节点即文件名（v2.0 验收：'根主题' 占位符退役）；
+   *  模板解析失败回退同缺省（不阻断创建） */
   templateContent?: string,
 ): Promise<MapInfo> {
   const trimmed = name.trim()
@@ -67,7 +68,7 @@ export async function createMap(
   if (INVALID.test(trimmed)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
   const mdPath = joinPath(wsDir, trimmed + '.md')
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
-  let content = '# 根主题\n'
+  let content = `# ${trimmed}\n`
   if (templateContent !== undefined) {
     const r = parse(templateContent)
     if (r.ok) content = serialize({ ...r.tree, text: trimmed })

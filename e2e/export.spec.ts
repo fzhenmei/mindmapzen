@@ -8,7 +8,7 @@ test('导出与复制为图片：三入口经端口桩可观测', async ({ page 
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('导出测试')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('导出测试').first()).toBeVisible()
 
   // 复制为图片：写剪贴板桩收到字节（长度 > 0）并盖「已复制」墨青印
   await page.getByTestId('btn-export').click()
@@ -50,7 +50,7 @@ test('导出 SVG：桩路径记录 .svg 扩展文件名', async ({ page }) => {
   await page.getByTestId('btn-new').click()
   await page.getByTestId('input-name').fill('矢量图')
   await page.getByTestId('btn-confirm').click()
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('矢量图').first()).toBeVisible()
   await page.getByTestId('btn-export').click()
   await page.getByTestId('export-svg').click()
   await expect

@@ -10,10 +10,10 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
   await page.getByTestId('btn-confirm').click()
 
   // 编辑器出现（真实引擎渲染根节点文本）
-  await expect(page.getByText('根主题').first()).toBeVisible()
+  await expect(page.getByText('测试图').first()).toBeVisible()
   // Tab 建子节点并录入中文：INSERT_CHILD_NODE 默认自动打开文本编辑框（inserting 行为），
   // 且编辑框内占位文本「二级节点」已被全选，keyboard.type 直接整体替换
-  await page.getByText('根主题').first().click()
+  await page.getByText('测试图').first().click()
   await page.keyboard.press('Tab')
   // 适配说明：引擎「插入子节点 → 渲染 → 打开编辑框」是异步链路，直接续打字会丢前几个字符，
   // 先等编辑框弹出（此时占位文本「二级节点」已被全选）再输入
@@ -43,5 +43,5 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
   )
   // 精确断言（M4 强化）：钉死完整序列化形态，杜绝 toContain 兜底。
   // 实际值经 __zenE2e.readFile 运行校对后写死（与 copy-import 整图断言同构，子节点名不同）
-  expect(md).toBe('# 根主题\n\n## 分支一\n')
+  expect(md).toBe('# 测试图\n\n## 分支一\n')
 })
