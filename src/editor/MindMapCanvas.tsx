@@ -12,6 +12,7 @@ import {
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
+import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import {
   normalizeEngineOffsets,
   resolveLinkOffsets,
@@ -245,11 +246,17 @@ export default function MindMapCanvas({
 }: Readonly<Props>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mmRef = useRef<MindMapHandle | null>(null)
+  // 备注悬停窗（M17b）：引擎官方通道 customNoteContentShow 接管渲染（mermaid 备注画布内成图）；
+  // tipRef 供主题 effect 引用
+  const tipRef = useRef<NoteTooltip | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
   const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, registry })
   cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, registry }
 
   useEffect(() => {
+    // 悬停窗先建后传（引擎构造期即可能注册 mouseover 钩子）；主题取挂载期值
+    const tip = createNoteTooltip(theme === 'zen-night' ? 'dark' : 'light')
+    tipRef.current = tip
     const mm = new MindMap({
       el: containerRef.current!,
       data: tree,
@@ -278,6 +285,12 @@ export default function MindMapCanvas({
           toNode,
           () => cbRef.current.onDataChange(), // 无载荷上报=必有变化：置脏 + 5s 自动保存链
         ),
+      // 备注悬停窗接管（M17b，nodeCreateContents.js:446-478 官方通道）：设置后引擎不建
+      // 内置 noteEl，mermaid 备注在画布悬停即成图（文本段转义、图源 strict SVG）
+      customNoteContentShow: {
+        show: (note: string, left: number, top: number) => tip.show(note, left, top),
+        hide: () => tip.hide(),
+      },
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
@@ -367,6 +380,8 @@ export default function MindMapCanvas({
       mm.off('data_change', changed)
       mm.off('afterExecCommand', syncExpand)
       mm.destroy()
+      tip.destroy()
+      tipRef.current = null
       mmRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时初始化，文档切换由父组件 key 重挂载实现
@@ -379,6 +394,8 @@ export default function MindMapCanvas({
     if (theme && themeRef.current !== theme) {
       themeRef.current = theme
       mmRef.current?.setTheme(theme)
+      // 悬停窗同随主题（显示中内容按新主题重渲染）
+      tipRef.current?.setTheme(theme === 'zen-night' ? 'dark' : 'light')
     }
   }, [theme])
 
