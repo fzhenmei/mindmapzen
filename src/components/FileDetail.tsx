@@ -86,6 +86,7 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
             <TooltipTrigger asChild>
               <Button
                 type="button"
+                variant="ghost"
                 size="icon-sm"
                 data-testid="btn-detail-open"
                 aria-label="打开导图"
@@ -98,8 +99,12 @@ export default function FileDetail({ info, onBack }: Readonly<Props>) {
           </Tooltip>
         </div>
       </div>
-      {/* 预览区：md 内容自渲染；包裹边框线（M15 验收）+ 白卡面与摘要条分层 */}
-      <div className="mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-lg border bg-card">
+      {/* 预览区：md 内容自渲染；包裹边框线（M15 验收）+ 白卡面与摘要条分层。
+          testid 为视觉冒烟回归锁（borderColor 必须等于 --border，防 currentColor 复发） */}
+      <div
+        data-testid="detail-preview-frame"
+        className="mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-lg border bg-card"
+      >
         {state.kind === 'text' ? (
           <MarkdownPreview text={state.text} />
         ) : (
