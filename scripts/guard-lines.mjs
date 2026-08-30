@@ -1,10 +1,11 @@
 // 视图行数护栏（M5a 台账裁定，M5c 多文件化）：跨 shell 的 node 实现，替代 bash 单行脚本
 // （.npmrc script-shell=bash 在 PowerShell 下会路由到 WSL bash 导致 node not found）。
 // M5c：单文件 LIMIT 升级为配置数组——EditorView ≤300（M5a 旧限）+ LibraryView ≤520（M5d 终审欠账）。
+// M18：EditorView 300→320（图标管理器接线：hook + NodeActions 钮 + 对话框渲染的功能性增长）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 300 },
+  { path: '../src/views/EditorView.tsx', limit: 320 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

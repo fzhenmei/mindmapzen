@@ -46,12 +46,10 @@ test('模板：工作区 templates/ 目录的用户模板可选可实例化', as
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
-  // 页面内写用户模板（dev server 动态 import，同 M15 验证手法）
+  // 页面内写用户模板（harness 通道——防裸 import 模块双实例，目录隐式推导无需 mkdir）
   await page.evaluate(async () => {
-    const m = await import('/src/store/appStore.ts')
-    const s = m.useAppStore.getState()
-    await s.adapter.mkdir('/ws/templates')
-    await s.adapter.writeTextFileAtomic('/ws/templates/周会.md', '# 周会模板\n\n## 本周进展\n\n## 下周计划\n')
+    const z = (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e
+    await z.writeFile('/ws/templates/周会.md', '# 周会模板\n\n## 本周进展\n\n## 下周计划\n')
   })
 
   await page.getByTestId('btn-new').click()

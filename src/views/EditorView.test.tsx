@@ -73,6 +73,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     fakeHandle = {
       getData: () => fakeTree,
       execCommand: vi.fn(),
+      // M18 图标：opts 引用与设图标入口（真实语义见 MindMapCanvas 装配）
+      opt: { iconList: [{ type: 'zen', list: [] }] },
+      execCommandIcon: vi.fn(),
       // 导出插件（M5b Task 5）：png/svg 返回固定 data URL（引擎真实返回为 base64 字符串，见 exportImage.test）
       doExport: {
         png: vi.fn(async () => pngDataUrl),

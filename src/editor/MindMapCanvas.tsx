@@ -13,6 +13,7 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
+import { toEngineIconList } from './zenIcons'
 import {
   normalizeEngineOffsets,
   resolveLinkOffsets,
@@ -291,6 +292,9 @@ export default function MindMapCanvas({
         show: (note: string, left: number, top: number) => tip.show(note, left, top),
         hide: () => tip.hide(),
       },
+      // 节点图标集（M18）：lucide 精选 64 经 iconList 通道注册（data.icon 'zen_'+name
+      // 解析到此处 svg）；全集新图标由 useIconPicker 运行时 push 进本数组
+      iconList: toEngineIconList(),
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
@@ -327,6 +331,14 @@ export default function MindMapCanvas({
     // 内部等首帧渲染完成后建注册表 → 剥离显示文本 → 按注册表重建连线（registry 经 cbRef 取最新引用）
     ;(mm as MindMapHandle).applyRegistry = (adjust?: LinkAdjust) =>
       applyRegistryToEngine(mm, cbRef.current.registry, adjust)
+    // 设节点图标（M18）：按 uid 定位渲染节点 → node.setIcon（SET_NODE_ICON 命令，入历史）
+    ;(mm as MindMapHandle).execCommandIcon = (uid, icons) => {
+      const node = mm.renderer.findNodeByUid(uid) as
+        | { setIcon?(icons: string[]): void }
+        | null
+        | undefined
+      node?.setIcon?.(icons)
+    }
     cbRef.current.onReady(mm)
 
     // 键盘录入走 window 层：焦点在 body/SVG 时容器级监听收不到事件；

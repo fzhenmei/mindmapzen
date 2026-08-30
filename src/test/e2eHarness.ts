@@ -16,6 +16,13 @@ export async function installE2eHarness(): Promise<void> {
     async readFile(path: string): Promise<string> {
       return fs.readTextFile(path)
     },
+    // 写内存工作区并刷新案头清单（M18 起 spec 预置用）。注意必须走本通道而非
+    // evaluate 裸动态 import store——HMR 失效后裸 URL 会解析出与 app 不同的
+    // 模块实例（store 初始态），本方法持 harness 装配时的真实引用（已实证）
+    async writeFile(path: string, text: string): Promise<void> {
+      await fs.writeTextFileAtomic(path, text)
+      await useAppStore.getState().refreshMaps()
+    },
     // 剪贴板桩：App E2E 装配的 writeClipboard 将复制内容记录于此，供 spec 断言
     lastCopied: null as string | null,
     // 导出端口桩（M5b Task 5）：App E2E 装配的 pickSavePath 记录导出路径；
