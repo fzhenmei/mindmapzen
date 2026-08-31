@@ -46,9 +46,11 @@ interface Props {
   exitApp: () => void
   /** 选图端口（M19 插图）：生产为 Tauri 对话框 + readFile 字节；E2E harness 桩 */
   pickImageFile: () => Promise<{ name: string; bytes: Uint8Array } | null>
+  /** 剪贴板读图端口（粘贴截图）：生产为 Tauri readImage + Canvas 编码 PNG；E2E harness 桩 */
+  readClipboardImage: () => Promise<{ name: string; bytes: Uint8Array } | null>
 }
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile }: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
@@ -93,9 +95,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
-  // 插图编辑（M19）：选图复制入 assets/ + imgMap 运行时注入 + SET_NODE_IMAGE
-  const imageEdit = useImageEdit(mmRef, selection.activeUidRef, adapter, workspaceDir, pickImageFile, () =>
-    pipeline.onTreeDataChange(),
+  // 插图编辑（M19 + 粘贴截图）：选图/粘贴复制入 assets/ + imgMap 运行时注入 + SET_NODE_IMAGE
+  const imageEdit = useImageEdit(
+    mmRef,
+    selection.activeUidRef,
+    adapter,
+    workspaceDir,
+    pickImageFile,
+    readClipboardImage,
+    () => pipeline.onTreeDataChange(),
   )
 
   // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
@@ -329,13 +337,16 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onConfirm={iconPick.apply}
         />
       )}
-      {/* 插图（M19）：互斥优先级同上 */}
+      {/* 插图（M19 + 粘贴截图）：互斥优先级同上 */}
       {imageEdit.open && !guard.guarding && !flow.confirming && (
         <ImageDialog
           nodeText={imageEdit.nodeText}
           current={imageEdit.current}
           preview={imageEdit.preview}
+          pasteError={imageEdit.pasteError}
           onPick={() => void imageEdit.pickAndApply()}
+          onPaste={(image) => void imageEdit.pasteAndApply(image)}
+          onPasteClick={() => void imageEdit.pasteFromClipboard()}
           onRemove={imageEdit.remove}
           onCancel={imageEdit.close}
         />

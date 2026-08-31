@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // M19 节点插图：行尾 ![alt](src)（md 原生语法零发明；src 相对工作区，AI 可读写）。
 // 管理链路（选图→复制 assets/→落盘标记→重开预览）与手写/AI 链路（直接改 md）。
+// 粘贴截图：Ctrl+V（paste 事件）与「粘贴」按钮（harness 桩）双路径 + 空剪贴板提示。
 
 test('插图：选图流——复制入 assets/、落盘行尾标记、画布渲染、重开预览', async ({ page }) => {
   test.setTimeout(30_000)
@@ -80,6 +81,107 @@ test('插图：手写/AI 改 md 标记 → 打开即渲染；文件缺失宽容�
   )
   expect(md).toContain('# 手写插图 ![配图](assets/hand.png)')
   expect(md).toContain('## 缺失 ![丢图](assets/gone.png)')
+})
+
+test('插图：粘贴按钮路径——读剪贴板桩、复制入 assets/、落盘 paste- 时间戳标记', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('粘贴图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('粘贴图').first()).toBeVisible()
+
+  // 选中根 → 插图对话框 → 点「粘贴」（harness 桩 readClipboardImage 默认 1×1 PNG）
+  await page.getByText('粘贴图').first().click()
+  await page.getByTestId('node-action-image').click()
+  await expect(page.getByTestId('image-dialog')).toBeVisible()
+  await page.getByTestId('image-paste').click()
+
+  // 预览 img 出现 + 画布即时渲染 dataURL（与选图链路同款形态断言）
+  await expect(page.getByTestId('image-preview').locator('img')).toBeVisible()
+  const canvasImg = page.locator('.canvas-host image').first()
+  await expect(canvasImg).toHaveAttribute('href', /^data:image\/png;base64,/)
+
+  // 落盘：行尾标记 alt/src 均为 paste- 时间戳名
+  await page.getByTestId('image-dialog').getByRole('button', { name: '关闭' }).click()
+  await page.getByTestId('btn-back').click()
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/粘贴图.md',
+    ),
+  )
+  expect(md).toMatch(/# 粘贴图 !\[paste-\d{8}-\d{6}\]\(assets\/paste-\d{8}-\d{6}\.png\)/)
+})
+
+test('插图：Ctrl+V 路径——paste 事件同步读图并应用', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('快贴图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('快贴图').first()).toBeVisible()
+  await page.getByText('快贴图').first().click()
+  await page.getByTestId('node-action-image').click()
+  await expect(page.getByTestId('image-dialog')).toBeVisible()
+
+  // 合成 paste 事件（真实微信/QQ 场景由 WebView2 把剪贴板位图合成 image/png 条目，
+  // 此处同构：DataTransfer + File(image/png) + ClipboardEvent dispatch 到对话框）
+  await page.evaluate(() => {
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+      0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+      0x42, 0x60, 0x82,
+    ])
+    const dt = new DataTransfer()
+    dt.items.add(new File([png], 'shot.png', { type: 'image/png' }))
+    const dialog = document.querySelector('[data-testid="image-dialog"]')
+    dialog?.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+
+  // 预览 img 出现（paste 事件路径经 bytesFromPasteEvent → pasteAndApply → imgMap 注入）
+  await expect(page.getByTestId('image-preview').locator('img')).toBeVisible()
+  await page.getByTestId('image-dialog').getByRole('button', { name: '关闭' }).click()
+  await page.getByTestId('btn-back').click()
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/快贴图.md',
+    ),
+  )
+  expect(md).toMatch(/# 快贴图 !\[paste-\d{8}-\d{6}\]\(assets\/paste-\d{8}-\d{6}\.png\)/)
+})
+
+test('插图：剪贴板无图——按钮与 Ctrl+V 均提示「剪贴板中没有图片」，插图不被改动', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('空板图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('空板图').first()).toBeVisible()
+  await page.getByText('空板图').first().click()
+  await page.getByTestId('node-action-image').click()
+  await expect(page.getByTestId('image-dialog')).toBeVisible()
+
+  // 按钮路径：覆写桩返回 null（剪贴板无图）
+  await page.evaluate(() => {
+    ;(window as unknown as { __zenE2e: { readClipboardImage: () => Promise<null> } }).__zenE2e.readClipboardImage =
+      async () => null
+  })
+  await page.getByTestId('image-paste').click()
+  await expect(page.getByTestId('paste-error')).toHaveText('剪贴板中没有图片')
+  // 仍是无图占位，未产生画布图片
+  await expect(page.getByTestId('image-preview')).toContainText('未设置插图')
+  await expect(page.locator('.canvas-host image')).toHaveCount(0)
+
+  // Ctrl+V 路径：只有文本的剪贴板 → 同款提示
+  await page.evaluate(() => {
+    const dt = new DataTransfer()
+    dt.items.add(new File(['字'], 't.txt', { type: 'text/plain' }))
+    const dialog = document.querySelector('[data-testid="image-dialog"]')
+    dialog?.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  await expect(page.getByTestId('paste-error')).toHaveText('剪贴板中没有图片')
 })
 
 // M19 验收补：详情态 markdown 预览渲染图片（相对路径经 imgMap 解析为 dataURL）

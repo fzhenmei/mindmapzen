@@ -3,6 +3,7 @@ import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
+import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -72,6 +73,27 @@ const pickImageFile = async (): Promise<{ name: string; bytes: Uint8Array } | nu
   const name = picked.split(/[\\/]/).pop()!
   const bytes = await readFile(picked)
   return { name, bytes }
+}
+
+/** 生产读剪贴板图（粘贴截图「粘贴」按钮路径）：Tauri 插件 readImage 取 RGBA 裸像素
+ *  （微信/QQ 截图的位图数据原生可读）→ Canvas 编码 PNG 字节。剪贴板无图/读取失败
+ *  统一返回 null（hook 提示「剪贴板中没有图片」）。E2E web 模式读 harness 桩。 */
+const readClipboardImage = async (): Promise<{ name: string; bytes: Uint8Array } | null> => {
+  if (E2E) {
+    return (
+      (window as unknown as { __zenE2e?: { readClipboardImage(): Promise<{ name: string; bytes: Uint8Array } | null> } })
+        .__zenE2e?.readClipboardImage() ?? null
+    )
+  }
+  try {
+    const { readImage } = await import('@tauri-apps/plugin-clipboard-manager')
+    const img = await readImage()
+    const { width, height } = await img.size()
+    const bytes = await rgbaToPngBytes(width, height, await img.rgba())
+    return { name: pasteImageName('png'), bytes }
+  } catch {
+    return null
+  }
 }
 
 /** 生产关闭守卫：Tauri onCloseRequested → handler。动态 import 不阻塞渲染；
@@ -246,6 +268,7 @@ export default function App() {
         registerCloseGuard={registerCloseGuard}
         exitApp={exitApp}
         pickImageFile={pickImageFile}
+        readClipboardImage={readClipboardImage}
       />
     )
   }

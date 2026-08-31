@@ -41,6 +41,16 @@ export const IconCopy = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 粘贴（剪贴板+内容条）：外框圆角矩形 + 顶部夹片 + 两条内容线 */
+export const IconPaste = ({ size }: IconProps) =>
+  base(
+    <>
+      <rect x="3" y="4.5" width="10" height="10" rx="1.5" />
+      <path d="M6 4.5V3.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" />
+      <path d="M6 9h4M6 12h2" />
+    </>,
+    size,
+  )
 export const IconMinus = ({ size }: IconProps) => base(<path d="M4 8h8" />, size)
 export const IconPlus = ({ size }: IconProps) => base(<path d="M8 4v8M4 8h8" />, size)
 export const IconCrosshair = ({ size }: IconProps) =>
