@@ -8,6 +8,7 @@ import { parseXmind } from '../services/xmindImport'
 import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
+import HistoryDialog from '../components/HistoryDialog'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
@@ -61,7 +62,7 @@ interface ImportPreview {
 export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const store = useAppStore.getState()
-  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | null>(null)
+  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | 'history' | null>(null)
   // 重命名/删除/移动对话框当前操作的导图（由所在 tile 的按钮选定，而非 maps[0]）
   const [target, setTarget] = useState<MapInfo | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
@@ -392,6 +393,7 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
           workspaceDir:null 回开屏页（无工作区分支渲染 WelcomeScreen） */}
       {dialog === 'settings' && (
         <SettingsDialog
+          onOpenHistory={() => setDialog('history')}
           onClose={() => setDialog(null)}
           onChangeWorkspace={() => {
             setDialog(null)
@@ -403,6 +405,8 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
           }}
         />
       )}
+      {/* 版本历史/回滚（M22）：从设置页打开（Radix modal 互斥，settings 先关再开本框） */}
+      {dialog === 'history' && <HistoryDialog onClose={() => setDialog(null)} />}
       {dialog === 'rename' && target && (
         <NameDialog
           title="重命名导图"

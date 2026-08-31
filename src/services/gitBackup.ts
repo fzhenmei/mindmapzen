@@ -88,3 +88,46 @@ export async function gitStatusInfo(wsDir: string, run: GitRun): Promise<GitStat
   const m = sb.out.match(/ahead (\d+)/)
   return { lastCommit: log.out.trim(), aheadCount: m !== null ? Number(m[1]) : 0 }
 }
+
+export interface HistoryEntry {
+  /** 短哈希 */
+  hash: string
+  /** 提交时间（原始 %ci 格式） */
+  date: string
+  /** 提交消息首行 */
+  message: string
+}
+
+/** 版本历史（M22 回滚 UI）：最近 limit 条提交（新→旧）；无仓库/无提交返回空数组 */
+export async function gitHistory(wsDir: string, run: GitRun, limit = 50): Promise<HistoryEntry[]> {
+  const log = await run(wsDir, ['log', `-${limit}`, '--format=%h%x9%ci%x9%s'])
+  if (!log.ok) return []
+  return log.out
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => {
+      const [hash = '', date = '', ...msg] = l.split('\t')
+      return { hash, date, message: msg.join('\t') }
+    })
+}
+
+/** 恢复到指定版本（M22）：工作区文件整体回到该提交内容，**以新提交落盘**——
+ *  历史只增不改（git checkout <hash> -- . 后自动 commit），回滚本身可再回滚；
+ *  工作区若有未提交变更一并被覆盖（入口在案头设置页，编辑器内无在途内容）。
+ *  返回 null=成功，否则中文错误 */
+export async function restoreToVersion(
+  wsDir: string,
+  hash: string,
+  run: GitRun,
+): Promise<string | null> {
+  const checkout = await run(wsDir, ['checkout', hash, '--', '.'])
+  if (!checkout.ok) return `恢复失败：${checkout.err.split('\n')[0] ?? ''}`
+  // 变更落为新提交（无变更时 commit 失败=无差异，视为成功）
+  await run(wsDir, ['add', '-A'])
+  const stamp = new Date().toLocaleString('zh-CN')
+  const commit = await run(wsDir, ['commit', '-m', `回滚到 ${hash} · ${stamp}`])
+  if (!commit.ok && !/nothing to commit|无|no changes/i.test(commit.out + commit.err)) {
+    return `提交回滚失败：${commit.err.split('\n')[0] ?? ''}`
+  }
+  return null
+}

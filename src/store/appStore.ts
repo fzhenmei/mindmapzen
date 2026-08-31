@@ -4,7 +4,7 @@ import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
-import { checkAndBackup, gitStatusInfo, type GitStatusInfo } from '../services/gitBackup'
+import { checkAndBackup, gitHistory, gitStatusInfo, restoreToVersion, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
 import type { GitRun } from '../types/ports'
 
 interface AppState {
@@ -34,6 +34,8 @@ interface AppState {
   lastBackup: string | null
   /** 仓库状态（设置页显示） */
   gitStatus: GitStatusInfo
+  /** 版本历史（M22 回滚 UI）：最近提交列表；空 = 无仓库/未加载 */
+  gitHistoryList: HistoryEntry[]
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -53,6 +55,11 @@ interface AppState {
   backupNow: () => Promise<void>
   /** 刷新仓库状态（设置页打开时） */
   refreshGitStatus: () => Promise<void>
+  /** 拉取版本历史（M22 历史对话框打开时） */
+  fetchGitHistory: () => Promise<void>
+  /** 恢复到指定版本（M22）：工作区文件回到该提交（新提交落盘），刷新案头清单与状态。
+   *  返回 null=成功，否则中文错误（对话框显示） */
+  restoreVersion: (hash: string) => Promise<string | null>
   markDirty: () => void
   clearDirty: () => void
   backToLibrary: () => Promise<void>
@@ -77,6 +84,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   gitRun: null,
   lastBackup: null,
   gitStatus: { lastCommit: null, aheadCount: null },
+  gitHistoryList: [],
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -192,6 +200,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { gitRun, workspaceDir } = get()
     if (gitRun === null || workspaceDir === null) return
     set({ gitStatus: await gitStatusInfo(workspaceDir, gitRun) })
+  },
+
+  fetchGitHistory: async () => {
+    const { gitRun, workspaceDir } = get()
+    if (gitRun === null || workspaceDir === null) return
+    set({ gitHistoryList: await gitHistory(workspaceDir, gitRun) })
+  },
+
+  restoreVersion: async (hash) => {
+    const { gitRun, workspaceDir } = get()
+    if (gitRun === null || workspaceDir === null) return '未启用版本管理'
+    const err = await restoreToVersion(workspaceDir, hash, gitRun)
+    if (err !== null) return err
+    await get().refreshMaps()
+    await get().refreshGitStatus()
+    await get().fetchGitHistory()
+    return null
   },
 
   openMap: async (mdPath) => {

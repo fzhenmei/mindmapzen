@@ -11,6 +11,8 @@ interface SettingsDialogProps {
   onChangeWorkspace?: () => void
   /** 退出工作区入口（v0.7.0 验收）：清 workspaceDir 回开屏页；未注入则隐藏该行 */
   onExitWorkspace?: () => void
+  /** 版本历史入口（M22）：打开历史/回滚对话框；未注入则隐藏该钮 */
+  onOpenHistory?: () => void
 }
 
 /** 开关行（M12b Task 5 转 utility）：checkbox 走 primary 强调色 */
@@ -20,7 +22,7 @@ const SETTING_ROW = 'flex cursor-pointer select-none items-center gap-2'
  *  改动即生效——toggle 直写 store 并 load-merge-save 持久化，无确认按钮，关闭即退出。
  *  M5d 增「更换工作区」行（M5a 缓期项：无工作区切换入口）；
  *  v0.7.0 增「退出工作区（回到开屏）」行 */
-export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorkspace }: Readonly<SettingsDialogProps>) {
+export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorkspace, onOpenHistory }: Readonly<SettingsDialogProps>) {
   const settings = useAppStore((s) => s.settings)
   const setSetting = useAppStore((s) => s.setSetting)
   const workspaceDir = useAppStore((s) => s.workspaceDir) // 更换工作区行显示当前路径
@@ -99,9 +101,16 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                       : '尚无提交'}
                     {lastBackup !== null ? ` · ${lastBackup}` : ''}
                   </span>
-                  <Button variant="secondary" size="sm" data-testid="git-backup-now" onClick={() => void backupNow()}>
-                    立即备份
-                  </Button>
+                  <span className="flex shrink-0 gap-1">
+                    {onOpenHistory && (
+                      <Button variant="secondary" size="sm" data-testid="git-history-open" onClick={onOpenHistory}>
+                        历史
+                      </Button>
+                    )}
+                    <Button variant="secondary" size="sm" data-testid="git-backup-now" onClick={() => void backupNow()}>
+                      立即备份
+                    </Button>
+                  </span>
                 </div>
               </>
             )}
