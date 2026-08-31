@@ -25,12 +25,15 @@ import {
   IconPlus,
   IconRedo,
   IconSave,
+  IconSwitch,
   IconUndo,
 } from './icons'
 
 interface Props {
   /** 返回文件库（EditorView 组合：暂停自动保存 → 显式保存链 → 成功才导航） */
   onBack(): void
+  /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
+  onSwitchClick(): void
   /** 回退/重做（v1.1，想法5）：引擎 BACK/FORWARD 命令 + back_forward 历史态驱动的禁用信号
    *  （状态与执行在 EditorView 的 useUndoRedo；键盘 Ctrl+Z/Y 走引擎原生与画布兜底，命令栏只是按钮路径） */
   undoRedo: UndoRedo
@@ -71,6 +74,7 @@ function Tip({ label, children }: Readonly<{ label: string; children: ReactNode 
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
   onBack,
+  onSwitchClick,
   undoRedo,
   onCopyClick,
   scope,
@@ -105,6 +109,18 @@ export default function ZenBar({
           onClick={onBack}
         >
           <IconArrowLeft />
+        </Button>
+      </Tip>
+      <Tip label="切换导图（Ctrl+P）">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-switch"
+          aria-label="切换导图（Ctrl+P）"
+          onClick={onSwitchClick}
+        >
+          <IconSwitch />
         </Button>
       </Tip>
       <Separator orientation="vertical" className="mx-1" />

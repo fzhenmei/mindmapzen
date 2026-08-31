@@ -3,10 +3,11 @@
 // M5c：单文件 LIMIT 升级为配置数组——EditorView ≤300（M5a 旧限）+ LibraryView ≤520（M5d 终审欠账）。
 // M18：EditorView 300→320（图标管理器接线：hook + NodeActions 钮 + 对话框渲染的功能性增长）。
 // M19：EditorView 320→360（插图：打开链 imgMeta 构建 + useImageEdit 接线 + ImageDialog 渲染）。
+// v2.5：EditorView 360→380（快速切换：逻辑已拆 useQuickSwitch，浮层渲染 + 砚栏钮 + 快捷键接线）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 360 },
+  { path: '../src/views/EditorView.tsx', limit: 380 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

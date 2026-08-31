@@ -22,6 +22,17 @@ const base = (d: ReactNode, size = 16) => (
 )
 
 export const IconArrowLeft = ({ size }: IconProps) => base(<path d="M10 3 5 8l5 5" />, size)
+/** 切换导图（v2.5 快速切换）：左右双向箭头上下错行（⇄），行高对齐 16 网格 */
+export const IconSwitch = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M13 4.5H3" />
+      <path d="M6 1.5l-3 3 3 3" />
+      <path d="M3 11.5h10" />
+      <path d="M10 8.5l3 3-3 3" />
+    </>,
+    size,
+  )
 /** 保存（经典软盘，验收修复 2）：外轮廓（右上斜切+圆角）+ 底部门 + 顶部标签槽，
  *  24→16 缩放（÷1.5）自 lucide save，几何已核（圆角圆心均落在角内 3.3/11.7 网格上） */
 export const IconSave = ({ size }: IconProps) =>
