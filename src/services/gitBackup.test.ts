@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { checkAndBackup, gitStatusInfo, type GitConfig } from './gitBackup'
+import { checkAndBackup, gitHistory, gitStatusInfo, restoreToVersion, type GitConfig } from './gitBackup'
 import type { GitRun } from '../types/ports'
 
 /** 记录型桩：按命令模式回放预设应答（args.join(' ') 前缀匹配） */
@@ -103,5 +103,35 @@ describe('gitStatusInfo', () => {
     })
     const empty = makeRun([{ match: 'log', ok: false }])
     expect(await gitStatusInfo('/ws', empty.run)).toEqual({ lastCommit: null, aheadCount: null })
+  })
+})
+
+describe('版本历史与回滚（M22）', () => {
+  test('gitHistory：制表符分隔解析（新→旧），无仓库空数组', async () => {
+    const ok = makeRun([
+      { match: 'log -50', ok: true, out: "abc1234\t2026-08-31 10:00:00 +0800\t自动备份 · 3 文件变更\ndef5678\t2026-08-31 09:00:00 +0800\t回滚到 abc1234\n" },
+    ])
+    const list = await gitHistory('/ws', ok.run)
+    expect(list).toHaveLength(2)
+    expect(list[0]).toEqual({ hash: 'abc1234', date: '2026-08-31 10:00:00 +0800', message: '自动备份 · 3 文件变更' })
+    expect(list[1]?.message).toBe('回滚到 abc1234')
+    const empty = makeRun([{ match: 'log', ok: false }])
+    expect(await gitHistory('/ws', empty.run)).toEqual([])
+  })
+
+  test('restoreToVersion：checkout <hash> -- . + add -A + 回滚提交；无差异也视为成功', async () => {
+    const ok = makeRun([{ match: 'checkout', ok: true }, { match: 'commit', ok: true }])
+    expect(await restoreToVersion('/ws', 'abc1234', ok.run)).toBeNull()
+    expect(ok.calls.some((c) => c.startsWith('checkout abc1234 -- .'))).toBe(true)
+    const noDiff = makeRun([
+      { match: 'checkout', ok: true },
+      { match: 'commit', ok: false, out: 'On branch master\nnothing to commit, working tree clean\n' },
+    ])
+    expect(await restoreToVersion('/ws', 'abc1234', noDiff.run)).toBeNull()
+  })
+
+  test('checkout 失败中文回报', async () => {
+    const bad = makeRun([{ match: 'checkout', ok: false, err: 'fatal: bad object' }])
+    expect(await restoreToVersion('/ws', 'xx', bad.run)).toContain('恢复失败')
   })
 })
