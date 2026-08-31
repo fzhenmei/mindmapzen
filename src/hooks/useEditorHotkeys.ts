@@ -21,11 +21,11 @@ interface Params {
   anyDialogRef: RefObject<boolean>
   /** 呼出快速切换浮层（Ctrl+P；v2.5） */
   openQuickSwitch(): void
-  /** ping-pong 切上一张导图（Ctrl+Tab；v2.5） */
-  pingPong(): void
+  /** Ctrl+Tab 步进（v2.5：呼出轮换浮层/循环移动高亮，Shift 反向；落定在 keyup Ctrl，见 useQuickSwitch） */
+  cycleStep(reverse: boolean): void
 }
 
-export function useEditorHotkeys({ doCopy, explicitSave, openNoteDialog, activeUidRef, anyDialogRef, openQuickSwitch, pingPong }: Params): void {
+export function useEditorHotkeys({ doCopy, explicitSave, openNoteDialog, activeUidRef, anyDialogRef, openQuickSwitch, cycleStep }: Params): void {
   useEffect(() => {
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
@@ -38,16 +38,15 @@ export function useEditorHotkeys({ doCopy, explicitSave, openNoteDialog, activeU
         explicitSave()
         return true
       }
-      // 切换族（v2.5）：浮层/对话框互斥期 no-op——浮层开着时 Tab 不抢其内部导航
-      if (!anyDialogRef.current) {
-        if (e.key === 'Tab') {
-          pingPong()
-          return true
-        }
-        if (k === 'p') {
-          openQuickSwitch()
-          return true
-        }
+      // 切换族（v2.5）：对话框互斥期 no-op。轮换浮层开着时 Tab 由 useQuickSwitch 的
+      // 捕获监听接管（stopPropagation 截停，本监听收不到），不受此守卫影响
+      if (e.key === 'Tab' && !anyDialogRef.current) {
+        cycleStep(e.shiftKey)
+        return true
+      }
+      if (k === 'p' && !anyDialogRef.current) {
+        openQuickSwitch()
+        return true
       }
       return false
     }

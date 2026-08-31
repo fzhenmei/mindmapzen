@@ -23,7 +23,7 @@ const activeItem = (): HTMLElement =>
 describe('QuickSwitchDialog（编辑器内快速切换浮层）', () => {
   test('渲染候选并自动聚焦输入框，首项默认高亮', () => {
     renderDialog()
-    expect(screen.getAllByTestId('switch-item').length).toBe(3)
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(3)
     expect(screen.getByTestId('switch-input')).toBe(document.activeElement)
     expect(activeItem().textContent).toContain('周会')
   })
@@ -31,11 +31,11 @@ describe('QuickSwitchDialog（编辑器内快速切换浮层）', () => {
   test('输入过滤：名称大小写不敏感、目录名也可命中', () => {
     renderDialog()
     fireEvent.change(screen.getByTestId('switch-input'), { target: { value: '架构' } })
-    expect(screen.getAllByTestId('switch-item').length).toBe(1)
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(1)
     fireEvent.change(screen.getByTestId('switch-input'), { target: { value: '会 议'.slice(0, 2) } })
-    expect(screen.getAllByTestId('switch-item').length).toBe(1)
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(1)
     fireEvent.change(screen.getByTestId('switch-input'), { target: { value: ' nonexistent ' } })
-    expect(screen.queryAllByTestId('switch-item').length).toBe(0)
+    expect(screen.queryAllByTestId('switch-item')).toHaveLength(0)
     expect(screen.getByTestId('switch-empty')).toBeInTheDocument()
   })
 
@@ -71,5 +71,36 @@ describe('QuickSwitchDialog（编辑器内快速切换浮层）', () => {
     fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(onPick).not.toHaveBeenCalled()
+  })
+})
+
+// ---- cycle 模式（Ctrl+Tab 按住轮换，v2.5）：无输入框、高亮受控（Tab 轮换在 useQuickSwitch） ----
+describe('QuickSwitchDialog cycle 模式', () => {
+  test('隐藏输入框，高亮由 cycleActive 受控', () => {
+    const onPick = vi.fn()
+    render(<QuickSwitchDialog candidates={candidates} cycleActive={1} onPick={onPick} onClose={vi.fn()} />)
+    expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(3)
+    expect(activeItem().textContent).toContain('读书') // 受控第 2 项，非默认首项
+  })
+
+  test('受控高亮跟随 rerender 变化，hover 条目经 onActiveChange 上报', () => {
+    const onActiveChange = vi.fn()
+    const { rerender } = render(
+      <QuickSwitchDialog candidates={candidates} cycleActive={0} onActiveChange={onActiveChange} onPick={vi.fn()} onClose={vi.fn()} />,
+    )
+    rerender(
+      <QuickSwitchDialog candidates={candidates} cycleActive={2} onActiveChange={onActiveChange} onPick={vi.fn()} onClose={vi.fn()} />,
+    )
+    expect(activeItem().textContent).toContain('架构')
+    fireEvent.mouseEnter(screen.getAllByTestId('switch-item')[1])
+    expect(onActiveChange).toHaveBeenCalledWith(1)
+  })
+
+  test('点击条目照常立即切换', () => {
+    const onPick = vi.fn()
+    render(<QuickSwitchDialog candidates={candidates} cycleActive={0} onPick={onPick} onClose={vi.fn()} />)
+    fireEvent.click(screen.getAllByTestId('switch-item')[2])
+    expect(onPick).toHaveBeenCalledWith('/ws/项目/架构.md')
   })
 })

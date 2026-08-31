@@ -205,8 +205,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }, [])
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
-  // v2.5：切换浮层同列互斥（开着时 Ctrl+Tab/Ctrl+P 不再响应，Tab 归浮层内部导航）
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen
+  // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -217,7 +217,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     activeUidRef: selection.activeUidRef,
     anyDialogRef,
     openQuickSwitch: quick.open,
-    pingPong: quick.pingPong,
+    cycleStep: quick.cycleStep,
   })
 
   useEffect(() => {
@@ -357,12 +357,16 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onCancel={imageEdit.close}
         />
       )}
-      {/* 快速切换浮层（v2.5）：互斥优先级同上（guarding > confirming > 浮层） */}
-      {quick.switchOpen && !guard.guarding && !flow.confirming && (
+      {/* 快速切换浮层（v2.5）：互斥优先级同上（guarding > confirming > 浮层）。
+          两形态互斥共用组件：搜索态（Ctrl+P，输入过滤高亮自管）/ 轮换态（Ctrl+Tab
+          按住，受控高亮无输入框）——cycleActive 传 undefined 即搜索态 */}
+      {!guard.guarding && !flow.confirming && (quick.switchOpen || quick.cycle !== null) && (
         <QuickSwitchDialog
-          candidates={quick.candidates}
+          candidates={quick.cycle !== null ? quick.cycleCandidates : quick.candidates}
+          cycleActive={quick.cycle ?? undefined}
+          onActiveChange={quick.setCycleActive}
           onPick={(p) => void quick.switchTo(p)}
-          onClose={quick.close}
+          onClose={quick.cycle !== null ? quick.cancelCycle : quick.close}
         />
       )}
     </TooltipProvider></div>
