@@ -10,6 +10,7 @@ import { readFile } from '@tauri-apps/plugin-fs'
 import type { ExportPorts, GitRun, RegisterCloseGuard } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
+import AppLogo from './components/AppLogo'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -168,6 +169,7 @@ const exportPorts: ExportPorts = E2E
 
 export default function App() {
   const { route, currentMdPath, setAdapter, init } = useAppStore()
+  const booted = useAppStore((s) => s.booted)
   useEffect(() => {
     useAppStore.setState({ gitRun })
     void (async () => {
@@ -190,6 +192,8 @@ export default function App() {
         useAppStore.setState({ configPath })
         await init()
       } catch (e) {
+        // 初始化失败也离开启动屏（错误经 banner 呈现），不能永远卡在 loading
+        useAppStore.setState({ booted: true })
         useAppStore.getState().setError('初始化失败：' + String(e))
       }
     })()
@@ -217,6 +221,18 @@ export default function App() {
     })
     return stop
   }, [])
+
+  // 启动屏（v2.4 验收）：init 的磁盘 IO 期间不闪开屏/案头，给确定性的加载态
+  if (!booted) {
+    return (
+      <div className="grid h-screen place-items-center bg-background" data-testid="boot-screen">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <AppLogo size={48} />
+          <p className="text-sm">正在启动…</p>
+        </div>
+      </div>
+    )
+  }
 
   if (route === 'editor' && currentMdPath) {
     // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）

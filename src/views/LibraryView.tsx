@@ -61,6 +61,12 @@ interface ImportPreview {
  *  文件 tile/树文件行单击=选中进详情，双击=进纸面；悬停操作钮（移动/重命名/删除）沿旧口径 */
 export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
+  const recentOpened = useAppStore((s) => s.recentOpened)
+  // 最近打开清单 → 导图信息（已删/移出工作区的宽容剔除，最多 8 条）
+  const recent = recentOpened
+    .map((p) => maps.find((m) => m.mdPath === p) ?? null)
+    .filter((m): m is MapInfo => m !== null)
+    .slice(0, 8)
   const store = useAppStore.getState()
   const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | 'history' | null>(null)
   // 重命名/删除/移动对话框当前操作的导图（由所在 tile 的按钮选定，而非 maps[0]）
@@ -250,14 +256,52 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
       )
     if (idle)
       return (
-        <div
-          className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center text-muted-foreground"
-          data-testid="desk-idle"
-        >
-          <p className="text-sm">从左侧选择目录或导图，或新建一张</p>
-          <Button size="sm" data-testid="desk-idle-new" onClick={() => setDialog('new')}>
-            新建导图
-          </Button>
+        // 欢迎页（v2.4，VSCode Welcome 布局）：左列动作（新建/导入），右列最近打开
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 p-8 md:flex-row" data-testid="desk-idle">
+          {/* 左列：开始 */}
+          <section className="flex-1">
+            <h2 className="mb-3 text-sm font-medium text-foreground">开始</h2>
+            <div className="flex flex-col items-start gap-1.5">
+              <Button variant="ghost" className="h-8 px-2 font-file text-[13px]" data-testid="desk-idle-new" onClick={() => setDialog('new')}>
+                <span className="mr-2 text-primary">
+                  <IconPlus size={14} />
+                </span>
+                新建导图
+              </Button>
+              <Button variant="ghost" className="h-8 px-2 font-file text-[13px]" onClick={() => void startImport()}>
+                <span className="mr-2 text-primary">
+                  <IconImport size={14} />
+                </span>
+                导入 .md / .xmind
+              </Button>
+            </div>
+          </section>
+          {/* 右列：最近打开（recentOpened 派生，已删/移的宽容剔除） */}
+          <section className="flex-1">
+            <h2 className="mb-3 text-sm font-medium text-foreground">最近的</h2>
+            {recent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">还没有打开过的导图</p>
+            ) : (
+              <ul className="flex flex-col items-start gap-0.5" data-testid="desk-recent">
+                {recent.map((m) => (
+                  <li key={m.mdPath} className="w-full">
+                    <button
+                      type="button"
+                      data-testid={`recent-item-${m.name}`}
+                      className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                      onClick={() => void store.openMap(m.mdPath)}
+                    >
+                      <span className="truncate font-file text-[13px]">{m.name}</span>
+                      <span className="shrink-0 font-file text-xs text-muted-foreground">
+                        {m.relDir === '' ? '' : `${m.relDir} · `}
+                        {new Date(m.modifiedAt).toLocaleDateString('zh-CN')}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       )
     return (

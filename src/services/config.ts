@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, parseGitConfig, parseLayoutKind, parseSettings, parseThemePref, type AppConfig, type FsAdapter } from '../types/files'
+import { DEFAULT_CONFIG, parseGitConfig, parseLayoutKind, parseRecentOpened, parseSettings, parseThemePref, type AppConfig, type FsAdapter } from '../types/files'
 
 /** 配置缺失或损坏时回退默认值（spec §8：容错不抛异常；旧配置无 preferredLayout 字段按 null、无 theme 按 auto、无 settings 按默认兼容） */
 export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig> {
@@ -12,6 +12,7 @@ export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig
       theme: parseThemePref(parsed.theme),
       settings: parseSettings(parsed.settings),
       git: parseGitConfig(parsed.git),
+      recentOpened: parseRecentOpened(parsed.recentOpened),
     }
   } catch {
     return DEFAULT_CONFIG

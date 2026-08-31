@@ -47,12 +47,13 @@ describe('appStore', () => {
     expect(useAppStore.getState().route).toBe('library')
   })
 
-  test('init 有 lastOpened 时恢复到编辑器', async () => {
+  // v2.4 验收：启动恒定落案头（不自动回上次导图——上次内容在欢迎页「最近打开」可达）
+  test('init 有 lastOpened 也落案头，booted 置位', async () => {
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: '/ws/已有.md' }))
     useAppStore.setState({ configPath: '/cfg.json' })
     await useAppStore.getState().init()
-    expect(useAppStore.getState().route).toBe('editor')
-    expect(useAppStore.getState().currentMdPath).toBe('/ws/已有.md')
+    expect(useAppStore.getState().route).toBe('library')
+    expect(useAppStore.getState().booted).toBe(true)
   })
 
   test('createAndOpen 创建文件并进入编辑器', async () => {

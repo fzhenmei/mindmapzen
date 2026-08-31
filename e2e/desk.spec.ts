@@ -118,3 +118,21 @@ test('案头：文件树折叠扳机收起子树、行面选中不折叠', async
   await page.getByRole('button', { name: '折叠「项目」' }).click()
   await expect(page.getByTestId('file-node-项目图')).toBeVisible()
 })
+
+// v2.4 欢迎页：最近打开列表（VSCode Welcome 布局）——打开过的导图出现在右列，点击直达
+test('欢迎页：最近打开列表展示与直达', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 打开根图（从资源管理器双击）→ 返回案头（落 idle 态）
+  await page.getByTestId('dir-node-all').click()
+  await page.getByTestId('map-item').filter({ hasText: '根图' }).dblclick()
+  await expect(page.getByText('根图').first()).toBeVisible()
+  await page.getByTestId('btn-back').click()
+
+  // 欢迎页右列出现该图；点击直达编辑器
+  const recent = page.getByTestId('recent-item-根图')
+  await expect(recent).toBeVisible()
+  await recent.click()
+  await expect(page.getByText('根图').first()).toBeVisible()
+})

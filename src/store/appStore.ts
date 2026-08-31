@@ -9,6 +9,10 @@ import type { GitRun } from '../types/ports'
 
 interface AppState {
   route: 'library' | 'editor'
+  /** 启动完成标志（v2.4）：init（含磁盘 IO）完成前 App 显示 boot loading，不闪开屏/案头 */
+  booted: boolean
+  /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
+  recentOpened: string[]
   workspaceDir: string | null
   maps: MapInfo[]
   /** 案头左树当前选中目录（''=全部；相对工作区路径，'/' 分隔）。maps 在 store 中不过滤，由 LibraryView 渲染时派生 */
@@ -68,6 +72,8 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
+  booted: false,
+  recentOpened: [],
   workspaceDir: null,
   maps: [],
   selectedDir: '',
@@ -97,14 +103,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
-      set({ workspaceDir: cfg.workspaceDir })
+      set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
       await get().refreshMaps()
-      if (cfg.lastOpened) {
-        set({ currentMdPath: cfg.lastOpened, route: 'editor' })
-        return
-      }
     }
-    set({ route: 'library' })
+    // v2.4：不再自动回到上次打开的导图——启动恒定落案头（上次内容在「最近打开」一键可达）
+    set({ route: 'library', booted: true })
   },
 
   setWorkspace: async (dir) => {
@@ -222,8 +225,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   openMap: async (mdPath) => {
     set({ currentMdPath: mdPath, route: 'editor', error: null })
     const { adapter, configPath } = get()
+    // 最近打开清单：置顶去重截断（v2.4 案头欢迎页），随 lastOpened 一并持久化
+    const recentOpened = [mdPath, ...get().recentOpened.filter((p) => p !== mdPath)].slice(0, 10)
+    set({ recentOpened })
     const cfg = await loadConfig(adapter, configPath)
-    await saveConfig(adapter, configPath, { ...cfg, lastOpened: mdPath })
+    await saveConfig(adapter, configPath, { ...cfg, lastOpened: mdPath, recentOpened })
   },
 
   markDirty: () => set({ dirty: true }),
