@@ -21,12 +21,14 @@ import { useNoteEdit } from '../hooks/useNoteEdit'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
+import { useQuickSwitch } from '../hooks/useQuickSwitch'
 import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import IconPickerDialog from '../components/IconPickerDialog'
 import ImageDialog from '../components/ImageDialog'
 import EditorCaption from '../components/EditorCaption'
+import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
@@ -151,6 +153,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return saveAndStamp()
   }
 
+  // 快速切换（v2.5）：浮层候选/切换链/ping-pong（含返回案头共用的安全链 leaveTo）
+  const quick = useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave })
+
   // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
   const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
 
@@ -200,16 +205,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }, [])
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open
+  // v2.5：切换浮层同列互斥（开着时 Ctrl+Tab/Ctrl+P 不再响应，Tab 归浮层内部导航）
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
-  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+.）拆至 useEditorHotkeys（验收轮，行数护栏）
+  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
   useEditorHotkeys({
     doCopy,
     explicitSave,
     openNoteDialog: noteEdit.openNoteDialog,
     activeUidRef: selection.activeUidRef,
     anyDialogRef,
+    openQuickSwitch: quick.open,
+    pingPong: quick.pingPong,
   })
 
   useEffect(() => {
@@ -281,10 +289,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       )}
       {/* 浮动砚栏（M5a 拆分至 ZenBar）：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
       <ZenBar
-        onBack={async () => {
-          pipeline.clearPendingAutosave()
-          if (await explicitSave()) await backToLibrary() // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
-        }}
+        onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
+        onSwitchClick={quick.open}
         undoRedo={undoRedo}
         onCopyClick={() => void doCopy()}
         scope={selection.activeUid ? 'branch' : 'full'}
@@ -349,6 +355,14 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onPasteClick={() => void imageEdit.pasteFromClipboard()}
           onRemove={imageEdit.remove}
           onCancel={imageEdit.close}
+        />
+      )}
+      {/* 快速切换浮层（v2.5）：互斥优先级同上（guarding > confirming > 浮层） */}
+      {quick.switchOpen && !guard.guarding && !flow.confirming && (
+        <QuickSwitchDialog
+          candidates={quick.candidates}
+          onPick={(p) => void quick.switchTo(p)}
+          onClose={quick.close}
         />
       )}
     </TooltipProvider></div>

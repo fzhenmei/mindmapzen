@@ -13,6 +13,9 @@ interface AppState {
   booted: boolean
   /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
   recentOpened: string[]
+  /** 会话内打开 MRU（v2.5 编辑器快速切换）：内存态不落盘，Ctrl+Tab ping-pong 的数据源
+   *  （「上一张」= 首个 ≠ 当前图的项；区别于跨会话的 recentOpened） */
+  sessionRecent: string[]
   workspaceDir: string | null
   maps: MapInfo[]
   /** 案头左树当前选中目录（''=全部；相对工作区路径，'/' 分隔）。maps 在 store 中不过滤，由 LibraryView 渲染时派生 */
@@ -74,6 +77,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
   booted: false,
   recentOpened: [],
+  sessionRecent: [],
   workspaceDir: null,
   maps: [],
   selectedDir: '',
@@ -124,7 +128,7 @@ export const useAppStore = create<AppState>((set, get) => ({
    *  （无工作区不得残留打开指针，否则换工作区重进会被旧指针劫持） */
   exitWorkspace: async () => {
     const { adapter, configPath } = get()
-    set({ workspaceDir: null, maps: [], selectedDir: '', currentMdPath: null })
+    set({ workspaceDir: null, maps: [], selectedDir: '', currentMdPath: null, sessionRecent: [] })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, workspaceDir: null, lastOpened: null })
   },
@@ -142,10 +146,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   /** 抛错语义（M16 验收）：输入类错误（空名/非法字符/重名）抛给调用方，由
    *  新建对话框就地显示、不关框——不再吞进全局 error-banner */
   createAndOpen: async (name, templateContent) => {
-    const { adapter, workspaceDir, preferredLayout } = get()
+    const { adapter, configPath, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
     const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent)
-    set({ currentMdPath: info.mdPath, route: 'editor', error: null })
+    set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)] })
+    // 新建即最近（v2.5）：与 openMap 同款 MRU 维护——新图立即可达快速切换浮层与案头欢迎页
+    const recentOpened = [info.mdPath, ...get().recentOpened.filter((p) => p !== info.mdPath)].slice(0, 10)
+    set({ recentOpened })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, recentOpened })
   },
 
   /** 记住用户偏好的默认布局（新建/导入/无 sidecar 导图的初始布局），持久化到应用配置 */
@@ -189,12 +198,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (gitRun === null || !gitConfig.enabled || workspaceDir === null) return
     const r = await checkAndBackup(workspaceDir, gitConfig, gitRun)
     // 状态摘要：提交消息 / 跳过原因 / 致命错误（中文）
-    const summary =
-      r.fatal !== null
-        ? `备份失败：${r.fatal}`
-        : r.committed
-          ? `已提交${r.push.kind === 'ok' ? '并推送' : r.push.kind === 'error' ? '（推送失败：' + r.push.message + '）' : ''}`
-          : `无变更`
+    let summary: string
+    if (r.fatal !== null) summary = `备份失败：${r.fatal}`
+    else if (!r.committed) summary = `无变更`
+    else {
+      // 已提交：推送结果三分支（成功并推送 / 失败附原因 / 未配置推送）
+      let push: string
+      if (r.push.kind === 'ok') push = '并推送'
+      else if (r.push.kind === 'error') push = `（推送失败：${r.push.message}）`
+      else push = ''
+      summary = `已提交${push}`
+    }
     set({ lastBackup: summary })
     await get().refreshGitStatus()
   },
@@ -223,7 +237,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openMap: async (mdPath) => {
-    set({ currentMdPath: mdPath, route: 'editor', error: null })
+    // 会话内 MRU 置顶（v2.5 快速切换）：与持久化的 recentOpened 分开维护（各取各的语义）
+    set({ currentMdPath: mdPath, route: 'editor', error: null, sessionRecent: [mdPath, ...get().sessionRecent.filter((p) => p !== mdPath)] })
     const { adapter, configPath } = get()
     // 最近打开清单：置顶去重截断（v2.4 案头欢迎页），随 lastOpened 一并持久化
     const recentOpened = [mdPath, ...get().recentOpened.filter((p) => p !== mdPath)].slice(0, 10)

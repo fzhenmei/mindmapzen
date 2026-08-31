@@ -155,6 +155,8 @@ beforeEach(async () => {
     maps: [],
     dirty: false,
     error: null,
+    recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
+    sessionRecent: [],
     settings: { copyIncludeNote: false, copyIncludeLinks: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
@@ -1721,4 +1723,96 @@ test('栈态边界：回退到基线（index=0）撤销钮禁用重做可用；�
   })
   expect(screen.getByTestId('btn-undo')).toBeDisabled()
   expect(screen.getByTestId('btn-redo')).toBeDisabled()
+})
+
+// ---- 快速切换（v2.5 编辑器内切换导图）：Ctrl+P 浮层 / Ctrl+Tab ping-pong / 切换安全链 ----
+
+/** 快速切换用例装配：渲染编辑器（当前图 a；候选 recentOpened 与 MRU sessionRecent
+ *  由 describe 级 beforeEach 预置——b 与 子/c 为候选，a 的上一张 = b） */
+const renderForSwitch = async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn()}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+}
+
+describe('快速切换（v2.5）', () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      recentOpened: ['/ws/a.md', '/ws/b.md', '/ws/子/c.md'],
+      sessionRecent: ['/ws/a.md', '/ws/b.md'],
+    })
+  })
+
+  test('Ctrl+P 呼出浮层：候选取自最近打开（跨会话）且不含当前图', async () => {
+    await renderForSwitch()
+    expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(screen.getByTestId('switch-input')).toBeInTheDocument()
+    expect(screen.getAllByTestId('switch-item').length).toBe(2) // b 与 子/c；当前图 a 不入列
+  })
+
+  test('砚栏切换钮呼出浮层（鼠标路径）', async () => {
+    await renderForSwitch()
+    fireEvent.click(screen.getByTestId('btn-switch'))
+    expect(screen.getByTestId('switch-input')).toBeInTheDocument()
+  })
+
+  test('浮层回车切换：干净状态直接 openMap 目标（含目录候选）', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    fireEvent.change(screen.getByTestId('switch-input'), { target: { value: 'c' } })
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Enter' })
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/子/c.md'))
+    // openMap 维护的会话 MRU：目标置顶
+    expect(useAppStore.getState().sessionRecent[0]).toBe('/ws/子/c.md')
+  })
+
+  test('浮层回车切换：脏且保存失败 → 留在原图（横幅提示，数据不丢）', async () => {
+    fs.writeTextFileAtomic = vi.fn(async () => {
+      throw new Error('磁盘占用')
+    })
+    await renderForSwitch()
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Enter' })
+    await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 未切走
+    expect(useAppStore.getState().dirty).toBe(true)
+  })
+
+  test('Ctrl+Tab ping-pong：切到会话 MRU 首个非当前图', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+
+  test('Ctrl+Tab 会话只开过当前一张：no-op', async () => {
+    useAppStore.setState({ sessionRecent: ['/ws/a.md'] })
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+  })
+
+  test('浮层打开时 Ctrl+Tab no-op（互斥守卫），Esc 关闭后恢复', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument())
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 关闭后 ping-pong 恢复
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
 })

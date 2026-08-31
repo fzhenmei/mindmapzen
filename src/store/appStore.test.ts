@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS } })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [] })
 })
 
 describe('appStore', () => {
@@ -81,6 +81,38 @@ describe('appStore', () => {
     expect(s.route).toBe('library')
     expect(s.dirty).toBe(false)
     expect(s.currentMdPath).toBeNull()
+  })
+})
+
+// 快速切换（v2.5 编辑器内切换导图）：sessionRecent = 会话内打开 MRU（内存态，不落盘），
+// Ctrl+Tab ping-pong 的数据源（「上一张」= 首个 ≠ 当前图的项）
+describe('sessionRecent（会话内打开 MRU）', () => {
+  test('openMap 置顶去重维护', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().openMap('/ws/b.md')
+    expect(useAppStore.getState().sessionRecent).toEqual(['/ws/b.md', '/ws/a.md'])
+    await useAppStore.getState().openMap('/ws/a.md') // 重复打开：去重置顶
+    expect(useAppStore.getState().sessionRecent).toEqual(['/ws/a.md', '/ws/b.md'])
+  })
+  test('createAndOpen 记入 sessionRecent', async () => {
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().createAndOpen('新图')
+    expect(useAppStore.getState().sessionRecent).toEqual(['/ws/新图.md'])
+  })
+  test('createAndOpen 维护 recentOpened 并持久化（新建即最近，Ctrl+P 候选含新图）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().createAndOpen('新图')
+    expect(useAppStore.getState().recentOpened).toEqual(['/ws/新图.md'])
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.recentOpened).toEqual(['/ws/新图.md'])
+  })
+  test('exitWorkspace 清空（换工作区后路径无意义）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/已有.md')
+    await useAppStore.getState().exitWorkspace()
+    expect(useAppStore.getState().sessionRecent).toEqual([])
   })
 })
 
