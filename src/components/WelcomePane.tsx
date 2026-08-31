@@ -37,10 +37,10 @@ function friendlyTime(ms: number): string {
 
 /** 案头欢迎页（v2.5 纵轴轮）：单一居中纵轴（max-w-xl），对齐问题结构性消除——
  *  品牌头（印标 + 名 + 问候，问候行不带工作区名——页首/侧栏已示，且本地工具无「用户」）；
- *  居中并排双按钮承担「开始」（新建导图 primary + 导入 outline，窄屏竖排通栏）；
+ *  居中并排双按钮承担「开始」（新建导图 primary + 导入 outline，等宽对称，窄屏竖排通栏）；
  *  「最近的」居中小节题（朱砂印点签名，呼应 logo 印面）+ 全宽行列表（发丝分隔线 +
- *  hover 浮起 + 人性化时间）。空态保持邀请语气。testid 契约不变
- *  （desk-idle/desk-idle-new/desk-recent/recent-item-*） */
+ *  hover 浮起 + 人性化时间）；页脚落款寄语一行收尾。空态保持邀请语气。
+ *  testid 契约不变（desk-idle/desk-idle-new/desk-recent/recent-item-*） */
 export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonly<Props>) {
   return (
     <div
@@ -54,13 +54,13 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
         <p className="text-sm text-muted-foreground">{greeting()} —— 想法落成 .md</p>
       </header>
 
-      {/* 开始：居中并排双按钮（窄屏竖排通栏） */}
+      {/* 开始：居中并排双按钮，等宽对称（窄屏竖排通栏） */}
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <Button type="button" data-testid="desk-idle-new" onClick={onNew}>
+        <Button type="button" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
           <IconPlus />
           新建导图
         </Button>
-        <Button type="button" variant="outline" onClick={onImport}>
+        <Button type="button" variant="outline" className="sm:w-32" onClick={onImport}>
           <IconImport />
           导入
         </Button>
@@ -104,6 +104,11 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
           </ul>
         )}
       </section>
+
+      {/* 落款：页脚寄语（居中，案头题跋气质） */}
+      <footer className="text-center text-xs text-muted-foreground">
+        踏上取经路比到达灵山更重要
+      </footer>
     </div>
   )
 }
