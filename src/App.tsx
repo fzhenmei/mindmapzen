@@ -244,6 +244,23 @@ export default function App() {
     return stop
   }, [])
 
+  // WebView 默认快捷键全局屏蔽（v2.5 案头 Ctrl+P 调起打印）：应用无对应功能的浏览器
+  // 默认键（Ctrl+P 打印 / Ctrl+S 保存网页 / Ctrl+F 查找栏 / Ctrl+O 打开 / Ctrl+D 收藏
+  // / Ctrl+R、F5 刷新——reload 绕过关闭守卫直接丢未保存内容，最危险）一律阻默认行为。
+  // 只 preventDefault 不拦传播：应用自身快捷键（编辑器 Ctrl+P 浮层、Ctrl+S 保存等）
+  // 由各视图监听照常收到并处理，preventDefault 幂等不冲突
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase()
+      const block =
+        e.key === 'F5' ||
+        ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ['p', 's', 'f', 'o', 'd', 'r'].includes(k))
+      if (block) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // 启动屏（v2.4 验收）：init 的磁盘 IO 期间不闪开屏/案头，给确定性的加载态
   if (!booted) {
     return (
