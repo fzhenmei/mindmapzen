@@ -2,6 +2,8 @@
 // 根节点文本在实例化时替换为用户输入名（createMapFromTemplate），故根标题即占位名。
 // v2.1：dev-tracking 退役，ai-collab 接任——用户定稿的人机分工版（想法五态追踪，
 // Bug/版本不入图；详见模板根备注与 manual-checklist）
+// v2.2：DDD 战略层入图——新增「领域地图」（有界上下文/统一语言/契约），
+// 「进行中」按上下文分组（未归类兜底），契约冻结后跨上下文开 worktree 并行
 import blankMd from './blank.md?raw'
 import aiCollabMd from './ai-collab.md?raw'
 
@@ -20,7 +22,7 @@ export const BUILTIN_TEMPLATES: readonly BuiltinTemplate[] = [
   {
     id: 'ai-collab',
     name: 'AI 协作开发',
-    desc: '目标 / 想法五态 / 规范决策 · 人机分工',
+    desc: '目标 / 领域地图 / 想法五态 · 人机分工',
     content: aiCollabMd,
   },
 ]
