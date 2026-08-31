@@ -256,10 +256,9 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
         />
       )
     if (idle)
-      // 欢迎页（v2.4 美化轮）：独立组件 WelcomePane（品牌头 + 双列 + 人性化时间）
+      // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）
       return (
         <WelcomePane
-          workspaceName={workspaceName}
           recent={recent}
           onNew={() => setDialog('new')}
           onImport={() => void startImport()}
