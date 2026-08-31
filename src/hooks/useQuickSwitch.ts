@@ -39,11 +39,13 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     if (await explicitSave()) await navigate()
   }
 
-  /** 快速切换：终点 openMap 目标图（同图 no-op；父组件按 mdPath key 重挂载，切换天然干净） */
+  /** 快速切换：终点 openMap 目标图；目标 = 当前图时关浮层即取消——不 openMap、
+   *  不触发保存链（轮换轮回当前/点击当前项的真 no-op，画布零重载）。
+   *  异图切换父组件按 mdPath key 重挂载，天然干净 */
   const switchTo = async (target: string): Promise<void> => {
-    if (target === mdPath) return
     setSwitchOpen(false)
     setCycle(null)
+    if (target === mdPath) return
     await leaveTo(() => useAppStore.getState().openMap(target))
   }
 
@@ -55,20 +57,22 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     [recentOpened, mdPath, workspaceDir],
   )
 
-  // Ctrl+Tab 轮换候选：sessionRecent（会话内严格 MRU——「最近在用的几张」轮换语义）
+  // Ctrl+Tab 轮换候选：sessionRecent 全序（**含当前图**，VS Code 手法——轮换可循环回
+  // 当前，松手落在当前即取消；会话只开过一张时列表一项，浮层照常呼出让用户看见状态）
   const sessionRecent = useAppStore((s) => s.sessionRecent)
   const cycleCandidates = useMemo<SwitchCandidate[]>(
-    () => sessionRecent.filter((p) => p !== mdPath).map(toCandidate),
+    () => sessionRecent.map(toCandidate),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
-    [sessionRecent, mdPath, workspaceDir],
+    [sessionRecent, workspaceDir],
   )
 
-  /** Ctrl+Tab 步进（未开则呼出，reverse = Shift 反向从未项起）：mod 循环；无候选 no-op */
+  /** Ctrl+Tab 步进（未开则呼出）：首按高亮跳过当前（索引 0）到上一张（一按即松 = ping-pong；
+   *  列表仅当前一张时高亮唯一项），reverse = Shift 反向从未项起；此后 mod 循环含索引 0 */
   const cycleStep = (reverse: boolean): void => {
     setCycle((cur) => {
       const n = cycleCandidates.length
       if (n === 0) return null
-      if (cur === null) return reverse ? n - 1 : 0
+      if (cur === null) return reverse ? n - 1 : 1 % n
       return (cur + (reverse ? -1 : 1) + n) % n
     })
   }
