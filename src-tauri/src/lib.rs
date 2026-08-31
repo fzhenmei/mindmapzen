@@ -47,6 +47,16 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // 运行时窗口图标（v2.4 验收：任务栏先 logo 后变 Windows 默认）——Windows 任务栏
+        // 图标查询窗口类/进程资源，显式 set_icon 钉住（icons/128x128.png 与应用图标同源）
+        .setup(|app| {
+            use tauri::Manager;
+            if let Some(win) = app.get_webview_window("main") {
+                let img = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png"))?;
+                let _ = win.set_icon(img); // 失败不阻断启动（图标缺失仅视觉）
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![trash_delete, git_exec])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
