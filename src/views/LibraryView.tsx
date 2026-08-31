@@ -9,6 +9,7 @@ import { describeIgnoredType } from '../services/ignoredType'
 import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import HistoryDialog from '../components/HistoryDialog'
+import WelcomePane from '../components/WelcomePane'
 import ThemeToggle from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
@@ -255,54 +256,15 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
         />
       )
     if (idle)
+      // 欢迎页（v2.4 美化轮）：独立组件 WelcomePane（品牌头 + 双列 + 人性化时间）
       return (
-        // 欢迎页（v2.4，VSCode Welcome 布局）：左列动作（新建/导入），右列最近打开
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 p-8 md:flex-row" data-testid="desk-idle">
-          {/* 左列：开始 */}
-          <section className="flex-1">
-            <h2 className="mb-3 text-sm font-medium text-foreground">开始</h2>
-            <div className="flex flex-col items-start gap-1.5">
-              <Button variant="ghost" className="h-8 px-2 font-file text-[13px]" data-testid="desk-idle-new" onClick={() => setDialog('new')}>
-                <span className="mr-2 text-primary">
-                  <IconPlus size={14} />
-                </span>
-                新建导图
-              </Button>
-              <Button variant="ghost" className="h-8 px-2 font-file text-[13px]" onClick={() => void startImport()}>
-                <span className="mr-2 text-primary">
-                  <IconImport size={14} />
-                </span>
-                导入 .md / .xmind
-              </Button>
-            </div>
-          </section>
-          {/* 右列：最近打开（recentOpened 派生，已删/移的宽容剔除） */}
-          <section className="flex-1">
-            <h2 className="mb-3 text-sm font-medium text-foreground">最近的</h2>
-            {recent.length === 0 ? (
-              <p className="text-sm text-muted-foreground">还没有打开过的导图</p>
-            ) : (
-              <ul className="flex flex-col items-start gap-0.5" data-testid="desk-recent">
-                {recent.map((m) => (
-                  <li key={m.mdPath} className="w-full">
-                    <button
-                      type="button"
-                      data-testid={`recent-item-${m.name}`}
-                      className="flex w-full items-baseline gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                      onClick={() => void store.openMap(m.mdPath)}
-                    >
-                      <span className="truncate font-file text-[13px]">{m.name}</span>
-                      <span className="shrink-0 font-file text-xs text-muted-foreground">
-                        {m.relDir === '' ? '' : `${m.relDir} · `}
-                        {new Date(m.modifiedAt).toLocaleDateString('zh-CN')}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        <WelcomePane
+          workspaceName={workspaceName}
+          recent={recent}
+          onNew={() => setDialog('new')}
+          onImport={() => void startImport()}
+          onOpen={(m) => void store.openMap(m.mdPath)}
+        />
       )
     return (
       <FileExplorer

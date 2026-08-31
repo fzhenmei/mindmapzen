@@ -310,7 +310,8 @@ describe('案头三区与交互（M5d）', () => {
   test('命令栏：印章 + 工作区名面包屑、设置/导入/新建均纯图标（M5c 起 ZenTooltip 承担提示，title 退役防双提示）；工作区路径移到树根 tooltip', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} />)
     // M12b 案头三区：左面包屑为工作区名（品牌名归开屏页）
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('ws')
+    // 欢迎页品牌头也有 h1（Mind Map Zen）——面包屑按名称精确断言
+    expect(screen.getByRole('heading', { level: 1, name: 'ws' })).toHaveTextContent('ws')
     // v0.7.0 验收纯图标化 + M5c：视觉提示改 ZenTooltip（悬停浮签），语义名归 aria-label（title 移除）
     expect(screen.getByTestId('btn-settings').textContent).toBe('')
     expect(screen.getByTestId('btn-import').textContent).toBe('')
