@@ -1792,22 +1792,26 @@ describe('快速切换（v2.5）', () => {
     expect(useAppStore.getState().dirty).toBe(true)
   })
 
-  test('Ctrl+Tab 一按即松：呼出轮换浮层（无输入框）并切到上一张（ping-pong 手感不变）', async () => {
+  test('Ctrl+Tab 一按即松：呼出轮换浮层（无输入框、列表含当前图）并切到上一张', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
     await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
     expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument() // 轮换态无输入框
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(2) // MRU 全序含当前 a：[a, b]
     fireEvent.keyUp(window, { key: 'Control' })
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 
-  test('Ctrl+Tab 会话只开过当前一张：no-op（无候选不呼浮层）', async () => {
+  test('Ctrl+Tab 会话只开过当前一张：也呼浮层（列表仅当前），松 Ctrl 不切换', async () => {
     useAppStore.setState({ sessionRecent: ['/ws/a.md'] })
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(1) // 唯一项 = 当前图，高亮其上
+    expect(screen.getAllByTestId('switch-item')[0].getAttribute('aria-selected')).toBe('true')
     fireEvent.keyUp(window, { key: 'Control' })
-    expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument()
-    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+    await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 落在当前 = 真 no-op
   })
 
   test('搜索浮层打开时 Ctrl+Tab no-op（互斥守卫），Esc 关闭后恢复', async () => {
@@ -1822,17 +1826,20 @@ describe('快速切换（v2.5）', () => {
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 
-  test('Ctrl+Tab 按住连按：高亮循环下移，松 Ctrl 切到高亮项', async () => {
+  test('Ctrl+Tab 按住连按：高亮循环下移，轮回当前图松手不切（真 no-op）', async () => {
     useAppStore.setState({ sessionRecent: ['/ws/a.md', '/ws/b.md', '/ws/子/c.md'] })
     await renderForSwitch()
-    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 开浮层，高亮 b
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 开浮层（列表 [a,b,c]），高亮 b
     const activeText = () =>
       screen.getAllByTestId('switch-item').find((el) => el.getAttribute('aria-selected') === 'true')!.textContent
     expect(activeText()).toContain('b')
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 高亮 c
     await waitFor(() => expect(activeText()).toContain('c'))
-    fireEvent.keyUp(window, { key: 'Control' }) // 松 Ctrl 落定
-    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/子/c.md'))
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 循环回 a（当前图）
+    await waitFor(() => expect(activeText()).toContain('a'))
+    fireEvent.keyUp(window, { key: 'Control' })
+    await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 落在当前 = 不切换不重载
   })
 
   test('Ctrl+Shift+Tab 反向轮换：首按从未项起', async () => {
@@ -1866,11 +1873,15 @@ describe('快速切换（v2.5）', () => {
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
   })
 
-  test('轮换浮层点击条目：立即切换（鼠标路径）', async () => {
+  test('轮换浮层点击：点当前项不切换，点其他项立即切换（鼠标路径）', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
     await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
-    fireEvent.click(screen.getAllByTestId('switch-item')[0])
+    fireEvent.click(screen.getAllByTestId('switch-item')[0]) // 列表 [a, b]：[0]=当前 a
+    await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 同图 no-op（浮层关闭）
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 再呼
+    fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 })
