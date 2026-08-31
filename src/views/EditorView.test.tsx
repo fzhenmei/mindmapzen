@@ -1792,27 +1792,85 @@ describe('快速切换（v2.5）', () => {
     expect(useAppStore.getState().dirty).toBe(true)
   })
 
-  test('Ctrl+Tab ping-pong：切到会话 MRU 首个非当前图', async () => {
+  test('Ctrl+Tab 一按即松：呼出轮换浮层（无输入框）并切到上一张（ping-pong 手感不变）', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument() // 轮换态无输入框
+    fireEvent.keyUp(window, { key: 'Control' })
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 
-  test('Ctrl+Tab 会话只开过当前一张：no-op', async () => {
+  test('Ctrl+Tab 会话只开过当前一张：no-op（无候选不呼浮层）', async () => {
     useAppStore.setState({ sessionRecent: ['/ws/a.md'] })
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    fireEvent.keyUp(window, { key: 'Control' })
+    expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument()
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
   })
 
-  test('浮层打开时 Ctrl+Tab no-op（互斥守卫），Esc 关闭后恢复', async () => {
+  test('搜索浮层打开时 Ctrl+Tab no-op（互斥守卫），Esc 关闭后恢复', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
     fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument())
-    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 关闭后 ping-pong 恢复
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 关闭后轮换恢复
+    fireEvent.keyUp(window, { key: 'Control' })
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+
+  test('Ctrl+Tab 按住连按：高亮循环下移，松 Ctrl 切到高亮项', async () => {
+    useAppStore.setState({ sessionRecent: ['/ws/a.md', '/ws/b.md', '/ws/子/c.md'] })
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 开浮层，高亮 b
+    const activeText = () =>
+      screen.getAllByTestId('switch-item').find((el) => el.getAttribute('aria-selected') === 'true')!.textContent
+    expect(activeText()).toContain('b')
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 高亮 c
+    await waitFor(() => expect(activeText()).toContain('c'))
+    fireEvent.keyUp(window, { key: 'Control' }) // 松 Ctrl 落定
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/子/c.md'))
+  })
+
+  test('Ctrl+Shift+Tab 反向轮换：首按从未项起', async () => {
+    useAppStore.setState({ sessionRecent: ['/ws/a.md', '/ws/b.md', '/ws/子/c.md'] })
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true })
+    const active = screen
+      .getAllByTestId('switch-item')
+      .find((el) => el.getAttribute('aria-selected') === 'true')!
+    expect(active.textContent).toContain('c') // MRU 末项
+    fireEvent.keyUp(window, { key: 'Control' })
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/子/c.md'))
+  })
+
+  test('轮换浮层 Esc 取消：关闭不切换', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    // Esc 从浮层内派发（真实浏览器焦点在浮层，radix 在 document 上收冒泡）
+    fireEvent.keyDown(screen.getByTestId('switch-list'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+  })
+
+  test('轮换期间窗口失焦：兜底取消不切（Alt+Tab 切走丢 keyup）', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    fireEvent(window, new Event('blur'))
+    await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+  })
+
+  test('轮换浮层点击条目：立即切换（鼠标路径）', async () => {
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    fireEvent.click(screen.getAllByTestId('switch-item')[0])
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 })
