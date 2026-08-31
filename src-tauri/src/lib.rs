@@ -4,14 +4,27 @@ fn trash_delete(path: String) -> Result<(), String> {
 }
 
 /// git 命令执行（M20 版本管理）：cwd 限定调用方传入的工作区目录，args 为 git 子命令。
+/// v2.4 性能修复：
+///  ① async + tokio::process——不阻塞线程（同步 output() 冻结消息泵，UI 全卡，验收实案）；
+///  ② Windows CREATE_NO_WINDOW——git.exe 是控制台程序，默认会闪黑色 cmd 窗口（验收实案）；
+///  ③ 30s 超时——防异常仓库（如巨型 status）把会话挂死。
 /// 单用户桌面应用，信任本地图；输出与退出码整体回传（服务层按 ok/out 解析状态）
 #[tauri::command]
-fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
-    use std::process::Command;
-    let out = Command::new("git")
-        .args(&args)
-        .current_dir(&cwd)
-        .output()
+async fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
+    use std::time::Duration;
+    use tokio::process::Command as TokioCommand;
+
+    let mut cmd = TokioCommand::new("git");
+    cmd.args(&args).current_dir(&cwd);
+    #[cfg(windows)]
+    {
+        // tokio Command 自带 creation_flags（Windows）：控制台子进程不创建新窗口
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = tokio::time::timeout(Duration::from_secs(30), cmd.output())
+        .await
+        .map_err(|_| "git 命令超时（30 秒）".to_string())?
         .map_err(|e| e.to_string())?;
     Ok(GitResult {
         ok: out.status.success(),

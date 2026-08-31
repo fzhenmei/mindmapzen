@@ -46,6 +46,8 @@ export function parseSettings(v: unknown): CopySettings {
 export interface AppConfig {
   workspaceDir: string | null
   lastOpened: string | null
+  /** 最近打开的导图（mdPath，新→旧，上限 10；v2.4 案头欢迎页右侧列表） */
+  recentOpened: string[]
   /** 用户偏好的默认布局（新建导图与无 sidecar 导图的初始布局）；null = 未设置（按 mindmap） */
   preferredLayout: LayoutKind | null
   /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
@@ -64,6 +66,12 @@ export interface GitConfig {
   token: string | null
 }
 export const DEFAULT_GIT_CONFIG: GitConfig = { enabled: false, remoteUrl: null, token: null }
+/** 宽容解析最近打开清单：仅字符串数组项保留，截断 10（旧配置无字段兼容） */
+export function parseRecentOpened(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  return v.filter((x): x is string => typeof x === 'string').slice(0, 10)
+}
+
 /** 宽容解析 git 配置：逐字段回退默认（旧配置无 git 字段兼容） */
 export function parseGitConfig(v: unknown): GitConfig {
   if (typeof v !== 'object' || v === null) return DEFAULT_GIT_CONFIG
@@ -78,6 +86,7 @@ export function parseGitConfig(v: unknown): GitConfig {
 export const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: null,
   lastOpened: null,
+  recentOpened: [],
   preferredLayout: null,
   theme: 'auto',
   settings: DEFAULT_COPY_SETTINGS,
