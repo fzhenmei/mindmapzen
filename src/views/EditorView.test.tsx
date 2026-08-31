@@ -1753,12 +1753,38 @@ describe('快速切换（v2.5）', () => {
     })
   })
 
-  test('Ctrl+P 呼出浮层：候选取自最近打开（跨会话）且不含当前图', async () => {
+  test('Ctrl+P 呼出浮层：候选含最近打开（跨会话）且不含当前图', async () => {
     await renderForSwitch()
     expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
     expect(screen.getByTestId('switch-input')).toBeInTheDocument()
-    expect(screen.getAllByTestId('switch-item').length).toBe(2) // b 与 子/c；当前图 a 不入列
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(2) // b 与 子/c；当前图 a 不入列
+  })
+
+  // v2.5：搜索候选 = 工作区全量（maps）+ 最近打开置顶（编辑内新建未回案头的图 maps 缺失由
+  // recentOpened 兜底）；未打开过的文件也应可搜到——用户反馈「搜不到工作区文件」
+  test('Ctrl+P 搜索工作区全量：最近打开置顶、其余按修改时间、未打开过的文件可搜到', async () => {
+    useAppStore.setState({
+      maps: [
+        { name: '新品', mdPath: '/ws/新品.md', relDir: '', modifiedAt: 30, createdAt: 1, size: 1 },
+        { name: '归档', mdPath: '/ws/项目/归档.md', relDir: '项目', modifiedAt: 20, createdAt: 1, size: 1 },
+        { name: 'b', mdPath: '/ws/b.md', relDir: '', modifiedAt: 10, createdAt: 1, size: 1 },
+        { name: 'c', mdPath: '/ws/子/c.md', relDir: '子', modifiedAt: 5, createdAt: 1, size: 1 },
+      ],
+    })
+    await renderForSwitch()
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    // 默认序：recentOpened（排除当前 a）= [b, c] 置顶，工作区其余按 mtime 降序 [新品, 归档]
+    const names = screen.getAllByTestId('switch-item').map((el) => el.textContent)
+    expect(names).toHaveLength(4)
+    expect(names[0]).toContain('b')
+    expect(names[1]).toContain('c')
+    expect(names[2]).toContain('新品')
+    expect(names[3]).toContain('归档')
+    // 输入「归档」搜到从未打开过的工作区文件并切换
+    fireEvent.change(screen.getByTestId('switch-input'), { target: { value: '归档' } })
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Enter' })
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/项目/归档.md'))
   })
 
   test('砚栏切换钮呼出浮层（鼠标路径）', async () => {
@@ -1795,7 +1821,7 @@ describe('快速切换（v2.5）', () => {
   test('Ctrl+Tab 一按即松：呼出轮换浮层（无输入框、列表含当前图）并切到上一张', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
-    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    await screen.findByTestId('switch-list')
     expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument() // 轮换态无输入框
     expect(screen.getAllByTestId('switch-item')).toHaveLength(2) // MRU 全序含当前 a：[a, b]
     fireEvent.keyUp(window, { key: 'Control' })
@@ -1806,7 +1832,7 @@ describe('快速切换（v2.5）', () => {
     useAppStore.setState({ sessionRecent: ['/ws/a.md'] })
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
-    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    await screen.findByTestId('switch-list')
     expect(screen.getAllByTestId('switch-item')).toHaveLength(1) // 唯一项 = 当前图，高亮其上
     expect(screen.getAllByTestId('switch-item')[0].getAttribute('aria-selected')).toBe('true')
     fireEvent.keyUp(window, { key: 'Control' })
@@ -1857,7 +1883,7 @@ describe('快速切换（v2.5）', () => {
   test('轮换浮层 Esc 取消：关闭不切换', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
-    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    await screen.findByTestId('switch-list')
     // Esc 从浮层内派发（真实浏览器焦点在浮层，radix 在 document 上收冒泡）
     fireEvent.keyDown(screen.getByTestId('switch-list'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
@@ -1867,7 +1893,7 @@ describe('快速切换（v2.5）', () => {
   test('轮换期间窗口失焦：兜底取消不切（Alt+Tab 切走丢 keyup）', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
-    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    await screen.findByTestId('switch-list')
     fireEvent(window, new Event('blur'))
     await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
@@ -1876,7 +1902,7 @@ describe('快速切换（v2.5）', () => {
   test('轮换浮层点击：点当前项不切换，点其他项立即切换（鼠标路径）', async () => {
     await renderForSwitch()
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
-    await waitFor(() => expect(screen.getByTestId('switch-list')).toBeInTheDocument())
+    await screen.findByTestId('switch-list')
     fireEvent.click(screen.getAllByTestId('switch-item')[0]) // 列表 [a, b]：[0]=当前 a
     await waitFor(() => expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument())
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 同图 no-op（浮层关闭）

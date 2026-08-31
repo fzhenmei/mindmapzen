@@ -26,6 +26,10 @@ interface Props {
 const matches = (c: SwitchCandidate, q: string): boolean =>
   `${c.dir}/${c.name}`.toLowerCase().includes(q.toLowerCase())
 
+/** 默认展示上限（v2.5）：无输入只显前 N（候选已按可达性排好序——最近打开置顶 +
+ *  修改时间降序），输入关键词后全量过滤；轮换模式不截断（Tab 循环可达全列表） */
+const TOP_N = 10
+
 /** 快速切换浮层（v2.5 编辑器内切换导图）：Ctrl+P 搜索 / Ctrl+Tab 轮换两形态共用——
  *  轮换态传 cycleActive（无输入框、高亮受控），搜索态不传（输入过滤、↑↓/Enter 内部自管）。
  *  纯展示组件——候选与切换链在 EditorView 装配。布局 VS Code Quick Open 手法：
@@ -35,7 +39,7 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
   const [active, setActive] = useState(0)
   const cycling = cycleActive !== undefined
   const q = query.trim()
-  const visible = q === '' || cycling ? candidates : candidates.filter((c) => matches(c, q))
+  const visible = cycling ? candidates : q === '' ? candidates.slice(0, TOP_N) : candidates.filter((c) => matches(c, q))
   // 受控/自管高亮统一收口：越界收拢到列表范围内（过滤词变化/候选缩短时防悬空）
   const raw = cycling ? cycleActive : active
   const idx = Math.min(raw, Math.max(visible.length - 1, 0))
