@@ -8,6 +8,12 @@ const candidates: SwitchCandidate[] = [
   { mdPath: '/ws/读书.md', name: '读书', dir: '' },
   { mdPath: '/ws/项目/架构.md', name: '架构', dir: '项目' },
 ]
+// 大列表（截断用例）：图0~图14 平铺
+const many: SwitchCandidate[] = Array.from({ length: 15 }, (_, i) => ({
+  mdPath: `/ws/图${i}.md`,
+  name: `图${i}`,
+  dir: '',
+}))
 
 const renderDialog = (cs: SwitchCandidate[] = candidates) => {
   const onPick = vi.fn()
@@ -102,5 +108,22 @@ describe('QuickSwitchDialog cycle 模式', () => {
     render(<QuickSwitchDialog candidates={candidates} cycleActive={0} onPick={onPick} onClose={vi.fn()} />)
     fireEvent.click(screen.getAllByTestId('switch-item')[2])
     expect(onPick).toHaveBeenCalledWith('/ws/项目/架构.md')
+  })
+
+  test('cycle 模式不截断（受控高亮可达全列表）', () => {
+    render(<QuickSwitchDialog candidates={many} cycleActive={12} onPick={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(15)
+    expect(activeItem().textContent).toContain('图12')
+  })
+})
+
+// ---- 默认截断（v2.5 搜索候选 = 工作区全量）：无输入只显最新 10 个，输入后全量过滤 ----
+describe('QuickSwitchDialog 默认截断', () => {
+  test('无输入只显示前 10 个；输入关键词后全量过滤', () => {
+    render(<QuickSwitchDialog candidates={many} onPick={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(10)
+    fireEvent.change(screen.getByTestId('switch-input'), { target: { value: '1' } }) // 图1、图10~14
+    expect(screen.getAllByTestId('switch-item')).toHaveLength(6)
+    expect(screen.getAllByTestId('switch-item').map((el) => el.textContent).some((t) => t!.includes('图14'))).toBe(true)
   })
 })

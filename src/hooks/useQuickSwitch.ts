@@ -49,13 +49,28 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     await leaveTo(() => useAppStore.getState().openMap(target))
   }
 
-  // Ctrl+P 搜索候选：recentOpened（跨会话 MRU，含上次会话）排除当前图
+  // Ctrl+P 搜索候选（v2.5）：工作区全量清单（maps，mtime 降序）供搜索——未打开过的文件
+  // 也可达（用户反馈「搜不到工作区文件」）；最近打开（recentOpened MRU）置顶（刚编辑过的
+  // 最可达，且兜底 maps 缺失的编辑内新建图——编辑器内不刷新 maps 防与在途原子写冲突）。
+  // 当前图不入列（切换语义）
   const recentOpened = useAppStore((s) => s.recentOpened)
-  const candidates = useMemo<SwitchCandidate[]>(
-    () => recentOpened.filter((p) => p !== mdPath).map(toCandidate),
+  const maps = useAppStore((s) => s.maps)
+  const candidates = useMemo<SwitchCandidate[]>(() => {
+    const seen = new Set<string>([mdPath]) // 当前图先行占位：两路候选统一排除
+    const out: SwitchCandidate[] = []
+    for (const p of recentOpened) {
+      if (seen.has(p)) continue
+      seen.add(p)
+      out.push(toCandidate(p))
+    }
+    for (const m of maps) {
+      if (seen.has(m.mdPath)) continue
+      seen.add(m.mdPath)
+      out.push({ mdPath: m.mdPath, name: m.name, dir: m.relDir })
+    }
+    return out
     // eslint-disable-next-line react-hooks/exhaustive-deps -- toCandidate 依赖 workspaceDir（props 稳定于本视图生命周期）
-    [recentOpened, mdPath, workspaceDir],
-  )
+  }, [recentOpened, maps, mdPath, workspaceDir])
 
   // Ctrl+Tab 轮换候选：sessionRecent 全序（**含当前图**，VS Code 手法——轮换可循环回
   // 当前，松手落在当前即取消；会话只开过一张时列表一项，浮层照常呼出让用户看见状态）
