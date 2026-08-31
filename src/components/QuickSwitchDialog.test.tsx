@@ -58,6 +58,19 @@ describe('QuickSwitchDialog（编辑器内快速切换浮层）', () => {
     expect(activeItem().textContent).toContain('架构')
   })
 
+  // Tab/Shift+Tab 同 ↑↓（v2.5 用户反馈）：Tab 不绑定时焦点会跳进列表项，
+  // focus ring 滞留在旧项上——高亮（背景色）与框分离令人迷惑
+  test('Tab/Shift+Tab 移动高亮且不交出焦点（防 focus ring 滞留）', () => {
+    renderDialog()
+    const input = screen.getByTestId('switch-input')
+    fireEvent.keyDown(input, { key: 'Tab' })
+    expect(activeItem().textContent).toContain('读书')
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true })
+    expect(activeItem().textContent).toContain('周会')
+    // 焦点仍在输入框（Tab 被拦截，未落到列表项）
+    expect(document.activeElement).toBe(input)
+  })
+
   test('Enter 挑选当前高亮项', () => {
     const { onPick } = renderDialog()
     const input = screen.getByTestId('switch-input')

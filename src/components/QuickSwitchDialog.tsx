@@ -39,19 +39,27 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
   const [active, setActive] = useState(0)
   const cycling = cycleActive !== undefined
   const q = query.trim()
-  const visible = cycling ? candidates : q === '' ? candidates.slice(0, TOP_N) : candidates.filter((c) => matches(c, q))
+  // 可见列表：轮换态全量（Tab 循环可达全列表）；搜索态无输入显前 TOP_N、有输入全量过滤
+  const visibleOf = (): ReadonlyArray<SwitchCandidate> => {
+    if (cycling) return candidates
+    if (q === '') return candidates.slice(0, TOP_N)
+    return candidates.filter((c) => matches(c, q))
+  }
+  const visible = visibleOf()
   // 受控/自管高亮统一收口：越界收拢到列表范围内（过滤词变化/候选缩短时防悬空）
   const raw = cycling ? cycleActive : active
   const idx = Math.min(raw, Math.max(visible.length - 1, 0))
 
-  /** 键盘流（搜索态输入框承载）：↑↓ 循环移动、Enter 挑选。Esc 不在此处——radix Dialog
-   *  在 document 捕获阶段统一处理（onOpenChange(false) → onClose），自持分支会双触发 */
+  /** 键盘流（搜索态输入框承载）：↑↓/Tab（Shift 反向）循环移动、Enter 挑选。Tab 亦拦下
+   *  （v2.5 用户反馈）——不拦会把焦点交进列表项，focus ring 滞留旧项与高亮分离。
+   *  Esc 不在此处——radix Dialog 在 document 捕获阶段统一处理（onOpenChange(false)
+   *  → onClose），自持分支会双触发 */
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
       e.preventDefault()
       if (visible.length === 0) return
-      const step = e.key === 'ArrowDown' ? 1 : -1
-      setActive((idx + step + visible.length) % visible.length)
+      const reverse = e.key === 'ArrowUp' || e.shiftKey
+      setActive((idx + (reverse ? -1 : 1) + visible.length) % visible.length)
       return
     }
     if (e.key === 'Enter') {
@@ -87,13 +95,18 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
         ) : (
           <div data-testid="switch-list" className="max-h-80 overflow-y-auto p-1" role="listbox">
             {visible.map((c, i) => (
+              // tabIndex=-1（v2.5 用户反馈「框滞留」根因）：radix Dialog 的 FocusScope
+              // 焦点陷阱在捕获层接管 Tab 并把焦点交给列表项（preventDefault 拦不住），
+              // focus ring 便滞留旧项与高亮分离——条目退出 Tab 序，焦点恒留输入框，
+              // 键盘导航（Tab/↑↓）只动高亮；鼠标点击不受 tabIndex 影响
               <button
                 key={c.mdPath}
                 type="button"
                 role="option"
+                tabIndex={-1}
                 data-testid="switch-item"
                 aria-selected={i === idx}
-                className="flex w-full flex-col items-start gap-0.5 rounded-sm px-3 py-2 text-left aria-selected:bg-accent"
+                className="flex w-full flex-col items-start gap-0.5 rounded-sm px-3 py-2 text-left aria-selected:bg-accent aria-selected:text-accent-foreground aria-selected:ring-1 aria-selected:ring-ring"
                 onMouseEnter={() => (cycling ? onActiveChange?.(i) : setActive(i))}
                 onClick={() => onPick(c.mdPath)}
               >
