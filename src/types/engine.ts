@@ -30,6 +30,9 @@ export interface EngineRenderer {
   /** 复制选中节点（Render.js:1195）：写入引擎内部剪贴板（beingCopyData，供 Control+v 画布内
    *  粘贴节点）并同步系统剪贴板 smm 格式数据；快捷键对调后由 Control+Shift+c 触发（MindMapCanvas） */
   copy(): void
+  /** 当前激活（选中）节点实例数组（Render.js 维护）：无选中为空数组——Control+Shift+c
+   *  复制成功的判定依据（无选中 copy() 为 no-op，不上报盖印） */
+  activeNodeList?: unknown[]
 }
 
 /** 引擎快捷键层（MindMapHandle.keyCommand，KeyCommand.js）：window keydown 按键多重集匹配，

@@ -23,6 +23,8 @@ test('复制 md：整图与选中子树', async ({ page }) => {
   // 整图用精确断言（较简报加强）：同时钉死「单次 Tab 只插一个子节点」——
   // 画布键盘监听曾与引擎原生 KeyCommand 双份执行 Tab 导致双插入，此处防回归
   await page.keyboard.press('Control+c')
+  // 印记反馈：右上角墨青印闪现（1.2s），区分复制路径文案
+  await expect(page.getByTestId('save-stamp')).toHaveText('已复制为 Markdown')
   await expect
     .poll(() =>
       page.evaluate(

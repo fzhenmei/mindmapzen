@@ -33,7 +33,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
-import SaveStamp from '../components/SaveStamp'
+import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import ZenBar from '../components/ZenBar'
 interface Props {
   mdPath: string
@@ -66,7 +66,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
-  const [stamp, setStamp] = useState<{ kind: 'saved' | 'copied'; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
+  const [stamp, setStamp] = useState<{ kind: StampKind; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
@@ -113,7 +113,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const undoRedo = useUndoRedo() // 回退/重做（v1.1）：back_forward 历史态驱动按钮禁用，命令走引擎 BACK/FORWARD
 
   /** 盖印记（Task 7）：seq 自增 → key 变化强制重挂载（到期前重置计时 / 到期后再触发也全新挂载） */
-  const flashStamp = (kind: 'saved' | 'copied'): void => {
+  const flashStamp = (kind: StampKind): void => {
     stampSeqRef.current += 1
     setStamp({ kind, seq: stampSeqRef.current })
   }
@@ -132,7 +132,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       const uid = selection.activeUidRef.current
       const active = uid ? findSubtreeByUid(full, uid) : null
       await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree, registry.byUid), useAppStore.getState().settings))
-      flashStamp('copied')
+      flashStamp('copied-md')
     } catch (e) {
       setError('复制失败：' + String(e))
     }
@@ -273,6 +273,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
             onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
+            // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 盖「已复制为节点」墨青印
+            onNodeCopy={() => flashStamp('copied-node')}
           />
         )}
       </div>

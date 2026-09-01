@@ -60,6 +60,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
       onDataChange,
       onActiveChange,
       onEditorPaste,
+      onNodeCopy,
       layout,
       registry,
     }: {
@@ -67,6 +68,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
       onDataChange: () => void
       onActiveChange?: (uid: string | null) => void
       onEditorPaste?: (rawText: string) => void
+      onNodeCopy?: () => void
       layout?: string
       registry: LinkRegistry
     }) => {
@@ -122,6 +124,8 @@ vi.mock('../editor/MindMapCanvas', async () => {
       onActiveChange?.(uid)
     ;(globalThis as unknown as Record<string, unknown>).__emitPaste = (raw: string) =>
       onEditorPaste?.(raw)
+    // 快捷键对调：Control+Shift+c 引擎节点复制成功上报（真实链路见 MindMapCanvas remap 闭包）
+    ;(globalThis as unknown as Record<string, unknown>).__emitNodeCopy = () => onNodeCopy?.()
     // 挂载期 layout prop（引擎构造参数，Task 3）：记录供「打开恢复布局」用例断言
     ;(globalThis as unknown as Record<string, unknown>).__lastLayoutProp = layout
     return <div data-testid="fake-canvas" />
@@ -684,7 +688,7 @@ test('干净状态下保存为 no-op：不盖印记（无用户可感知的写�
   expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
 })
 
-test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）', async () => {
+test('复制成功盖「已复制为 Markdown」墨青印记（替代按钮内 ✓ 文案）', async () => {
   render(
     <EditorView
       mdPath="/ws/a.md"
@@ -701,9 +705,31 @@ test('复制成功盖「已复制」墨青印记（替代按钮内 ✓ 文案）
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.click(screen.getByTestId('btn-copy'))
   await act(async () => {}) // 排空剪贴板微任务
-  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制为 Markdown')
   expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
   expect(screen.getByTestId('btn-copy')).not.toHaveTextContent('✓')
+})
+
+test('引擎节点复制上报盖「已复制为节点」墨青印记（Ctrl+Shift+C 路径）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async () => {}}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, () => void>).__emitNodeCopy!()
+  })
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制为节点')
+  expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
 })
 
 test('同会话到期卸载后再次保存可再次盖印（回归：stamp state 不得残留）', async () => {
@@ -764,7 +790,7 @@ test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前
   try {
     fireEvent.click(screen.getByTestId('btn-copy'))
     await act(async () => {})
-    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制')
+    expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制为 Markdown')
     act(() => {
       vi.advanceTimersByTime(600) // 首枚计时过半（未到期）
     })
