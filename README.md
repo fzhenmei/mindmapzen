@@ -21,6 +21,9 @@ npm run e2e        # 端到端测试（Playwright，web 模式）
 npm run lint       # ESLint
 npm run typecheck  # TypeScript 类型检查
 npm run build      # 前端构建（tsc + vite）
+npm run build:release  # release 打包（msi/nsis 安装包，见下方说明）
 ```
+
+**release 打包**：`npm run build:release` 委托 `tauri build` 出包——产物在 `src-tauri/target/release/bundle/`（msi + nsis 双格式），免安装单文件 exe 在 `src-tauri/target/release/`。脚本（`scripts/build-release.mjs`）会自动定位 Windows SDK 的 `rc.exe` 并前置进 PATH：改过 `src-tauri/tauri.conf.json` 或 `capabilities/*` 后 `tauri-winres` 重编译需要它，而普通终端 PATH 里没有（有编译缓存时不触发，一触发即报 RC.EXE panic）。参数原样透传，如 `npm run build:release -- --no-bundle` 只出 exe 不打安装包。
 
 设计文档见 [docs/superpowers/specs/](docs/superpowers/specs/)。
