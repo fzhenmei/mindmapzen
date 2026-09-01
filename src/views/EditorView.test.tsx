@@ -464,6 +464,30 @@ test('复制整图：无选中时写入完整 md', async () => {
   expect(writes[0]).toBe('# 根\n\n## 新分支\n')
 })
 
+test('复制文件路径（砚栏路径钮，2026-09）：点击以 mdPath 绝对路径写剪贴板并盖「已复制」印', async () => {
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy-path'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  expect(writes[0]).toBe('/ws/a.md')
+  await waitFor(() => expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制'))
+})
+
 test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async () => {
   const writes: string[] = []
   render(

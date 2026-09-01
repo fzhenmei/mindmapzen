@@ -309,7 +309,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         onSwitchClick={quick.open}
         undoRedo={undoRedo}
-        onCopyClick={() => void doCopy()}
+        onCopyClick={doCopy}
+        onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
         onNoteClick={noteEdit.openNoteDialog}
@@ -329,15 +330,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {copyStamp && (
         <CopyStamp key={copyStamp.seq} kind={copyStamp.kind} pos={{ left: copyStamp.left, top: copyStamp.top }} onDone={() => setCopyStamp(null)} />
       )}
-      {/* 左下题签 + 朱砂脏印 + 统计行 + 复制路径钮；右下主题钮（M5a 拆分至 EditorCaption） */}
-      <EditorCaption
-        name={name}
-        dirty={dirty}
-        mdPath={mdPath}
-        onCopyPath={() => void copyPath()}
-        nodeCount={stats.nodeCount}
-        savedAt={stats.savedAt}
-      />
+      {/* 左下题签 + 朱砂脏印 + 统计行；右下主题钮（M5a 拆分至 EditorCaption）；
+          复制文件路径钮在砚栏复制 md 钮旁（IconRoute 区分） */}
+      <EditorCaption name={name} dirty={dirty} nodeCount={stats.nodeCount} savedAt={stats.savedAt} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
       {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——guarding 优先于 flow.confirming

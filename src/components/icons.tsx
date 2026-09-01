@@ -213,6 +213,10 @@ export const IconUndo = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 复制文件路径（2026-09 砚栏）：S 形路径双端弯钩（lucide route，24→16 ÷1.5
+ *  缩放，x/y 范围恰居中网格）——与 IconCopy（双叠方框）形状区分，同 currentColor */
+export const IconRoute = ({ size }: IconProps) =>
+  base(<path d="M6 12.67h5.67a2.33 2.33 0 0 0 0-4.67h-7.33a2.33 2.33 0 0 1 0-4.67H10" />, size)
 /** 重做（v1.1）：IconUndo 的镜像（右向回头箭头 + 下方半圆钩） */
 export const IconRedo = ({ size }: IconProps) =>
   base(
