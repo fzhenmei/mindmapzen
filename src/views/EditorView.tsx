@@ -212,7 +212,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
-  // 快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
+  // 快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
   useEditorHotkeys({
     doCopy,
     explicitSave,

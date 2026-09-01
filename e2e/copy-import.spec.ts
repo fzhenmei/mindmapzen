@@ -19,10 +19,10 @@ test('复制 md：整图与选中子树', async ({ page }) => {
   // 按键若先于其到达会以旧激活态复制。以复制按钮 data-scope 为激活态可观测信号做同步
   // （M4 迁移：脱离 title 文案依赖，data-scope 随选中态在 full/branch 间切换）
   await expect(page.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
-  // 无选中（点空白已清除激活）→ Ctrl+Shift+C 复制整图。
+  // 无选中（点空白已清除激活）→ Ctrl+C 复制整图（与引擎 Control+c 节点复制对调后的新键位）。
   // 整图用精确断言（较简报加强）：同时钉死「单次 Tab 只插一个子节点」——
   // 画布键盘监听曾与引擎原生 KeyCommand 双份执行 Tab 导致双插入，此处防回归
-  await page.keyboard.press('Control+Shift+C')
+  await page.keyboard.press('Control+c')
   await expect
     .poll(() =>
       page.evaluate(
@@ -34,7 +34,7 @@ test('复制 md：整图与选中子树', async ({ page }) => {
   // 选中「分支甲」后复制 → 子树从 H1 重计（data-scope='branch' 确认选中态已同步）
   await page.getByText('分支甲').first().click()
   await expect(page.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'branch')
-  await page.keyboard.press('Control+Shift+C')
+  await page.keyboard.press('Control+c')
   await expect
     .poll(() =>
       page.evaluate(

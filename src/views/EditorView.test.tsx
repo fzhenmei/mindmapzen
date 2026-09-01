@@ -109,6 +109,8 @@ vi.mock('../editor/MindMapCanvas', async () => {
         textEdit: { hideEditTextBox: vi.fn() },
         // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
         reRenderNodeCheckChange: vi.fn(),
+        // 复制选中节点（对调后 Control+Shift+c 路径，EditorView 不经此，桩满足 EngineRenderer）
+        copy: vi.fn(),
       },
     }
     ;(globalThis as unknown as Record<string, unknown>).__emitReady = () => onReady(fakeHandle)
@@ -486,7 +488,7 @@ test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async ()
   expect(writes[0]).toBe('# 新分支\n')
 })
 
-test('快捷键 Ctrl+Shift+C 触发复制', async () => {
+test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () => {
   const writes: string[] = []
   render(
     <EditorView
@@ -504,7 +506,15 @@ test('快捷键 Ctrl+Shift+C 触发复制', async () => {
   )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
-  fireEvent.keyDown(window, { key: 'c', ctrlKey: true, shiftKey: true })
+  // 焦点在输入域（节点编辑框/备注文本区同构场景）时不截获——Ctrl+C 留给原生复制选中文本
+  const editable = document.createElement('div')
+  editable.setAttribute('contenteditable', 'true')
+  document.body.appendChild(editable)
+  fireEvent.keyDown(editable, { key: 'c', ctrlKey: true })
+  expect(writes).toHaveLength(0)
+  editable.remove()
+  // 画布态（target 非 input/textarea/contenteditable）裸 Ctrl+C 触发复制 md
+  fireEvent.keyDown(window, { key: 'c', ctrlKey: true })
   await waitFor(() => expect(writes).toHaveLength(1))
 })
 

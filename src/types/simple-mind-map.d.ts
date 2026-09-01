@@ -1,7 +1,7 @@
 // 引擎无官方 TS 类型（package.json 的 types 字段指向不存在的 ./types/index.d.ts），
 // 声明我们用到的 API；多余成员经索引签名访问。假设核验见 docs/notes/engine-api.md。
 declare module 'simple-mind-map' {
-  import type { EngineNode, EngineRenderer, EngineView, MindMapHandle } from './engine'
+  import type { EngineKeyCommand, EngineNode, EngineRenderer, EngineView, MindMapHandle } from './engine'
   export default class MindMap implements MindMapHandle {
     constructor(opts: {
       el: HTMLElement
@@ -33,6 +33,8 @@ declare module 'simple-mind-map' {
     destroy(): void
     /** 引擎构造时同步创建（index.js:136 new Render）；节点实例定位与编辑框控制走这里 */
     renderer: EngineRenderer;
+    /** 快捷键层（构造时同步创建 new KeyCommand，window keydown 全局注册） */
+    keyCommand: EngineKeyCommand;
     [key: string]: unknown
   }
 }
