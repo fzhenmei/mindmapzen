@@ -30,6 +30,25 @@ export function computeNodeActionPos(
 const samePos = (a: NodeActionPos | null, b: NodeActionPos | null): boolean =>
   a === b || (a !== null && b !== null && a.left === b.left && a.top === b.top)
 
+/** 节点上边中点外扩 8px 的锚点（复制印记 CopyStamp 用，纯函数）：几何缺失返回 null，
+ *  换算口径同 computeNodeActionPos（内容坐标 × view.scale + view 平移） */
+export function computeNodeStampPos(
+  node: unknown,
+  view?: { x?: number; y?: number; scale?: number } | null,
+): NodeActionPos | null {
+  const g = node as { left?: unknown; top?: unknown; width?: unknown; height?: unknown } | null
+  if (!g) return null
+  const nums = [g.left, g.top, g.width, g.height]
+  if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return null
+  const s = typeof view?.scale === 'number' ? view.scale : 1
+  const x = typeof view?.x === 'number' ? view.x : 0
+  const y = typeof view?.y === 'number' ? view.y : 0
+  return {
+    left: ((g.left as number) + (g.width as number) / 2) * s + x,
+    top: (g.top as number) * s + y - 8,
+  }
+}
+
 /** 选中节点浮动操作条锚点：activeUid 变化订阅引擎事件刷新几何；
  *  建线态隐藏（拖线时浮动条跟随悬停目标跳动会遮挡目标节点）。 */
 export function useNodeActions(

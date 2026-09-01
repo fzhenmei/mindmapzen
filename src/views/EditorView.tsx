@@ -22,7 +22,7 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useQuickSwitch } from '../hooks/useQuickSwitch'
-import { startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
+import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import IconPickerDialog from '../components/IconPickerDialog'
@@ -34,6 +34,7 @@ import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
+import CopyStamp from '../components/CopyStamp'
 import ZenBar from '../components/ZenBar'
 interface Props {
   mdPath: string
@@ -68,6 +69,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [stamp, setStamp] = useState<{ kind: StampKind; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
+  const [copyStamp, setCopyStamp] = useState<{ kind: 'copied-md' | 'copied-node'; left: number; top: number; seq: number } | null>(null) // 复制印记：贴目标节点上方闪现（右上角对画布内操作不可见）；锚定版独立计时序号
+  const copyStampSeqRef = useRef(0)
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -118,6 +121,21 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     setStamp({ kind, seq: stampSeqRef.current })
   }
 
+  /** 盖复制印记（贴目标节点）：选中节点上方；无选中（整图 md 复制）锚根节点；几何缺失
+   *  （未布局/假画布）兜底右上角 SaveStamp。seq 重挂载语义同 flashStamp */
+  const flashCopy = (kind: 'copied-md' | 'copied-node'): void => {
+    const mm = mmRef.current
+    const uid = selection.activeUidRef.current
+    const node = (uid ? mm?.renderer?.findNodeByUid(uid) : null) ?? mm?.renderer?.root
+    const pos = mm ? computeNodeStampPos(node, mm.view) : null
+    if (pos === null) {
+      flashStamp(kind)
+      return
+    }
+    copyStampSeqRef.current += 1
+    setCopyStamp({ kind, left: pos.left, top: pos.top, seq: copyStampSeqRef.current })
+  }
+
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
 
@@ -132,7 +150,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       const uid = selection.activeUidRef.current
       const active = uid ? findSubtreeByUid(full, uid) : null
       await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree, registry.byUid), useAppStore.getState().settings))
-      flashStamp('copied-md')
+      flashCopy('copied-md')
     } catch (e) {
       setError('复制失败：' + String(e))
     }
@@ -273,8 +291,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             onDataChange={pipeline.onTreeDataChange}
             onActiveChange={selection.handleActiveChange}
             onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
-            // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 盖「已复制为节点」墨青印
-            onNodeCopy={() => flashStamp('copied-node')}
+            // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
+            onNodeCopy={() => flashCopy('copied-node')}
           />
         )}
       </div>
@@ -313,6 +331,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
+      {/* 复制印记：贴目标节点上方闪现（视线在操作处）；几何缺失时 flashCopy 已兜底走右上角，此处只渲染锚定版 */}
+      {copyStamp && (
+        <CopyStamp key={copyStamp.seq} kind={copyStamp.kind} pos={{ left: copyStamp.left, top: copyStamp.top }} onDone={() => setCopyStamp(null)} />
+      )}
       {/* 左下题签 + 朱砂脏印；右下主题钮（M5a 拆分至 EditorCaption） */}
       <EditorCaption name={name} dirty={dirty} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}

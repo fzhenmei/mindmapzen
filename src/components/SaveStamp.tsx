@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 
 /** 印记分路：保存成功（朱砂印）；复制成功三路（墨青印）——快捷键对调后 md 复制（Ctrl+C）
- *  与节点复制（Ctrl+Shift+c）按路径区分文案，导出图片复制保持泛义「已复制」 */
-const STAMPS = {
+ *  与节点复制（Ctrl+Shift+c）按路径区分文案，导出图片复制保持泛义「已复制」。
+ *  CopyStamp（贴节点上方的复制印记）共享此表 */
+export const STAMPS = {
   saved: { text: '已存', cls: 'stamp-seal' },
   copied: { text: '已复制', cls: 'stamp-ink' },
   'copied-md': { text: '已复制为 Markdown', cls: 'stamp-ink' },
