@@ -302,5 +302,7 @@ export default function App() {
       />,
     )
   }
-  return shell(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} />)
+  return shell(
+    <LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={writeClipboard} />,
+  )
 }
