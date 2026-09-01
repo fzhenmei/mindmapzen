@@ -319,8 +319,12 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
       <SidebarProvider className="min-h-0 flex-1">
         {/* variant=inset（M14b 区块化）：官方机器承担分区——侧栏去 border-r 改留悬浮呼吸位，
             wrapper 自动换 bg-sidebar 色场，SidebarInset 自动成 rounded-xl shadow-sm 白色浮层。
-            分区靠「色场 vs 圆角浮层」，不靠线条 */}
-        <Sidebar variant="inset" data-testid="dir-panel">
+            分区靠「色场 vs 圆角浮层」，不靠线条。
+            className 落在官方 fixed 容器上（cn 合并，tw-merge 顶掉 inset-y-0/h-svh）：
+            官方假设侧栏顶层贴视口，本项目上方有 h-8 TitleBar——top-8 让侧栏从标题栏底
+            锚定，SidebarHeader 内搜索框方能与 SidebarInset 浮层上边框齐平（top-8 与
+            TitleBar 的 h-8 联动） */}
+        <Sidebar variant="inset" data-testid="dir-panel" className="top-8 bottom-0 h-auto">
           {/* 侧栏头（v2.5 上移）：朱砂方印 + 品名移入全局 TitleBar（自定义标题栏左侧），
               此处不再重复展示 */}
           {/* 侧栏内容 = 左树（DirectoryTree 内部即 SidebarContent/Group/Menu 官方骨架）；
