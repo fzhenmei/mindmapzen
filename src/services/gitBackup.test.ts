@@ -119,6 +119,26 @@ describe('版本历史与回滚（M22）', () => {
     expect(await gitHistory('/ws', empty.run)).toEqual([])
   })
 
+  test('gitHistory：脏行防御——无分隔符的行（%x9 笔误案的字面输出形态）不产出条目', async () => {
+    const dirty = makeRun([
+      {
+        match: 'log -50',
+        ok: true,
+        // 真实 git 对非法占位符 %x9 的行为：原样字面输出（无 TAB），split('\t') 切不开 → 整行进 hash
+        out: 'abc1234%x92026-08-31 10:00:00 +0800%x9自动备份 · 3 文件变更\n',
+      },
+    ])
+    const list = await gitHistory('/ws', dirty.run)
+    expect(list).toEqual([])
+  })
+
+  test('restoreToVersion：hash 预检——非哈希形态直接中文报错，不发起任何 git 调用', async () => {
+    const ok = makeRun([])
+    const err = await restoreToVersion('/ws', 'abc1234%x92026-08-31 10:00:00 +0800%x9自动备份', ok.run)
+    expect(err).toContain('版本号无效')
+    expect(ok.calls).toHaveLength(0)
+  })
+
   test('restoreToVersion：checkout <hash> -- . + add -A + 回滚提交；无差异也视为成功', async () => {
     const ok = makeRun([{ match: 'checkout', ok: true }, { match: 'commit', ok: true }])
     expect(await restoreToVersion('/ws', 'abc1234', ok.run)).toBeNull()
@@ -132,6 +152,6 @@ describe('版本历史与回滚（M22）', () => {
 
   test('checkout 失败中文回报', async () => {
     const bad = makeRun([{ match: 'checkout', ok: false, err: 'fatal: bad object' }])
-    expect(await restoreToVersion('/ws', 'xx', bad.run)).toContain('恢复失败')
+    expect(await restoreToVersion('/ws', 'abc1234', bad.run)).toContain('恢复失败')
   })
 })
