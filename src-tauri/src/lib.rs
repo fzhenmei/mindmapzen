@@ -121,6 +121,17 @@ struct GitResult {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 单实例锁（多实例互覆防护）：同 identifier 二次启动不再开新进程，聚焦已有主窗口。
+        // 两个实例各持内存态编辑同一文件时，自动保存后写者胜——先保存的变更被静默覆盖，
+        // 根治靠锁死多开（保存前冲突检测另防外部编辑器改盘，见前端 useSavePipeline）。
+        // 官方要求：必须最先注册（先于其余插件），后注册的实例启动即退出并触发此回调
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Manager;
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())

@@ -27,6 +27,8 @@ export interface OpenDocumentDeps {
   onLayout(initial: LayoutKind): void
   /** 引擎树就绪（EditorView 的 engineTree state） */
   onTree(tree: EngineNode): void
+  /** 打开的磁盘原文（parse 成功后上报；冲突检测基线初始化——保存前对比磁盘现内容） */
+  onRaw(raw: string): void
   /** 文件最后落盘时刻（stat mtime；题签统计行初值）；stat 失败不回调 */
   onFileTime(ms: number): void
   /** 全链成功（loading → ready） */
@@ -51,6 +53,8 @@ export function useOpenDocument(deps: OpenDocumentDeps): void {
           deps.onParseError(r.error, raw)
           return
         }
+        // 冲突检测基线（parse 成功即记）：此后磁盘内容相对此基线的变化即「外部改写」
+        deps.onRaw(raw)
         // 文件最后落盘时刻（2026-09 统计行初值）：宽容——stat 失败只少一行统计不炸打开链
         adapter
           .stat(mdPath)

@@ -21,6 +21,9 @@ interface AppState {
   /** 案头左树当前选中目录（''=全部；相对工作区路径，'/' 分隔）。maps 在 store 中不过滤，由 LibraryView 渲染时派生 */
   selectedDir: string
   currentMdPath: string | null
+  /** 编辑器重挂载序号（外部变更冲突 reload 用）：App 层 EditorView key 拼接此值，
+   *  递增即强制重挂载当前图（丢弃内存编辑、从磁盘重载）——同路径 openMap 不变 key 无法重开 */
+  editorSeq: number
   dirty: boolean
   error: string | null
   configPath: string
@@ -72,6 +75,8 @@ interface AppState {
   restoreVersion: (hash: string) => Promise<string | null>
   markDirty: () => void
   clearDirty: () => void
+  /** 冲突裁决「以磁盘版为准」：递增重挂序号（App 层 key 变化），当前图从磁盘重载 */
+  reopenEditor: () => void
   backToLibrary: () => Promise<void>
   setError: (e: string | null) => void
 }
@@ -85,6 +90,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   maps: [],
   selectedDir: '',
   currentMdPath: null,
+  editorSeq: 0,
   dirty: false,
   error: null,
   configPath: '/cfg.json',
@@ -253,6 +259,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   markDirty: () => set({ dirty: true }),
   clearDirty: () => set({ dirty: false }),
+
+  reopenEditor: () => set((s) => ({ editorSeq: s.editorSeq + 1 })),
 
   backToLibrary: async () => {
     set({ currentMdPath: null, dirty: false, route: 'library' })

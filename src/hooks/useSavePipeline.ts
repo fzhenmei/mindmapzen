@@ -23,6 +23,9 @@ export interface SavePipelineOpts {
   onDirtyChange: (dirty: boolean) => void // 脏标记同步（markDirty / clearDirty）
   onError: (msg: string) => void // 保存失败横幅（setError）
   onSaved?: () => void // md+sidecar 落盘成功后回调（M5b Task 3：双链重建随保存链）
+  /** 外部变更裁决（多实例/外部编辑器改盘）：保存链挂起等待三态决策——
+   *  overwrite 以内存为准续写；reload/cancel 中止本轮保脏（重载导航由上层按决策执行） */
+  onExternalConflict(): Promise<'overwrite' | 'reload' | 'cancel'>
 }
 
 export interface SavePipeline {
@@ -32,6 +35,8 @@ export interface SavePipeline {
   persistLayoutSidecar(): Promise<void>
   /** 脏标记+防抖自动保存+快照去重+pending 标记（原 EditorView.onDataChange） */
   onTreeDataChange(data?: EngineNode): void
+  /** 冲突基线初始化（打开文档上报磁盘原文；此后随每次成功落盘刷新） */
+  initBaseline(raw: string): void
   /** 清防抖自动保存定时器 */
   clearPendingAutosave(): void
   /** 卸载冲刷（含返回文件库） */
@@ -46,6 +51,9 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
   const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true)) // 当前串行保存轮（在途合并调用方等待它的最终结局）
   const dataRevRef = useRef(0) // 数据修订号：写盘窗口内落新编辑时递增，writeOnce 据此拒绝盲目清脏
   const lastSavedDataRef = useRef<string | null>(null) // 最近一次成功落盘的引擎整树快照（JSON），供 data_change 同值去重
+  // 冲突基线（外部变更检测）：打开时的磁盘原文 / 最近一次本会话成功落盘的内容。
+  //  写盘前重读对比——不一致即磁盘被另一实例或外部编辑器改过，盲写会静默覆盖对方
+  const baselineRef = useRef<string | null>(null)
 
   /** 完整 Sidecar 构造（writeOnce 与布局切换即时落盘共用同一形状；layout 取当前切换值）。
    *  linkAdjust（M5d Task 5）由调用方从引擎树采集——布局即时落盘也须带上，否则切换布局会抹掉已拖弯曲 */
@@ -74,7 +82,24 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       harvestRegistry(snapshot, opts.registry)
       const { tree, collapsed } = engineTreeToZen(snapshot)
       // M5d Task 2 序列化注入：净化会话下引擎文本无标记，连线按注册表（uid）句尾注入回 md
-      await adapter.writeTextFileAtomic(mdPath, serialize(tree, opts.registry.byUid))
+      const mdContent = serialize(tree, opts.registry.byUid)
+      // 外部变更检测：磁盘现内容 ≠ 基线（打开原文 / 上次落盘内容）即已被另一实例或外部
+      // 编辑器改写——无条件覆盖会静默吞掉对方变更（多开互覆实案），挂起保存链交上层裁决。
+      //  读盘失败（文件被移除/删除）不视为冲突：写回即恢复
+      let disk: string | null = null
+      try {
+        disk = await adapter.readTextFile(mdPath)
+      } catch {
+        // 文件不在了：落盘即重建，无需裁决
+      }
+      if (disk !== null && baselineRef.current !== null && disk !== baselineRef.current) {
+        const choice = await opts.onExternalConflict()
+        if (choice !== 'overwrite') return false // reload/cancel：中止本轮保脏，不写盘
+      }
+      await adapter.writeTextFileAtomic(mdPath, mdContent)
+      // 基线随 md 落盘即刻刷新（先于 sidecar）：sidecar 失败保脏重试时不得把自己的
+      // md 写入误判为外部变更再弹一次裁决
+      baselineRef.current = mdContent
       // M5d Task 5 弯曲采集：引擎 offsets（uid 失联/空洞自然跳过）→ sidecar linkAdjust（路径对键）
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed, collectLinkAdjust(snapshot)))
       opts.onSaved?.()
@@ -157,6 +182,11 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
     }
   }
 
+  /** 冲突基线初始化：打开文档时上报磁盘原文（useOpenDocument 的 onRaw → 此处） */
+  const initBaseline = (raw: string): void => {
+    baselineRef.current = raw
+  }
+
   /** 清防抖自动保存定时器（原 EditorView 内联的 `if (timerRef) clearTimeout` 两处调用点） */
   const clearPendingAutosave = (): void => {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -168,5 +198,5 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
     if (dirtyRef.current) void saveNow() // unmount 冲刷（含返回文件库）
   }
 
-  return { saveNow, persistLayoutSidecar, onTreeDataChange, clearPendingAutosave, unmountFlush }
+  return { saveNow, persistLayoutSidecar, onTreeDataChange, initBaseline, clearPendingAutosave, unmountFlush }
 }

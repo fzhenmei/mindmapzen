@@ -8,6 +8,7 @@ import { useState, type ComponentProps } from 'react'
 import type { IgnoredBlock } from '../types/tree'
 import type { ExportActions } from '../hooks/useExportFlow'
 import CloseGuardDialog from './CloseGuardDialog'
+import ConflictDialog from './ConflictDialog'
 import ExportDialog from './ExportDialog'
 import IconPickerDialog from './IconPickerDialog'
 import ImageDialog from './ImageDialog'
@@ -37,6 +38,8 @@ interface EditorDialogsProps {
   imageEdit: ComponentProps<typeof ImageDialog> | null
   /** 快速切换浮层（v2.5，2026-09 迁入）：搜索/轮换两形态共用；同上 */
   quickSwitch: ComponentProps<typeof QuickSwitchDialog> | null
+  /** 冲突裁决框（外部变更防护）：非 null 时打开（保存链挂起等待三态决策） */
+  conflict: { mapName: string; onChoice(c: 'overwrite' | 'reload' | 'cancel'): void } | null
 }
 
 /** 备注对话框：textarea 本地受控（draft 仅为初值），保存回传编辑值（等宽文件声道） */
@@ -96,6 +99,7 @@ export default function EditorDialogs({
   iconPicker,
   imageEdit,
   quickSwitch,
+  conflict,
 }: Readonly<EditorDialogsProps>) {
   const ignoredTitle = `保存将丢弃 ${ignored.length} 个未映射的内容块`
   return (
@@ -123,6 +127,7 @@ export default function EditorDialogs({
       {iconPicker !== null && <IconPickerDialog {...iconPicker} />}
       {imageEdit !== null && <ImageDialog {...imageEdit} />}
       {quickSwitch !== null && <QuickSwitchDialog {...quickSwitch} />}
+      {conflict !== null && <ConflictDialog mapName={conflict.mapName} onChoice={conflict.onChoice} />}
     </>
   )
 }

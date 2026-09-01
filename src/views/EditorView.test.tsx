@@ -158,6 +158,7 @@ beforeEach(async () => {
     route: 'editor',
     workspaceDir: '/ws',
     currentMdPath: '/ws/a.md',
+    editorSeq: 0, // 冲突 reload 用例断言递增，逐用例重置防跨用例泄漏
     maps: [],
     dirty: false,
     error: null,
@@ -1985,5 +1986,76 @@ describe('快速切换（v2.5）', () => {
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 再呼
     fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+})
+
+// ── 外部变更冲突防护(多实例/外部编辑器改盘的保存前拦截) ──────────────────────
+// 打开文档记磁盘原文基线,写盘前重读对比:被外部改写过 → 冲突三态框裁决,不再静默覆盖
+describe('外部变更冲突防护', () => {
+  const renderEditor = async () => {
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  }
+
+  test('外部改盘后保存：弹冲突框拦截且磁盘不被覆盖；选「覆盖磁盘版」后按内存写盘', async () => {
+    await renderEditor()
+    // 模拟另一实例/外部编辑器落盘
+    await fs.writeTextFileAtomic('/ws/a.md', '# 外部版本\n')
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+    expect(await screen.findByTestId('conflict-dialog')).toBeInTheDocument()
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# 外部版本\n') // 拦截期未覆盖
+    fireEvent.click(screen.getByTestId('conflict-overwrite'))
+    await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
+  })
+
+  test('外部改盘后保存：选「以磁盘版为准」→ 不覆盖磁盘、清脏、递增重挂序号（重载）', async () => {
+    await renderEditor()
+    await fs.writeTextFileAtomic('/ws/a.md', '# 外部版本\n')
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+    await screen.findByTestId('conflict-dialog')
+    fireEvent.click(screen.getByTestId('conflict-reload'))
+    await waitFor(() => expect(useAppStore.getState().editorSeq).toBe(1))
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# 外部版本\n')
+    expect(useAppStore.getState().dirty).toBe(false)
+  })
+
+  test('外部改盘后保存：选「取消」→ 不写盘、保脏、框收起', async () => {
+    await renderEditor()
+    await fs.writeTextFileAtomic('/ws/a.md', '# 外部版本\n')
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+    await screen.findByTestId('conflict-dialog')
+    fireEvent.click(screen.getByTestId('conflict-cancel'))
+    await waitFor(() => expect(screen.queryByTestId('conflict-dialog')).not.toBeInTheDocument())
+    expect(useAppStore.getState().dirty).toBe(true)
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# 外部版本\n')
+  })
+
+  test('无外部改盘：保存不弹冲突框（基线接线后不得误报）', async () => {
+    await renderEditor()
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+    await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+    expect(screen.queryByTestId('conflict-dialog')).not.toBeInTheDocument()
+    expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
   })
 })

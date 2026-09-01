@@ -194,6 +194,8 @@ const exportPorts: ExportPorts = E2E
 export default function App() {
   const { route, currentMdPath, setAdapter, init } = useAppStore()
   const booted = useAppStore((s) => s.booted)
+  // 编辑器重挂序号（冲突裁决 reload）：同路径递增序号强制重挂 EditorView，从磁盘重载当前图
+  const editorSeq = useAppStore((s) => s.editorSeq)
   useEffect(() => {
     useAppStore.setState({ gitRun })
     void (async () => {
@@ -287,10 +289,11 @@ export default function App() {
   }
 
   if (route === 'editor' && currentMdPath) {
-    // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）
+    // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）；
+    // #editorSeq（冲突裁决 reload）：同路径递增序号也强制重挂，实现当前图从磁盘重载
     return shell(
       <EditorView
-        key={currentMdPath}
+        key={`${currentMdPath}#${editorSeq}`}
         mdPath={currentMdPath}
         openInEditor={(p) => void openPath(p)}
         writeClipboard={writeClipboard}
