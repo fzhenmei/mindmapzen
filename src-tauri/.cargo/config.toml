@@ -1,0 +1,7 @@
+# tauri build script（tauri-winres 编译图标/版本资源）需要 RC.EXE，而 Windows SDK
+# 不在默认 PATH——找不到即 build script panic（exit 101）。直接给 rc.exe 绝对路径，
+# cargo build / tauri dev / tauri build 任何入口都生效，免每次手动前置 PATH。
+# 注意：路径绑定本机 SDK 版本（10.0.26100.0），换机器需对齐
+#   dir "C:\Program Files (x86)\Windows Kits\10\bin" 找本机版本号
+[env]
+RC = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\rc.exe'
