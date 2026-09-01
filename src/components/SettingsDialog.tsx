@@ -18,6 +18,13 @@ interface SettingsDialogProps {
 /** 开关行（M12b Task 5 转 utility）：checkbox 走 primary 强调色 */
 const SETTING_ROW = 'flex cursor-pointer select-none items-center gap-2'
 
+/** git 状态摘要文案（Sonar S3358/S4624 修复：拆平 JSX 内嵌套三元与嵌套模板字面量） */
+function gitStatusLine(s: { lastCommit: string | null; aheadCount: number | null }): string {
+  if (s.lastCommit === null) return '尚无提交'
+  const ahead = s.aheadCount ? ` · 未推送 ${s.aheadCount}` : ''
+  return `最近提交：${s.lastCommit}${ahead}`
+}
+
 /** 设置对话框（M5b Task 4）：复制行为两开关（checkbox 形式）。
  *  改动即生效——toggle 直写 store 并 load-merge-save 持久化，无确认按钮，关闭即退出。
  *  M5d 增「更换工作区」行（M5a 缓期项：无工作区切换入口）；
@@ -96,9 +103,7 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                 />
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-muted-foreground" data-testid="git-status" title={gitStatus.lastCommit ?? undefined}>
-                    {gitStatus.lastCommit !== null
-                      ? `最近提交：${gitStatus.lastCommit}${gitStatus.aheadCount ? ` · 未推送 ${gitStatus.aheadCount}` : ''}`
-                      : '尚无提交'}
+                    {gitStatusLine(gitStatus)}
                     {lastBackup !== null ? ` · ${lastBackup}` : ''}
                   </span>
                   <span className="flex shrink-0 gap-1">
@@ -136,6 +141,16 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
               </Button>
             </div>
           )}
+          {/* 关于区（2026-09 版本信息批）：产品名 + 版本 + commit 短哈希——
+              __APP_VERSION__/__GIT_COMMIT__ 由 vite define 构建期注入（vite.config.ts） */}
+          <div
+            className="mt-1 flex items-center justify-between gap-2 border-t pt-2.5"
+            data-testid="about-section"
+          >
+            <span className="text-xs text-muted-foreground">
+              Mind Map Zen v{__APP_VERSION__} · {__GIT_COMMIT__}
+            </span>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="settings-close" onClick={onClose}>

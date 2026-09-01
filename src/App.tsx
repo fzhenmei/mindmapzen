@@ -13,6 +13,7 @@ import { openPath } from '@tauri-apps/plugin-opener'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
+import DevBadge from './components/DevBadge'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -263,11 +264,13 @@ export default function App() {
   }, [])
 
   // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
-  // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间
+  // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间；DevBadge 开发版贴纸同随三态
+  // （release 构建组件自渲染 null）
   const shell = (children: ReactNode) => (
     <div className="flex h-screen flex-col">
       <TitleBar />
       <div className="min-h-0 flex-1">{children}</div>
+      <DevBadge />
     </div>
   )
 

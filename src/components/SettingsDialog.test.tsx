@@ -81,4 +81,16 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByTestId('settings-workspace-exit'))
     expect(onExitWorkspace).toHaveBeenCalledTimes(1)
   })
+
+  // 关于区（2026-09 版本信息批）：产品名 + 版本号（vite define 注入，源自 package.json）
+  // + commit 短哈希；commit 是构建环境值，只断言非空存在不断言具体哈希
+  test('关于区：显示产品名、版本号与 commit 短哈希', () => {
+    render(<SettingsDialog onClose={() => {}} />)
+    const about = screen.getByTestId('about-section')
+    expect(about).toHaveTextContent('Mind Map Zen')
+    expect(about.textContent).toMatch(new RegExp(`v${__APP_VERSION__}`))
+    const hash = __GIT_COMMIT__
+    expect(hash.length).toBeGreaterThan(0)
+    expect(about).toHaveTextContent(hash)
+  })
 })
