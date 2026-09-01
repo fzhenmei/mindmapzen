@@ -23,6 +23,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* 官方 v4 base 层 body 规则（M14 迁移漏抄的第二处，同上 border 补齐先例）：
+   * 全局文字色锚定 --foreground。ghost/outline 按钮与无色类标题（如欢迎页 h1）不显式
+   * 设 text 色、全靠继承——此前唯一声明 color 的 .app 类是死类（App shell 未挂载），
+   * 继承链断在浏览器默认黑，夜航下黑字黑底近不可见（2026-09 暗色验收反馈） */
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 /* 官方 v4 动效基座（animate-in/fade-in-0/zoom-in-95 等官方组件动画类的

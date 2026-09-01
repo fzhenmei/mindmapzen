@@ -5,7 +5,9 @@
 html, body, #root { height: 100%; }
 /* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在树/卡片网格/大纲内 */
 html, body { overflow: hidden; }
-.app { height: 100%; font-family: var(--font-sans); color: var(--foreground); background: var(--background); }
+/* .app 类退役（2026-09 暗色修复）：App shell 根元素 M14 起未挂载本类，一直是死类；
+   color/background/font-family 职责由 theme.css @layer base 的 body 规则（官方 v4 迁移
+   补齐）与 @theme --font-sans 承担，此处保留档记防回潮 */
 
 /* ═══ 案头（M14 Task 3 官方 Sidebar 化）═══
  * 骨架已由 ui/sidebar 块承担（SidebarProvider/Sidebar/SidebarInset 官方布局），
