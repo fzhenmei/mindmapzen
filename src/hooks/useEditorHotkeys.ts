@@ -1,5 +1,5 @@
 // src/hooks/useEditorHotkeys.ts —— 编辑器全局快捷键（验收轮拆自 EditorView，行数护栏）：
-// Ctrl+Shift+C 复制 / Ctrl+S 保存 / Ctrl+P 快速切换浮层 / Ctrl+Tab 切上一张（v2.5）/
+// Ctrl+C 复制 / Ctrl+S 保存 / Ctrl+P 快速切换浮层 / Ctrl+Tab 切上一张（v2.5）/
 // 备注编辑 Shift+F2、Ctrl+.。监听只绑一次（闭包取首渲染值），各入口均走 refs
 // （activeUidRef/anyDialogRef）或稳定引用，无需重绑（M5a 收敛裁定）。
 import { useEffect, type RefObject } from 'react'
@@ -9,7 +9,7 @@ const isNoteHotkey = (e: KeyboardEvent): boolean =>
   (e.shiftKey && e.key === 'F2') || ((e.ctrlKey || e.metaKey) && e.key === '.')
 
 interface Params {
-  /** 复制 Markdown（Ctrl+Shift+C 的快捷键路径） */
+  /** 复制 Markdown（Ctrl+C 的快捷键路径；与引擎 Control+c 节点复制对调，后者挪 Control+Shift+c 见 MindMapCanvas） */
   doCopy(): void
   /** 显式保存链（Ctrl+S 的快捷键路径） */
   explicitSave(): void
@@ -30,9 +30,15 @@ export function useEditorHotkeys({ doCopy, explicitSave, openNoteDialog, activeU
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
       const k = e.key.toLowerCase()
-      if (e.shiftKey && k === 'c') {
-        doCopy()
-        return true
+      // 裸 Ctrl/Cmd+C 复制 Markdown（对调：md 复制高频占裸键，原引擎 Control+c 节点复制在
+      // Control+Shift+c）。输入域守卫：焦点在 input/textarea/contenteditable（节点编辑框、
+      // 备注对话框文本区）时放行原生复制选中文本，不截获成整图 md
+      if (k === 'c' && !e.shiftKey) {
+        const t = e.target
+        if (!(t instanceof Element && t.closest('input, textarea, [contenteditable="true"]'))) {
+          doCopy()
+          return true
+        }
       }
       if (k === 's') {
         explicitSave()

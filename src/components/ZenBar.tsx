@@ -1,6 +1,6 @@
 // src/components/ZenBar.tsx —— 纸面命令栏（M5a 拆分自 EditorView；M12b 底部停泊）：
 // 底部居中 40px 全不透明（spec §3：旧「静置淡化、悬停浮现」隐身游戏随青松工作台退役）。
-// 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+Shift+C / 备注编辑）不在此处，
+// 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑）不在此处，
 // 仍由 EditorView 的 window keydown effect 承担（命令栏只是按钮路径）。
 // M14 Task 5：内件全 ui——Button(ghost,icon) + ui Tooltip（官方默认内距 py-1.5 px-3）+
 // ui Separator + 布局组 ui ToggleGroup；外壳仅存停泊定位（M14 spec §4 唯一手搓例外）。
@@ -37,7 +37,7 @@ interface Props {
   /** 回退/重做（v1.1，想法5）：引擎 BACK/FORWARD 命令 + back_forward 历史态驱动的禁用信号
    *  （状态与执行在 EditorView 的 useUndoRedo；键盘 Ctrl+Z/Y 走引擎原生与画布兜底，命令栏只是按钮路径） */
   undoRedo: UndoRedo
-  /** 复制 Markdown（Ctrl+Shift+C 的按钮路径） */
+  /** 复制 Markdown（Ctrl+C 的按钮路径） */
   onCopyClick(): void
   /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮提示 */
   scope: 'full' | 'branch'
@@ -91,8 +91,8 @@ export default function ZenBar({
 }: Readonly<Props>) {
   const copyLabel =
     scope === 'branch'
-      ? '复制选中分支为 Markdown（Ctrl+Shift+C）'
-      : '复制整图为 Markdown（Ctrl+Shift+C）'
+      ? '复制选中分支为 Markdown（Ctrl+C）'
+      : '复制整图为 Markdown（Ctrl+C）'
   return (
     // zen-bar 类名保留为视觉冒烟钩子（skin 已全转 utility，App.css 无对应规则）
     <header

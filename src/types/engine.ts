@@ -27,6 +27,22 @@ export interface EngineRenderer {
   reRenderNodeCheckChange(node: unknown, notRender?: boolean): void
   /** 渲染树根节点实例（Render.js:601）；未渲染时为 null */
   root?: NodeBox | null
+  /** 复制选中节点（Render.js:1195）：写入引擎内部剪贴板（beingCopyData，供 Control+v 画布内
+   *  粘贴节点）并同步系统剪贴板 smm 格式数据；快捷键对调后由 Control+Shift+c 触发（MindMapCanvas） */
+  copy(): void
+  /** 当前激活（选中）节点实例数组（Render.js 维护）：无选中为空数组——Control+Shift+c
+   *  复制成功的判定依据（无选中 copy() 为 no-op，不上报盖印） */
+  activeNodeList?: unknown[]
+}
+
+/** 引擎快捷键层（MindMapHandle.keyCommand，KeyCommand.js）：window keydown 按键多重集匹配，
+ *  命中即 preventDefault+stopPropagation；defaultEnableCheck 只认 body 焦点（editNodeClassList
+ *  除外）。编辑框打开期引擎以 save()/restore() 缓存/恢复整个 shortcutMap，宿主注册随之存取不丢 */
+export interface EngineKeyCommand {
+  /** 注册快捷键（key 形如 'Control+Shift+c'，'|' 分隔多键）；同键多次注册追加回调 */
+  addShortcut(key: string, fn: () => void): void
+  /** 移除快捷键：不传 fn 删整组（引擎注册的匿名箭头函数拿不到引用，只能整组删） */
+  removeShortcut(key: string): void
 }
 
 /** 导出插件实例面（MindMapHandle.doExport，M5b Task 5）：返回 data URL 字符串（非 Blob），见上方 doExport 注释 */
@@ -119,4 +135,6 @@ export interface MindMapHandle {
   renderer?: EngineRenderer
   /** 命令层（构造时同步创建）：撤销历史栈与活动指针（v1.1 撤销/重做接线，见 undoSeed.ts） */
   command?: EngineCommand
+  /** 快捷键层（构造时同步创建，KeyCommand.js）：快捷键对调后 Control+c 节点复制在 Control+Shift+c */
+  keyCommand?: EngineKeyCommand
 }

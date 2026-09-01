@@ -229,6 +229,8 @@ interface Props {
   onDataChange: (data?: EngineNode) => void
   onActiveChange?: (uid: string | null) => void
   onEditorPaste?: (rawText: string) => void
+  /** Control+Shift+c 画布内复制节点成功（有选中，快捷键对调后的引擎路径）→ 宿主盖印记 */
+  onNodeCopy?: () => void
   layout?: string
   /** 引擎主题名（zen-paper/zen-night，见 engineThemes.ts）；挂载期入构造 opt，运行中变更走 setTheme 不重挂载 */
   theme?: string
@@ -243,6 +245,7 @@ export default function MindMapCanvas({
   onDataChange,
   onActiveChange,
   onEditorPaste,
+  onNodeCopy,
   layout,
   theme,
 }: Readonly<Props>) {
@@ -252,8 +255,8 @@ export default function MindMapCanvas({
   // tipRef 供主题 effect 引用
   const tipRef = useRef<NoteTooltip | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
-  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, registry })
-  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, registry }
+  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, onNodeCopy, registry })
+  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, onNodeCopy, registry }
 
   useEffect(() => {
     // 悬停窗先建后传（引擎构造期即可能注册 mouseover 钩子）；主题取挂载期值
@@ -325,6 +328,18 @@ export default function MindMapCanvas({
       cbRef.current.onActiveChange?.(typeof uid === 'string' ? uid : null)
     }
     mm.on('node_active', onActive)
+    // 快捷键对调：裸 Ctrl+C 让给宿主复制 Markdown（useEditorHotkeys doCopy，md 复制高频），
+    // 引擎原生 Control+c 复制节点挪至 Control+Shift+c（Render.js:438 注册的是匿名箭头函数拿不到
+    // 引用，removeShortcut 不传 fn 整组删除后重挂 copy）。编辑框打开期引擎 keyCommand.save()/
+    // restore() 缓存/恢复整个 shortcutMap 引用，此注册随之存取不丢；引擎命中时 preventDefault+
+    // stopPropagation 不拦同 window 后绑的宿主监听（同元素后续监听照常收，engine-api.md「M1 核验」）
+    mm.keyCommand.removeShortcut('Control+c')
+    mm.keyCommand.addShortcut('Control+Shift+c', () => {
+      mm.renderer.copy()
+      // 成功判定 = 有选中节点（Render.copy 无选中时 copyNode() 返回 undefined 即 no-op）；
+      // 印记经 cbRef 上报 EditorView 盖「已复制为节点」墨青印
+      if ((mm.renderer.activeNodeList ?? []).length > 0) cbRef.current.onNodeCopy?.()
+    })
     // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在保存成功后经 mmRef 调用。
     // 旧差值在重建内按 uid 留档回填（M5d Task 5），故此入口无需 adjust——引擎现存即最新
     ;(mm as MindMapHandle).rebuildLinks = (links) => rebuildEngineLinks(mm, links)

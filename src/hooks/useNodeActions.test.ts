@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import type { RefObject } from 'react'
 import { expect, test, vi } from 'vitest'
-import { computeNodeActionPos, useNodeActions } from './useNodeActions'
+import { computeNodeActionPos, computeNodeStampPos, useNodeActions } from './useNodeActions'
 import type { MindMapHandle } from '../types/engine'
 
 describe('computeNodeActionPos', () => {
@@ -18,6 +18,22 @@ describe('computeNodeActionPos', () => {
     expect(computeNodeActionPos({ left: 10, top: 20 })).toBeNull()
     expect(computeNodeActionPos({ left: 'x' as unknown, top: 0, width: 1, height: 1 })).toBeNull()
     expect(computeNodeActionPos({ left: NaN, top: 0, width: 1, height: 1 })).toBeNull()
+  })
+})
+
+describe('computeNodeStampPos（复制印记锚点）', () => {
+  test('节点上边中点上方 8px，内容坐标 × 视图变换（scale/平移）', () => {
+    const node = { left: 100, top: 50, width: 200, height: 100 }
+    // left=(100+200/2)×1.5+10=310；top=50×1.5+20-8=87
+    expect(computeNodeStampPos(node, { x: 10, y: 20, scale: 1.5 })).toEqual({ left: 310, top: 87 })
+  })
+  test('无视图参数按原点 1 倍缩放', () => {
+    expect(computeNodeStampPos({ left: 10, top: 20, width: 30, height: 40 })).toEqual({ left: 25, top: 12 })
+  })
+  test('几何缺失返回 null（兜底右上角 SaveStamp 的判定依据）', () => {
+    expect(computeNodeStampPos(null)).toBeNull()
+    expect(computeNodeStampPos({ left: 10, top: 20 })).toBeNull()
+    expect(computeNodeStampPos({ left: 'x' as unknown, top: 0, width: 1, height: 1 })).toBeNull()
   })
 })
 

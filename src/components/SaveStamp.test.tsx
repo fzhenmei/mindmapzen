@@ -1,13 +1,13 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useState } from 'react'
-import SaveStamp from './SaveStamp'
+import SaveStamp, { type StampKind } from './SaveStamp'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
 /** 受控卸载脚手架：onDone 时移除印记（模拟 EditorView 的 setStamp(null)） */
-function Harness({ kind }: Readonly<{ kind: 'saved' | 'copied' }>) {
+function Harness({ kind }: Readonly<{ kind: StampKind }>) {
   const [show, setShow] = useState(true)
   return show ? <SaveStamp kind={kind} onDone={() => setShow(false)} /> : null
 }
@@ -30,6 +30,18 @@ test('copied：渲染「已复制」墨青印，1.2s 到期经 onDone 卸载', (
     vi.advanceTimersByTime(1300)
   })
   expect(screen.queryByTestId('save-stamp')).not.toBeInTheDocument()
+})
+
+test('copied-md：渲染「已复制为 Markdown」墨青印（Ctrl+C 路径）', () => {
+  render(<Harness kind="copied-md" />)
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制为 Markdown')
+  expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
+})
+
+test('copied-node：渲染「已复制为节点」墨青印（Ctrl+Shift+C 引擎路径）', () => {
+  render(<Harness kind="copied-node" />)
+  expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制为节点')
+  expect(screen.getByTestId('save-stamp')).toHaveClass('stamp-ink')
 })
 
 test('显示期提前卸载：清理定时器，到期不再回调 onDone', () => {
