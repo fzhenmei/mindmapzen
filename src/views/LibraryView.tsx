@@ -364,8 +364,10 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
         </Sidebar>
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
-              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题 */}
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题。
+              h-12 紧凑（原 h-16 上下各 16px 死空间）：内部控件全 h-8 档，上下各留 py-2 呼吸位，
+              与预览卡头紧凑化同节奏 */}
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger data-testid="dir-panel-toggle" />
             <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
             <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
