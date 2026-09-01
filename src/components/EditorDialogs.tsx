@@ -58,6 +58,14 @@ function NoteDialog({
           rows={4}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          // Ctrl+Enter 即保存（2026-09）：备注常为大段文字，免鼠标/Tab 移到保存钮；
+          // 裸 Enter 不拦截（多行换行照常），Cmd+Enter 同译（mac 习惯）
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault()
+              onSave(value)
+            }
+          }}
           className="min-h-[50vh] w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-sm leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <DialogFooter>
@@ -65,7 +73,7 @@ function NoteDialog({
             取消
           </Button>
           <Button size="sm" data-testid="note-save" onClick={() => onSave(value)}>
-            保存
+            保存（Ctrl+Enter）
           </Button>
         </DialogFooter>
       </DialogContent>

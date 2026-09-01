@@ -1517,6 +1517,22 @@ test('btn-note：清空保存置 note=undefined（空值清除角标）', async 
   })
 })
 
+test('btn-note：Ctrl+Enter 保存（Enter 仍为换行，2026-09 快捷键）', async () => {
+  const handle = await renderWithSelection()
+  fireEvent.click(screen.getByTestId('btn-note'))
+  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
+  // 裸 Enter 不保存（多行备注正常换行，不触发命令）
+  fireEvent.keyDown(textarea, { key: 'Enter' })
+  expect(handle.execCommand).not.toHaveBeenCalled()
+  // Ctrl+Enter 即保存：整值写入并关框
+  fireEvent.change(textarea, { target: { value: '快捷保存\n第二行' } })
+  fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+    note: '快捷保存\n第二行',
+  })
+  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
+})
+
 test('btn-note：取消不执行命令且对话框关闭', async () => {
   const handle = await renderWithSelection()
   fireEvent.click(screen.getByTestId('btn-note'))
