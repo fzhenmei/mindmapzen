@@ -13,6 +13,7 @@
     "windows": [
       {
         "title": "Mind Map Zen",
+        "decorations": false,
         "width": 800,
         "height": 600,
         "resizable": true,

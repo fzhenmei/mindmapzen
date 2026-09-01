@@ -31,6 +31,9 @@ interface AppState {
   themePref: ThemePref
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
+  /** 顶部条（自定义标题栏）取色令牌：案头 '--sidebar'（视口顶是 sidebar 色场）、编辑器/
+   *  开屏 '--background'；视图挂载时声明，TitleBar 据此换底色与视口顶部无缝 */
+  titlebarBg: '--sidebar' | '--background'
   /** 复制行为设置（M5b Task 4：init 自配置，切换时持久化；EditorView 复制时按此后处理） */
   settings: CopySettings
   /** 版本管理配置（M20 想法8）：init 自配置，setGitConfig 持久化 */
@@ -89,6 +92,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   preferredLayout: 'mindmap',
   themePref: 'auto',
   resolvedTheme: 'light',
+  titlebarBg: '--background',
   settings: DEFAULT_COPY_SETTINGS,
   gitConfig: DEFAULT_GIT_CONFIG,
   gitRun: null,

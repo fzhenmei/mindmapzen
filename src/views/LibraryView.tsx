@@ -26,7 +26,6 @@ import { Separator } from '../components/ui/separator'
 import {
   Sidebar,
   SidebarFooter,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -95,6 +94,9 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
     // 工作区切换回到三态初始位（新工作区未选任何）
     setIdle(true)
   }, [workspaceDir, reloadTree])
+
+  // 顶部条取色令牌（v2.5）：案头视口顶部是 sidebar 色场，挂载即声明（TitleBar 换底色）
+  useEffect(() => useAppStore.setState({ titlebarBg: '--sidebar' }), [])
 
   const closeDialog = () => {
     setDialog(null)
@@ -319,13 +321,8 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
             wrapper 自动换 bg-sidebar 色场，SidebarInset 自动成 rounded-xl shadow-sm 白色浮层。
             分区靠「色场 vs 圆角浮层」，不靠线条 */}
         <Sidebar variant="inset" data-testid="dir-panel">
-          {/* 侧栏头：朱砂方印 + 品名（spec §4：印标 + Mind Map Zen） */}
-          <SidebarHeader>
-            <div className="flex items-center gap-2 px-2">
-              <AppLogo size={16} className="shrink-0" />
-              <span className="truncate text-sm font-semibold text-sidebar-foreground">Mind Map Zen</span>
-            </div>
-          </SidebarHeader>
+          {/* 侧栏头（v2.5 上移）：朱砂方印 + 品名移入全局 TitleBar（自定义标题栏左侧），
+              此处不再重复展示 */}
           {/* 侧栏内容 = 左树（DirectoryTree 内部即 SidebarContent/Group/Menu 官方骨架）；
               空工作区也可先建目录组织结构；树含导图文件行（M5d） */}
           <DirectoryTree

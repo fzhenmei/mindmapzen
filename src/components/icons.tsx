@@ -220,3 +220,20 @@ export const IconRedo = ({ size }: IconProps) =>
     </>,
     size,
   )
+
+/* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
+/** 最小化：底对齐短横（Win11 惯例，非垂直居中） */
+export const IconWinMin = ({ size }: IconProps) => base(<path d="M3.5 11.5h9" />, size)
+/** 最大化：细边方框 */
+export const IconWinMax = ({ size }: IconProps) => base(<rect x="3.5" y="3.5" width="9" height="9" />, size)
+/** 还原：错位双叠框（前小后大，Win11 语义） */
+export const IconWinRestore = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M5.5 5.5h7v7h-7z" />
+      <path d="M11 3.5H3.5V11" />
+    </>,
+    size,
+  )
+/** 关闭：X */
+export const IconWinClose = ({ size }: IconProps) => base(<path d="M4 4l8 8M12 4l-8 8" />, size)

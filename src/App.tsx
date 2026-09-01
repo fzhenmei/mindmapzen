@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useAppStore } from './store/appStore'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
@@ -12,6 +12,7 @@ import type { ExportPorts, GitRun, RegisterCloseGuard } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 import AppLogo from './components/AppLogo'
+import TitleBar from './components/TitleBar'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -261,21 +262,30 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
+  // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间
+  const shell = (children: ReactNode) => (
+    <div className="flex h-screen flex-col">
+      <TitleBar />
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  )
+
   // 启动屏（v2.4 验收）：init 的磁盘 IO 期间不闪开屏/案头，给确定性的加载态
   if (!booted) {
-    return (
-      <div className="grid h-screen place-items-center bg-background" data-testid="boot-screen">
+    return shell(
+      <div className="grid h-full place-items-center bg-background" data-testid="boot-screen">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <AppLogo size={48} />
           <p className="text-sm">正在启动…</p>
         </div>
-      </div>
+      </div>,
     )
   }
 
   if (route === 'editor' && currentMdPath) {
     // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）
-    return (
+    return shell(
       <EditorView
         key={currentMdPath}
         mdPath={currentMdPath}
@@ -286,8 +296,8 @@ export default function App() {
         exitApp={exitApp}
         pickImageFile={pickImageFile}
         readClipboardImage={readClipboardImage}
-      />
+      />,
     )
   }
-  return <LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} />
+  return shell(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} />)
 }
