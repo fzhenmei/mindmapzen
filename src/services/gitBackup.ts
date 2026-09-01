@@ -85,7 +85,7 @@ export async function gitStatusInfo(wsDir: string, run: GitRun): Promise<GitStat
   const log = await run(wsDir, ['log', '-1', '--format=%ci %s'])
   if (!log.ok) return { lastCommit: null, aheadCount: null }
   const sb = await run(wsDir, ['status', '-sb'])
-  const m = sb.out.match(/ahead (\d+)/)
+  const m = /ahead (\d+)/.exec(sb.out)
   return { lastCommit: log.out.trim(), aheadCount: m !== null ? Number(m[1]) : 0 }
 }
 
@@ -98,18 +98,24 @@ export interface HistoryEntry {
   message: string
 }
 
-/** 版本历史（M22 回滚 UI）：最近 limit 条提交（新→旧）；无仓库/无提交返回空数组 */
+/** 版本历史（M22 回滚 UI）：最近 limit 条提交（新→旧）；无仓库/无提交返回空数组。
+ *  分隔符占位符必须是 %x09（%x 后**两位**十六进制）——%x9 是笔误形态，git 会
+ *  原样字面输出，split('\t') 切不开 → 整行被当 hash（2026-09 invalid reference 实案） */
 export async function gitHistory(wsDir: string, run: GitRun, limit = 50): Promise<HistoryEntry[]> {
-  const log = await run(wsDir, ['log', `-${limit}`, '--format=%h%x9%ci%x9%s'])
+  const log = await run(wsDir, ['log', `-${limit}`, '--format=%h%x09%ci%x09%s'])
   if (!log.ok) return []
   return log.out
     .split('\n')
     .filter((l) => l.trim() !== '')
-    .map((l) => {
+    .flatMap((l) => {
       const [hash = '', date = '', ...msg] = l.split('\t')
-      return { hash, date, message: msg.join('\t') }
+      // 脏行防御：分隔符缺失（如字面 %x9 输出）时整行落进 hash——非哈希形态直接丢弃
+      return HASH_RE.test(hash) ? [{ hash, date, message: msg.join('\t') }] : []
     })
 }
+
+/** 哈希形态：短哈希 7 位起（core.abbrev 可加长），最长完整 40 位 */
+const HASH_RE = /^[0-9a-f]{7,40}$/
 
 /** 恢复到指定版本（M22）：工作区文件整体回到该提交内容，**以新提交落盘**——
  *  历史只增不改（git checkout <hash> -- . 后自动 commit），回滚本身可再回滚；
@@ -120,6 +126,8 @@ export async function restoreToVersion(
   hash: string,
   run: GitRun,
 ): Promise<string | null> {
+  // 预检：非哈希形态直接拒绝（防脏数据把整行文本带进 checkout 报 git 原始错误）
+  if (!HASH_RE.test(hash)) return `版本号无效：${hash.slice(0, 20)}…`
   const checkout = await run(wsDir, ['checkout', hash, '--', '.'])
   if (!checkout.ok) return `恢复失败：${checkout.err.split('\n')[0] ?? ''}`
   // 变更落为新提交（无变更时 commit 失败=无差异，视为成功）
