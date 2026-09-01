@@ -35,17 +35,21 @@ html, body { overflow: hidden; }
  * （ZenBar/NodeActions/EditorCaption 内联），App.css 不再有对应规则；zen-bar/editor-caption/
  * caption-name/theme-fab 类名保留为视觉冒烟钩子。布局分段控件（fieldset）随命令栏转 utility。 */
 /* 印记（Task 7）：保存成功朱砂印 / 已复制墨青印，右上角 250ms 缩放定影，1.2s 后由组件卸载。
-   top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞 */
+   top:12 right:16 与右下 .theme-fab（bottom:12）错位不相撞。
+   实底（2026-09 验收）：card 底 + 投影——贴节点的复制印记此前透明底，画布文字透上来
+   与印记文字混叠不可辨（同砚栏/浮动条的浮层语言：分区靠色场，浮层必不透明） */
 .save-stamp { position: absolute; top: 12px; right: 16px; z-index: 9; padding: var(--space-1) 10px;
-  font-size: var(--font-size-sm); border-radius: 6px; animation: stamp-in var(--duration-2) ease-out; }
+  font-size: var(--font-size-sm); border-radius: 6px; animation: stamp-in var(--duration-2) ease-out;
+  background: var(--card); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 .stamp-seal { color: var(--destructive); border: 1.5px solid var(--destructive); border-radius: 4px; transform: rotate(-3deg); }
 .stamp-ink { color: var(--primary); border: 1.5px solid var(--primary); border-radius: 4px; }
 @keyframes stamp-in { from { transform: scale(0.9) rotate(-3deg); opacity: 0; } to { opacity: 1; } }
 /* 复制印记：贴目标节点上方居中闪现（CopyStamp），墨青外观经 .stamp-ink；stamp-in 的
-   transform 动画会覆盖 translate 锚定，故独立 copy-in 纯淡入；不挡节点交互（pointer-events） */
+   transform 动画会覆盖 translate 锚定，故独立 copy-in 纯淡入；不挡节点交互（pointer-events）。
+   实底同 .save-stamp（2026-09 验收：透明底与节点文字混叠不可辨） */
 .copy-stamp { position: absolute; transform: translate(-50%, -100%); z-index: 9; padding: var(--space-1) 10px;
   font-size: var(--font-size-sm); border-radius: 6px; animation: copy-in var(--duration-2) ease-out;
-  pointer-events: none; }
+  pointer-events: none; background: var(--card); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 @keyframes copy-in { from { opacity: 0; } to { opacity: 1; } }
 /* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于画布上方居中（命令栏已停泊底部，M12b Task 4） */
 .zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
