@@ -176,7 +176,7 @@ test('打开文档渲染画布并显示名称', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -193,7 +193,7 @@ test('解析失败显示错误面板与原文', async () => {
     <EditorView
       mdPath="/ws/bad.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -212,7 +212,7 @@ test('读取失败显示错误面板并可纯文本打开', async () => {
     <EditorView
       mdPath="/ws/missing.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -230,7 +230,7 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -264,7 +264,7 @@ test('保存采集连线弯曲：引擎 offsets → sidecar linkAdjust 路径对
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -304,7 +304,7 @@ test('删线不复活：引擎 targets 删一后保存，md 缺该标记（注�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -342,7 +342,7 @@ test('打开时 sidecar linkAdjust 注入画布弯曲恢复', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -363,7 +363,7 @@ test('返回文件库前冲刷未保存修改', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -384,7 +384,7 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -422,7 +422,7 @@ test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -583,7 +583,7 @@ test('连线净化：打开后画布文本剥离标记，保存句尾注入（�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -612,7 +612,7 @@ test('连线净化：源节点改名后保存不断链（注册表以 uid 为键
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -637,7 +637,7 @@ test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () 
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -672,7 +672,7 @@ test('干净状态下保存为 no-op：不盖印记（无用户可感知的写�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -693,7 +693,7 @@ test('复制成功盖「已复制为 Markdown」墨青印记（替代按钮内 �
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -737,7 +737,7 @@ test('同会话到期卸载后再次保存可再次盖印（回归：stamp state
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -776,7 +776,7 @@ test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -819,7 +819,7 @@ test('多行粘贴拆子节点：首行替换被编辑节点文本，其余行�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -862,7 +862,7 @@ test('多行粘贴拆分后无有效行（纯空白）不执行命令', async ()
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -886,7 +886,7 @@ test('多行粘贴 uid 未命中渲染树时静默放弃（无命令执行）', 
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -935,7 +935,7 @@ const renderDirtyAndClose = async (guard: ReturnType<typeof makeGuardStub>) => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={guard.register}
       pickImageFile={stubPickImage}
@@ -1017,7 +1017,7 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={guard.register}
       pickImageFile={stubPickImage}
@@ -1074,7 +1074,7 @@ test('写盘窗口内的新编辑不丢：清脏被修订号拦下并补存一�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1104,7 +1104,7 @@ test('在途保存时点返回：等待补存轮落盘完成才回文件库（I1
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1179,7 +1179,7 @@ const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
     <EditorView
       mdPath="/ws/ignored.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={guard ? guard.register : noopRegister}
       exitApp={exitApp}
@@ -1303,7 +1303,7 @@ test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', a
 // ---- 布局三态切换（spec §3.7：即时生效不置脏，sidecar 随下次保存落盘；打开时以 sidecar.layout 为初值）----
 
 test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 viewOps 单测覆盖）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
@@ -1321,7 +1321,7 @@ test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', as
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1354,7 +1354,7 @@ test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', as
     <EditorView
       mdPath="/ws/b.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1382,7 +1382,7 @@ test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1413,7 +1413,7 @@ test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1432,7 +1432,7 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
   test('无 sidecar 的导图按偏好布局打开', async () => {
     await fs.writeTextFileAtomic('/ws/bare.md', '# 裸图\n') // 无 .zen.json
     useAppStore.setState({ preferredLayout: 'logic' })
-    render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
+    render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage} />)
     await screen.findByTestId('fake-canvas')
     expect(screen.getByTestId('layout-logic')).toHaveAttribute('data-state', 'on')
@@ -1440,7 +1440,7 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
 
   test('切换布局会记住偏好', async () => {
     useAppStore.setState({ preferredLayout: 'mindmap' })
-    render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
+    render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage} />)
     await screen.findByTestId('fake-canvas')
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
@@ -1452,7 +1452,7 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
 // ---- 复制按钮 data-scope（M4 新增 E2E 信号：随选中态在 full/branch 间切换）----
 
 test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
-  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn()} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
@@ -1474,7 +1474,7 @@ const renderWithSelection = async (): Promise<MindMapHandle> => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1547,7 +1547,7 @@ test('btn-note：无选中节点时禁用', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1579,7 +1579,7 @@ test('备注快捷键：无选中节点时不打开对话框', async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1616,7 +1616,7 @@ const renderReady = async (exportPorts: {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
@@ -1723,7 +1723,7 @@ test('回退/重做按钮：初始双禁用；历史态事件驱动启用；点�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1755,7 +1755,7 @@ test('栈态边界：回退到基线（index=0）撤销钮禁用重做可用；�
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={vi.fn()}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
@@ -1786,7 +1786,7 @@ const renderForSwitch = async () => {
     <EditorView
       mdPath="/ws/a.md"
       openInEditor={openInEditor}
-      writeClipboard={vi.fn()}
+      writeClipboard={vi.fn(async () => {})}
       exportPorts={stubExportPorts}
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}

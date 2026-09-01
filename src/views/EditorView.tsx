@@ -145,30 +145,31 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
 
   /** 复制文件路径（2026-09）：mdPath 绝对路径入剪贴板（发给 AI 直接读本文件），成功盖「已复制」墨青印 */
-  const copyPath = async (): Promise<void> => {
-    try {
-      await writeClipboard(mdPath)
-      flashStamp('copied')
-    } catch (e) {
-      setError('复制路径失败：' + String(e))
-    }
+  const copyPath = (): void => {
+    void writeClipboard(mdPath).then(
+      () => flashStamp('copied'),
+      (e) => setError('复制路径失败：' + String(e)),
+    )
   }
 
   /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
-   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值） */
-  const doCopy = async (): Promise<void> => {
-    try {
-      const mm = mmRef.current
-      if (!mm) return
-      const full = mm.getData()
-      selection.clearStaleIfMissing(full)
-      const uid = selection.activeUidRef.current
-      const active = uid ? findSubtreeByUid(full, uid) : null
-      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree, registry.byUid), useAppStore.getState().settings))
-      flashCopy('copied-md')
-    } catch (e) {
-      setError('复制失败：' + String(e))
-    }
+   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值）。
+   *  序列化同步无守卫（纯函数）；写剪贴板异步段以 then 双参兜错（Sonar S3776 认知复杂度） */
+  const doCopy = (): void => {
+    const mm = mmRef.current
+    if (!mm) return
+    const full = mm.getData()
+    selection.clearStaleIfMissing(full)
+    const uid = selection.activeUidRef.current
+    const active = uid ? findSubtreeByUid(full, uid) : null
+    const md = applyCopySettings(
+      serialize(engineTreeToZen(active ?? full).tree, registry.byUid),
+      useAppStore.getState().settings,
+    )
+    void writeClipboard(md).then(
+      () => flashCopy('copied-md'),
+      (e) => setError('复制失败：' + String(e)),
+    )
   }
 
   /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」；干净状态下保存是 no-op，不印记 */
@@ -219,6 +220,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       setEngineTree(tree)
       stats.onDataChange(tree) // 统计行初值（2026-09）：与引擎树落 state 同批（不产生额外重渲）
     },
+    onFileTime: stats.initSavedAt, // 「保存于」初值 = 文件 mtime（会话内保存链成功后刷新）
     onReady: () => setState('ready'),
     onParseError: failLoad,
     onReadError: failLoad,

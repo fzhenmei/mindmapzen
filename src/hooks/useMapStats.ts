@@ -13,10 +13,14 @@ function countTree(node: EngineNode): number {
 
 export interface MapStats {
   nodeCount: number
-  /** 最后一次成功落盘时刻（ms）；null = 打开以来未保存过 */
+  /** 最后一次落盘时刻（ms）：打开初值取文件 mtime，会话内保存链成功后刷新；
+   *  null = 拿不到文件时刻（防御，正常不出现） */
   savedAt: number | null
   /** 引擎数据变化（携带快照时顺带重数节点；无载荷调用只忽略计数） */
   onDataChange(data?: EngineNode): void
+  /** 打开文档初值（文件 mtime）：「保存于」自打开即有意义——干净图显示「未保存」
+   *  会被误读为有未落盘修改（新建即落盘，盘上明明有文件） */
+  initSavedAt(ms: number): void
   /** 保存链成功回调（写 md+sidecar 落盘后触发） */
   markSaved(): void
 }
@@ -31,6 +35,7 @@ export function useMapStats(): MapStats {
     onDataChange: (data?: EngineNode) => {
       if (data !== undefined) setNodeCount(countTree(data))
     },
+    initSavedAt: (ms: number) => setSavedAt(ms),
     markSaved: () => setSavedAt(Date.now()),
   }
 }

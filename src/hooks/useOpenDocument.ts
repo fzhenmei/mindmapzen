@@ -27,6 +27,8 @@ export interface OpenDocumentDeps {
   onLayout(initial: LayoutKind): void
   /** 引擎树就绪（EditorView 的 engineTree state） */
   onTree(tree: EngineNode): void
+  /** 文件最后落盘时刻（stat mtime；题签统计行初值）；stat 失败不回调 */
+  onFileTime(ms: number): void
   /** 全链成功（loading → ready） */
   onReady(): void
   /** 解析失败（错误面板显示 parse 错误与原文） */
@@ -49,6 +51,13 @@ export function useOpenDocument(deps: OpenDocumentDeps): void {
           deps.onParseError(r.error, raw)
           return
         }
+        // 文件最后落盘时刻（2026-09 统计行初值）：宽容——stat 失败只少一行统计不炸打开链
+        adapter
+          .stat(mdPath)
+          .then((st) => {
+            if (!cancelled) deps.onFileTime(st.modifiedAt)
+          })
+          .catch(() => {})
         const sc = await readSidecar(adapter, mdPath)
         if (cancelled) return
         deps.onIgnored(r.ignoredBlocks)

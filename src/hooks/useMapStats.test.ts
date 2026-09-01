@@ -30,4 +30,11 @@ describe('useMapStats', () => {
     act(() => result.current.markSaved())
     expect(result.current.savedAt).not.toBeNull()
   })
+
+  test('initSavedAt：打开文档以文件 mtime 为初值（干净图不显示「未保存」歧义）', () => {
+    const { result } = renderHook(() => useMapStats())
+    const mtime = 1756700000000
+    act(() => result.current.initSavedAt(mtime))
+    expect(result.current.savedAt).toBe(mtime)
+  })
 })
