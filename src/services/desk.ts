@@ -72,3 +72,40 @@ export async function moveMap(
   }
   return { name: finalName, mdPath: newMdPath, relDir: toRelNorm, ...(await statTail(fs, newMdPath)) }
 }
+
+/** 树文件行的结构形状（DirectoryTree 的 TreeFile 同构；服务层不 import 组件层，
+ *  结构类型即契约） */
+interface TreeFileShape { name: string; relDir: string }
+
+/** 工作区搜索过滤（v2.5 侧栏搜索框）：大小写不敏感包含匹配。语义——文件名命中 →
+ *  保留该文件及其祖先目录链；目录名命中 → 整子树保留（其下文件全显）；无命中的
+ *  目录分支剪除。q 去空格后为空原样返回（引用不变，未搜索时零成本）；返回新树
+ *  节点（浅拷贝链），不改动入参 */
+export function filterTree(
+  tree: DirNode[],
+  files: TreeFileShape[],
+  rawQ: string,
+): { tree: DirNode[]; files: TreeFileShape[] } {
+  const q = rawQ.trim().toLowerCase()
+  if (q === '') return { tree, files }
+  const hit = (s: string) => s.toLowerCase().includes(q)
+
+  // 目录命中区：命中目录及其全部后代 path（整子树保留区，区内文件无条件保留）
+  const subtreePaths = new Set<string>()
+  const collect = (n: DirNode) => {
+    subtreePaths.add(n.path)
+    n.children.forEach(collect)
+  }
+  tree.forEach((n) => { if (hit(n.name)) collect(n) })
+
+  // 树修剪：区内整子树直过；区外目录保留「有命中后代（子目录或直接文件）」的最小链
+  const keep = (n: DirNode): DirNode | null => {
+    if (subtreePaths.has(n.path)) return n
+    const kids = n.children.map(keep).filter((k): k is DirNode => k !== null)
+    const hasHitFile = files.some((f) => f.relDir === n.path && hit(f.name))
+    return kids.length === 0 && !hasHitFile ? null : { ...n, children: kids }
+  }
+  const keptTree = tree.map(keep).filter((k): k is DirNode => k !== null)
+  const keptFiles = files.filter((f) => subtreePaths.has(f.relDir) || hit(f.name))
+  return { tree: keptTree, files: keptFiles }
+}

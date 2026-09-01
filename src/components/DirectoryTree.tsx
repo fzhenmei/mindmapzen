@@ -1,15 +1,17 @@
-import { ChevronRight } from 'lucide-react'
-import type { JSX } from 'react'
-import type { DirNode } from '../services/desk'
+import { ChevronRight, Search } from 'lucide-react'
+import { useState, type JSX } from 'react'
+import { filterTree, type DirNode } from '../services/desk'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from './ui/collapsible'
+import { Input } from './ui/input'
 import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -59,6 +61,14 @@ export default function DirectoryTree({
   onSelectFile,
   onOpenFile,
 }: Readonly<Props>) {
+  // 侧栏搜索（v2.5）：占位原 SidebarHeader（logo 上移 TitleBar 后空出的位）。
+  //  过滤在 desk.filterTree（纯函数）；搜索态强制全树展开（defaultOpen 非受控只在
+  //  首挂生效，折叠中的目录里有命中文件时靠受控 open 展开），清空即复原
+  const [query, setQuery] = useState('')
+  const q = query.trim()
+  const searching = q !== ''
+  const filtered = searching ? filterTree(tree, files, q) : { tree, files }
+
   const isFileSelected = (f: TreeFile) =>
     selectedFile !== null && selectedFile.name === f.name && selectedFile.relDir === f.relDir
 
@@ -85,7 +95,7 @@ export default function DirectoryTree({
   )
 
   const renderFiles = (relDir: string) =>
-    files.filter((f) => f.relDir === relDir).map((f) => renderFile(f, `file:${relDir}/${f.name}`))
+    filtered.files.filter((f) => f.relDir === relDir).map((f) => renderFile(f, `file:${relDir}/${f.name}`))
 
   /** 目录行：有子（目录或文件）→ Collapsible（箭头折叠 + 行面选中）；无子 → 普通行 */
   const renderDir = (n: DirNode, key: string): JSX.Element => {
@@ -108,7 +118,7 @@ export default function DirectoryTree({
         </SidebarMenuSubItem>
       )
     return (
-      <Collapsible key={key} asChild defaultOpen className="group/collapsible">
+      <Collapsible key={key} asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
         <SidebarMenuSubItem>
           <div className="relative">
             <SidebarMenuSubButton
@@ -146,11 +156,27 @@ export default function DirectoryTree({
 
   return (
     <SidebarContent>
+      {/* 搜索框（v2.5）：SidebarHeader 原是 logo+品名（上移 TitleBar），此位改常驻
+          工作区文件搜索；Esc 清空复原 */}
+      <SidebarHeader>
+        <div className="relative px-2 pb-1">
+          <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
+          <Input
+            data-testid="dir-search"
+            aria-label="搜索工作区文件"
+            placeholder="搜索工作区文件…"
+            value={query}
+            className="h-8 pl-7 text-xs"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
+          />
+        </div>
+      </SidebarHeader>
       <SidebarGroup>
         <SidebarGroupLabel>目录</SidebarGroupLabel>
         <SidebarMenu>
           {/* 树根 = 工作区：本身即最外层 Collapsible（点箭头收起全树），行面选中根视图 */}
-          <Collapsible asChild defaultOpen className="group/collapsible">
+          <Collapsible asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
             <SidebarMenuItem>
               <div className="relative">
                 <SidebarMenuButton
@@ -174,8 +200,16 @@ export default function DirectoryTree({
               </div>
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  {tree.map((n) => renderDir(n, `dir:${n.path}`))}
-                  {renderFiles('')}
+                  {searching && filtered.tree.length === 0 && filtered.files.length === 0 ? (
+                    <p data-testid="dir-search-empty" className="px-2 py-1 text-xs text-muted-foreground">
+                      没有匹配的文件
+                    </p>
+                  ) : (
+                    <>
+                      {filtered.tree.map((n) => renderDir(n, `dir:${n.path}`))}
+                      {renderFiles('')}
+                    </>
+                  )}
                 </SidebarMenuSub>
               </CollapsibleContent>
             </SidebarMenuItem>

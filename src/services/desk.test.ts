@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { createDir, moveMap, readDirTree } from './desk'
+import { createDir, filterTree, moveMap, readDirTree } from './desk'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
@@ -79,5 +79,55 @@ describe('隐藏 git 内部目录（M20 验收）', () => {
     await fs.mkdir('/ws/真目录')
     const tree = await readDirTree(fs, '/ws')
     expect(tree.map((n) => n.name)).toEqual(['真目录'])
+  })
+})
+
+describe('filterTree（侧栏搜索过滤）', () => {
+  // 树形：项目/{前端, 后端}；灵感/；根直挂 note.md；文件分布见 files
+  const tree = [
+    { name: '灵感', path: '灵感', children: [] },
+    { name: '项目', path: '项目', children: [
+      { name: '后端', path: '项目/后端', children: [] },
+      { name: '前端', path: '项目/前端', children: [] },
+    ] },
+  ]
+  const files = [
+    { name: '架构图', relDir: '项目/后端' },
+    { name: '登录页', relDir: '项目/前端' },
+    { name: '灵感速记', relDir: '灵感' },
+    { name: 'note', relDir: '' },
+  ]
+
+  test('空查询原样返回（树/文件引用不变，未搜索零成本）', () => {
+    const r = filterTree(tree, files, '   ')
+    expect(r.tree).toBe(tree)
+    expect(r.files).toBe(files)
+  })
+
+  test('文件名命中：保留文件与祖先目录链，无关分支剪除', () => {
+    const r = filterTree(tree, files, '登录')
+    expect(r.files).toEqual([{ name: '登录页', relDir: '项目/前端' }])
+    expect(r.tree).toEqual([
+      { name: '项目', path: '项目', children: [{ name: '前端', path: '项目/前端', children: [] }] },
+    ])
+  })
+
+  test('目录名命中：整子树保留（其下文件全显）', () => {
+    const r = filterTree(tree, files, '灵感')
+    expect(r.tree).toEqual([tree[0]]) // 命中目录节点引用直过（整子树）
+    expect(r.files).toEqual([{ name: '灵感速记', relDir: '灵感' }])
+  })
+
+  test('根直挂文件命中：树剪空但文件在', () => {
+    const r = filterTree(tree, files, 'note')
+    expect(r.tree).toEqual([])
+    expect(r.files).toEqual([{ name: 'note', relDir: '' }])
+  })
+
+  test('大小写不敏感；无命中全空', () => {
+    expect(filterTree(tree, files, 'NOTE').files).toEqual([{ name: 'note', relDir: '' }])
+    const none = filterTree(tree, files, '不存在')
+    expect(none.tree).toEqual([])
+    expect(none.files).toEqual([])
   })
 })

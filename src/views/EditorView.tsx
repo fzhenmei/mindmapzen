@@ -156,6 +156,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 快速切换（v2.5）：浮层候选/切换链/ping-pong（含返回案头共用的安全链 leaveTo）
   const quick = useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave })
 
+  // 顶部条取色令牌（v2.5）：编辑器全屏画布顶部是 --background，挂载即声明（TitleBar 换底色）
+  useEffect(() => useAppStore.setState({ titlebarBg: '--background' }), [])
+
   // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
   const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
 
