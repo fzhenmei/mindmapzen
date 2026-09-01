@@ -26,7 +26,8 @@ type DetailState =
   | { kind: 'error' }
   | { kind: 'text'; text: string }
 
-/** 案头文件详情态（M15 → 官方 Card 解剖）：CardHeader = 标题（CardTitle）+ 按钮组
+/** 案头文件详情态（M15 → 官方 Card 解剖）：CardHeader = 标题（CardTitle，text-sm
+ *  font-semibold 对齐最外层 TitleBar 品名——font-file 等宽字体仅文件标识语境）+ 按钮组
  *  （CardAction 官方右上动作位），仅一行、上下距压至 py-2（卡根 py-0 抵官方 py-6，
  *  [.border-b]:pb-6 压至 pb-2）；CardContent = markdown 渲染区；元信息（目录/大小/
  *  创建/修改）不重要，下沉 CardFooter 低调呈示（muted 小字，卡脚 bg-card 与 muted
@@ -81,7 +82,7 @@ export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) 
       {/* border-b 分割线；py-2 紧凑上下距（官方 [.border-b]:pb-6 条件类压至 pb-2），
           gap-0 压官方行间 gap-2（描述行已移卡脚，空 grid 行不再漏高） */}
       <CardHeader className="gap-0 border-b py-2 [.border-b]:pb-2">
-        <CardTitle className="truncate font-file text-base" title={`${info.name}.md`}>
+        <CardTitle className="truncate text-sm font-semibold" title={`${info.name}.md`}>
           {info.name}.md
         </CardTitle>
         <CardAction>
