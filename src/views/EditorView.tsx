@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
 import { applyMultilinePaste } from '../services/multiline'
@@ -11,6 +11,7 @@ import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
+import { useConflictAsk } from '../hooks/useConflictAsk'
 import { useLinkPurify } from '../hooks/useLinkPurify'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
@@ -30,6 +31,7 @@ import EditorErrorPanel from '../components/EditorErrorPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
+import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
@@ -78,6 +80,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 题签统计行（2026-09）：节点数 + 最后保存时间；先于保存管线定义（onSaved 回调 markSaved）
   const stats = useMapStats()
 
+  // 冲突裁决（外部变更防护）：保存链挂起等三态对话框；reload 丢弃内存编辑重挂重载
+  const conflict = useConflictAsk(dirtyRef, clearDirty)
+
   // 保存管线（M5a 拆分）：串行保存链/自动保存/布局落盘；脏标记 ref 归本视图持有（守卫「放弃」路径也读写）
   const pipeline = useSavePipeline({
     adapter,
@@ -93,6 +98,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       rebuildFromRegistry()
       stats.markSaved()
     },
+    // 外部变更裁决（多实例/外部编辑器改盘防护）：保存链挂起等本视图的冲突对话框三态
+    onExternalConflict: conflict.ask,
   })
 
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
@@ -220,6 +227,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       setEngineTree(tree)
       stats.onDataChange(tree) // 统计行初值（2026-09）：与引擎树落 state 同批（不产生额外重渲）
     },
+    onRaw: pipeline.initBaseline, // 冲突检测基线（打开时的磁盘原文）
     onFileTime: stats.initSavedAt, // 「保存于」初值 = 文件 mtime（会话内保存链成功后刷新）
     onReady: () => setState('ready'),
     onParseError: failLoad,
@@ -228,7 +236,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null || conflict.open
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -379,20 +387,29 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
               }
             : null
         }
-        // 快速切换浮层（v2.5）：搜索态（Ctrl+P，输入过滤高亮自管）/ 轮换态（Ctrl+Tab 按住，
-        // 受控高亮无输入框）两形态互斥共用——cycleActive 传 undefined 即搜索态
-        quickSwitch={
-          !guard.guarding && !flow.confirming && (quick.switchOpen || quick.cycle !== null)
-            ? {
-                candidates: quick.cycle !== null ? quick.cycleCandidates : quick.candidates,
-                cycleActive: quick.cycle ?? undefined,
-                onActiveChange: quick.setCycleActive,
-                onPick: (p) => void quick.switchTo(p),
-                onClose: quick.cycle !== null ? quick.cancelCycle : quick.close,
-              }
-            : null
-        }
+        // 快速切换浮层（v2.5）：槽组装拆至 buildQuickSwitchSlot（复杂度护栏，槽内两形态互斥）
+        quickSwitch={buildQuickSwitchSlot(guard, flow, quick)}
+        // 冲突裁决框（外部变更防护）：保存链挂起等待，浮条/快捷键让位（anyDialog）
+        conflict={conflict.open ? { mapName: name, onChoice: conflict.onChoice } : null}
       />
     </TooltipProvider></div>
   )
+}
+
+/** 快速切换浮层槽组装（v2.5.1 拆出，复杂度护栏）：搜索态（Ctrl+P）/ 轮换态（Ctrl+Tab）
+ *  两形态互斥共用——cycleActive 传 undefined 即搜索态；守卫/确认框让位互斥（同其他槽） */
+function buildQuickSwitchSlot(
+  guard: Readonly<{ guarding: boolean }>,
+  flow: Readonly<{ confirming: boolean }>,
+  quick: ReturnType<typeof useQuickSwitch>,
+): ComponentProps<typeof QuickSwitchDialog> | null {
+  if (guard.guarding || flow.confirming) return null
+  if (!quick.switchOpen && quick.cycle === null) return null
+  return {
+    candidates: quick.cycle !== null ? quick.cycleCandidates : quick.candidates,
+    cycleActive: quick.cycle ?? undefined,
+    onActiveChange: quick.setCycleActive,
+    onPick: (p) => void quick.switchTo(p),
+    onClose: quick.cycle !== null ? quick.cancelCycle : quick.close,
+  }
 }
