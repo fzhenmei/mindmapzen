@@ -24,6 +24,7 @@ import {
   IconNote,
   IconPlus,
   IconRedo,
+  IconRoute,
   IconSave,
   IconSwitch,
   IconUndo,
@@ -39,6 +40,9 @@ interface Props {
   undoRedo: UndoRedo
   /** 复制 Markdown（Ctrl+C 的按钮路径） */
   onCopyClick(): void
+  /** 复制文件路径（2026-09：发给 AI 直接读本文件；按钮紧邻复制 md 钮，
+   *  IconRoute 路径图标与 IconCopy 形状区分） */
+  onCopyPathClick(): void
   /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮提示 */
   scope: 'full' | 'branch'
   /** 保存（Ctrl+S 的按钮路径） */
@@ -77,6 +81,7 @@ export default function ZenBar({
   onSwitchClick,
   undoRedo,
   onCopyClick,
+  onCopyPathClick,
   scope,
   onSaveClick,
   onNoteClick,
@@ -162,6 +167,18 @@ export default function ZenBar({
           onClick={onCopyClick}
         >
           <IconCopy />
+        </Button>
+      </Tip>
+      <Tip label="复制文件路径（发给 AI 直接读取）">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-copy-path"
+          aria-label="复制文件路径（发给 AI 直接读取）"
+          onClick={onCopyPathClick}
+        >
+          <IconRoute />
         </Button>
       </Tip>
       <Tip label="保存（Ctrl+S）">

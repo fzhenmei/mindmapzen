@@ -4,10 +4,12 @@
 // M18：EditorView 300→320（图标管理器接线：hook + NodeActions 钮 + 对话框渲染的功能性增长）。
 // M19：EditorView 320→360（插图：打开链 imgMeta 构建 + useImageEdit 接线 + ImageDialog 渲染）。
 // v2.5：EditorView 360→380（快速切换：逻辑已拆 useQuickSwitch，浮层渲染 + 砚栏钮 + 快捷键接线）。
+// 2026-09（v2.6 UI 打磨批）：380→405（题签统计行 + 复制路径接线 + onSaved 组合；同批
+// 拆 useOpenDocument/EditorErrorPanel、三浮动框迁 EditorDialogs，还掉 develop 既有超欠）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 380 },
+  { path: '../src/views/EditorView.tsx', limit: 405 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

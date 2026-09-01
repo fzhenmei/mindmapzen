@@ -8,7 +8,7 @@ import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card'
-import { IconArrowLeft, IconFolder, IconOpen, IconPencil, IconTrash } from './icons'
+import { IconArrowLeft, IconCopy, IconFolder, IconOpen, IconPencil, IconTrash } from './icons'
 import type { MapAction } from './FileExplorer'
 import MarkdownPreview from './MarkdownPreview'
 
@@ -19,6 +19,8 @@ interface Props {
   onBack(): void
   /** 悬停操作（M16 详情态补全，与资源管理器 tile 同构）：移动/重命名/删除，对话框流在 LibraryView */
   onAction(a: MapAction, m: MapInfo): void
+  /** 复制文件路径（2026-09：发给 AI 直接读本文件；写剪贴板端口经 LibraryView 注入） */
+  onCopyPath(path: string): void
 }
 
 type DetailState =
@@ -37,7 +39,7 @@ type DetailState =
  *  --card-spacing 变量尚未落进官方源码），滚动条与 muted 底贴卡边；Card 根压 py-0 +
  *  overflow-hidden，首尾距由卡头/卡脚各自的 py-2 承担。读取失败时卡头仍完整（元数据
  *  来自 store），预览区显示「无法预览」——打开按钮兜底 */
-export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) {
+export default function FileDetail({ info, onBack, onAction, onCopyPath }: Readonly<Props>) {
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
   // 插图解析表（M19）：md 行级收集 ![alt](src) → 字节转 dataURL（预览渲染用；
   // webview 解析不了工作区相对路径）。失败宽容空表（img 原样渲染为占位）
@@ -131,6 +133,23 @@ export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) 
               </Tooltip>
             ))}
             <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  data-testid="btn-copy-path"
+                  aria-label="复制文件路径"
+                  onClick={() => onCopyPath(info.mdPath)}
+                >
+                  <IconCopy />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-96">
+                <span className="block truncate">复制文件路径：{info.mdPath}</span>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

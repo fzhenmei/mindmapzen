@@ -6,6 +6,7 @@ import { createDir, moveMap, readDirTree, type DirNode } from '../services/desk'
 import { parse } from '../services/mdTree'
 import { parseXmind } from '../services/xmindImport'
 import { describeIgnoredType } from '../services/ignoredType'
+import type { WriteClipboard } from '../services/clipboard'
 import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import HistoryDialog from '../components/HistoryDialog'
@@ -46,6 +47,8 @@ interface Props {
   pickDirectory: () => Promise<string | null>
   /** 选择外部导入源（.md 文本 / .xmind 字节）：生产为 Tauri 对话框单选 + adapter 读取，测试注入桩；取消返回 null */
   pickImportFile: () => Promise<PickedImport | null>
+  /** 剪贴板写入端口（2026-09 复制路径）：生产为 Tauri 插件实现，测试注入内存实现（同 EditorView prop 模式） */
+  writeClipboard: WriteClipboard
 }
 
 /** 导入预览挂起态：解析成功但存在忽略块，待用户确认后才入库（取消则丢弃） */
@@ -59,7 +62,7 @@ interface ImportPreview {
  *  idle（进案头未选任何 → 空态引导）/ 目录态（FileExplorer 资源管理器大图标网格）/
  *  详情态（FileDetail 摘要条 + markdown 预览）。交互语义：树/文件夹 tile 单击=选目录，
  *  文件 tile/树文件行单击=选中进详情，双击=进纸面；悬停操作钮（移动/重命名/删除）沿旧口径 */
-export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<Props>) {
+export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
   // 最近打开清单 → 导图信息（已删/移出工作区的宽容剔除，最多 8 条）
@@ -245,6 +248,7 @@ export default function LibraryView({ pickDirectory, pickImportFile }: Readonly<
       return (
         <FileDetail
           info={selectedInfo}
+          onCopyPath={(p) => void writeClipboard(p)}
           onBack={() => {
             // 返回目录视图：清文件选中即回落到 selectedDir 的资源管理器态
             setSelectedMap(null)

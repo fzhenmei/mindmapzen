@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
-import { engineTreeToZen, findSubtreeByUid, parse, serialize, zenToEngineTree } from '../services/mdTree'
-import { buildImageMeta } from '../services/imageAssets'
-import { readSidecar } from '../services/sidecar'
+import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
 import { applyMultilinePaste } from '../services/multiline'
 import { applyCopySettings } from '../services/copyFilter'
 import type { WriteClipboard } from '../services/clipboard'
@@ -22,13 +20,13 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useQuickSwitch } from '../hooks/useQuickSwitch'
+import { useOpenDocument } from '../hooks/useOpenDocument'
+import { useMapStats } from '../hooks/useMapStats'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
-import IconPickerDialog from '../components/IconPickerDialog'
-import ImageDialog from '../components/ImageDialog'
 import EditorCaption from '../components/EditorCaption'
-import QuickSwitchDialog from '../components/QuickSwitchDialog'
+import EditorErrorPanel from '../components/EditorErrorPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
@@ -77,6 +75,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 连线净化（M5d Task 2）：会话注册表（uid → 目标名）序列化注入/画线桥接/复制共享；setLinkAdjust（Task 5）注入 sidecar 弯曲记忆
   const { registry, purify, rebuildFromRegistry, setLinkAdjust } = useLinkPurify(mmRef)
 
+  // 题签统计行（2026-09）：节点数 + 最后保存时间；先于保存管线定义（onSaved 回调 markSaved）
+  const stats = useMapStats()
+
   // 保存管线（M5a 拆分）：串行保存链/自动保存/布局落盘；脏标记 ref 归本视图持有（守卫「放弃」路径也读写）
   const pipeline = useSavePipeline({
     adapter,
@@ -87,7 +88,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     registry,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
     onError: setError,
-    onSaved: rebuildFromRegistry, // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）
+    // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）+ 统计行记保存时刻
+    onSaved: () => {
+      rebuildFromRegistry()
+      stats.markSaved()
+    },
   })
 
   // 忽略块流（M5a 拆分）：未映射块状态与显式保存确认门（确认挂起前暂停自动保存）
@@ -139,21 +144,32 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
 
+  /** 复制文件路径（2026-09）：mdPath 绝对路径入剪贴板（发给 AI 直接读本文件），成功盖「已复制」墨青印 */
+  const copyPath = (): void => {
+    void writeClipboard(mdPath).then(
+      () => flashStamp('copied'),
+      (e) => setError('复制路径失败：' + String(e)),
+    )
+  }
+
   /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
-   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值） */
-  const doCopy = async (): Promise<void> => {
-    try {
-      const mm = mmRef.current
-      if (!mm) return
-      const full = mm.getData()
-      selection.clearStaleIfMissing(full)
-      const uid = selection.activeUidRef.current
-      const active = uid ? findSubtreeByUid(full, uid) : null
-      await writeClipboard(applyCopySettings(serialize(engineTreeToZen(active ?? full).tree, registry.byUid), useAppStore.getState().settings))
-      flashCopy('copied-md')
-    } catch (e) {
-      setError('复制失败：' + String(e))
-    }
+   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值）。
+   *  序列化同步无守卫（纯函数）；写剪贴板异步段以 then 双参兜错（Sonar S3776 认知复杂度） */
+  const doCopy = (): void => {
+    const mm = mmRef.current
+    if (!mm) return
+    const full = mm.getData()
+    selection.clearStaleIfMissing(full)
+    const uid = selection.activeUidRef.current
+    const active = uid ? findSubtreeByUid(full, uid) : null
+    const md = applyCopySettings(
+      serialize(engineTreeToZen(active ?? full).tree, registry.byUid),
+      useAppStore.getState().settings,
+    )
+    void writeClipboard(md).then(
+      () => flashCopy('copied-md'),
+      (e) => setError('复制失败：' + String(e)),
+    )
   }
 
   /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」；干净状态下保存是 no-op，不印记 */
@@ -180,50 +196,35 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
   const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
 
-  useEffect(() => {
-    dirtyRef.current = false
-    let cancelled = false
-    ;(async () => {
-      try {
-        const raw = await adapter.readTextFile(mdPath)
-        const r = parse(raw)
-        if (cancelled) return
-        if (!r.ok) {
-          setState('error')
-          setErrorInfo({ error: r.error, raw })
-          return
-        }
-        const sc = await readSidecar(adapter, mdPath)
-        if (cancelled) return
-        flow.setFromParse(r.ignoredBlocks)
-        setLinkAdjust(sc?.linkAdjust ?? {}) // M5d Task 5：弯曲记忆随净化入口恢复（须先于 onReady purify）
-        // sidecar.layout 三处同步（挂载初值/激活态/保存引用，spec §3.7 打开恢复）；无 sidecar 回退用户偏好布局
-        const initial = sc?.layout ?? useAppStore.getState().preferredLayout
-        setInitialLayout(initial)
-        setLayout(initial)
-        layoutRef.current = initial
-        // 插图元数据（M19）：src→dataURL+尺寸（失败宽容跳过），引擎 imgMap 渲染；
-        // 编辑器路由必在工作区内（类型上防御空值）
-        const imgMeta =
-          workspaceDir !== null ? await buildImageMeta(adapter, workspaceDir, r.tree) : undefined
-        if (cancelled) return
-        setEngineTree(zenToEngineTree(r.tree, new Set(sc?.collapsed ?? []), '', imgMeta))
-        setState('ready')
-      } catch (e) {
-        // 读文件失败（如已被移动/删除）与解析失败走同一错误面板
-        if (cancelled) return
-        setState('error')
-        setErrorInfo({
-          error: `无法读取文件（可能已被移动或删除）：${e instanceof Error ? e.message : String(e)}`,
-          raw: '',
-        })
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 文档内容由父组件 key 重挂载切换
-  }, [])
+  // 打开文档加载链（2026-09 拆至 useOpenDocument，行数护栏）：读 md → parse → sidecar →
+  // 忽略块/弯曲记忆上报 → 布局三处同步 → 插图元数据 → 引擎树落 state
+  const failLoad = (error: string, raw = ''): void => {
+    setState('error')
+    setErrorInfo({ error, raw })
+  }
+  useOpenDocument({
+    adapter,
+    mdPath,
+    workspaceDir,
+    onStart: () => {
+      dirtyRef.current = false
+    },
+    onIgnored: flow.setFromParse,
+    onLinkAdjust: setLinkAdjust,
+    onLayout: (initial) => {
+      setInitialLayout(initial)
+      setLayout(initial)
+      layoutRef.current = initial
+    },
+    onTree: (tree) => {
+      setEngineTree(tree)
+      stats.onDataChange(tree) // 统计行初值（2026-09）：与引擎树落 state 同批（不产生额外重渲）
+    },
+    onFileTime: stats.initSavedAt, // 「保存于」初值 = 文件 mtime（会话内保存链成功后刷新）
+    onReady: () => setState('ready'),
+    onParseError: failLoad,
+    onReadError: failLoad,
+  })
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
@@ -259,18 +260,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   if (state === 'loading') return <div className="editor-loading">正在打开…</div>
 
-  if (state === 'error' && errorInfo) {
-    return (
-      <div className="editor-error">
-        <h2>无法打开此导图</h2>
-        <p className="error-detail">{errorInfo.error}</p>
-        <pre className="raw-preview">{errorInfo.raw}</pre>
-        <button type="button" data-testid="btn-raw-edit" onClick={() => openInEditor(mdPath)}>
-          以纯文本打开修复
-        </button>
-      </div>
-    )
-  }
+  if (state === 'error' && errorInfo)
+    return <EditorErrorPanel error={errorInfo.error} raw={errorInfo.raw} mdPath={mdPath} onRawEdit={openInEditor} />
 
   return (
     <div className="editor"><TooltipProvider>
@@ -288,7 +279,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
               purify(mm)
               undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
             }}
-            onDataChange={pipeline.onTreeDataChange}
+            onDataChange={(data) => {
+              stats.onDataChange(data) // 统计行（2026-09）：携带快照时重数节点
+              pipeline.onTreeDataChange(data)
+            }}
             onActiveChange={selection.handleActiveChange}
             onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
             // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
@@ -315,7 +309,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         onSwitchClick={quick.open}
         undoRedo={undoRedo}
-        onCopyClick={() => void doCopy()}
+        onCopyClick={doCopy}
+        onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
         onNoteClick={noteEdit.openNoteDialog}
@@ -335,12 +330,14 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {copyStamp && (
         <CopyStamp key={copyStamp.seq} kind={copyStamp.kind} pos={{ left: copyStamp.left, top: copyStamp.top }} onDone={() => setCopyStamp(null)} />
       )}
-      {/* 左下题签 + 朱砂脏印；右下主题钮（M5a 拆分至 EditorCaption） */}
-      <EditorCaption name={name} dirty={dirty} />
+      {/* 左下题签 + 朱砂脏印 + 统计行；右下主题钮（M5a 拆分至 EditorCaption）；
+          复制文件路径钮在砚栏复制 md 钮旁（IconRoute 区分） */}
+      <EditorCaption name={name} dirty={dirty} nodeCount={stats.nodeCount} savedAt={stats.savedAt} />
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
       {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——guarding 优先于 flow.confirming
-          （守卫先收起、确认框随即接管，故 !guarding 门闩）；两框 JSX 已迁 EditorDialogs（M5b Task 1） */}
+          （守卫先收起、确认框随即接管，故 !guarding 门闩）；全部对话框渲染已迁 EditorDialogs
+          （M5b Task 1 起；2026-09 图标/插图/快速切换三框随行数护栏迁入），槽非 null 即开 */}
       <EditorDialogs
         guarding={guard.guarding}
         mapName={name}
@@ -360,42 +357,42 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         exportActions={
           exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null
         }
+        // 图标管理器（M18）：互斥优先级同上（guarding > confirming > 图标）
+        iconPicker={
+          iconPick.open && !guard.guarding && !flow.confirming
+            ? { nodeText: iconPick.nodeText, current: iconPick.icons, onCancel: iconPick.close, onConfirm: iconPick.apply }
+            : null
+        }
+        // 插图（M19 + 粘贴截图）：同上
+        imageEdit={
+          imageEdit.open && !guard.guarding && !flow.confirming
+            ? {
+                nodeText: imageEdit.nodeText,
+                current: imageEdit.current,
+                preview: imageEdit.preview,
+                pasteError: imageEdit.pasteError,
+                onPick: () => void imageEdit.pickAndApply(),
+                onPaste: (image) => void imageEdit.pasteAndApply(image),
+                onPasteClick: () => void imageEdit.pasteFromClipboard(),
+                onRemove: imageEdit.remove,
+                onCancel: imageEdit.close,
+              }
+            : null
+        }
+        // 快速切换浮层（v2.5）：搜索态（Ctrl+P，输入过滤高亮自管）/ 轮换态（Ctrl+Tab 按住，
+        // 受控高亮无输入框）两形态互斥共用——cycleActive 传 undefined 即搜索态
+        quickSwitch={
+          !guard.guarding && !flow.confirming && (quick.switchOpen || quick.cycle !== null)
+            ? {
+                candidates: quick.cycle !== null ? quick.cycleCandidates : quick.candidates,
+                cycleActive: quick.cycle ?? undefined,
+                onActiveChange: quick.setCycleActive,
+                onPick: (p) => void quick.switchTo(p),
+                onClose: quick.cycle !== null ? quick.cancelCycle : quick.close,
+              }
+            : null
+        }
       />
-      {/* 图标管理器（M18）：互斥优先级同上（guarding > confirming > 图标） */}
-      {iconPick.open && !guard.guarding && !flow.confirming && (
-        <IconPickerDialog
-          nodeText={iconPick.nodeText}
-          current={iconPick.icons}
-          onCancel={iconPick.close}
-          onConfirm={iconPick.apply}
-        />
-      )}
-      {/* 插图（M19 + 粘贴截图）：互斥优先级同上 */}
-      {imageEdit.open && !guard.guarding && !flow.confirming && (
-        <ImageDialog
-          nodeText={imageEdit.nodeText}
-          current={imageEdit.current}
-          preview={imageEdit.preview}
-          pasteError={imageEdit.pasteError}
-          onPick={() => void imageEdit.pickAndApply()}
-          onPaste={(image) => void imageEdit.pasteAndApply(image)}
-          onPasteClick={() => void imageEdit.pasteFromClipboard()}
-          onRemove={imageEdit.remove}
-          onCancel={imageEdit.close}
-        />
-      )}
-      {/* 快速切换浮层（v2.5）：互斥优先级同上（guarding > confirming > 浮层）。
-          两形态互斥共用组件：搜索态（Ctrl+P，输入过滤高亮自管）/ 轮换态（Ctrl+Tab
-          按住，受控高亮无输入框）——cycleActive 传 undefined 即搜索态 */}
-      {!guard.guarding && !flow.confirming && (quick.switchOpen || quick.cycle !== null) && (
-        <QuickSwitchDialog
-          candidates={quick.cycle !== null ? quick.cycleCandidates : quick.candidates}
-          cycleActive={quick.cycle ?? undefined}
-          onActiveChange={quick.setCycleActive}
-          onPick={(p) => void quick.switchTo(p)}
-          onClose={quick.cycle !== null ? quick.cancelCycle : quick.close}
-        />
-      )}
     </TooltipProvider></div>
   )
 }
