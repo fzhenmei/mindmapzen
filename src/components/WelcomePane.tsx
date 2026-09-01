@@ -37,7 +37,7 @@ function friendlyTime(ms: number): string {
 
 /** 案头欢迎页（v2.5 纵轴轮）：单一居中纵轴（max-w-xl），对齐问题结构性消除——
  *  品牌头（印标 + 名 + 问候，问候行不带工作区名——页首/侧栏已示，且本地工具无「用户」）；
- *  居中并排双按钮承担「开始」（新建导图 primary + 导入 outline，等宽对称，窄屏竖排通栏）；
+ *  居中并排双按钮承担「开始」（新建导图 + 导入均 outline，等宽对称，窄屏竖排通栏）；
  *  「最近的」居中小节题（朱砂印点签名，呼应 logo 印面）+ 全宽行列表（发丝分隔线 +
  *  hover 浮起 + 人性化时间）；页脚落款寄语一行收尾。空态保持邀请语气。
  *  testid 契约不变（desk-idle/desk-idle-new/desk-recent/recent-item-*） */
@@ -56,7 +56,7 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
 
       {/* 开始：居中并排双按钮，等宽对称（窄屏竖排通栏） */}
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <Button type="button" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
+        <Button type="button" variant="outline" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
           <IconPlus />
           新建导图
         </Button>
