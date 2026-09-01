@@ -79,13 +79,16 @@ export default function FileDetail({ info, onBack, onAction }: Readonly<Props>) 
     // py-0 抵官方卡根 py-6（上下首尾距改由卡头/卡脚自管，布局紧凑）；
     // overflow-hidden 让 muted 内容区不戳出底部圆角
     <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden py-0">
-      {/* border-b 分割线；py-2 紧凑上下距（官方 [.border-b]:pb-6 条件类压至 pb-2），
-          gap-0 压官方行间 gap-2（描述行已移卡脚，空 grid 行不再漏高） */}
-      <CardHeader className="gap-0 border-b py-2 [.border-b]:pb-2">
-        <CardTitle className="truncate text-sm font-semibold" title={`${info.name}.md`}>
+      {/* border-b 分割线；py-2 紧凑上下距（官方 [.border-b]:pb-6 条件类压至 pb-2）。
+          官方卡头是「标题/描述」两行 grid：描述行移卡脚后第二行已空，但 CardAction
+          的 row-span-2 仍会让行高分配给空行死高（实测 = 按钮组高一半，纯空白），
+          故单行化——grid-rows-[auto] + CardAction row-span-1；标题 leading-8 = 按钮
+          高（size-8）垂直居中，上下距对称（14px/14px） */}
+      <CardHeader className="grid-rows-[auto] gap-0 border-b py-2 [.border-b]:pb-2">
+        <CardTitle className="truncate text-sm leading-8 font-semibold" title={`${info.name}.md`}>
           {info.name}.md
         </CardTitle>
-        <CardAction>
+        <CardAction className="row-span-1">
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
