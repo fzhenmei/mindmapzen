@@ -489,6 +489,36 @@ test('复制文件路径（砚栏路径钮，2026-09）：点击以 mdPath 绝�
   await waitFor(() => expect(screen.getByTestId('save-stamp')).toHaveTextContent('已复制'))
 })
 
+test('复制文件路径（Windows，2026-09 修复）：混用分隔符的 mdPath 归一为全反斜杠', async () => {
+  const writes: string[] = []
+  await fs.writeTextFileAtomic('C:\\ws\\测试/投教课堂.md', '# 根\n')
+  // jsdom 默认 platform=''（非 Windows 分支）；本用例 stub 成 Win32 走归一分支，测毕还原
+  Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+  try {
+    render(
+      <EditorView
+        mdPath={'C:\\ws\\测试/投教课堂.md'}
+        openInEditor={openInEditor}
+        writeClipboard={async (t) => {
+          writes.push(t)
+        }}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    fireEvent.click(screen.getByTestId('btn-copy-path'))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toBe('C:\\ws\\测试\\投教课堂.md')
+  } finally {
+    Reflect.deleteProperty(navigator, 'platform')
+  }
+})
+
 test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async () => {
   const writes: string[] = []
   render(

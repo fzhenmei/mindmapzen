@@ -6,10 +6,12 @@
 // v2.5：EditorView 360→380（快速切换：逻辑已拆 useQuickSwitch，浮层渲染 + 砚栏钮 + 快捷键接线）。
 // 2026-09（v2.6 UI 打磨批）：380→405（题签统计行 + 复制路径接线 + onSaved 组合；同批
 // 拆 useOpenDocument/EditorErrorPanel、三浮动框迁 EditorDialogs，还掉 develop 既有超欠）。
+// 2026-09（v2.7.0 修复批）：405→420（还清 f60b744「图片绝对路径」批 419 未升限的欠账 +
+// 复制路径出口分隔符归一 +1）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 405 },
+  { path: '../src/views/EditorView.tsx', limit: 420 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 
