@@ -15,6 +15,7 @@ import {
   IconArrowLeft,
   IconCopy,
   IconCrosshair,
+  IconFilePlus,
   IconFrame,
   IconImage,
   IconLayoutBoth,
@@ -35,6 +36,9 @@ interface Props {
   onBack(): void
   /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
   onSwitchClick(): void
+  /** 新建导图（2026-09 画布内入口）：呼出新建对话框（名称+模板，复用案头组件）；
+   *  确认后走 leaveTo 安全链保存当前图再跳转（逻辑在 EditorView） */
+  onNewClick(): void
   /** 回退/重做（v1.1，想法5）：引擎 BACK/FORWARD 命令 + back_forward 历史态驱动的禁用信号
    *  （状态与执行在 EditorView 的 useUndoRedo；键盘 Ctrl+Z/Y 走引擎原生与画布兜底，命令栏只是按钮路径） */
   undoRedo: UndoRedo
@@ -63,7 +67,7 @@ interface Props {
   onSwitchLayout(kind: LayoutKind): void
 }
 
-/** 浮签包装（本文件局部）：ui Tooltip 组合的简写——13 枚图标钮同构，
+/** 浮签包装（本文件局部）：ui Tooltip 组合的简写——14 枚图标钮同构，
  *  label 为视觉提示，语义名由触发钮自身 aria-label 承担（二者职责分离，同 ZenTooltip 旧约） */
 function Tip({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
@@ -79,6 +83,7 @@ function Tip({ label, children }: Readonly<{ label: string; children: ReactNode 
 export default function ZenBar({
   onBack,
   onSwitchClick,
+  onNewClick,
   undoRedo,
   onCopyClick,
   onCopyPathClick,
@@ -126,6 +131,18 @@ export default function ZenBar({
           onClick={onSwitchClick}
         >
           <IconSwitch />
+        </Button>
+      </Tip>
+      <Tip label="新建导图">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-new"
+          aria-label="新建导图"
+          onClick={onNewClick}
+        >
+          <IconFilePlus />
         </Button>
       </Tip>
       <Separator orientation="vertical" className="mx-1" />

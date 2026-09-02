@@ -2122,3 +2122,53 @@ describe('外部变更冲突防护', () => {
     expect(await fs.readTextFile('/ws/a.md')).toBe('# 根\n\n## 新分支\n')
   })
 })
+
+// 画布内新建导图（2026-09）：砚栏入口 → 复用案头 NewMapDialog → 确认走 leaveTo 安全链
+// （暂停自动保存 → 显式保存 → 成功才 createAndOpen 跳转），与「返回案头/快速切换」同构
+describe('画布内新建导图', () => {
+  test('砚栏新建钮呼出新建对话框（名称+模板，复用案头组件），取消关框不创建', async () => {
+    await renderForSwitch()
+    fireEvent.click(screen.getByTestId('btn-new'))
+    expect(screen.getByTestId('input-name')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('取消'))
+    await waitFor(() => expect(screen.queryByTestId('input-name')).not.toBeInTheDocument())
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+    expect(await fs.exists('/ws/新图.md')).toBe(false)
+  })
+
+  test('确认新建：干净状态直接创建并跳转新图（文件落盘 + MRU 置顶）', async () => {
+    await renderForSwitch()
+    fireEvent.click(screen.getByTestId('btn-new'))
+    fireEvent.change(screen.getByTestId('input-name'), { target: { value: '新图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/新图.md'))
+    expect(useAppStore.getState().route).toBe('editor')
+    expect(useAppStore.getState().sessionRecent[0]).toBe('/ws/新图.md')
+    expect(await fs.readTextFile('/ws/新图.md')).toBe('# 新图\n')
+  })
+
+  test('确认新建：脏且保存失败 → 留在原图不创建（横幅提示，数据不丢）', async () => {
+    fs.writeTextFileAtomic = vi.fn(async () => {
+      throw new Error('磁盘占用')
+    })
+    await renderForSwitch()
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+    await screen.findByTestId('dirty-badge')
+    fireEvent.click(screen.getByTestId('btn-new'))
+    fireEvent.change(screen.getByTestId('input-name'), { target: { value: '新图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 未跳走
+    expect(useAppStore.getState().dirty).toBe(true)
+  })
+
+  test('确认新建：重名 → 中文横幅提示且留在原图（创建失败不导航）', async () => {
+    await renderForSwitch()
+    fireEvent.click(screen.getByTestId('btn-new'))
+    fireEvent.change(screen.getByTestId('input-name'), { target: { value: 'a' } }) // /ws/a.md 已存在
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().error).toContain('已存在同名导图'))
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+  })
+})

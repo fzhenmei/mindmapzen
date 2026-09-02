@@ -164,6 +164,17 @@ export const IconFile = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 新建导图（2026-09 画布砚栏）：文档轮廓 + 中央加号——画布内 IconPlus 已被「放大」
+ *  占用，借文档形区分（案头无放大钮，新建仍用 IconPlus）；轮廓同 IconFile */
+export const IconFilePlus = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M4 1.5h5L12.5 5v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1z" />
+      <path d="M9 1.5V5h3.5" />
+      <path d="M8 6.5v4M6 8.5h4" />
+    </>,
+    size,
+  )
 /** 设置（M5d 案头工具栏；2026-09 换真齿轮）：双圆（外齿圈 + 中心轴孔）+ 12 根齿线，
  *  24→16 缩放（÷1.5）自 lucide cog——旧版「中心圆+八向辐条」画出来是太阳/亮度图标 */
 export const IconSettings = ({ size }: IconProps) =>
