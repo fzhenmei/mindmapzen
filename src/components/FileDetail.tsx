@@ -30,8 +30,8 @@ type DetailState =
 
 /** 案头文件详情态（M15 → 官方 Card 解剖）：CardHeader = 标题（CardTitle，text-sm
  *  font-semibold 对齐最外层 TitleBar 品名——font-file 等宽字体仅文件标识语境）+ 按钮组
- *  （CardAction 官方右上动作位），仅一行、上下距压至 py-2（卡根 py-0 抵官方 py-6，
- *  [.border-b]:pb-6 压至 pb-2）；CardContent = markdown 渲染区；元信息（目录/大小/
+ *  （CardAction 官方右上动作位），仅一行、py-0 零内距（卡头 33px 与侧栏搜索框 32px 同高，
+ *  卡根 py-0 抵官方 py-6）；CardContent = markdown 渲染区；元信息（目录/大小/
  *  创建/修改）不重要，下沉 CardFooter 低调呈示（muted 小字，卡脚 bg-card 与 muted
  *  内容区自然分界）。分节（验收）：CardHeader 加 border-b 分割，内容区 bg-muted 下陷
  *  底与卡头/卡脚（bg-card）区分。滚动区 edge-to-edge：CardContent 以 -mx-6 抵消官方
@@ -81,12 +81,13 @@ export default function FileDetail({ info, onBack, onAction, onCopyPath }: Reado
     // py-0 抵官方卡根 py-6（上下首尾距改由卡头/卡脚自管，布局紧凑）；
     // overflow-hidden 让 muted 内容区不戳出底部圆角
     <Card data-testid="file-detail" className="flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden py-0">
-      {/* border-b 分割线；py-2 紧凑上下距（官方 [.border-b]:pb-6 条件类压至 pb-2）。
+      {/* border-b 分割线；py-0 零内距——卡头高度 = 内容行 32px + 1px 线 = 33px，
+          与侧栏搜索框（h-8 = 32px）同高对齐（验收：两者并排不再高低差 16px）。
           官方卡头是「标题/描述」两行 grid：描述行移卡脚后第二行已空，但 CardAction
           的 row-span-2 仍会让行高分配给空行死高（实测 = 按钮组高一半，纯空白），
           故单行化——grid-rows-[auto] + CardAction row-span-1；标题 leading-8 = 按钮
-          高（size-8）垂直居中，上下距对称（14px/14px） */}
-      <CardHeader className="grid-rows-[auto] gap-0 border-b py-2 [.border-b]:pb-2">
+          高（size-8）垂直居中，hover 浮底满行高贴上下缘（工具条式，无死空间） */}
+      <CardHeader className="grid-rows-[auto] gap-0 border-b py-0 [.border-b]:pb-0">
         <CardTitle className="truncate text-sm leading-8 font-semibold" title={`${info.name}.md`}>
           {info.name}.md
         </CardTitle>
