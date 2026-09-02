@@ -8,10 +8,12 @@
 // 拆 useOpenDocument/EditorErrorPanel、三浮动框迁 EditorDialogs，还掉 develop 既有超欠）。
 // 2026-09（v2.7.0 修复批）：405→420（还清 f60b744「图片绝对路径」批 419 未升限的欠账 +
 // 复制路径出口分隔符归一 +1）。
+// 2026-09（v2.7 后续）：420→440（补记 161d9b0「画布砚栏新建导图入口」批 +20 漏账：
+// newMapOpen 态 + anyDialog 互斥列 + 砚栏钮 + newMap 槽组装——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 420 },
+  { path: '../src/views/EditorView.tsx', limit: 440 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 
