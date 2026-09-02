@@ -2,6 +2,9 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { disableBrowserContextMenu } from './services/contextMenuGuard'
+// OFL 开源字体（内嵌分发，替代系统微软字体：发布合规，详见 theme.css 字体双声道注释）
+import '@fontsource-variable/noto-sans-sc'
+import '@fontsource-variable/jetbrains-mono'
 import './styles/theme.css'
 import './App.css'
 

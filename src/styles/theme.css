@@ -168,12 +168,14 @@
 
 /* 字体双声道 + 页面级遗留阶梯（M14 保留项）：UI 中文声道 / 文件（等宽）声道。
  * 此块为普通 @theme（变量入产物）：font-file 工具类与 App.css 的 var(--font-sans)
- * 等消费点依赖真实 CSS 变量存在；间距/字号/时长阶梯仅 App.css（遗留皮肤文件）消费 */
+ * 等消费点依赖真实 CSS 变量存在；间距/字号/时长阶梯仅 App.css（遗留皮肤文件）消费。
+ * 字体为内嵌 OFL 开源字体（main.tsx 引入 @fontsource-variable 包），栈中不再引用
+ * 任何微软授权系统字体（Segoe UI / 雅黑 / Consolas 等）——发布合规要求；
+ * --font-file 栈尾带 Noto Sans SC 作中文文件名回退（JetBrains Mono 无 CJK 字形） */
 @theme {
-  --font-sans:
-    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Cascadia Code', 'Consolas', monospace;
-  --font-file: 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: 'Noto Sans SC Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', monospace;
+  --font-file: 'JetBrains Mono Variable', 'Noto Sans SC Variable', monospace;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
