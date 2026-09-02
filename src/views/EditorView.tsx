@@ -73,6 +73,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
   const [copyStamp, setCopyStamp] = useState<{ kind: 'copied-md' | 'copied-node'; left: number; top: number; seq: number } | null>(null) // 复制印记：贴目标节点上方闪现（右上角对画布内操作不可见）；锚定版独立计时序号
   const copyStampSeqRef = useRef(0)
+  const [newMapOpen, setNewMapOpen] = useState(false) // 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog，确认走 leaveTo 安全链
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -241,7 +242,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null || conflict.open
+  // 2026-09：新建导图对话框同列互斥
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -321,6 +323,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       <ZenBar
         onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         onSwitchClick={quick.open}
+        onNewClick={() => setNewMapOpen(true)}
         undoRedo={undoRedo}
         onCopyClick={doCopy}
         onCopyPathClick={copyPath}
@@ -394,6 +397,23 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         }
         // 快速切换浮层（v2.5）：槽组装拆至 buildQuickSwitchSlot（复杂度护栏，槽内两形态互斥）
         quickSwitch={buildQuickSwitchSlot(guard, flow, quick)}
+        // 新建导图对话框（2026-09 画布内入口）：互斥优先级同上（guarding > confirming > 新建）。
+        // 确认即关框走 leaveTo 安全链——保存当前图成功才 createAndOpen 跳转；保存失败/未映射块
+        // 确认挂起留在原图（与「返回案头」同款约定，确认后不自动续行）。创建失败（如重名）走横幅
+        // 提示不回框内（框已关，名字需重填——编辑器场景低频，可接受降级）
+        newMap={
+          newMapOpen && !guard.guarding && !flow.confirming
+            ? {
+                onCancel: () => setNewMapOpen(false),
+                onConfirm: (name, templateContent) => {
+                  setNewMapOpen(false)
+                  void quick
+                    .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent))
+                    .catch((e) => setError('新建导图失败：' + (e instanceof Error ? e.message : String(e))))
+                },
+              }
+            : null
+        }
         // 冲突裁决框（外部变更防护）：保存链挂起等待，浮条/快捷键让位（anyDialog）
         conflict={conflict.open ? { mapName: name, onChoice: conflict.onChoice } : null}
       />
