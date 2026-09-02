@@ -125,8 +125,9 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         </p>
         {/* 已选行（2026-09，用户反馈）：当前选中全量在场、点击即移除——非精选图标不在
             默认网格（精选 64），不搜索看不到已选，不知道关键词便无从删起；精选在 64 格
-            里找选中环也费眼。chip 只显示图标，悬停 title 显示名字（用户二审）；
-            svg 异步补载（上方 effect），加载不出的非法名维持 '…' 占位（与宽容丢弃一致） */}
+            里找选中环也费眼。chip = 图标 + 常显 ×（删除可供性初见即知，用户三审），
+            悬停 title 显示名字；svg 异步补载（上方 effect），加载不出的非法名维持 '…' 占位
+            （与宽容丢弃一致） */}
         {picked.length > 0 && (
           <div data-testid="icon-chips" className="flex flex-wrap gap-1">
             {picked.map((name) => {
@@ -139,13 +140,14 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
                   title={`移除 ${name}`}
                   aria-label={`移除 ${name}`}
                   onClick={() => toggle(name)}
-                  className="flex size-6 items-center justify-center rounded-md bg-secondary hover:bg-accent [&_svg]:size-4"
+                  className="flex items-center gap-0.5 rounded-md bg-secondary px-1 py-0.5 hover:bg-accent [&_svg]:size-4"
                 >
                   {svg !== undefined ? (
                     <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
                   ) : (
                     <span aria-hidden="true" className="text-[10px] text-muted-foreground">…</span>
                   )}
+                  <span aria-hidden="true" className="text-[10px] leading-none text-muted-foreground">×</span>
                 </button>
               )
             })}
