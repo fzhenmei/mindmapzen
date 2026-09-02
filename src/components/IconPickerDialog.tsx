@@ -18,6 +18,11 @@ interface Props {
 /** 搜索命中项：精选直取，全集懒加载（tags.json 名单 + svg 动态 import） */
 type GridIcon = { name: string; svg: string | null; loading: boolean }
 
+/** 非精选 svg 累积缓存（模块级：svg 内容不可变，跨搜索词/对话框开合复用）。
+ *  2026-09 修复：extras 此前只从当前搜索结果取——跨搜索词多选时，先前选中的非精选
+ *  图标丢失运行时注册，保存后当场就渲染空占位（重开恢复由 MindMapCanvas 打开期补注册兜底） */
+const uncuratedSvgCache = new Map<string, string>()
+
 /** 图标管理器（M18 想法9：节点签名图标的唯一增删 UI 通道）：
  *  精选 64 网格 + 全集搜索（lucide tags.json 懒加载，名字/标签匹配），
  *  点选 toggle 高亮，保存即 SET_NODE_ICON。md 句尾 ::name 标记是事实源，
@@ -47,12 +52,19 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
       const names = Object.keys(tags)
         .filter((n) => n.includes(q) || tags[n]?.some((t) => t.toLowerCase().includes(q)))
         .slice(0, 24)
-      setResults(names.map((name) => ({ name, svg: CURATED_ICONS[name] ?? null, loading: true })))
-      // 非精选项逐个懒加载 svg（失败宽容置空并从可选中排除）
+      setResults(
+        names.map((name) => ({
+          name,
+          svg: CURATED_ICONS[name] ?? uncuratedSvgCache.get(name) ?? null,
+          loading: CURATED_ICONS[name] === undefined && !uncuratedSvgCache.has(name),
+        })),
+      )
+      // 非精选项逐个懒加载 svg（失败宽容置空并从可选中排除）；成功即入累积缓存
       for (const name of names) {
-        if (CURATED_ICONS[name] !== undefined) continue
+        if (CURATED_ICONS[name] !== undefined || uncuratedSvgCache.has(name)) continue
         const svg = await loadIconSvg(name)
         if (cancelled) return
+        if (svg !== null) uncuratedSvgCache.set(name, svg)
         setResults((rs) => rs.map((r) => (r.name === name ? { ...r, svg, loading: false } : r)))
       }
     })()
@@ -74,12 +86,14 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
     setPicked((p) => (p.includes(name) ? p.filter((n) => n !== name) : [...p, name]))
   }
 
-  // extras = 本次选中但不在精选集的（已懒加载成功的）
+  // extras = 本次选中但不在精选集的（从累积缓存取，不依赖当前搜索结果——跨搜索词不丢）
   const extras = picked
     .filter((n) => CURATED_ICONS[n] === undefined)
-    .map((n) => results.find((r) => r.name === n))
-    .filter((r): r is GridIcon => r !== undefined && r.svg !== null)
-    .map((r) => ({ name: r.name, icon: r.svg as string }))
+    .map((n) => {
+      const svg = uncuratedSvgCache.get(n)
+      return svg === undefined ? undefined : { name: n, icon: svg }
+    })
+    .filter((r): r is { name: string; icon: string } => r !== undefined)
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>

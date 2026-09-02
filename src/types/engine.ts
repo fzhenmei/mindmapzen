@@ -127,6 +127,10 @@ export interface MindMapHandle {
   setTheme(name: string): void
   /** 容器尺寸变化后重算画布（引擎 index.js:325 resize()；引擎无自动监听，须由宿主在窗口 resize 时调用） */
   resize(): void
+  /** 整树重渲染（引擎 index.js:308：清节点缓存池+清画布+render）；打开期补注册非精选
+   *  图标后触发（iconList 运行时变更不会自动反映到已渲染节点，2026-09 修复）。
+   *  引擎包类型未声明（实例运行时存在），故可选——调用点以 ?. 触发 */
+  reRender?(callback?: () => void, source?: string): void
   /** 视图变换与复位（引擎 View.js） */
   view: EngineView
   /** 画布容器元素（引擎销毁后为 null） */

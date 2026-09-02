@@ -2,6 +2,7 @@
 // 引擎约定（nodeCreateContents.js:98-135 + svg/icons.js:288）：data.icon 元素形如
 // '<type>_<name>'，经 opt.iconList 的 { type, list:[{name, icon}] } 解析出 svg 字符串；
 // /^<svg/ 前缀走 SVG 渲染。我们的 type 固定 'zen'：'zen_flag' ↔ md 标记 '::flag'。
+import type { EngineNode } from '../types/engine'
 import alertTriangle from 'lucide-static/icons/alert-triangle.svg?raw'
 import arrowDown from 'lucide-static/icons/arrow-down.svg?raw'
 import arrowRight from 'lucide-static/icons/arrow-right.svg?raw'
@@ -104,8 +105,9 @@ export function toEngineIconList(): Array<{ type: string; list: Array<{ name: st
 type LucideNode = [tag: string, attrs: Record<string, string>, children?: LucideNode[]]
 
 /** 节点数组 → svg 字符串（lucide 官方 24×24 stroke 骨架 + 递归序列化；
- *  attrs 值做引号转义——lucide 数据本身安全，转义为纵深防御） */
-function nodesToSvg(children: readonly LucideNode[]): string {
+ *  attrs 值做引号转义——lucide 数据本身安全，转义为纵深防御。
+ *  class 与精选包内 svg 同构（lucide lucide-<name>），画布/网格断言按名定位不区分来源） */
+function nodesToSvg(children: readonly LucideNode[], name: string): string {
   const walk = ([tag, attrs, kids]: LucideNode): string => {
     const a = Object.entries(attrs ?? {})
       .map(([k, v]) => ` ${k}="${String(v).replaceAll('"', '&quot;')}"`)
@@ -115,7 +117,7 @@ function nodesToSvg(children: readonly LucideNode[]): string {
       : `<${tag}${a}/>`
   }
   return (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ' +
+    `<svg class="lucide lucide-${name}" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ` +
     'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
     `stroke-linejoin="round">${children.map(walk).join('')}</svg>`
   )
@@ -139,8 +141,50 @@ export async function loadIconSvg(name: string): Promise<string | null> {
   try {
     const nodes = await loadNodes()
     const kids = nodes[name]
-    return kids === undefined ? null : nodesToSvg(kids)
+    return kids === undefined ? null : nodesToSvg(kids, name)
   } catch {
     return null
   }
+}
+
+/** 打开期图标恢复（2026-09 修复）：整树收集「非精选」zen_ 图标名（保序去重）。
+ *  非精选图标此前只在图标管理器确认时运行时注册（useIconPicker.apply），重开导图后
+ *  iconList 只剩精选 64——md 里 ::name 解析出 data.icon 却无 svg，引擎渲染空占位
+ *  （getNodeIconListIcon 未命中返回 ''，实案：::shield-alert ::book-search 全不可见）。
+ *  精选 / 非 zen_ 前缀（引擎其他图标源）/ 非法形态全忽略。 */
+export function collectUncuratedIcons(root: EngineNode): string[] {
+  const out: string[] = []
+  const walk = (n: EngineNode): void => {
+    if (Array.isArray(n.data.icon)) {
+      for (const item of n.data.icon) {
+        if (typeof item !== 'string' || !item.startsWith('zen_')) continue
+        const name = item.slice(4)
+        if (CURATED_ICONS[name] !== undefined || out.includes(name)) continue
+        out.push(name)
+      }
+    }
+    for (const c of n.children ?? []) walk(c)
+  }
+  walk(root)
+  return out
+}
+
+/** names 逐个补注册进 iconList 分组 list（iconList[0].list）：已在册 / 加载失败
+ *  （名字不在 lucide 全集，宽容丢弃）跳过，返回实际新增数。loader 参数供测试注入。 */
+export async function registerIconsInto(
+  list: Array<{ name: string; icon: string }>,
+  names: readonly string[],
+  loader: (name: string) => Promise<string | null> = loadIconSvg,
+): Promise<number> {
+  const known = new Set(list.map((i) => i.name))
+  let added = 0
+  for (const n of names) {
+    if (known.has(n)) continue
+    const svg = await loader(n)
+    if (svg === null) continue
+    list.push({ name: n, icon: svg })
+    known.add(n)
+    added += 1
+  }
+  return added
 }

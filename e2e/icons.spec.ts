@@ -62,6 +62,47 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
   expect(md2).not.toContain('::star')
 })
 
+test('图标：非精选图标（全集搜索、跨搜索词多选）→ 当场与重开后画布均显示（2026-09 修复）', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('非精选图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('非精选图').first()).toBeVisible()
+
+  await page.getByText('非精选图').first().click()
+  await page.getByTestId('node-action-icon').click()
+  await expect(page.getByTestId('icon-dialog')).toBeVisible()
+
+  // 跨搜索词各选一个非精选图标（换词后网格重置，此前选中须仍能注册渲染）
+  await page.getByTestId('icon-search').fill('alert')
+  await page.getByTestId('icon-item-shield-alert').click()
+  await expect(page.getByTestId('icon-item-shield-alert')).toHaveClass(/ring/)
+  await page.getByTestId('icon-search').fill('book')
+  await page.getByTestId('icon-item-book-search').click()
+  await expect(page.getByTestId('icon-item-book-search')).toHaveClass(/ring/)
+  await page.getByTestId('icon-save').click()
+  await expect(page.getByTestId('icon-dialog')).toBeHidden()
+
+  // 当场渲染断言：跨搜索选取的两个非精选 svg 都在画布上（extras 累积缓存修复）
+  await expect(page.locator('.canvas-host svg.lucide-shield-alert').first()).toBeVisible()
+  await expect(page.locator('.canvas-host svg.lucide-book-search').first()).toBeVisible()
+
+  // 落盘 → 重开 → 打开期补注册 + 重渲染，两图标仍可见（此前：iconList 只剩精选 64，渲染空占位）
+  await page.getByTestId('btn-back').click()
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/非精选图.md',
+    ),
+  )
+  expect(md).toContain('# 非精选图 ::shield-alert ::book-search')
+  await page.getByTestId('dir-node-all').click()
+  await page.getByTestId('map-item').filter({ hasText: '非精选图' }).dblclick()
+  await expect(page.getByText('非精选图').first()).toBeVisible()
+  await expect(page.locator('.canvas-host svg.lucide-shield-alert').first()).toBeVisible()
+  await expect(page.locator('.canvas-host svg.lucide-book-search').first()).toBeVisible()
+})
+
 test('图标：手写/AI 直接改 md 标记 → 打开即生效（画布净化 + 保存保持）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')

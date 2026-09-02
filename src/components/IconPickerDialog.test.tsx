@@ -35,3 +35,28 @@ test('搜索命中的非精选图标渲染 svg（icon-nodes.json 懒加载链路
     { timeout: 8000 },
   )
 })
+
+// 2026-09 修复：extras 此前只从当前搜索结果取——换搜索词后先前选中的非精选图标
+// 丢失运行时注册（保存后当场渲染空占位）。锁累积缓存：跨词多选的 extras 全量在场
+test('跨搜索词多选非精选图标：extras 全量携带（累积缓存，换词不丢）', async () => {
+  const onConfirm = vi.fn()
+  render(<IconPickerDialog nodeText="节点" current={[]} onCancel={vi.fn()} onConfirm={onConfirm} />)
+  const search = screen.getByTestId('icon-search')
+  fireEvent.input(search, { target: { value: 'flag-off' } })
+  const first = await screen.findByTestId('icon-item-flag-off', {}, { timeout: 8000 })
+  await waitFor(() => expect(first.querySelector('svg')).not.toBeNull(), { timeout: 8000 })
+  fireEvent.click(first)
+  fireEvent.input(search, { target: { value: 'shield-alert' } })
+  const second = await screen.findByTestId('icon-item-shield-alert', {}, { timeout: 8000 })
+  await waitFor(() => expect(second.querySelector('svg')).not.toBeNull(), { timeout: 8000 })
+  fireEvent.click(second)
+  fireEvent.click(screen.getByTestId('icon-save'))
+  expect(onConfirm).toHaveBeenCalledTimes(1)
+  const [names, extras] = onConfirm.mock.calls[0] as [
+    string[],
+    Array<{ name: string; icon: string }>,
+  ]
+  expect(names).toEqual(['flag-off', 'shield-alert'])
+  expect(extras.map((e) => e.name).sort()).toEqual(['flag-off', 'shield-alert'])
+  for (const e of extras) expect(e.icon).toMatch(/^<svg/)
+})
