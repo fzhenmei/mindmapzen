@@ -79,11 +79,12 @@ test('视觉冒烟 2：夜航暗主题——令牌翻转与纸面停泊栏（spe
   })
   expect(bar).toEqual({ bottom: '12px', height: '40px', opacity: '1' })
 
-  // 题签等宽文件声道（spec §2 字体双声道）：导图名走 Cascadia Code 等宽栈
+  // 题签等宽文件声道（spec §2 字体双声道）：导图名走 JetBrains Mono 等宽栈
+  // （aeb5990 发布合规起内嵌 OFL 开源字体，替代原微软 Cascadia Code 系统栈）
   const captionFont = await page.evaluate(
     () => getComputedStyle(document.querySelector('.caption-name')!).fontFamily,
   )
-  expect(captionFont).toContain('Cascadia Code')
+  expect(captionFont).toContain('JetBrains Mono Variable')
 })
 
 test('视觉冒烟 3：Tailwind 工具类运行时生效——令牌链双主题驱动', async ({ page }) => {
