@@ -100,6 +100,19 @@ test('版本历史：列表渲染 + 确认恢复命令序列（checkout <hash> -
   })
   await expect(page.getByTestId('history-item-def5678')).toBeVisible()
 
+  // M23 恢复预览：点「预览」行内展开差异（numstat 桩回放：test.md +2/-1），恢复不开盲盒
+  await page.evaluate(() => {
+    const z = (window as unknown as {
+      __zenE2e: { gitAnswers: Array<{ match: string; ok: boolean; out?: string }> }
+    }).__zenE2e
+    z.gitAnswers.push({ match: 'diff --numstat', ok: true, out: '2\t1\tdoc/test.md\n' })
+  })
+  await page.getByTestId('history-preview-def5678').click()
+  const diff = page.getByTestId('history-diff-def5678')
+  await expect(diff).toContainText('doc/test.md', { timeout: 10_000 })
+  await expect(diff).toContainText('+2')
+  await expect(diff).toContainText('-1')
+
   // 行内确认恢复：先「恢复」展开确认，再「确认恢复」执行
   await page.getByTestId('history-restore-def5678').click()
   await expect(page.getByTestId('history-confirm-def5678')).toBeVisible()

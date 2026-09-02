@@ -117,6 +117,42 @@ export async function gitHistory(wsDir: string, run: GitRun, limit = 50): Promis
 /** 哈希形态：短哈希 7 位起（core.abbrev 可加长），最长完整 40 位 */
 const HASH_RE = /^[0-9a-f]{7,40}$/
 
+/** 恢复预览的文件级差异（M23）：ins/del 为恢复后该文件相对当前的增/删行数 */
+export interface DiffFile {
+  path: string
+  ins: number
+  del: number
+}
+
+/** 恢复预览（M23 盲盒问题）：hash 与 HEAD 的文件级差异——
+ *  git diff --numstat HEAD <hash>（numstat 原生 TAB 分隔，无 format 占位符风险），
+ *  输出视角即"当前 → 该版本"，ins/del 就是恢复后的相对增删行。
+ *  返回 null = 命令失败或非法 hash；files 空 = 与当前无差异（恢复无效果） */
+export async function gitDiffStat(
+  wsDir: string,
+  hash: string,
+  run: GitRun,
+): Promise<{ files: DiffFile[]; ins: number; del: number } | null> {
+  if (!HASH_RE.test(hash)) return null
+  const diff = await run(wsDir, ['diff', '--numstat', 'HEAD', hash])
+  if (!diff.ok) return null
+  const files = diff.out
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .flatMap((l) => {
+      const [ins = '', del = '', ...rest] = l.split('\t')
+      const path = rest.join('\t')
+      // 不可解析行（如二进制计数为 "-"）跳过——工作区为 md/json 文本，属异常防御
+      if (!/^\d+$/.test(ins) || !/^\d+$/.test(del) || path === '') return []
+      return [{ path, ins: Number(ins), del: Number(del) }]
+    })
+  return {
+    files,
+    ins: files.reduce((s, f) => s + f.ins, 0),
+    del: files.reduce((s, f) => s + f.del, 0),
+  }
+}
+
 /** 恢复到指定版本（M22）：工作区文件整体回到该提交内容，**以新提交落盘**——
  *  历史只增不改（git checkout <hash> -- . 后自动 commit），回滚本身可再回滚；
  *  工作区若有未提交变更一并被覆盖（入口在案头设置页，编辑器内无在途内容）。

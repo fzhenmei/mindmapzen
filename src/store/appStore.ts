@@ -4,7 +4,7 @@ import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
-import { checkAndBackup, gitHistory, gitStatusInfo, restoreToVersion, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
+import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
 import type { GitRun } from '../types/ports'
 
 interface AppState {
@@ -73,6 +73,9 @@ interface AppState {
   /** 恢复到指定版本（M22）：工作区文件回到该提交（新提交落盘），刷新案头清单与状态。
    *  返回 null=成功，否则中文错误（对话框显示） */
   restoreVersion: (hash: string) => Promise<string | null>
+  /** 恢复预览（M23 盲盒问题）：该版本相对当前的文件级差异（现取现返不进全局态）；
+   *  null = 差异不可得（未启用/命令失败），files 空 = 无差异 */
+  diffPreview: (hash: string) => Promise<{ files: DiffFile[]; ins: number; del: number } | null>
   markDirty: () => void
   clearDirty: () => void
   /** 冲突裁决「以磁盘版为准」：递增重挂序号（App 层 key 变化），当前图从磁盘重载 */
@@ -244,6 +247,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshGitStatus()
     await get().fetchGitHistory()
     return null
+  },
+
+  diffPreview: async (hash) => {
+    const { gitRun, workspaceDir } = get()
+    if (gitRun === null || workspaceDir === null) return null
+    return gitDiffStat(workspaceDir, hash, gitRun)
   },
 
   openMap: async (mdPath) => {

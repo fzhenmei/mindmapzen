@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitHistory } from './gitBackup'
+import { gitDiffStat, gitHistory } from './gitBackup'
 import type { GitRun } from '../types/ports'
 
 /** 真 git 适配 GitRun：cwd 限定临时仓库；失败时 stdout/stderr 从异常恢复（与 Tauri git_exec 同构） */
@@ -52,6 +52,29 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
       expect(list[0]?.hash).toMatch(/^[0-9a-f]{7,40}$/)
       expect(list[0]?.date).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [+-]\d{4}$/)
       expect(list[0]?.message).toBe('自动备份 · 1 文件变更')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('gitDiffStat：numstat 真 TAB 输出 + 恢复视角语义（HEAD→hash 的增删行）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'zen-git-'))
+    try {
+      const env = { ...process.env, GIT_AUTHOR_NAME: 'zen-test', GIT_AUTHOR_EMAIL: 'zen@test', GIT_COMMITTER_NAME: 'zen-test', GIT_COMMITTER_EMAIL: 'zen@test' }
+      const sh = (args: string[]) => execFileSync('git', args, { cwd: dir, env, stdio: 'ignore' })
+      sh(['init'])
+      writeFileSync(join(dir, 'a.md'), 'l1\n')
+      sh(['add', '-A'])
+      sh(['commit', '-m', 'v1'])
+      // v2：v1 的 l1 保留，新增 l2/l3 两行 → 恢复到 v1 = 相对当前 -2 行
+      writeFileSync(join(dir, 'a.md'), 'l1\nl2\nl3\n')
+      sh(['add', '-A'])
+      sh(['commit', '-m', 'v2'])
+      const hash = execFileSync('git', ['rev-parse', '--short', 'HEAD~1'], { cwd: dir, env, encoding: 'utf8' }).trim()
+
+      const stat = await gitDiffStat(dir, hash, realRun)
+      // 契约：TAB 分隔的 ins/del 可解析；参数顺序 HEAD hash 语义 = 恢复后相对当前 +0/-2
+      expect(stat).toEqual({ files: [{ path: 'a.md', ins: 0, del: 2 }], ins: 0, del: 2 })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { checkAndBackup, gitHistory, gitStatusInfo, restoreToVersion, type GitConfig } from './gitBackup'
+import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type GitConfig } from './gitBackup'
 import type { GitRun } from '../types/ports'
 
 /** 记录型桩：按命令模式回放预设应答（args.join(' ') 前缀匹配） */
@@ -153,5 +153,26 @@ describe('版本历史与回滚（M22）', () => {
   test('checkout 失败中文回报', async () => {
     const bad = makeRun([{ match: 'checkout', ok: false, err: 'fatal: bad object' }])
     expect(await restoreToVersion('/ws', 'abc1234', bad.run)).toContain('恢复失败')
+  })
+
+  test('gitDiffStat：numstat 解析（恢复后视角）；无差异空；失败/非法 hash 为 null', async () => {
+    const ok = makeRun([
+      { match: 'diff --numstat HEAD abc1234', ok: true, out: '12\t0\ta.md\n0\t3\tsub/b.md\n' },
+    ])
+    expect(await gitDiffStat('/ws', 'abc1234', ok.run)).toEqual({
+      files: [
+        { path: 'a.md', ins: 12, del: 0 },
+        { path: 'sub/b.md', ins: 0, del: 3 },
+      ],
+      ins: 12,
+      del: 3,
+    })
+    const noDiff = makeRun([{ match: 'diff --numstat', ok: true, out: '' }])
+    expect(await gitDiffStat('/ws', 'abc1234', noDiff.run)).toEqual({ files: [], ins: 0, del: 0 })
+    const bad = makeRun([{ match: 'diff --numstat', ok: false, err: 'fatal: bad object' }])
+    expect(await gitDiffStat('/ws', 'abc1234', bad.run)).toBeNull()
+    const badHash = makeRun([])
+    expect(await gitDiffStat('/ws', 'abc1234%x9垃圾', badHash.run)).toBeNull()
+    expect(badHash.calls).toHaveLength(0)
   })
 })
