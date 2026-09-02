@@ -175,6 +175,17 @@ export const IconFilePlus = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 更多操作（容器合并改版，案头详情态窄容器收纳）：横排三点省略号——dots 沿
+ *  IconTheme 前图标（音量/加载类）r=1.2 描边圆点口径 */
+export const IconMore = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="3" cy="8" r="1.2" />
+      <circle cx="8" cy="8" r="1.2" />
+      <circle cx="13" cy="8" r="1.2" />
+    </>,
+    size,
+  )
 /** 设置（M5d 案头工具栏；2026-09 换真齿轮）：双圆（外齿圈 + 中心轴孔）+ 12 根齿线，
  *  24→16 缩放（÷1.5）自 lucide cog——旧版「中心圆+八向辐条」画出来是太阳/亮度图标 */
 export const IconSettings = ({ size }: IconProps) =>
