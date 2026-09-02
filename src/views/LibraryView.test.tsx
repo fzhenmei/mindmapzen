@@ -328,18 +328,55 @@ describe('案头三区与交互（M5d）', () => {
     expect(root).toHaveAttribute('title', '/ws')
   })
 
-  test('tile 单击 = 选中进详情态（摘要 + md 预览），不进纸面', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+  test('tile 单击 = 选中进详情态（header 标题/动作钮上移 + md 预览），不进纸面', async () => {
+    const writeClipboard = vi.fn(async () => {})
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={writeClipboard} />)
     fireEvent.click(await screen.findByTestId('dir-node-all'))
     const tile = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
     expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument()
+    // 详情动作钮仅详情态渲染（容器合并：自卡头上移页首）
+    expect(screen.queryByTestId('btn-detail-back')).not.toBeInTheDocument()
     fireEvent.click(tile)
-    // M15：主区切文件详情态——摘要条 + 真实 markdown 预览（H1 渲染想法A）
+    // 容器合并：主区即预览面板——真实 markdown 渲染（H1 渲染想法A），无 Card 包裹
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     expect(await screen.findByTestId('md-preview')).toHaveTextContent('想法A')
-    expect(screen.getByTestId('detail-size')).toHaveTextContent(/B$/)
+    // header 标题换 md 文件名（truncate 截断）；元信息（大小/创建/修改）并入 title tooltip。
+    // 名称定位：预览区 md 内容的 # 想法A 也渲染 h1，按可访问名区分
+    const h1 = screen.getByRole('heading', { level: 1, name: '想法A.md' })
+    expect(h1).toHaveAttribute('title', expect.stringContaining('B'))
+    // 六枚详情动作钮 + 「更多」触发钮均在页首（宽组/窄组由容器查询 CSS 分流）
+    for (const id of [
+      'btn-detail-back',
+      'btn-move',
+      'btn-rename',
+      'btn-delete',
+      'btn-copy-path',
+      'btn-detail-open',
+      'btn-detail-more',
+    ]) {
+      expect(screen.getByTestId(id)).toBeInTheDocument()
+    }
+    // 复制路径（原 FileDetail 卡头行为,上移页首后行为不变）：以 mdPath 调剪贴板端口
+    fireEvent.click(screen.getByTestId('btn-copy-path'))
+    expect(writeClipboard).toHaveBeenCalledTimes(1)
+    expect(writeClipboard).toHaveBeenCalledWith('/ws/想法A.md')
     // 单击只选中不进纸面
     expect(useAppStore.getState().route).toBe('library')
+  })
+
+  test('详情态「更多」浮层：平铺全部动作，菜单项直达（打开导图）', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('dir-node-all'))
+    const tile = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
+    fireEvent.click(tile)
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    // pointerdown 开菜单（Radix Trigger 口径，同 ui/dropdown-menu.test 模式）；条目 testid 加 more- 前缀与宽组同名钮区分（E2E 严格模式）
+    fireEvent.pointerDown(screen.getByTestId('btn-detail-more'), { button: 0 })
+    expect(await screen.findByTestId('more-btn-detail-back')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '移动到目录' })).toBeInTheDocument()
+    // 菜单「打开导图」直达纸面
+    fireEvent.click(screen.getByTestId('more-btn-detail-open'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
   })
 
   test('树文件行渲染：目录与根下文件行可见，单击选中进详情；目录行带文件夹图标', async () => {

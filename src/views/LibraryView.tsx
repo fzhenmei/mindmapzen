@@ -19,10 +19,11 @@ import MoveMapDialog from '../components/MoveMapDialog'
 import NewMapDialog from '../components/NewMapDialog'
 import FileExplorer, { type MapAction } from '../components/FileExplorer'
 import FileDetail from '../components/FileDetail'
+import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../components/ui/dialog'
 import { Button } from '../components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
+import { iconBtn } from '../components/ui/icon-button'
 import { Separator } from '../components/ui/separator'
 import {
   Sidebar,
@@ -60,8 +61,9 @@ interface ImportPreview {
 
 /** 案头（M15 文件化三态）：SidebarProvider + inset 骨架；主区三态——
  *  idle（进案头未选任何 → 空态引导）/ 目录态（FileExplorer 资源管理器大图标网格）/
- *  详情态（FileDetail 摘要条 + markdown 预览）。交互语义：树/文件夹 tile 单击=选目录，
- *  文件 tile/树文件行单击=选中进详情，双击=进纸面；悬停操作钮（移动/重命名/删除）沿旧口径 */
+ *  详情态（容器合并改版：页首即详情卡头——md 标题 + 动作钮上移，主区即预览面板）。
+ *  交互语义：树/文件夹 tile 单击=选目录，文件 tile/树文件行单击=选中进详情，双击=进纸面；
+ *  悬停操作钮（移动/重命名/删除）沿旧口径 */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
@@ -244,23 +246,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           </Button>
         </div>
       )
-    if (selectedInfo !== null)
-      return (
-        <FileDetail
-          info={selectedInfo}
-          onCopyPath={(p) => void writeClipboard(p)}
-          onBack={() => {
-            // 返回目录视图：清文件选中即回落到 selectedDir 的资源管理器态
-            setSelectedMap(null)
-            setIdle(false)
-          }}
-          onAction={(a, m) => {
-            // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
-            setTarget(m)
-            setDialog(a)
-          }}
-        />
-      )
+    // 详情态（容器合并）：动作钮/标题在页首（见 header），主区只剩预览面板
+    if (selectedInfo !== null) return <FileDetail info={selectedInfo} />
     if (idle)
       // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）
       return (
@@ -292,22 +279,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       />
     )
   }
-
-  /** 页首动作钮（官方 header 模式）：ui Button ghost sm + ui/tooltip 悬浮提示 +
-   *  aria-label 语义名（title 退役防双提示），testid 逐枚保留（E2E 兼容） */
-  const headerBtn = (label: string, testid: string, Icon: typeof IconSettings, onClick: () => void) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" data-testid={testid} aria-label={label} onClick={onClick}>
-          <Icon />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  )
-
-  const createDirTitle =
-    selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`
 
   // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；骨架（侧栏/页首）在此态不渲染
   if (!workspaceDir)
@@ -353,7 +324,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               <SidebarMenuItem>
                 <SidebarMenuButton
                   data-testid="dir-create"
-                  tooltip={createDirTitle}
+                  tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
                   onClick={() => {
                     setDirParent(selectedDir)
                     setDialog('newdir')
@@ -368,24 +339,51 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         </Sidebar>
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
-              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 面包屑 … 动作钮 + 主题。
-              无固定高（h-16 死空间→h-12→零固定）——内部控件全 h-8 档撑出行高 32px+1px 线，
-              与侧栏搜索框（32px）/预览卡头（33px）同高对齐 */}
-          <header className="flex shrink-0 items-center gap-2 border-b px-4">
+              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 标题 … 动作钮 + 主题。
+              容器合并改版：@container 承担详情动作收纳（页首宽 = SidebarInset 宽，随窗体/
+              侧栏折叠变化，容器查询比视口断点更准）；详情态标题换 md 文件名（truncate 截断
+              加 …），元信息并入 title 悬停。无固定高（零固定）——内部控件全 h-8 档撑出
+              行高 32px+1px 线，与侧栏搜索框（32px）同高对齐 */}
+          <header className="@container flex shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger data-testid="dir-panel-toggle" />
             <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
-            <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
+            <h1
+              className="truncate text-sm font-semibold tracking-wide text-foreground"
+              title={selectedInfo === null ? undefined : `${detailTitle(selectedInfo)}\n${detailMeta(selectedInfo)}`}
+            >
+              {selectedInfo === null ? workspaceName : detailTitle(selectedInfo)}
+            </h1>
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              {headerBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
-              {headerBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
-              {headerBtn('新建导图', 'btn-new', IconPlus, () => setDialog('new'))}
+              {selectedInfo !== null && (
+                <DetailActions
+                  info={selectedInfo}
+                  onBack={() => {
+                    // 返回目录视图：清文件选中即回落到 selectedDir 的资源管理器态
+                    setSelectedMap(null)
+                    setIdle(false)
+                  }}
+                  onAction={(a, m) => {
+                    // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
+                    setTarget(m)
+                    setDialog(a)
+                  }}
+                  onCopyPath={(p) => void writeClipboard(p)}
+                  onOpen={(m) => void store.openMap(m.mdPath)}
+                />
+              )}
+              {iconBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
+              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
+              {iconBtn('新建导图', 'btn-new', IconPlus, () => setDialog('new'))}
               {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
               <ThemeToggle />
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
-          {/* 主区（官方 p-6）：M15 三态（idle 空态引导 / 目录态资源管理器 / 详情态摘要+md 预览） */}
-          <main className="flex min-h-0 flex-1 p-6">{renderRight()}</main>
+          {/* 主区（官方 p-6）：M15 三态（idle 空态引导 / 目录态资源管理器 / 详情态预览面板）；
+              详情态 p-0——容器合并后预览区 edge-to-edge 铺满 SidebarInset（bg-muted 贴圆角边） */}
+          <main className={selectedInfo !== null ? 'flex min-h-0 flex-1 p-0' : 'flex min-h-0 flex-1 p-6'}>
+            {renderRight()}
+          </main>
         </SidebarInset>
       </SidebarProvider>
 

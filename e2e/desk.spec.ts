@@ -64,17 +64,38 @@ test('案头：三态切换、目录过滤与移动', async ({ page }) => {
   expect(rootGone).toBe(true)
 })
 
+// 容器合并改版：窗体缩窄（header 容器 < 680px），详情动作组整组收进「更多」浮层
+// （容器查询 @container 纯 CSS 分流，零 JS 测量；常驻 4 钮不受影响）
+test('案头：窄窗详情动作收纳进「更多」浮层', async ({ page }) => {
+  test.setTimeout(30_000)
+  // 900px 视口：侧栏 256px + inset 边距后 header ≈ 628px < 680px 阈值
+  await page.setViewportSize({ width: 900, height: 720 })
+  await page.goto('/?e2e=1&desk=1')
+
+  // 进详情态：宽组整组收起（btn-move 隐藏），「更多」钮出现
+  await page.getByTestId('dir-node-all').click()
+  await page.getByTestId('map-item').filter({ hasText: '根图' }).click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await expect(page.getByTestId('btn-move')).toBeHidden()
+  await expect(page.getByTestId('btn-detail-more')).toBeVisible()
+
+  // 浮层平铺全部详情动作；菜单「返回目录」回资源管理器态
+  await page.getByTestId('btn-detail-more').click()
+  await expect(page.getByTestId('more-btn-detail-back')).toBeVisible()
+  await page.getByTestId('more-btn-detail-back').click()
+  await expect(page.getByTestId('map-item')).toHaveCount(1)
+})
+
 // M15 交互语义：tile/树文件行单击=选中进详情态（摘要 + md 预览），双击或详情「打开」=进纸面
 test('案头：tile 单击出详情、详情打开进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 进根目录资源管理器态，单击根图 tile：主区切文件详情态（摘要条 + markdown 预览）
+  // 进根目录资源管理器态，单击根图 tile：主区切文件详情态（页首即卡头 + markdown 预览）
   await page.getByTestId('dir-node-all').click()
   await page.getByTestId('map-item').filter({ hasText: '根图' }).click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   await expect(page.getByTestId('md-preview')).toHaveText(/根图/)
-  await expect(page.getByTestId('detail-size')).toHaveText(/B$/) // 摘要条含大小元信息
   // 仍是案头，未进纸面（命令栏不可见）
   await expect(page.getByTestId('zen-bar')).toHaveCount(0)
 
