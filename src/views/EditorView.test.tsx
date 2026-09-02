@@ -547,6 +547,39 @@ test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () 
   await waitFor(() => expect(writes).toHaveLength(1))
 })
 
+// ---- 复制 md 给 AI（图片绝对路径，2026-09）----
+
+test('复制带图节点：图片相对路径转绝对 + 头部说明行（头注在剥备注之后，不被误剥）', async () => {
+  const writes: string[] = []
+  // 子节点带插图（engineTreeToZen 还原 data.image/imageTitle，serialize 注入行尾标记）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      { data: { text: '配图', expand: true, uid: 'child-uid', image: 'assets/配图.png', imageTitle: '图注' }, children: [] },
+    ],
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  // 默认 settings（剥备注）在前、图片转换在后：头注引用行存活，src 拼 workspaceDir 前缀
+  expect(writes[0]).toBe('> 图片为本地绝对路径，请用工具读取\n\n# 根\n\n## 配图 ![图注](/ws/assets/配图.png)\n')
+})
+
 // ---- 复制后处理（M5b Task 4：settings 两开关）----
 // 样例树：child 带 note「备注」与文本双链 [[B]]（备注/双链均由 data 携带，engineTreeToZen 还原）
 const noteLinkTree = (): EngineNode => ({

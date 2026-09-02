@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
 import { applyMultilinePaste } from '../services/multiline'
 import { applyCopySettings } from '../services/copyFilter'
+import { absolutizeImagePaths } from '../services/aiImagePaths'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { engineThemeName } from '../editor/engineThemes'
@@ -161,6 +162,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
    *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号（getState 取实时值）。
+   *  尾段图片引用相对→绝对（2026-09，AI 消费者）：须在剥备注之后——头注引用行不能被一并剥掉。
    *  序列化同步无守卫（纯函数）；写剪贴板异步段以 then 双参兜错（Sonar S3776 认知复杂度） */
   const doCopy = (): void => {
     const mm = mmRef.current
@@ -169,10 +171,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     selection.clearStaleIfMissing(full)
     const uid = selection.activeUidRef.current
     const active = uid ? findSubtreeByUid(full, uid) : null
-    const md = applyCopySettings(
+    let md = applyCopySettings(
       serialize(engineTreeToZen(active ?? full).tree, registry.byUid),
       useAppStore.getState().settings,
     )
+    const wsDir = useAppStore.getState().workspaceDir
+    if (wsDir !== null) md = absolutizeImagePaths(md, wsDir)
     void writeClipboard(md).then(
       () => flashCopy('copied-md'),
       (e) => setError('复制失败：' + String(e)),
