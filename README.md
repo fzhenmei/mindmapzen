@@ -15,7 +15,8 @@
 
 ```bash
 npm run dev        # 前端开发服务器（Vite）
-npm run tauri dev  # 桌面壳完整开发模式（Tauri 窗口）
+npm run dev:app    # 桌面壳完整开发模式（Tauri 窗口；单实例锁与 release 分离，可与 release 并行，见下方说明）
+npm run tauri dev  # 桌面壳开发模式旧入口（单实例锁与 release 共享，二者不能并行）
 npm test           # 单元/组件测试（Vitest）
 npm run e2e        # 端到端测试（Playwright，web 模式）
 npm run lint       # ESLint
@@ -24,6 +25,8 @@ npm run build      # 前端构建（tsc + vite）
 npm run build:release  # release 打包（msi/nsis 安装包，见下方说明）
 ```
 
-**release 打包**：`npm run build:release` 委托 `tauri build` 出包——产物在 `src-tauri/target/release/bundle/`（msi + nsis 双格式），免安装单文件 exe 在 `src-tauri/target/release/`。脚本（`scripts/build-release.mjs`）会自动定位 Windows SDK 的 `rc.exe` 并前置进 PATH：改过 `src-tauri/tauri.conf.json` 或 `capabilities/*` 后 `tauri-winres` 重编译需要它，而普通终端 PATH 里没有（有编译缓存时不触发，一触发即报 RC.EXE panic）。参数原样透传，如 `npm run build:release -- --no-bundle` 只出 exe 不打安装包。
+**release 打包**：`npm run build:release` 委托 `tauri build` 出包——产物在 `src-tauri/target/release/bundle/`（msi + nsis 双格式），免安装单文件 exe `mind-map-zen.exe` 在 `src-tauri/target/release/`（裸 exe 名取自 `src-tauri/Cargo.toml` 的包名，与 `tauri.conf.json` 的 `productName` 无关——后者只管 bundle 安装包）。脚本（`scripts/build-release.mjs`）会自动定位 Windows SDK 的 `rc.exe` 并前置进 PATH：改过 `src-tauri/tauri.conf.json` 或 `capabilities/*` 后 `tauri-winres` 重编译需要它，而普通终端 PATH 里没有（有编译缓存时不触发，一触发即报 RC.EXE panic）。参数原样透传，如 `npm run build:release -- --no-bundle` 只出 exe 不打安装包。
+
+**单实例锁与 dev/release 并行**：应用用 `tauri-plugin-single-instance` 防多开——同 identifier 二次启动不起新进程，转而聚焦已有主窗口。锁 key 取自 `tauri.conf.json` 的 identifier（Windows 为 named mutex，如 release 的 `com.mindmapzen.app-sim`），dev 与 release 默认共享一把锁。并行调试请用 `npm run dev:app`：它以 `--config` 把 identifier 覆盖为 `com.mindmapzen.app.dev`，锁随之分离——dev 与 release 可并行，同类型（dev↔dev、release↔release）仍互斥。注意事项：WebView2 本地数据目录（localStorage 等）跟随 identifier，首次用 `dev:app` 会重新开始一次，换来 dev 与 release 数据彻底隔离（开发试验不污染真实数据）；`npm run tauri dev` 仍是共享锁的旧入口，与已运行的 release 互斥；release 构建不受影响。
 
 设计文档见 [docs/superpowers/specs/](docs/superpowers/specs/)。
