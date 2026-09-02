@@ -4,6 +4,7 @@ import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree
 import { applyMultilinePaste } from '../services/multiline'
 import { applyCopySettings } from '../services/copyFilter'
 import { absolutizeImagePaths } from '../services/aiImagePaths'
+import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import { engineThemeName } from '../editor/engineThemes'
@@ -152,9 +153,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
 
-  /** 复制文件路径（2026-09）：mdPath 绝对路径入剪贴板（发给 AI 直接读本文件），成功盖「已复制」墨青印 */
+  /** 复制文件路径（2026-09）：mdPath 入剪贴板（发给 AI 读），出口分隔符按平台归一（toNativePath，同批修复） */
   const copyPath = (): void => {
-    void writeClipboard(mdPath).then(
+    void writeClipboard(toNativePath(mdPath)).then(
       () => flashStamp('copied'),
       (e) => setError('复制路径失败：' + String(e)),
     )

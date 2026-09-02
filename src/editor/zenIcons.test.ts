@@ -1,0 +1,64 @@
+import { describe, expect, it, vi } from 'vitest'
+import { collectUncuratedIcons, CURATED_ICONS, registerIconsInto } from './zenIcons'
+import type { EngineNode } from '../types/engine'
+
+/** 最小引擎树构造：children 递归展开 [data, ...children] 对 */
+const tree = (data: EngineNode['data'], ...children: EngineNode[]): EngineNode => ({
+  data,
+  children,
+})
+
+describe('collectUncuratedIcons（打开期图标恢复，2026-09 修复：重开导图后非精选图标丢注册）', () => {
+  it('整树收集非精选 zen_ 名（保序去重）；精选 / 非 zen_ 前缀 / 非字符串 / 非数组全忽略', () => {
+    const root = tree(
+      { text: '根', icon: ['zen_shield-alert', 'zen_flag', 'zen_book-search'] },
+      tree({ text: '子1', icon: ['zen_shield-alert', 'zen_priority', 'emoji_smile'] } as EngineNode['data']),
+      tree({ text: '子2', icon: 'zen_oops' } as unknown as EngineNode['data']),
+      tree({ text: '子3' }),
+    )
+    expect(collectUncuratedIcons(root)).toEqual(['shield-alert', 'book-search', 'priority'])
+  })
+
+  it('无图标 / 空树恒空数组', () => {
+    expect(collectUncuratedIcons(tree({ text: 'a' }))).toEqual([])
+    expect(collectUncuratedIcons(tree({ text: 'a' }, tree({ text: 'b' })))).toEqual([])
+  })
+})
+
+describe('registerIconsInto（iconList 补注册：新名入册，已知/加载失败跳过）', () => {
+  const list = () => [{ name: 'flag', icon: '<svg/>' }]
+
+  it('新名按序注册并返回新增数；精选已在列表则不重复', async () => {
+    const target = list()
+    const loader = vi.fn(async (n: string) => `<svg data-name="${n}"/>`)
+    const added = await registerIconsInto(target, ['shield-alert', 'flag', 'book-search'], loader)
+    expect(added).toBe(2)
+    expect(target.map((i) => i.name)).toEqual(['flag', 'shield-alert', 'book-search'])
+    // 已在列表的名字不发起加载
+    expect(loader).toHaveBeenCalledTimes(2)
+  })
+
+  it('loader 返回 null（名字不在 lucide 全集）宽容丢弃，不产生占位项', async () => {
+    const target = list()
+    const loader = vi.fn(async (n: string) => (n === 'shield-alert' ? '<svg/>' : null))
+    const added = await registerIconsInto(target, ['shield-alert', 'not-exist'], loader)
+    expect(added).toBe(1)
+    expect(target).toHaveLength(2)
+  })
+
+  it('names 内重复名只注册一次', async () => {
+    const target = list()
+    const added = await registerIconsInto(target, ['a', 'a'], async () => '<svg/>')
+    expect(added).toBe(1)
+    expect(target).toHaveLength(2)
+  })
+})
+
+describe('精选集健全性（用例前提）', () => {
+  it('shield / search 在精选，shield-alert / book-search 不在（Bug 实案形态）', () => {
+    expect(CURATED_ICONS['shield']).toBeDefined()
+    expect(CURATED_ICONS['search']).toBeDefined()
+    expect(CURATED_ICONS['shield-alert']).toBeUndefined()
+    expect(CURATED_ICONS['book-search']).toBeUndefined()
+  })
+})
