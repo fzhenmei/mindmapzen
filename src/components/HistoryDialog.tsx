@@ -64,7 +64,7 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
             {error}
           </p>
         )}
-        <ScrollArea className="h-80 rounded-md">
+        <ScrollArea type="hover" className="h-80 rounded-md">
           {list.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground" data-testid="history-empty">
               尚无提交
