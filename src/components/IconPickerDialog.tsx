@@ -86,6 +86,27 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
     setPicked((p) => (p.includes(name) ? p.filter((n) => n !== name) : [...p, name]))
   }
 
+  // 已选行 svg 补载（2026-09）：打开期恢复的非精选（未经搜索、不在本组件缓存）挂载后
+  // 异步补图；入缓存后 bump 触发重渲染（cache 为模块级可变，渲染读它须手动驱动）
+  const [, bumpChipTick] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      for (const n of picked) {
+        if (CURATED_ICONS[n] !== undefined || uncuratedSvgCache.has(n)) continue
+        const svg = await loadIconSvg(n)
+        if (cancelled) return
+        if (svg !== null) {
+          uncuratedSvgCache.set(n, svg)
+          bumpChipTick((t) => t + 1)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [picked])
+
   // extras = 本次选中但不在精选集的（从累积缓存取，不依赖当前搜索结果——跨搜索词不丢）
   const extras = picked
     .filter((n) => CURATED_ICONS[n] === undefined)
@@ -104,7 +125,8 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         </p>
         {/* 已选行（2026-09，用户反馈）：当前选中全量在场、点击即移除——非精选图标不在
             默认网格（精选 64），不搜索看不到已选，不知道关键词便无从删起；精选在 64 格
-            里找选中环也费眼。svg 缺失（打开期恢复的非精选未入本组件缓存）只显名字，足用 */}
+            里找选中环也费眼。chip 只显示图标，悬停 title 显示名字（用户二审）；
+            svg 异步补载（上方 effect），加载不出的非法名维持 '…' 占位（与宽容丢弃一致） */}
         {picked.length > 0 && (
           <div data-testid="icon-chips" className="flex flex-wrap gap-1">
             {picked.map((name) => {
@@ -117,11 +139,13 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
                   title={`移除 ${name}`}
                   aria-label={`移除 ${name}`}
                   onClick={() => toggle(name)}
-                  className="flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs hover:bg-accent [&_svg]:size-4"
+                  className="flex size-6 items-center justify-center rounded-md bg-secondary hover:bg-accent [&_svg]:size-4"
                 >
-                  {svg !== undefined && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />}
-                  <span>{name}</span>
-                  <span aria-hidden="true" className="text-muted-foreground">×</span>
+                  {svg !== undefined ? (
+                    <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />
+                  ) : (
+                    <span aria-hidden="true" className="text-[10px] text-muted-foreground">…</span>
+                  )}
                 </button>
               )
             })}

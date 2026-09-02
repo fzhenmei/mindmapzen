@@ -62,15 +62,20 @@ test('跨搜索词多选非精选图标：extras 全量携带（累积缓存，�
 })
 
 // 2026-09 修复（用户反馈）：非精选图标不在默认网格（精选 64），不搜索看不到已选，
-// 不知道关键词就无从移除。已选行：打开即全量在场（含非精选），点击即移除
-test('已选行：非精选已选不搜索也可见，点击即移除', async () => {
+// 不知道关键词就无从移除。已选行：打开即全量在场（含非精选），点击即移除。
+// 视觉（用户二审）：chip 只显示图标，悬停 title 显示名字——不显示名字文本
+test('已选行：非精选已选不搜索也可见（悬停显名），点击即移除', async () => {
   const onConfirm = vi.fn()
   render(
     <IconPickerDialog nodeText="节点" current={['shield-alert', 'flag']} onCancel={vi.fn()} onConfirm={onConfirm} />,
   )
   const chip = screen.getByTestId('icon-chip-shield-alert')
-  expect(chip).toHaveTextContent('shield-alert')
-  expect(screen.getByTestId('icon-chip-flag')).toBeInTheDocument()
+  // 悬停提示与可访问名承载名字（chip 本体不显示名字文本）
+  expect(chip).toHaveAttribute('title', '移除 shield-alert')
+  expect(chip.textContent).not.toContain('shield-alert')
+  // 精选 svg 直取同步在场；非精选异步补载后出图
+  expect(screen.getByTestId('icon-chip-flag').querySelector('svg')).not.toBeNull()
+  await waitFor(() => expect(chip.querySelector('svg')).not.toBeNull(), { timeout: 8000 })
   fireEvent.click(chip)
   fireEvent.click(screen.getByTestId('icon-save'))
   expect(onConfirm).toHaveBeenCalledTimes(1)
