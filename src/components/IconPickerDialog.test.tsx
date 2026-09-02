@@ -60,3 +60,24 @@ test('跨搜索词多选非精选图标：extras 全量携带（累积缓存，�
   expect(extras.map((e) => e.name).sort()).toEqual(['flag-off', 'shield-alert'])
   for (const e of extras) expect(e.icon).toMatch(/^<svg/)
 })
+
+// 2026-09 修复（用户反馈）：非精选图标不在默认网格（精选 64），不搜索看不到已选，
+// 不知道关键词就无从移除。已选行：打开即全量在场（含非精选），点击即移除
+test('已选行：非精选已选不搜索也可见，点击即移除', async () => {
+  const onConfirm = vi.fn()
+  render(
+    <IconPickerDialog nodeText="节点" current={['shield-alert', 'flag']} onCancel={vi.fn()} onConfirm={onConfirm} />,
+  )
+  const chip = screen.getByTestId('icon-chip-shield-alert')
+  expect(chip).toHaveTextContent('shield-alert')
+  expect(screen.getByTestId('icon-chip-flag')).toBeInTheDocument()
+  fireEvent.click(chip)
+  fireEvent.click(screen.getByTestId('icon-save'))
+  expect(onConfirm).toHaveBeenCalledTimes(1)
+  expect(onConfirm.mock.calls[0]?.[0]).toEqual(['flag'])
+})
+
+test('已选行：无选中不渲染（空态隐藏）', () => {
+  render(<IconPickerDialog nodeText="节点" current={[]} onCancel={vi.fn()} onConfirm={vi.fn()} />)
+  expect(screen.queryByTestId('icon-chips')).not.toBeInTheDocument()
+})

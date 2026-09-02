@@ -102,6 +102,31 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         <p className="truncate text-xs text-muted-foreground" title={nodeText}>
           {nodeText}
         </p>
+        {/* 已选行（2026-09，用户反馈）：当前选中全量在场、点击即移除——非精选图标不在
+            默认网格（精选 64），不搜索看不到已选，不知道关键词便无从删起；精选在 64 格
+            里找选中环也费眼。svg 缺失（打开期恢复的非精选未入本组件缓存）只显名字，足用 */}
+        {picked.length > 0 && (
+          <div data-testid="icon-chips" className="flex flex-wrap gap-1">
+            {picked.map((name) => {
+              const svg = CURATED_ICONS[name] ?? uncuratedSvgCache.get(name)
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  data-testid={`icon-chip-${name}`}
+                  title={`移除 ${name}`}
+                  aria-label={`移除 ${name}`}
+                  onClick={() => toggle(name)}
+                  className="flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs hover:bg-accent [&_svg]:size-4"
+                >
+                  {svg !== undefined && <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />}
+                  <span>{name}</span>
+                  <span aria-hidden="true" className="text-muted-foreground">×</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         <Input
           data-testid="icon-search"
           value={query}

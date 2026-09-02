@@ -103,6 +103,45 @@ test('图标：非精选图标（全集搜索、跨搜索词多选）→ 当场�
   await expect(page.locator('.canvas-host svg.lucide-book-search').first()).toBeVisible()
 })
 
+test('图标：已选行移除非精选——重开后不搜索，点已选 chip 即删（2026-09 用户反馈）', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('删图标图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('删图标图').first()).toBeVisible()
+
+  // 设一个非精选图标 → 落盘
+  await page.getByText('删图标图').first().click()
+  await page.getByTestId('node-action-icon').click()
+  await page.getByTestId('icon-search').fill('alert')
+  await page.getByTestId('icon-item-shield-alert').click()
+  await page.getByTestId('icon-save').click()
+  await page.getByTestId('btn-back').click()
+
+  // 重开 → 打开管理器：不搜索，已选行 chip 直接在场，点击移除 → 保存
+  await page.getByTestId('dir-node-all').click()
+  await page.getByTestId('map-item').filter({ hasText: '删图标图' }).dblclick()
+  await expect(page.getByText('删图标图').first()).toBeVisible()
+  await page.getByText('删图标图').first().click()
+  await page.getByTestId('node-action-icon').click()
+  const chip = page.getByTestId('icon-chip-shield-alert')
+  await expect(chip).toBeVisible()
+  await expect(chip).toHaveText(/shield-alert/)
+  await chip.click()
+  await page.getByTestId('icon-save').click()
+
+  // 落盘标记清空；画布图标消失
+  await page.getByTestId('btn-back').click()
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/删图标图.md',
+    ),
+  )
+  expect(md).toContain('# 删图标图')
+  expect(md).not.toContain('::shield-alert')
+})
+
 test('图标：手写/AI 直接改 md 标记 → 打开即生效（画布净化 + 保存保持）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
