@@ -127,7 +127,7 @@ test('图标：已选行移除非精选——重开后不搜索，点已选 chip
   await page.getByTestId('node-action-icon').click()
   const chip = page.getByTestId('icon-chip-shield-alert')
   await expect(chip).toBeVisible()
-  await expect(chip).toHaveText(/shield-alert/)
+  await expect(chip).toHaveAttribute('title', '移除 shield-alert')
   await chip.click()
   await page.getByTestId('icon-save').click()
 
