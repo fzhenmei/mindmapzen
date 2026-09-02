@@ -5,6 +5,20 @@
 html, body, #root { height: 100%; }
 /* 页面级不滚动（引擎自带拖拽平移）：滚动条只允许出现在树/卡片网格/大纲内 */
 html, body { overflow: hidden; }
+/* 全局细滚动条（2026-09 验收）：上述原生滚动容器统一 6px 胶囊滑块、轨道/转角全透明
+   （替换 WebView2 系统默认粗滚动条的立体样式）；滑块默认透明，指针悬停在滚动容器
+   （含子元素）时着色，离开即隐去（macOS overlay 观感）。悬停显隐不用 :hover——
+   Chromium 合成器对滚动条伪元素的动态伪类变化不重绘（152 实测），改由
+   services/slimScrollbarHover.ts 挂 .sb-hot（pointerover 委托，业务容器零改动）。
+   滑块色由 --muted-foreground 派生（color-mix），深浅主题自适应。定制后滚动条转为
+   占位式、内容区让出 6px（系统默认约 17px，反而更宽）。对话框内 Radix ScrollArea
+   为自定义渲染不经本规则，由 scroll-area.tsx 同步 6px/同派生色。 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
+.sb-hot::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 40%, transparent); }
 /* .app 类退役（2026-09 暗色修复）：App shell 根元素 M14 起未挂载本类，一直是死类；
    color/background/font-family 职责由 theme.css @layer base 的 body 规则（官方 v4 迁移
    补齐）与 @theme --font-sans 承担，此处保留档记防回潮 */
