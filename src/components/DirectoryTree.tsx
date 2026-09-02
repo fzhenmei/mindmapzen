@@ -155,12 +155,14 @@ export default function DirectoryTree({
   }
 
   return (
-    <SidebarContent>
+    <>
       {/* 搜索框（v2.5）：SidebarHeader 原是 logo+品名（上移 TitleBar），此位改常驻
           工作区文件搜索；Esc 清空复原。pt-0 顶掉默认 p-2 的顶距——搜索框贴侧栏顶，
-          与右侧 SidebarInset 浮层上边框齐平（见 LibraryView Sidebar className 注释）；
-          pb-3 = 原 pb-2+pb-1，保持与「目录」组的原间距 */}
-      <SidebarHeader className="pt-0 pb-3">
+          与右侧 SidebarInset 浮层上边框齐平（见 LibraryView Sidebar className 注释）。
+          2026-09 移出 SidebarContent 滚动容器（与 SidebarFooter 同级固定——此前在
+          容器内随树滚、滚动条还从搜索框顶起延伸）；pb-5 = 原 pb-3(12px)+容器内
+          gap-2(8px)，gap 随移出消失由 pb 补足，与「目录」组保持 28px 原间距 */}
+      <SidebarHeader className="pt-0 pb-5">
         <div className="relative px-2">
           <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
           <Input
@@ -174,6 +176,7 @@ export default function DirectoryTree({
           />
         </div>
       </SidebarHeader>
+      <SidebarContent>
       <SidebarGroup>
         <SidebarGroupLabel>目录</SidebarGroupLabel>
         <SidebarMenu>
@@ -218,6 +221,7 @@ export default function DirectoryTree({
           </Collapsible>
         </SidebarMenu>
       </SidebarGroup>
-    </SidebarContent>
+      </SidebarContent>
+    </>
   )
 }
