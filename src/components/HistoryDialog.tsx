@@ -140,8 +140,12 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
   )
 }
 
+/** 行级 diff 展示上限：单文件超此数折叠（防巨型 diff 撑爆对话框）；单行超长截断 */
+const MAX_LINES_SHOWN = 30
+const MAX_LINE_CHARS = 160
+
 /** 差异展开块（M23 恢复预览）：undefined=加载中、null=不可得、files 空=无差异；
- *  否则汇总行 + 文件行（±行数，红绿为 diff 惯例色） */
+ *  否则汇总行 + 按文件分组的变更行内容（红=恢复后消失，绿=恢复后回来） */
 function DiffBlock({
   stat,
   hash,
@@ -160,19 +164,49 @@ function DiffBlock({
       ) : (
         <>
           <p className="text-muted-foreground">
-            恢复后 {stat.files.length} 个文件变更（+{stat.ins} / -{stat.del} 行）
+            恢复后 {stat.files.length} 个文件变更（
+            <span className="text-green-600 dark:text-green-400">+{stat.ins}</span> /
+            <span className="text-red-600 dark:text-red-400">-{stat.del}</span> 行；红=消失，绿=回来）
           </p>
-          <ul className="mt-1 flex flex-col gap-0.5">
+          <div className="mt-1 flex flex-col gap-2">
             {stat.files.map((f) => (
-              <li key={f.path} className="flex items-center gap-2">
-                <span className="font-file min-w-0 flex-1 truncate" title={f.path}>
-                  {f.path}
-                </span>
-                <span className="shrink-0 text-green-600 dark:text-green-400">+{f.ins}</span>
-                <span className="shrink-0 text-red-600 dark:text-red-400">-{f.del}</span>
-              </li>
+              <div key={f.path} data-testid={`history-diff-file-${f.path}`}>
+                <p className="flex items-center gap-2">
+                  <span className="font-file min-w-0 flex-1 truncate" title={f.path}>
+                    {f.path}
+                  </span>
+                  <span className="shrink-0 text-green-600 dark:text-green-400">+{f.ins}</span>
+                  <span className="shrink-0 text-red-600 dark:text-red-400">-{f.del}</span>
+                </p>
+                {f.lines.length > 0 && (
+                  <ul className="mt-0.5 flex flex-col gap-px">
+                    {f.lines.slice(0, MAX_LINES_SHOWN).map((ln, i) => {
+                      const sign = ln.kind === 'add' ? '+' : '-'
+                      const isAdd = ln.kind === 'add'
+                      const text = ln.text.length > MAX_LINE_CHARS ? `${ln.text.slice(0, MAX_LINE_CHARS)}…` : ln.text
+                      return (
+                        <li
+                          key={i}
+                          className={
+                            isAdd
+                              ? 'bg-green-500/10 px-1 font-file text-green-700 dark:text-green-400'
+                              : 'bg-red-500/10 px-1 font-file text-red-700 dark:text-red-400'
+                          }
+                          title={ln.text}
+                        >
+                          {sign}
+                          {text}
+                        </li>
+                      )
+                    })}
+                    {f.lines.length > MAX_LINES_SHOWN && (
+                      <li className="text-muted-foreground">…还有 {f.lines.length - MAX_LINES_SHOWN} 行变更，已折叠</li>
+                    )}
+                  </ul>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
         </>
       )}
     </div>

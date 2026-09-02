@@ -117,16 +117,24 @@ export async function gitHistory(wsDir: string, run: GitRun, limit = 50): Promis
 /** 哈希形态：短哈希 7 位起（core.abbrev 可加长），最长完整 40 位 */
 const HASH_RE = /^[0-9a-f]{7,40}$/
 
-/** 恢复预览的文件级差异（M23）：ins/del 为恢复后该文件相对当前的增/删行数 */
+/** 恢复预览的单条变更行（M23b）：add=恢复后回来的行，del=恢复后消失的行 */
+export interface DiffLine {
+  kind: 'add' | 'del'
+  text: string
+}
+
+/** 恢复预览的文件级差异（M23b 行级）：ins/del 为行计数，lines 为变更行内容 */
 export interface DiffFile {
   path: string
   ins: number
   del: number
+  /** 变更行（unified=0 无上下文）；二进制等无行级 diff 的文件为空 */
+  lines: DiffLine[]
 }
 
-/** 恢复预览（M23 盲盒问题）：hash 与 HEAD 的文件级差异——
- *  git diff --numstat HEAD <hash>（numstat 原生 TAB 分隔，无 format 占位符风险），
- *  输出视角即"当前 → 该版本"，ins/del 就是恢复后的相对增删行。
+/** 恢复预览（M23 盲盒问题）：hash 与 HEAD 的**行级**差异——
+ *  git diff --unified=0 HEAD <hash>（零上下文，只出变更行），输出视角即
+ *  "当前 → 该版本"：- 行=恢复后消失的内容，+ 行=恢复后回来的内容。
  *  返回 null = 命令失败或非法 hash；files 空 = 与当前无差异（恢复无效果） */
 export async function gitDiffStat(
   wsDir: string,
@@ -134,18 +142,28 @@ export async function gitDiffStat(
   run: GitRun,
 ): Promise<{ files: DiffFile[]; ins: number; del: number } | null> {
   if (!HASH_RE.test(hash)) return null
-  const diff = await run(wsDir, ['diff', '--numstat', 'HEAD', hash])
+  const diff = await run(wsDir, ['diff', '--unified=0', 'HEAD', hash])
   if (!diff.ok) return null
-  const files = diff.out
-    .split('\n')
-    .filter((l) => l.trim() !== '')
-    .flatMap((l) => {
-      const [ins = '', del = '', ...rest] = l.split('\t')
-      const path = rest.join('\t')
-      // 不可解析行（如二进制计数为 "-"）跳过——工作区为 md/json 文本，属异常防御
-      if (!/^\d+$/.test(ins) || !/^\d+$/.test(del) || path === '') return []
-      return [{ path, ins: Number(ins), del: Number(del) }]
-    })
+  const files: DiffFile[] = []
+  let cur: DiffFile | null = null
+  let aPath = ''
+  for (const l of diff.out.split('\n')) {
+    if (l.startsWith('+++ ')) {
+      // b/ 前缀后可含空格，故整体截取；/dev/null = 文件被删，路径取 --- a/ 侧
+      if (cur !== null && cur.path !== '') files.push(cur)
+      const b = l.slice(4)
+      cur = { path: b === '/dev/null' ? aPath.replace(/^a\//, '') : b.replace(/^b\//, ''), ins: 0, del: 0, lines: [] }
+    } else if (l.startsWith('--- ')) {
+      aPath = l.slice(4)
+    } else if (cur !== null && (l.startsWith('+') || l.startsWith('-'))) {
+      const kind: DiffLine['kind'] = l[0] === '+' ? 'add' : 'del'
+      cur.lines.push({ kind, text: l.slice(1) })
+      if (kind === 'add') cur.ins += 1
+      else cur.del += 1
+    }
+    // diff --git / index / @@ 头、\ No newline、空行：不产出内容
+  }
+  if (cur !== null && cur.path !== '') files.push(cur)
   return {
     files,
     ins: files.reduce((s, f) => s + f.ins, 0),
