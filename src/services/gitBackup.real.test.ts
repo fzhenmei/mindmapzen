@@ -57,7 +57,7 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
     }
   })
 
-  test('gitDiffStat：numstat 真 TAB 输出 + 恢复视角语义（HEAD→hash 的增删行）', async () => {
+  test('gitDiffStat：unified=0 行级输出 + 恢复视角语义（HEAD→hash，+行=恢复后回来）', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'zen-git-'))
     try {
       const env = { ...process.env, GIT_AUTHOR_NAME: 'zen-test', GIT_AUTHOR_EMAIL: 'zen@test', GIT_COMMITTER_NAME: 'zen-test', GIT_COMMITTER_EMAIL: 'zen@test' }
@@ -66,15 +66,21 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
       writeFileSync(join(dir, 'a.md'), 'l1\n')
       sh(['add', '-A'])
       sh(['commit', '-m', 'v1'])
-      // v2：v1 的 l1 保留，新增 l2/l3 两行 → 恢复到 v1 = 相对当前 -2 行
+      // v2：v1 的 l1 保留，新增 l2/l3 两行 → 恢复到 v1 = 相对当前消失 l2/l3 两行
       writeFileSync(join(dir, 'a.md'), 'l1\nl2\nl3\n')
       sh(['add', '-A'])
       sh(['commit', '-m', 'v2'])
       const hash = execFileSync('git', ['rev-parse', '--short', 'HEAD~1'], { cwd: dir, env, encoding: 'utf8' }).trim()
 
       const stat = await gitDiffStat(dir, hash, realRun)
-      // 契约：TAB 分隔的 ins/del 可解析；参数顺序 HEAD hash 语义 = 恢复后相对当前 +0/-2
-      expect(stat).toEqual({ files: [{ path: 'a.md', ins: 0, del: 2 }], ins: 0, del: 2 })
+      // 契约：参数顺序 HEAD hash 语义 = 恢复后相对当前；del 行 = 恢复后消失的内容
+      expect(stat).toEqual({
+        files: [
+          { path: 'a.md', ins: 0, del: 2, lines: [{ kind: 'del', text: 'l2' }, { kind: 'del', text: 'l3' }] },
+        ],
+        ins: 0,
+        del: 2,
+      })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

@@ -155,21 +155,48 @@ describe('版本历史与回滚（M22）', () => {
     expect(await restoreToVersion('/ws', 'abc1234', bad.run)).toContain('恢复失败')
   })
 
-  test('gitDiffStat：numstat 解析（恢复后视角）；无差异空；失败/非法 hash 为 null', async () => {
+  test('gitDiffStat：unified=0 行级解析（恢复后视角）；无差异空；失败/非法 hash 为 null', async () => {
     const ok = makeRun([
-      { match: 'diff --numstat HEAD abc1234', ok: true, out: '12\t0\ta.md\n0\t3\tsub/b.md\n' },
+      {
+        match: 'diff --unified=0 HEAD abc1234',
+        ok: true,
+        out: 'diff --git a/a.md b/a.md\nindex 111..222 100644\n--- a/a.md\n+++ b/a.md\n@@ -1 +1 @@\n-old l1\n+new l1\n@@ -5,0 +6,2 @@\n+new l6\n+new l7\ndiff --git a/sub/b.md b/sub/b.md\n--- a/sub/b.md\n+++ b/sub/b.md\n@@ -2 +2 @@\n-removed\n',
+      },
     ])
     expect(await gitDiffStat('/ws', 'abc1234', ok.run)).toEqual({
       files: [
-        { path: 'a.md', ins: 12, del: 0 },
-        { path: 'sub/b.md', ins: 0, del: 3 },
+        {
+          path: 'a.md',
+          ins: 3,
+          del: 1,
+          lines: [
+            { kind: 'del', text: 'old l1' },
+            { kind: 'add', text: 'new l1' },
+            { kind: 'add', text: 'new l6' },
+            { kind: 'add', text: 'new l7' },
+          ],
+        },
+        { path: 'sub/b.md', ins: 0, del: 1, lines: [{ kind: 'del', text: 'removed' }] },
       ],
-      ins: 12,
-      del: 3,
+      ins: 3,
+      del: 2,
     })
-    const noDiff = makeRun([{ match: 'diff --numstat', ok: true, out: '' }])
+    // 删除文件场景：路径取 --- a/ 侧（+++ 为 /dev/null）
+    const gone = makeRun([
+      {
+        match: 'diff --unified=0',
+        ok: true,
+        out: 'diff --git a/gone.md b/gone.md\ndeleted file mode 100644\nindex 111..000\n--- a/gone.md\n+++ /dev/null\n@@ -1 +0 @@\n-content\n',
+      },
+    ])
+    expect(await gitDiffStat('/ws', 'abc1234', gone.run)).toEqual({
+      files: [{ path: 'gone.md', ins: 0, del: 1, lines: [{ kind: 'del', text: 'content' }] }],
+      ins: 0,
+      del: 1,
+    })
+    const noDiff = makeRun([{ match: 'diff --unified=0', ok: true, out: '' }])
     expect(await gitDiffStat('/ws', 'abc1234', noDiff.run)).toEqual({ files: [], ins: 0, del: 0 })
-    const bad = makeRun([{ match: 'diff --numstat', ok: false, err: 'fatal: bad object' }])
+    const bad = makeRun([{ match: 'diff --unified=0', ok: false, err: 'fatal: bad object' }])
     expect(await gitDiffStat('/ws', 'abc1234', bad.run)).toBeNull()
     const badHash = makeRun([])
     expect(await gitDiffStat('/ws', 'abc1234%x9垃圾', badHash.run)).toBeNull()
