@@ -140,8 +140,9 @@ export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
     .join('\n')
   const components = useMemo(() => ({ ...MD_COMPONENTS, img: imgRenderer(imgMap) }), [imgMap])
   return (
-    // pb-2 只留滚动尾部呼吸位：卡脚已承接尾距（原 pb-6 与卡脚叠加，下距偏空）
-    <div data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto px-6 pb-2">
+    // p-6：顶距 2026-09 补齐——首个标题（h1 无 mt）原零距贴住页首工具栏，顶距改与
+    // 正文左右距一致（24px）；pb-2 只留滚动尾部呼吸位（卡脚已承接尾距，原 pb-6 偏空）
+    <div data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto p-6 pb-2">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {display}
       </ReactMarkdown>

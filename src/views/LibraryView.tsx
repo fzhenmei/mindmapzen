@@ -339,7 +339,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         </Sidebar>
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
-              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 标题 … 动作钮 + 主题。
+              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 标题 … 动作钮
+              （主题钮 2026-09 移出页首，与纸面统一挂右下角 theme-fab，见下方 main 后）。
               容器合并改版：@container 承担详情动作收纳（页首宽 = SidebarInset 宽，随窗体/
               侧栏折叠变化，容器查询比视口断点更准）；详情态标题换 md 文件名（truncate 截断
               加 …），元信息并入 title 悬停。无固定高（零固定）——内部控件全 h-8 档撑出
@@ -374,8 +375,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               {iconBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
               {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
               {iconBtn('新建导图', 'btn-new', IconPlus, () => setDialog('new'))}
-              {/* 主题三态切换（页首常驻；编辑器右下角挂载见 M4 Task 4） */}
-              <ThemeToggle />
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
@@ -384,6 +383,12 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           <main className={selectedInfo !== null ? 'flex min-h-0 flex-1 p-0' : 'flex min-h-0 flex-1 p-6'}>
             {renderRight()}
           </main>
+          {/* 右下主题钮（2026-09）：定位容器与纸面 EditorCaption theme-fab 同款（absolute
+              bottom-3 right-4 z-[5]，类名同为视觉冒烟钩子），案头/纸面统一右下角挂载；
+              SidebarInset 自身 relative，锚点即圆角浮层右下角 */}
+          <div className="theme-fab absolute bottom-3 right-4 z-[5]">
+            <ThemeToggle />
+          </div>
         </SidebarInset>
       </SidebarProvider>
 
