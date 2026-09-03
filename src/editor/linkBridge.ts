@@ -13,32 +13,39 @@ interface NodeLike {
 }
 
 
-/** 目标名在全树不唯一时改推全路径形式（v1.1 验收 Bug 修复）：裸名多命中会被
- *  registryToLinks 宽容丢弃 → 线永不绘制且无任何反馈（"有时能连有时不能连"的根因）。
- *  桥接手里有精确节点实例，可自动消歧为 spec §4 的 [[/全/路径]] 形式（AI 仍可读）。
- *  同父同名（路径也相同）时全路径取首个命中——线可见地连到同名节点之一，优于静默丢弃。 */
+/** 目标标记统一规则（2026-09-03 同名消歧，spec §4.3，与 harvestRegistry/identityMarker 同语义）：
+ *  名称全树唯一 → 裸名（md 简洁、AI 可读）；不唯一 → 全路径（v1.1 消歧）；且为同路径孪生
+ *  第 n（n>1）→ 追加 #n（同父同名路径也相同，序号才能精确指认）。桥接手里有精确节点实例
+ *  与全树，序号按文档序可算。 */
 function disambiguatedTarget(mm: MindMapHandle, toNode: NodeLike, bareName: string): string {
   const plain = mm.getData()
   const toUid = toNode.getData('uid')
   let nameCount = 0
   let targetPath: string | null = null
+  let targetOrdinal = 0
+  const pathOccurrence = new Map<string, number>()
   const walk = (node: EngineNode, parentPath: string): void => {
     const { uid, text } = node.data
     const path = parentPath === '' ? '/' + String(text) : parentPath + '/' + String(text)
     if (text === bareName) nameCount += 1
-    if (toUid !== undefined && uid === toUid) targetPath = path
+    const ordinal = (pathOccurrence.get(path) ?? 0) + 1
+    pathOccurrence.set(path, ordinal)
+    if (toUid !== undefined && uid === toUid) {
+      targetPath = path
+      targetOrdinal = ordinal
+    }
     for (const child of node.children ?? []) walk(child, path)
   }
   if (!plain) return bareName
   walk(plain, '')
   if (nameCount <= 1 || targetPath === null) return bareName
-  return targetPath
+  return targetOrdinal > 1 ? `${targetPath}#${targetOrdinal}` : targetPath
 }
 
 /** 桥接钩子（构造 opt 传入，complete 时机调用）：注册表 push → 立即按注册表重建 → 上报触发保存链。
  *  显示文本全程不动（净化语义）；任何分支都返回 true（连线数据永不落引擎层）——
- *  无源（异常态）例外放行：addLine 对空源 no-op 且引擎自清建线态。目标名不唯一时
- *  registryToLinks 宽容丢弃（注册表保留、线不显示——与手写 [[..]] 同语义）。 */
+ *  无源（异常态）例外放行：addLine 对空源 no-op 且引擎自清建线态。目标名不唯一时入表
+ *  统一消歧标记（路径/#n，spec §4.3）——重开重建按序号精确落位。 */
 export function bridgeLinkToRegistry(
   mm: MindMapHandle,
   registry: LinkRegistry,

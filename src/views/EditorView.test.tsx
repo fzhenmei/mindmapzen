@@ -33,19 +33,27 @@ vi.mock('../editor/MindMapCanvas', async () => {
   /** rebuildEngineLinks 的 targets 落位镜像（免 offsets/重绘——单测只关心数据面）：
    *  全清后按解析结果重写（同生产「连线完全派生、重建即全清」语义） */
   const writeFakeTargets = (tree: EngineNode, reg: { byUid: Map<string, string[]> }): void => {
-    const byPath = new Map<string, EngineNode>()
+    const byPath = new Map<string, EngineNode[]>()
     const targets = new Map<EngineNode, string[]>()
     const walk = (node: EngineNode, parent: string): void => {
       const path = parent === '' ? '/' + node.data.text : parent + '/' + node.data.text
-      byPath.set(path, node)
+      const twins = byPath.get(path) ?? []
+      twins.push(node)
+      byPath.set(path, twins)
       delete node.data.associativeLineTargets
       for (const c of node.children ?? []) walk(c, path)
     }
     walk(tree, '')
-    for (const { fromPath, toPath } of registryToLinks(tree, reg)) {
-      const from = byPath.get(fromPath)
-      const uid = byPath.get(toPath)?.data.uid
-      if (!from || typeof uid !== 'string') continue
+    const pick = (path: string, ordinal?: number): EngineNode | undefined => {
+      const twins = byPath.get(path)
+      if (twins === undefined || twins.length === 0) return undefined
+      return twins[Math.min(Math.max(ordinal ?? 1, 1), twins.length) - 1]
+    }
+    for (const { fromPath, toPath, fromOrdinal, toOrdinal } of registryToLinks(tree, reg)) {
+      const from = pick(fromPath, fromOrdinal)
+      const to = pick(toPath, toOrdinal)
+      const uid = to?.data.uid
+      if (!from || !to || from === to || typeof uid !== 'string') continue
       const list = targets.get(from) ?? []
       if (!list.includes(uid)) list.push(uid)
       targets.set(from, list)

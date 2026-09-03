@@ -180,3 +180,53 @@ test('节点连线：删除后不复活（自动保存移除 md 标记，重开�
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.locator(LINE_PATHS)).toHaveCount(0)
 })
+
+// 2026-09-03 同名消歧（spec 2026-09-03 §1）：同父同名孪生可精确连线——桥接产 #n 标记、
+// md 落盘、重开按序号重建。断点③回归（v1.1 桥接消歧被保存链降级裸名→重开线消失）一并覆盖：
+// 保存链收割产路径/#n 标记，不再降级。
+test('节点连线：同父同名孪生按 #n 精确连线、保存重开复现', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('孪生连线')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('孪生连线').first()).toBeVisible()
+
+  // 根下三个子节点：A、S、S（同父同名孪生对）
+  for (const label of ['A', 'S', 'S']) {
+    await page.getByText('孪生连线').first().click()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+    await page.keyboard.type(label)
+    await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+    await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
+  }
+
+  // 操作条连线：A → 第 2 个 S（DOM 序即文档序，nth(1) 为第 2 孪生）
+  await page.getByText('A', { exact: true }).first().click()
+  await page.getByTestId('node-action-link').click()
+  await page.getByText('S', { exact: true }).nth(1).click()
+  await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+
+  // 保存：md 落统一消歧标记（名称不唯一 → 路径；第 2 孪生 → #2；不降级裸名）
+  await page.keyboard.press('Control+s')
+  const md = await readMd(page, '/ws/孪生连线.md')
+  expect(md).toBe('# 孪生连线\n\n## A [[/孪生连线/S#2]]\n\n## S\n\n## S\n')
+
+  // 重开：按 #n 序号重建，线复现（画布文本无标记——净化语义）
+  await page.getByTestId('btn-back').click()
+  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
+  await page.getByTestId('dir-node-all').click()
+  await expect(page.getByTestId('map-item')).toBeVisible()
+  await page.getByTestId('map-item').dblclick()
+  await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('A [[/孪生连线/S#2]]')).toHaveCount(0)
+  await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+
+  // 闭环校验：count=2 只证线存在，未证落位第 2 孪生——再保存一次，harvestRegistry 的
+  // identityMarker 仅当目标确为同路径第 2 孪生时产 #2；若重开错连第 1 孪生，md 会漂移为
+  // /孪生连线/S（无 #2），断言失败（重开落位 → 再保存 → 标记不漂移）
+  await page.keyboard.press('Control+s')
+  const md2 = await readMd(page, '/ws/孪生连线.md')
+  expect(md2).toBe('# 孪生连线\n\n## A [[/孪生连线/S#2]]\n\n## S\n\n## S\n')
+})

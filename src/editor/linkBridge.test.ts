@@ -144,3 +144,45 @@ describe('桥接消歧：目标名不唯一时推全路径', () => {
     ])
   })
 })
+
+// 2026-09-03 同父同名孪生（断点②目标端）：路径也相同时靠 #n 序号精确指认孪生。
+// 统一标记规则与 harvestRegistry/identityMarker 同语义：名称唯一→裸名，否则路径，孪生 n>1 缀 #n
+describe('桥接消歧：同父同名孪生按 #n 指认', () => {
+  const makeTwin = () => {
+    // 根下：A（源）、B、B（同父同名孪生对）
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1' }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+        { data: { text: 'B', uid: 'u3' }, children: [] },
+      ],
+    }
+    const fromNode = { getData: (k: string) => (k === 'text' ? 'A' : k === 'uid' ? 'u1' : undefined) }
+    const twinOf = (uid: string) => ({
+      getData: (k: string) => (k === 'text' ? 'B' : k === 'uid' ? uid : undefined),
+    })
+    const mm = {
+      getData: () => tree,
+      rebuildLinks: vi.fn(),
+      execCommand: vi.fn(),
+      associativeLine: { creatingStartNode: fromNode, cancelCreateLine: vi.fn() },
+    } as unknown as MindMapHandle
+    return { mm, registry: { byUid: new Map() } as LinkRegistry, twinOf }
+  }
+
+  test('连到首个孪生：推裸路径（不缀 #1）', () => {
+    const f = makeTwin()
+    bridgeLinkToRegistry(f.mm, f.registry, f.twinOf('u2'), vi.fn())
+    expect(f.registry.byUid.get('u1')).toEqual(['/根/B'])
+  })
+
+  test('连到第 2 孪生：推 路径#2，rebuildLinks 带 toOrdinal 精确落位', () => {
+    const f = makeTwin()
+    bridgeLinkToRegistry(f.mm, f.registry, f.twinOf('u3'), vi.fn())
+    expect(f.registry.byUid.get('u1')).toEqual(['/根/B#2'])
+    expect(f.mm.rebuildLinks).toHaveBeenCalledWith([
+      { fromPath: '/根/A', toPath: '/根/B', toOrdinal: 2 },
+    ])
+  })
+})

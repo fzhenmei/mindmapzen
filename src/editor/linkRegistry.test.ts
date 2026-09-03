@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildRegistry, harvestRegistry, registryToLinks, stripTreeTexts } from './linkRegistry'
+import { buildRegistry, harvestRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
 import type { EngineNode } from '../types/engine'
 
 /** 样例引擎树：u1 含两个标记（一命中一无命中），u2/u3 无标记 */
@@ -98,6 +98,38 @@ describe('harvestRegistry（v0.7.0 删线修复：引擎现态权威，替换语
     }
     expect(harvestRegistry(tree, { byUid: new Map() }).byUid.get('u1')).toEqual(['B', 'C'])
   })
+
+  // 2026-09-03 断点③修复：收割不再一律降级裸名——名称不唯一时按统一规则存路径/#n，
+  // 否则 md 落 [[裸名]] 重开多命中丢弃 → 线消失（v1.1 桥接消歧被保存链抹掉的根因）
+  test('同名不同父：收割目标存全路径（不降级裸名）', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1', associativeLineTargets: ['u2', 'u3'] }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+        { data: { text: 'X', uid: 'u4' }, children: [{ data: { text: 'B', uid: 'u3' }, children: [] }] },
+      ],
+    }
+    expect(harvestRegistry(tree, { byUid: new Map() }).byUid.get('u1')).toEqual([
+      '/根/B',
+      '/根/X/B',
+    ])
+  })
+
+  test('同父同名孪生：收割目标存 路径#n（第 2 孪生 → #2，首位不缀）', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1', associativeLineTargets: ['u2', 'u3'] }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+        { data: { text: 'B', uid: 'u3' }, children: [] },
+      ],
+    }
+    expect(harvestRegistry(tree, { byUid: new Map() }).byUid.get('u1')).toEqual([
+      '/根/B',
+      '/根/B#2',
+    ])
+  })
 })
 
 describe('stripTreeTexts', () => {
@@ -132,5 +164,39 @@ describe('registryToLinks', () => {
     reg.byUid.set('u1', ['/根/C'])
     stripTreeTexts(tree)
     expect(registryToLinks(tree, reg)).toEqual([{ fromPath: '/根/A 见 与', toPath: '/根/C' }])
+  })
+
+  // 2026-09-03 断点②源端修复：孪生节点作连线源时 fromPath 相同，序号才能区分——
+  // registryToLinks 按 uid 算源孪生序号填 fromOrdinal
+  test('孪生源节点：fromOrdinal 落位（文档序第 2 孪生）', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'S', uid: 'u1' }, children: [] },
+        { data: { text: 'S', uid: 'u2' }, children: [] },
+        { data: { text: 'B', uid: 'u3' }, children: [] },
+      ],
+    }
+    const reg: LinkRegistry = { byUid: new Map() }
+    reg.byUid.set('u2', ['B']) // 第 2 个 S 连 B
+    expect(registryToLinks(tree, reg)).toEqual([
+      { fromPath: '/根/S', fromOrdinal: 2, toPath: '/根/B' },
+    ])
+  })
+
+  test('孪生目标：#n 标记解析出 toOrdinal（端到端语义）', () => {
+    const tree: EngineNode = {
+      data: { text: '根', uid: 'u0' },
+      children: [
+        { data: { text: 'A', uid: 'u1' }, children: [] },
+        { data: { text: 'B', uid: 'u2' }, children: [] },
+        { data: { text: 'B', uid: 'u3' }, children: [] },
+      ],
+    }
+    const reg: LinkRegistry = { byUid: new Map() }
+    reg.byUid.set('u1', ['/根/B#2'])
+    expect(registryToLinks(tree, reg)).toEqual([
+      { fromPath: '/根/A', toPath: '/根/B', toOrdinal: 2 },
+    ])
   })
 })
