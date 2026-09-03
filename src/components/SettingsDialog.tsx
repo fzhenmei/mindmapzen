@@ -120,6 +120,21 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
               </>
             )}
           </div>
+          {/* 漫游引导重看（2026-09 onboarding tour，spec §6）：点击激活引导并关设置——遮罩需要完整视口 */}
+          <div className="flex items-center justify-between gap-2">
+            <span>功能引导</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-testid="tour-replay"
+              onClick={() => {
+                useAppStore.getState().startTour()
+                onClose()
+              }}
+            >
+              重新观看
+            </Button>
+          </div>
           {onChangeWorkspace && (
             <div className="flex items-center justify-between gap-2">
               <span>工作区：{workspaceDir ?? '未设置'}</span>

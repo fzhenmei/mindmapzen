@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [] })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], tourActive: false, tourStep: 0, tourDone: false })
 })
 
 describe('appStore', () => {
@@ -186,5 +186,40 @@ describe('settings（M5b Task 4：复制行为）', () => {
     const cfg2 = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
     expect(cfg2.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
     expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+  })
+})
+
+describe('漫游引导状态（onboarding tour）', () => {
+  test('startTour 激活并回到第 0 步', () => {
+    useAppStore.setState({ tourStep: 5 })
+    useAppStore.getState().startTour()
+    const s = useAppStore.getState()
+    expect(s.tourActive).toBe(true)
+    expect(s.tourStep).toBe(0)
+  })
+  test('setTourStep 仅改步号（before 钩子切视图后由组件调用）', () => {
+    useAppStore.getState().startTour()
+    useAppStore.getState().setTourStep(3)
+    expect(useAppStore.getState().tourStep).toBe(3)
+  })
+  test('finishTour 关闭引导并持久化 tourDone:true（load-merge-save 不丢其他字段）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    useAppStore.getState().startTour()
+    useAppStore.getState().setTourStep(2)
+    await useAppStore.getState().finishTour()
+    const s = useAppStore.getState()
+    expect(s.tourActive).toBe(false)
+    expect(s.tourStep).toBe(0)
+    expect(s.tourDone).toBe(true)
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.tourDone).toBe(true)
+    expect(cfg.workspaceDir).toBe('/ws') // merge 未覆盖
+  })
+  test('init 自 config 载入 tourDone', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, tourDone: true }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().tourDone).toBe(true)
   })
 })

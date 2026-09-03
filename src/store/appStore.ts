@@ -51,6 +51,16 @@ interface AppState {
   gitStatus: GitStatusInfo
   /** 版本历史（M22 回滚 UI）：最近提交列表；空 = 无仓库/未加载 */
   gitHistoryList: HistoryEntry[]
+  /** 漫游引导（2026-09 onboarding tour）：激活态与当前步仅内存；tourDone 为 config 镜像
+   *  （init 载入，finishTour 置 true 落盘）。步进编排（before 钩子/越末步）在 TourOverlay，
+   *  store 只持状态——避免 store→tourSteps→store 模块循环 */
+  tourActive: boolean
+  tourStep: number
+  tourDone: boolean
+  startTour: () => void
+  setTourStep: (n: number) => void
+  /** 完成或跳过同路径（spec §3.3：跳过即完成，不再骚扰）；幂等——重看后再 finish 仍落 true */
+  finishTour: () => Promise<void>
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -112,6 +122,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastBackup: null,
   gitStatus: { lastCommit: null, aheadCount: null },
   gitHistoryList: [],
+  tourActive: false,
+  tourStep: 0,
+  tourDone: false,
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -121,7 +134,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
@@ -287,6 +300,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   backToLibrary: async () => {
     set({ currentMdPath: null, dirty: false, route: 'library' })
     await get().refreshMaps()
+  },
+
+  startTour: () => set({ tourActive: true, tourStep: 0 }),
+  setTourStep: (n) => set({ tourStep: n }),
+
+  finishTour: async () => {
+    const { adapter, configPath } = get()
+    set({ tourActive: false, tourStep: 0, tourDone: true })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, tourDone: true })
   },
 
   setError: (e) => set({ error: e }),

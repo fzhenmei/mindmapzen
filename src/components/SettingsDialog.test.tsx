@@ -93,4 +93,14 @@ describe('SettingsDialog', () => {
     expect(hash.length).toBeGreaterThan(0)
     expect(about).toHaveTextContent(hash)
   })
+
+  // 漫游引导重看入口（spec §6）：点击即激活引导并关闭设置（引导遮罩需要完整视口）
+  test('重新观看功能引导：点击后激活引导并关闭设置', async () => {
+    useAppStore.setState({ tourActive: false })
+    const onClose = vi.fn()
+    render(<SettingsDialog onClose={onClose} />)
+    fireEvent.click(screen.getByTestId('tour-replay'))
+    expect(useAppStore.getState().tourActive).toBe(true)
+    expect(onClose).toHaveBeenCalled()
+  })
 })

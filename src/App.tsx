@@ -14,6 +14,7 @@ import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/t
 import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
 import DevBadge from './components/DevBadge'
+import TourOverlay from './components/tour/TourOverlay'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -236,6 +237,19 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [gitEnabled, workspaceDir])
 
+  // 漫游引导自动触发（2026-09 onboarding tour，spec §3.3）：单一 effect 统一两种时机——
+  // 启动已有工作区 / 开屏当场选好工作区落案头；error 非空不触发（遮罩不得盖住错误横幅）
+  const bootedForTour = useAppStore((s) => s.booted)
+  const workspaceForTour = useAppStore((s) => s.workspaceDir)
+  const tourDone = useAppStore((s) => s.tourDone)
+  const tourActive = useAppStore((s) => s.tourActive)
+  const appError = useAppStore((s) => s.error)
+  useEffect(() => {
+    if (bootedForTour && workspaceForTour !== null && !tourDone && !tourActive && appError === null) {
+      useAppStore.getState().startTour()
+    }
+  }, [bootedForTour, workspaceForTour, tourDone, tourActive, appError])
+
   // auto 模式下跟随系统切换（显式亮/暗不受影响）；E2E web 模式 matchMedia 同样可用，无冲突
   useEffect(() => {
     const stop = watchSystemTheme(() => {
@@ -273,6 +287,7 @@ export default function App() {
       <TitleBar />
       <div className="min-h-0 flex-1">{children}</div>
       <DevBadge />
+      <TourOverlay />
     </div>
   )
 
