@@ -22,7 +22,10 @@ function harnessPngBytes(): Uint8Array {
  *  预置须先于 setWorkspace 写盘（refreshMaps/左树在 setWorkspace 时生成），
  *  且不能无条件预置：多卡片会破坏既有用例对 map-item 的单例（严格模式）断言。
  *  ?nows=1 跳过 setWorkspace（保持无工作区首启态）：仅 welcome.spec 开屏流程使用——
- *  点 btn-welcome-create 后经 pickDirectory 桩（固定返回 /ws）走真实 setWorkspace 链路 */
+ *  点 btn-welcome-create 后经 pickDirectory 桩（固定返回 /ws）走真实 setWorkspace 链路。
+ *  引导预设：默认预写 /cfg.json tourDone:true（须先于 setWorkspace，load-merge-save 保留），
+ *  仅 ?tour=1 时写 false——tour.spec 显式要求看引导；?tourdone=1 与默认等效（语义自述）。
+ *  不预写 false 的原因同 ?desk=1：引导遮罩全屏拦截交互，既有 ?e2e=1 用例会被挡住 */
 export async function installE2eHarness(): Promise<void> {
   const fs = new MemoryFsAdapter()
   useAppStore.getState().setAdapter(fs)
@@ -80,6 +83,13 @@ export async function installE2eHarness(): Promise<void> {
     await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n')
     await fs.writeTextFileAtomic('/ws/根图.md', '# 根图\n')
   }
+  // 引导预设（2026-09 onboarding tour）：引导遮罩全屏拦截交互，既有用例（?e2e=1）
+  // 启动即满足触发条件会被挡住——故无 ?tour 参数时默认预写 tourDone:true（既有用例
+  // 零改动豁免）；仅 ?tour=1 显式要看引导时写 false（tour.spec 全流程/跳过/重看用）。
+  // ?tourdone=1（tour.spec「完成后重启」用例）与默认等效，仅作 spec 内语义自述。
+  // 预写须先于 setWorkspace：它是 load-merge-save，会保留 tourDone
+  const tourDone = !new URLSearchParams(window.location.search).has('tour')
+  await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, tourDone }))
   if (!new URLSearchParams(window.location.search).has('nows')) {
     await useAppStore.getState().setWorkspace('/ws')
   }
