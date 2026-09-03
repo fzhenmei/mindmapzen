@@ -69,6 +69,9 @@ export interface AppConfig {
   settings: CopySettings
   /** 版本管理（M20 想法8）：自动 commit + 远程备份 */
   git: GitConfig
+  /** 漫游引导完成标记（2026-09 onboarding tour）：完成或跳过即 true；缺省 false——
+   *  老用户升级后首次启动也会看一次（spec §3.1 已确认口径） */
+  tourDone: boolean
 }
 /** 版本管理配置（M20）：宽容解析见 config.ts（parseGitConfig） */
 export interface GitConfig {
@@ -96,6 +99,11 @@ export function parseGitConfig(v: unknown): GitConfig {
   }
 }
 
+/** 宽容解析引导完成标记：非 boolean 一律 false（旧配置无字段按未完成兼容） */
+export function parseTourDone(v: unknown): boolean {
+  return typeof v === 'boolean' ? v : false
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: null,
   lastOpened: null,
@@ -105,6 +113,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   previewOutline: 'auto',
   settings: DEFAULT_COPY_SETTINGS,
   git: DEFAULT_GIT_CONFIG,
+  tourDone: false,
 }
 /** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
  *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，
