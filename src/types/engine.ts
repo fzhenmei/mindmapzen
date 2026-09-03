@@ -27,6 +27,10 @@ export interface EngineRenderer {
   reRenderNodeCheckChange(node: unknown, notRender?: boolean): void
   /** 渲染树根节点实例（Render.js:601）；未渲染时为 null */
   root?: NodeBox | null
+  /** 数据树（Render.js:81 构造数据 / :749 撤销恢复）：与渲染实例共享 data 本体，**含收起隐藏子树**
+ *  （收起只改 data.expand，节点不出渲染树但保留在数据树）。连线净化/重建以此为全量数据源
+ *  （走渲染树会遗漏隐藏节点：标记残留被文本编辑吞噬 → 连线永久丢失，2026-09 修复） */
+  renderTree?: EngineNode | null
   /** 复制选中节点（Render.js:1195）：写入引擎内部剪贴板（beingCopyData，供 Control+v 画布内
    *  粘贴节点）并同步系统剪贴板 smm 格式数据；快捷键对调后由 Control+Shift+c 触发（MindMapCanvas） */
   copy(): void
@@ -115,8 +119,9 @@ export interface MindMapHandle {
    *  内部等待首帧渲染完成后按 links 清空并重建关联线（既有控制点差值按 uid 留档回填，M5d Task 5） */
   rebuildLinks?(links: ResolvedLink[]): void
   /** 连线净化/再净化（M5d Task 2/5 + v0.7.0 验收修复）：宿主侧方法——同上装配挂载；等首帧渲染完成后
-   *  走渲染树：按引擎现态收割重建注册表（打开时引擎 targets 恒空＝文本标记建表；保存后再净化时
-   *  以引擎 targets 为权威，替换语义）→ 直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线；
+   *  走数据树（renderer.renderTree，含收起隐藏子树，2026-09 收起态修复）：按引擎现态收割重建注册表
+   *  （打开时引擎 targets 恒空＝文本标记建表；保存后再净化时以引擎 targets 为权威，替换语义）→
+   *  直写剥离显示文本（不进命令层，不置脏）→ 按注册表重建连线；
    *  adjust = 打开时 sidecar linkAdjust，重建时一并恢复用户拖过的弯曲（保存后入口不传，引擎现存优先） */
   applyRegistry?(adjust?: LinkAdjust): void
   /** 关联线插件实例（构造时挂载）：建线态入口与状态（验收轮连线文本桥接） */
