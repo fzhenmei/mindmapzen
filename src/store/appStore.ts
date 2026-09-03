@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type MapInfo, type ThemePref } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -32,6 +32,8 @@ interface AppState {
   preferredLayout: LayoutKind
   /** 主题三态偏好（auto/亮/暗；init 自配置，切换时持久化） */
   themePref: ThemePref
+  /** 预览大纲三态偏好（2026-09 大纲面板；auto = 跟随预览主区宽，显式 on/off 记住手动开关） */
+  previewOutline: PreviewOutlinePref
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
   /** 顶部条（自定义标题栏）取色令牌：案头 '--sidebar'（视口顶是 sidebar 色场）、编辑器/
@@ -61,6 +63,7 @@ interface AppState {
   openMap: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
+  setPreviewOutline: (pref: PreviewOutlinePref) => Promise<void>
   setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
   /** 版本管理配置变更（M20）：即时生效 + load-merge-save 持久化 */
   setGitConfig: (patch: Partial<GitConfig>) => Promise<void>
@@ -100,6 +103,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
   preferredLayout: 'mindmap',
   themePref: 'auto',
+  previewOutline: 'auto',
   resolvedTheme: 'light',
   titlebarBg: '--background',
   settings: DEFAULT_COPY_SETTINGS,
@@ -117,7 +121,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
@@ -186,6 +190,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyDocumentTheme(resolved)
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, theme: pref })
+  },
+
+  /** 预览大纲三态偏好（2026-09 大纲面板）：即时生效 + load-merge-save 持久化
+   *  （auto = 跟随预览主区宽；显式 on/off 记住用户手动开关，跨会话生效） */
+  setPreviewOutline: async (pref) => {
+    const { adapter, configPath } = get()
+    set({ previewOutline: pref })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, previewOutline: pref })
   },
 
   /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */

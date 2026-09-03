@@ -148,6 +148,25 @@ describe('theme（M4 禅意视觉）', () => {
   })
 })
 
+describe('previewOutline（预览大纲三态偏好）', () => {
+  test('setPreviewOutline 更新状态并 load-merge-save 持久化', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setPreviewOutline('off')
+    expect(useAppStore.getState().previewOutline).toBe('off')
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.previewOutline).toBe('off')
+  })
+  test('init 读配置的 previewOutline（缺失回退 auto）', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, previewOutline: 'on' }))
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().previewOutline).toBe('on')
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().previewOutline).toBe('auto')
+  })
+})
+
 describe('settings（M5b Task 4：复制行为）', () => {
   test('初始默认 {copyIncludeNote:false, copyIncludeLinks:true}', () => {
     expect(useAppStore.getState().settings).toEqual(DEFAULT_COPY_SETTINGS)
