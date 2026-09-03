@@ -45,6 +45,8 @@ const stripEmptyNote = (t: ZenNode): ZenNode => ({
   children: t.children.map(stripEmptyNote),
 })
 
+// 500 例 fuzz 用例在单文件独跑时远低于 5s，但全量并行满载下 CPU 争用会膨胀越线，
+// 故统一放宽到 30s（只放宽等待上限，用例数与断言语义零改动）
 test('parse(serialize(tree)) 结构恒等（500 例，深度≤6 时全走标题）', () => {
   fc.assert(
     fc.property(treeArb, (tree) => {
@@ -53,7 +55,7 @@ test('parse(serialize(tree)) 结构恒等（500 例，深度≤6 时全走标题
     }),
     { numRuns: 500 },
   )
-})
+}, 30_000)
 
 test('备注含空字符串的树 roundtrip：空串序列化为无引用块（parse 无 note 键）', () => {
   const tree: ZenNode = {
@@ -287,7 +289,7 @@ test('标记属性①句尾规范化：净化后注入序列化，重开每节�
     }),
     { numRuns: 500 },
   )
-})
+}, 30_000)
 
 test('标记属性②幂等：strip∘inject∘strip === strip（500 例）', () => {
   // 净化链核心不变量：注入再剥离不得改写已净化文本（显示文本在连线开-存循环中保持稳定）
@@ -298,7 +300,7 @@ test('标记属性②幂等：strip∘inject∘strip === strip（500 例）', ()
     }),
     { numRuns: 500 },
   )
-})
+}, 30_000)
 
 test('标记属性③定点：parse(serialize(tree, links)) 再 serialize 同 links 结果恒等（500 例）', () => {
   // 二次开-存定点：md 是连线唯一事实源——净化注入产出的 md 再开再存（同注册表）不得漂移
@@ -313,7 +315,7 @@ test('标记属性③定点：parse(serialize(tree, links)) 再 serialize 同 li
     }),
     { numRuns: 500 },
   )
-})
+}, 30_000)
 
 // —— M17 备注即宿主：note 含 ```mermaid 围栏（多行备注）的定点 roundtrip ——
 // md 事实源零改动的前提证明：序列化逐行 `> ` 前缀 ↔ 解析逐行剥标记，围栏原样保留
