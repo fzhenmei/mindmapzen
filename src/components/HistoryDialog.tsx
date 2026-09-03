@@ -64,7 +64,13 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
             {error}
           </p>
         )}
-        <ScrollArea type="hover" className="h-80 rounded-md">
+        {/* min-w-0 + viewport 内容容器改 block：truncate 的 nowrap 使长消息 min-content=全文一行宽，
+            Radix ScrollArea 的 table 容器(inline style)会把该宽度顶回，撑破对话框(grid item 默认
+            min-width:auto)——table 是内联样式故须 !important 压制；两者缺一不可，单改任一仍溢出 */}
+        <ScrollArea
+          type="hover"
+          className="h-80 min-w-0 rounded-md [&_[data-radix-scroll-area-viewport]_div]:block!"
+        >
           {list.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground" data-testid="history-empty">
               尚无提交
