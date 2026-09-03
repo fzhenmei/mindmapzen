@@ -90,7 +90,7 @@ test('版本历史：列表渲染 + 确认恢复命令序列（checkout <hash> -
     z.gitAnswers.push({
       match: 'log -50',
       ok: true,
-      out: 'abc1234\t2026-08-31 10:00:00 +0800\t自动备份 · 3 文件变更\ndef5678\t2026-08-31 09:00:00 +0800\t自动备份 · 1 文件变更\n',
+      out: 'abc1234\t2026-08-31 10:00:00 +0800\t自动备份 · 3 文件变更,长消息用于验证列表不被 truncate 的 nowrap 固有宽度撑破对话框\ndef5678\t2026-08-31 09:00:00 +0800\t自动备份 · 1 文件变更\n',
     })
   })
   await page.getByTestId('git-history-open').click()
@@ -99,6 +99,14 @@ test('版本历史：列表渲染 + 确认恢复命令序列（checkout <hash> -
     timeout: 10_000,
   })
   await expect(page.getByTestId('history-item-def5678')).toBeVisible()
+
+  // 布局回归：长消息（truncate 的 nowrap 使 min-content=全文一行宽）不得经 Radix
+  // ScrollArea 的 table 容器把列表撑出对话框——列表右端按钮画出框外即此因（曾现缺陷）
+  const dlgBox = await page.getByTestId('history-dialog').boundingBox()
+  const listBox = await page.getByTestId('history-list').boundingBox()
+  const btnBox = await page.getByTestId('history-preview-abc1234').boundingBox()
+  expect(listBox.width).toBeLessThanOrEqual(dlgBox.width)
+  expect(btnBox.x + btnBox.width).toBeLessThanOrEqual(dlgBox.x + dlgBox.width)
 
   // M23 恢复预览：点「预览」行内展开行级差异（unified=0 桩回放，红=消失/绿=回来），恢复不开盲盒
   await page.evaluate(() => {
