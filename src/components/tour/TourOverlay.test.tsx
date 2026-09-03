@@ -10,7 +10,8 @@ beforeEach(() => {
   // finishTour 会 load/save 配置：默认 adapter 为 null（生产 main.tsx 注入），
   // 按仓库惯例（SettingsDialog.test.tsx）注入内存桩 + 指定配置路径，避免 unhandled rejection
   useAppStore.getState().setAdapter(new MemoryFsAdapter())
-  useAppStore.setState({ tourActive: false, tourStep: 0, route: 'library', currentMdPath: null, configPath: '/cfg.json' })
+  // tourDone 一并归零：同文件先跑的用例可能已 finishTour 置 true，残留会让「跳过即完成」的落盘断言恒真
+  useAppStore.setState({ tourActive: false, tourStep: 0, tourDone: false, route: 'library', currentMdPath: null, configPath: '/cfg.json' })
 })
 
 describe('TourOverlay', () => {

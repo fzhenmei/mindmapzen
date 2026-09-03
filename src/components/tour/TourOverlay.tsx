@@ -90,12 +90,13 @@ export default function TourOverlay() {
   }
   /** 回退：跨视图段（editor→library）先 await 回案头再步进——否则 route 停在 editor，
    *  library 段锚点不存在、viewMatch 恒 false，step 0~5 全部永久降级居中卡且无法恢复高亮。
-   *  引导中不产生 dirty，backToLibrary 直接回安全 */
+   *  引导中不产生 dirty，backToLibrary 直接回安全；其异常（磁盘故障 refreshMaps 抛错）同
+   *  goNext 吞掉仍步进（spec §9 不断链），跳过/上一步按钮仍可用 */
   const goBack = async () => {
     const cur = useAppStore.getState().tourStep
     if (cur <= 0) return
     if (TOUR_STEPS[cur - 1].view !== TOUR_STEPS[cur].view) {
-      await useAppStore.getState().backToLibrary()
+      await useAppStore.getState().backToLibrary().catch(() => {})
     }
     useAppStore.getState().setTourStep(cur - 1)
   }
