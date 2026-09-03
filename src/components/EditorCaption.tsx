@@ -2,9 +2,9 @@
 // 左下题签 = 等宽文件声道导图名 + 有未保存修改时缀朱砂脏印（spec §3 纸面）+
 // 基本信息统计（2026-09：节点数 + 最后保存时间，并入题签行不加新浮层）；
 // 复制文件路径钮初版曾挂此处，后移砚栏复制钮旁（IconRoute 图标区分）；
-// 右下 theme-fab 仅是定位容器，按钮本体为 ThemeToggle（内部接 store，不经 props）。
+// 右下 theme-fab 定位容器 2026-09 抽至 ThemeToggle.ThemeFab（开屏/案头/纸面三态统一）。
 // editor-caption/caption-name/theme-fab 类名保留为视觉冒烟钩子（skin 已转 utility，App.css 无对应规则）。
-import ThemeToggle from './ThemeToggle'
+import { ThemeFab } from './ThemeToggle'
 
 interface Props {
   /** 导图名（EditorView 取自 mdPath 文件名，去 .md 扩展） */
@@ -52,9 +52,7 @@ export default function EditorCaption({ name, dirty, nodeCount, savedAt }: Reado
           {nodeCount} 节点 · {savedTimeLabel(savedAt)}
         </span>
       </div>
-      <div className="theme-fab absolute bottom-3 right-4 z-[5]">
-        <ThemeToggle />
-      </div>
+      <ThemeFab />
     </>
   )
 }

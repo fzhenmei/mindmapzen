@@ -23,9 +23,9 @@ test('无工作区时渲染开屏页，创建工作区后进入案头', async ()
   expect(screen.getByTestId('welcome-screen')).toBeInTheDocument()
   expect(screen.getByTestId('btn-welcome-create')).toBeInTheDocument()
   expect(screen.getByTestId('btn-welcome-pick')).toBeInTheDocument()
-  // 页首栏隐藏：设置/主题入口不渲染
+  // 页首栏隐藏：设置入口不渲染；主题钮 2026-09 起开屏态常驻右下角 fab（开屏/案头/纸面三态统一）
   expect(screen.queryByTestId('btn-settings')).not.toBeInTheDocument()
-  expect(screen.queryByTestId('btn-theme')).not.toBeInTheDocument()
+  expect(screen.getByTestId('btn-theme')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-welcome-create'))
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws'))
   // M15：有工作区后进案头 idle 空态（未选任何），开屏页不再渲染
