@@ -44,6 +44,16 @@ describe('TourOverlay', () => {
     expect(screen.queryByTestId('tour-highlight')).not.toBeInTheDocument()
     expect(screen.getByTestId('tour-popover')).toBeInTheDocument()
   })
+  test('锚点延迟挂载：有界重试找到后从降级升级为高亮（跨视图异步渲染）', async () => {
+    useAppStore.setState({ tourActive: true, tourStep: 1 }) // btn-new 步
+    render(<TourOverlay />)
+    expect(screen.queryByTestId('tour-highlight')).not.toBeInTheDocument() // 暂缺时先降级
+    const el = document.createElement('div')
+    el.setAttribute('data-testid', 'btn-new')
+    document.body.appendChild(el) // 模拟编辑器文档加载链完成后锚点异步挂载
+    await waitFor(() => expect(screen.getByTestId('tour-highlight')).toBeInTheDocument())
+    el.remove()
+  })
   test('推进：下一步步进、上一步回退、末步「完成」点击即 finish（spec §3.3 完成路径）', async () => {
     useAppStore.setState({ tourActive: true, tourStep: 0 })
     render(<TourOverlay />)
@@ -58,11 +68,20 @@ describe('TourOverlay', () => {
     fireEvent.click(screen.getByTestId('tour-next'))
     await waitFor(() => expect(useAppStore.getState().tourActive).toBe(false))
   })
+  test('上一步跨视图回退案头：route 回 library 高亮链恢复', async () => {
+    // step 6（editor 段首步）：模拟 before 已跑完的跨视图状态（route=editor）
+    useAppStore.setState({ tourActive: true, tourStep: 6, route: 'editor', workspaceDir: null })
+    render(<TourOverlay />)
+    fireEvent.click(screen.getByTestId('tour-prev'))
+    await waitFor(() => expect(useAppStore.getState().tourStep).toBe(5))
+    expect(useAppStore.getState().route).toBe('library') // 不回案头则 library 段锚点全失效
+  })
   test('跳过即完成：finishTour 关闭并置 tourDone', async () => {
     useAppStore.setState({ tourActive: true, tourStep: 2 })
     render(<TourOverlay />)
     fireEvent.click(screen.getByTestId('tour-skip'))
     await waitFor(() => expect(useAppStore.getState().tourActive).toBe(false))
+    expect(useAppStore.getState().tourDone).toBe(true)
   })
   test('Esc 触发跳过', async () => {
     useAppStore.setState({ tourActive: true, tourStep: 0 })

@@ -15,6 +15,8 @@ test('引导：全流程走完（案头→编辑器跨视图）并落盘 tourDon
   await page.getByTestId('tour-next').click()
   await expect(page.getByTestId('zen-bar')).toBeVisible()
   await expect(page.getByTestId('tour-step-indicator')).toHaveText('7 / 11')
+  // 跨视图后锚点（zen-bar）随编辑器异步挂载：有界重试内成功定位，高亮不降级
+  await expect(page.getByTestId('tour-highlight')).toBeVisible()
   // 走到末步（完成）
   for (let i = 0; i < 4; i++) await page.getByTestId('tour-next').click()
   await expect(page.getByTestId('tour-next')).toHaveText('完成')
@@ -43,7 +45,7 @@ test('引导：跳过即完成（Esc 同效），配置落盘', async ({ page })
   expect(JSON.parse(cfg).tourDone).toBe(true)
 })
 
-test('引导：设置页重看再次出现（示例图已存在时幂等打开）', async ({ page }) => {
+test('引导：设置页重看再次出现', async ({ page }) => {
   test.setTimeout(60_000)
   await page.goto('/?e2e=1&tour=1')
   await expect(page.getByTestId('tour-overlay')).toBeVisible()

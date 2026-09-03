@@ -23,21 +23,43 @@ export default function TourOverlay() {
   const step = TOUR_STEPS[tourStep] ?? TOUR_STEPS[0]
   const viewMatch = step.view === route
 
-  // 锚点定位 + resize 重算（spec §5）：view/步号变化或窗口变化时重测
+  // 锚点定位 + resize 重算（spec §5）：view/步号变化或窗口变化时重测。
+  // 锚点暂不存在时启动有界重试：跨视图步进（before 打开示例图）后编辑器文档加载链是异步的，
+  // effect 依赖里没有「编辑器 ready」信号不会重跑——一次性测量落空会让该步永久降级居中卡。
+  // 50ms 轮询至多 20 次（约 1s），仍不存在才放弃，维持 rect=null 降级（spec §4.3）
   useEffect(() => {
     if (!tourActive || !viewMatch || step.target === null) {
       setRect(null)
       return
     }
-    const el = document.querySelector(`[data-testid="${step.target}"]`)
-    if (el === null) {
-      setRect(null) // 降级居中卡（spec §4.3）
-      return
+    let measure: (() => void) | null = null
+    let pollTimer: number | null = null
+    const attach = (el: Element) => {
+      measure = () => setRect(el.getBoundingClientRect())
+      measure()
+      window.addEventListener('resize', measure)
     }
-    const measure = () => setRect(el.getBoundingClientRect())
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    const el = document.querySelector(`[data-testid="${step.target}"]`)
+    if (el !== null) {
+      attach(el)
+    } else {
+      setRect(null) // 先降级居中卡，轮询到锚点后升级为高亮
+      let tries = 0
+      const timer = window.setInterval(() => {
+        const found = document.querySelector(`[data-testid="${step.target}"]`)
+        if (found !== null) {
+          window.clearInterval(timer)
+          attach(found)
+        } else if (++tries >= 20) {
+          window.clearInterval(timer) // 有界放弃：锚点真不存在，维持降级
+        }
+      }, 50)
+      pollTimer = timer
+    }
+    return () => {
+      if (pollTimer !== null) window.clearInterval(pollTimer)
+      if (measure !== null) window.removeEventListener('resize', measure)
+    }
   }, [tourActive, tourStep, viewMatch, step.target, route])
 
   // 键盘：→ / ← 步进，Esc 跳过（spec §5）
@@ -46,7 +68,7 @@ export default function TourOverlay() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') void useAppStore.getState().finishTour()
       else if (e.key === 'ArrowRight') void goNext()
-      else if (e.key === 'ArrowLeft') goBack()
+      else if (e.key === 'ArrowLeft') void goBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -66,9 +88,16 @@ export default function TourOverlay() {
     if (next.before) await next.before().catch(() => {})
     useAppStore.getState().setTourStep(cur + 1)
   }
-  const goBack = () => {
+  /** 回退：跨视图段（editor→library）先 await 回案头再步进——否则 route 停在 editor，
+   *  library 段锚点不存在、viewMatch 恒 false，step 0~5 全部永久降级居中卡且无法恢复高亮。
+   *  引导中不产生 dirty，backToLibrary 直接回安全 */
+  const goBack = async () => {
     const cur = useAppStore.getState().tourStep
-    if (cur > 0) useAppStore.getState().setTourStep(cur - 1)
+    if (cur <= 0) return
+    if (TOUR_STEPS[cur - 1].view !== TOUR_STEPS[cur].view) {
+      await useAppStore.getState().backToLibrary()
+    }
+    useAppStore.getState().setTourStep(cur - 1)
   }
 
   if (!tourActive) return null
@@ -105,7 +134,7 @@ export default function TourOverlay() {
             跳过
           </Button>
           {tourStep > 0 && (
-            <Button variant="secondary" size="sm" data-testid="tour-prev" onClick={goBack}>
+            <Button variant="secondary" size="sm" data-testid="tour-prev" onClick={() => void goBack()}>
               上一步
             </Button>
           )}
