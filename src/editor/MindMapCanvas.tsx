@@ -85,63 +85,67 @@ const ASSOCIATIVE_KEYS = [
  *  offsets 数组必须稠密（引擎拖控制点路径直读 offsets[targetIndex][1] 无判空，稀疏数组拖弯即崩，
  *  见 engine-api.md「M5d 核验 (d)」）：有落位时空洞按 addLine 同款算式补引擎默认差值；
  *  节点几何不可得（防御）则整节点放弃写 offsets（渲染仍按默认曲线画）。
- *  具名导出供 rebuildLinks.test 直测恢复胶水层（组件本体仍由 E2E 覆盖，不变）。 */
+ *  收起态全量语义（2026-09 数据丢失修复）：清键/索引/写 targets 走**数据树**（renderer.renderTree，
+ *  含收起隐藏子树）——渲染树只含可见节点，走它则隐藏节点陈旧键清不掉、targets 写不上，重开展开后
+ *  无线（「收起→保存→重开→连线消失」根因）。渲染实例仅用于几何兜底：隐藏节点无实例，该线位补不出
+ *  默认差值 → 整节点放弃 offsets（展开后引擎按默认曲线画）。具名导出供 rebuildLinks.test 直测。 */
 export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adjust?: LinkAdjust): void {
   const run = (): void => {
-    const root = mm.renderer?.root as EngineNodeInstance | null | undefined
-    if (!root) return
-    const byPath = new Map<string, EngineNodeInstance>()
-    const pathByNode = new Map<EngineNodeInstance, string>()
-    const nodeByUid = new Map<string, EngineNodeInstance>()
+    const dataRoot = mm.renderer?.renderTree
+    if (!dataRoot) return
+    // 渲染实例索引（几何兜底用）：uid → 实例；收起子树内的节点无实例
+    const instanceByUid = new Map<string, EngineNodeInstance>()
+    const instRoot = mm.renderer?.root as EngineNodeInstance | null | undefined
+    if (instRoot) {
+      const walkInst = (node: EngineNodeInstance): void => {
+        const uid = node.getData('uid')
+        if (typeof uid === 'string') instanceByUid.set(uid, node)
+        for (const child of node.children ?? []) walkInst(child)
+      }
+      walkInst(instRoot)
+    }
+    const byPath = new Map<string, EngineNode>()
+    const pathByNode = new Map<EngineNode, string>()
     const pathByUid = new Map<string, string>()
     // 清键前按 uid 留档既有差值：重建后按 uid 回填（索引顺序可能因增删线漂移，uid 才是稳定锚）
-    const existingByUid = new Map<EngineNodeInstance, Map<string, [ControlPointOffset, ControlPointOffset]>>()
-    const walk = (node: EngineNodeInstance, parentPath: string): void => {
-      const text = node.getData('text')
-      const path = parentPath === '' ? '/' + String(text) : parentPath + '/' + String(text)
+    const existingByUid = new Map<EngineNode, Map<string, [ControlPointOffset, ControlPointOffset]>>()
+    const walk = (node: EngineNode, parentPath: string): void => {
+      const path = parentPath === '' ? '/' + String(node.data.text) : parentPath + '/' + String(node.data.text)
       byPath.set(path, node)
       pathByNode.set(node, path)
-      const uid = node.getData('uid')
-      if (typeof uid === 'string') {
-        nodeByUid.set(uid, node)
-        pathByUid.set(uid, path)
+      if (typeof node.data.uid === 'string') pathByUid.set(node.data.uid, path)
+      const oldTargets = node.data.associativeLineTargets
+      const oldOffsets = node.data.associativeLineTargetControlOffsets
+      if (Array.isArray(oldTargets) && Array.isArray(oldOffsets)) {
+        const kept = new Map<string, [ControlPointOffset, ControlPointOffset]>()
+        oldTargets.forEach((t, i) => {
+          if (typeof t !== 'string') return
+          const pair = normalizeEngineOffsets(oldOffsets[i])
+          if (pair !== undefined) kept.set(t, pair)
+        })
+        if (kept.size > 0) existingByUid.set(node, kept)
       }
-      const data = node.getData() as Record<string, unknown> | undefined
-      if (data) {
-        const oldTargets = data.associativeLineTargets
-        const oldOffsets = data.associativeLineTargetControlOffsets
-        if (Array.isArray(oldTargets) && Array.isArray(oldOffsets)) {
-          const kept = new Map<string, [ControlPointOffset, ControlPointOffset]>()
-          oldTargets.forEach((t, i) => {
-            if (typeof t !== 'string') return
-            const pair = normalizeEngineOffsets(oldOffsets[i])
-            if (pair !== undefined) kept.set(t, pair)
-          })
-          if (kept.size > 0) existingByUid.set(node, kept)
-        }
-        for (const key of ASSOCIATIVE_KEYS) delete data[key]
-      }
+      for (const key of ASSOCIATIVE_KEYS) delete node.data[key]
       for (const child of node.children ?? []) walk(child, path)
     }
-    walk(root, '')
-    const targets = new Map<EngineNodeInstance, string[]>()
+    walk(dataRoot, '')
+    const targets = new Map<EngineNode, string[]>()
     for (const { fromPath, toPath } of links) {
       const from = byPath.get(fromPath)
       const to = byPath.get(toPath)
-      const uid = to?.getData('uid')
+      const uid = to?.data.uid
       if (!from || !to || from === to || typeof uid !== 'string') continue
       const list = targets.get(from) ?? []
       if (!list.includes(uid)) list.push(uid)
       targets.set(from, list)
     }
     targets.forEach((uids, from) => {
-      const data = from.getData() as Record<string, unknown> | undefined
-      if (!data) return
-      data.associativeLineTargets = uids
+      from.data.associativeLineTargets = uids
       const pairs = resolveLinkOffsets(uids, pathByNode.get(from)!, pathByUid, existingByUid.get(from) ?? new Map(), adjust)
       if (!pairs.some((p) => p !== undefined)) return // 全线无弯曲：不写 offsets，渲染按默认曲线
       // 空洞补引擎默认差值（addLine 同款算式，AssociativeLine.js:609-632）：差值相对当前端点，
-      // 与节点后续重排解耦（引擎保存差值正为此）；几何不可得时整节点放弃（宁缺勿稀疏）
+      // 与节点后续重排解耦（引擎保存差值正为此）；端点任一无渲染实例（收起隐藏）或几何不可得
+      // 时整节点放弃（宁缺勿稀疏）
       const dense: Array<[ControlPointOffset, ControlPointOffset]> = []
       for (let i = 0; i < uids.length; i++) {
         const pair = pairs[i]
@@ -149,12 +153,13 @@ export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adj
           dense[i] = pair
           continue
         }
-        const to = nodeByUid.get(uids[i]!)
-        const fallback = to ? defaultControlOffsets(from, to) : undefined
+        const fromInst = typeof from.data.uid === 'string' ? instanceByUid.get(from.data.uid) : undefined
+        const toInst = instanceByUid.get(uids[i]!)
+        const fallback = fromInst && toInst ? defaultControlOffsets(fromInst, toInst) : undefined
         if (fallback === undefined) return
         dense[i] = fallback
       }
-      data.associativeLineTargetControlOffsets = dense
+      from.data.associativeLineTargetControlOffsets = dense
     })
     ;(mm as unknown as { associativeLine?: { renderAllLines(): void } }).associativeLine?.renderAllLines()
   }
@@ -182,30 +187,35 @@ function defaultControlOffsets(
   ]
 }
 
-/** 打开/保存后再净化（M5d Task 2 + v0.7.0 验收修复）：等首帧渲染后走渲染树——
- *  ①harvestRegistry 按引擎现态重建注册表（打开时引擎 targets 恒空＝纯文本标记建表；
- *  保存后收割含引擎 targets——删线修剪后的现态为权威，替换语义不残留陈旧条目）；
- *  ②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：
- *  不进命令层、无历史、无 data_change → 打开净化不置脏）；③逐节点按需重渲（文本变短重算尺寸）；
- *  ④按注册表重建连线（显示文本已剥离，连线数据源自此是注册表而非文本标记）。
+/** 打开/保存后再净化（M5d Task 2 + v0.7.0 验收修复 + 2026-09 收起态修复）：等首帧渲染后——
+ *  ①harvestRegistry 按**数据树**（renderer.renderTree，含收起隐藏子树）现态重建注册表（打开时
+ *  引擎 targets 恒空＝纯文本标记建表；保存后收割含引擎 targets——删线修剪后的现态为权威，替换
+ *  语义不残留陈旧条目；隐藏节点同样收割，否则收起子树内的连线条目丢失）；
+ *  ②data 本体直写 stripTreeTexts 剥离显示文本（同 rebuildEngineLinks 直写通道：不进命令层、
+ *  无历史、无 data_change → 打开净化不置脏；全量剥离——隐藏节点也剥，否则重开展开后残留
+ *  [[..]] 标记既暴露画布、又随文本编辑被吞，连线唯一事实源永久丢失）；③可见节点按需重渲
+ *  （文本变短重算尺寸；隐藏节点无实例无需重渲，展开重建时数据已干净）；
+ *  ④按注册表重建连线（rebuildEngineLinks 同走数据树，隐藏节点 targets 落位，展开即自动画线）。
  *  adjust（M5d Task 5）＝打开时 sidecar linkAdjust，随重建一并恢复用户拖过的弯曲；
- *  保存后入口（onSaved）不传 adjust——引擎现存差值即最新（rebuildEngineLinks 内按 uid 留档回填） */
-function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: LinkAdjust): void {
+ *  保存后入口（onSaved）不传 adjust——引擎现存差值即最新（rebuildEngineLinks 内按 uid 留档回填）。
+ *  具名导出供 rebuildLinks.test 直测（组件本体仍由 E2E 覆盖，不变）。 */
+export function applyRegistryToEngine(mm: MindMapHandle, reg: LinkRegistry, adjust?: LinkAdjust): void {
   const run = (): void => {
-    const root = mm.renderer?.root as EngineNodeInstance | null | undefined
-    if (!root) return
+    const dataRoot = mm.renderer?.renderTree
+    const instRoot = mm.renderer?.root as EngineNodeInstance | null | undefined
+    if (!dataRoot || !instRoot) return
+    // 需重渲的可见实例：文本含标记（剥离后变短须重算尺寸）；隐藏节点无实例，展开时按已剥离数据重建
     const changed: EngineNodeInstance[] = []
-    // 活引用快照：plain 树的 data 即引擎节点 data 本体（getData() 无参返回活引用）
-    const toPlain = (node: EngineNodeInstance): EngineNode => {
-      const data = (node.getData() ?? { text: '' }) as EngineNode['data']
-      if (typeof data.text === 'string' && stripMarkers(data.text) !== data.text) changed.push(node)
-      return { data, children: (node.children ?? []).map(toPlain) }
+    const collectChanged = (node: EngineNodeInstance): void => {
+      const text = node.getData('text')
+      if (typeof text === 'string' && stripMarkers(text) !== text) changed.push(node)
+      for (const child of node.children ?? []) collectChanged(child)
     }
-    const plain = toPlain(root)
-    harvestRegistry(plain, reg)
-    stripTreeTexts(plain)
+    collectChanged(instRoot)
+    harvestRegistry(dataRoot, reg)
+    stripTreeTexts(dataRoot)
     for (const node of changed) mm.renderer?.reRenderNodeCheckChange(node)
-    rebuildEngineLinks(mm, registryToLinks(plain, reg), adjust)
+    rebuildEngineLinks(mm, registryToLinks(dataRoot, reg), adjust)
     // 撤销基线种子（v1.1）：此刻是「文档打开且净化完成」的稳态——净化后现态入撤销栈，首条编辑才可
     // 撤销；栈非空即幂等跳过（保存链再净化路径不受扰）。机制与实证见 undoSeed.ts / engine-api.md
     seedUndoBaseline(mm)
