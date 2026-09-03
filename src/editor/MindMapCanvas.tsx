@@ -88,7 +88,8 @@ const ASSOCIATIVE_KEYS = [
  *  收起态全量语义（2026-09 数据丢失修复）：清键/索引/写 targets 走**数据树**（renderer.renderTree，
  *  含收起隐藏子树）——渲染树只含可见节点，走它则隐藏节点陈旧键清不掉、targets 写不上，重开展开后
  *  无线（「收起→保存→重开→连线消失」根因）。渲染实例仅用于几何兜底：隐藏节点无实例，该线位补不出
- *  默认差值 → 整节点放弃 offsets（展开后引擎按默认曲线画）。具名导出供 rebuildLinks.test 直测。 */
+ *  默认差值 → 整节点放弃 offsets（展开后引擎按默认曲线画）。具名导出供 rebuildLinks.test 直测。
+ *  同名消歧（2026-09-03 spec §4.4）：byPath 为"路径→节点数组"，无序号=首位孪生（原后写覆盖=末位，语义变更）。 */
 export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adjust?: LinkAdjust): void {
   const run = (): void => {
     const dataRoot = mm.renderer?.renderTree
@@ -104,14 +105,16 @@ export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adj
       }
       walkInst(instRoot)
     }
-    const byPath = new Map<string, EngineNode>()
+    const byPath = new Map<string, EngineNode[]>()
     const pathByNode = new Map<EngineNode, string>()
     const pathByUid = new Map<string, string>()
     // 清键前按 uid 留档既有差值：重建后按 uid 回填（索引顺序可能因增删线漂移，uid 才是稳定锚）
     const existingByUid = new Map<EngineNode, Map<string, [ControlPointOffset, ControlPointOffset]>>()
     const walk = (node: EngineNode, parentPath: string): void => {
       const path = parentPath === '' ? '/' + String(node.data.text) : parentPath + '/' + String(node.data.text)
-      byPath.set(path, node)
+      const twins = byPath.get(path) ?? []
+      twins.push(node)
+      byPath.set(path, twins)
       pathByNode.set(node, path)
       if (typeof node.data.uid === 'string') pathByUid.set(node.data.uid, path)
       const oldTargets = node.data.associativeLineTargets
@@ -129,10 +132,16 @@ export function rebuildEngineLinks(mm: MindMapHandle, links: ResolvedLink[], adj
       for (const child of node.children ?? []) walk(child, path)
     }
     walk(dataRoot, '')
+    /** 路径 + 孪生序号取节点（文档序 1 起；缺省/越界钳位——resolveLinks 已钳，防御双保险） */
+    const pick = (path: string, ordinal?: number): EngineNode | undefined => {
+      const twins = byPath.get(path)
+      if (twins === undefined || twins.length === 0) return undefined
+      return twins[Math.min(Math.max(ordinal ?? 1, 1), twins.length) - 1]
+    }
     const targets = new Map<EngineNode, string[]>()
-    for (const { fromPath, toPath } of links) {
-      const from = byPath.get(fromPath)
-      const to = byPath.get(toPath)
+    for (const { fromPath, toPath, fromOrdinal, toOrdinal } of links) {
+      const from = pick(fromPath, fromOrdinal)
+      const to = pick(toPath, toOrdinal)
       const uid = to?.data.uid
       if (!from || !to || from === to || typeof uid !== 'string') continue
       const list = targets.get(from) ?? []

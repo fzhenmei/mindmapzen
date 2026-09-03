@@ -65,7 +65,11 @@ function fakeHandle(
   return { mm: mm as unknown as MindMapHandle, renderAllLines }
 }
 
-const link = (fromPath: string, toPath: string): ResolvedLink => ({ fromPath, toPath })
+const link = (
+  fromPath: string,
+  toPath: string,
+  ordinals?: { fromOrdinal?: number; toOrdinal?: number },
+): ResolvedLink => ({ fromPath, toPath, ...ordinals })
 
 describe('rebuildEngineLinks 恢复胶水层（M5d Task 5）', () => {
   test('清键前 uid 留档优先于 sidecar：刚拖的弯不被旧 sidecar 回退；全树连线五键清空', () => {
@@ -204,5 +208,43 @@ describe('rebuildEngineLinks / applyRegistryToEngine 收起态（隐藏节点只
     expect(reg.byUid.get('u1')).toEqual(['B']) // 收割：注册表含隐藏节点条目
     expect(aData.text).toBe('A') // 剥离：隐藏节点文本不残留标记
     expect(aData.associativeLineTargets).toEqual(['u2']) // 重建：targets 落位（展开即画线）
+  })
+})
+
+// 2026-09-03 同名消歧（spec §4.4）：byPath 从"后写覆盖（末位胜出）"改"路径→节点数组 + 序号取位"
+describe('rebuildEngineLinks 孪生序号取位', () => {
+  /** 同父同名孪生装配：根 → A(u1)、S(u2)、S(u3) */
+  const setupTwins = () => {
+    const aData: Record<string, unknown> = { text: 'A', uid: 'u1' }
+    const s1: Record<string, unknown> = { text: 'S', uid: 'u2' }
+    const s2: Record<string, unknown> = { text: 'S', uid: 'u3' }
+    const rootData: Record<string, unknown> = { text: '根', uid: 'u0' }
+    const { mm } = fakeHandle(fakeNode(rootData, [fakeNode(aData), fakeNode(s1), fakeNode(s2)]))
+    return { mm, aData, s1, s2 }
+  }
+
+  test('目标序号落位：toOrdinal 2 连到第 2 孪生；无序号 = 首位（缺省语义变更点）', () => {
+    const { mm, aData } = setupTwins()
+    rebuildEngineLinks(mm, [link('/根/A', '/根/S'), link('/根/A', '/根/S', { toOrdinal: 2 })])
+    expect(aData.associativeLineTargets).toEqual(['u2', 'u3'])
+  })
+
+  test('序号越界钳位：#5 实存 2 孪生 → 钳到末位（线保持可见）', () => {
+    const { mm, aData } = setupTwins()
+    rebuildEngineLinks(mm, [link('/根/A', '/根/S', { toOrdinal: 5 })])
+    expect(aData.associativeLineTargets).toEqual(['u3'])
+  })
+
+  test('源端序号落位：孪生源 fromOrdinal 2 → targets 写到第 2 孪生上', () => {
+    const s1: Record<string, unknown> = { text: 'S', uid: 'u1' }
+    const s2: Record<string, unknown> = { text: 'S', uid: 'u4' }
+    const b: Record<string, unknown> = { text: 'B', uid: 'u2' }
+    const rootData: Record<string, unknown> = { text: '根', uid: 'u0' }
+    const { mm } = fakeHandle(
+      fakeNode(rootData, [fakeNode(s1), fakeNode(s2), fakeNode(b)]),
+    )
+    rebuildEngineLinks(mm, [link('/根/S', '/根/B', { fromOrdinal: 2 })])
+    expect(s1.associativeLineTargets).toBeUndefined()
+    expect(s2.associativeLineTargets).toEqual(['u2'])
   })
 })
