@@ -35,3 +35,14 @@ export default function ThemeToggle() {
     </TooltipProvider>
   )
 }
+
+/** 右下角主题钮定位容器（2026-09 三态统一）：开屏/案头/纸面同款挂法，锚点为最近
+ *  relative 祖先（开屏 .library / 案头 SidebarInset / 纸面 .editor）；theme-fab
+ *  类名保留为视觉冒烟钩子。抽出前三处各写一份相同 div（EditorCaption 原创） */
+export function ThemeFab() {
+  return (
+    <div className="theme-fab absolute bottom-3 right-4 z-[5]">
+      <ThemeToggle />
+    </div>
+  )
+}

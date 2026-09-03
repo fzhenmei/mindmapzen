@@ -11,7 +11,7 @@ import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
 import HistoryDialog from '../components/HistoryDialog'
 import WelcomePane from '../components/WelcomePane'
-import ThemeToggle from '../components/ThemeToggle'
+import { ThemeFab } from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
@@ -283,9 +283,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   // 无工作区 → 开屏页（M5d spec §2）：替代旧 hint；骨架（侧栏/页首）在此态不渲染
   if (!workspaceDir)
     return (
-      <div className="library flex h-full flex-col bg-background">
+      <div className="library relative flex h-full flex-col bg-background">
         {error && <div className="error-banner">{error}</div>}
         <WelcomeScreen onCreateWorkspace={() => void chooseWorkspace()} />
+        {/* 右下主题钮（2026-09 三态统一）：开屏无 SidebarInset 浮层，锚定视口级 .library */}
+        <ThemeFab />
       </div>
     )
 
@@ -383,12 +385,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           <main className={selectedInfo !== null ? 'flex min-h-0 flex-1 p-0' : 'flex min-h-0 flex-1 p-6'}>
             {renderRight()}
           </main>
-          {/* 右下主题钮（2026-09）：定位容器与纸面 EditorCaption theme-fab 同款（absolute
-              bottom-3 right-4 z-[5]，类名同为视觉冒烟钩子），案头/纸面统一右下角挂载；
-              SidebarInset 自身 relative，锚点即圆角浮层右下角 */}
-          <div className="theme-fab absolute bottom-3 right-4 z-[5]">
-            <ThemeToggle />
-          </div>
+          {/* 右下主题钮（2026-09 三态统一）：SidebarInset 自身 relative，锚点即圆角浮层右下角 */}
+          <ThemeFab />
         </SidebarInset>
       </SidebarProvider>
 
