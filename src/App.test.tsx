@@ -41,3 +41,10 @@ test('WebView 默认快捷键被全局屏蔽，应用自有键不受影响', asy
   }
 })
 
+// 漫游引导（spec §3.3）：无工作区（开屏）不自动触发——先选工作区落案头后才开始
+test('无工作区时不自动出现漫游引导', async () => {
+  render(<App />)
+  await screen.findByTestId('welcome-screen')
+  expect(screen.queryByTestId('tour-overlay')).not.toBeInTheDocument()
+})
+
