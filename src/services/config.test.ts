@@ -15,15 +15,32 @@ describe('配置读写', () => {
   })
   test('保存后可读回', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS, recentOpened: [], git: DEFAULT_GIT_CONFIG })
-    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', recentOpened: [], preferredLayout: null, theme: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', previewOutline: 'auto', settings: DEFAULT_COPY_SETTINGS, recentOpened: [], git: DEFAULT_GIT_CONFIG })
+    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+  })
+})
+
+describe('previewOutline（预览大纲三态偏好）', () => {
+  test('合法值往返', async () => {
+    const fs = new MemoryFsAdapter()
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'on', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('on')
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'off', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('off')
+  })
+  test('非法值与缺失回退 auto（旧配置兼容）', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: null, previewOutline: 'bogus' }))
+    expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('auto')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: null }))
+    expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('auto')
   })
 })
 
 describe('preferredLayout（验收轮三：记住默认布局）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: 'logic', theme: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: 'logic', theme: 'auto', previewOutline: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
     expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('logic')
   })
   test('非法值与缺失回退 null', async () => {
@@ -38,7 +55,7 @@ describe('preferredLayout（验收轮三：记住默认布局）', () => {
 describe('theme（M4 禅意视觉）', () => {
   test('theme 往返与非法回退 auto', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: null, lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'dark', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
+    await saveConfig(fs, '/cfg.json', { workspaceDir: null, lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'dark', previewOutline: 'auto', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG })
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('dark')
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'x' }))
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('auto')
@@ -49,7 +66,7 @@ describe('settings（M5b Task 4：复制行为）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
     await saveConfig(fs, '/cfg.json', {
-      workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto',
+      workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto', previewOutline: 'auto',
       settings: { copyIncludeNote: true, copyIncludeLinks: false },
       recentOpened: [],
       git: DEFAULT_GIT_CONFIG,

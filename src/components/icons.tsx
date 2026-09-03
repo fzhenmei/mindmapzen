@@ -248,6 +248,15 @@ export const IconRedo = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 大纲（2026-09 预览大纲面板）：三行条目线 + 左缘层级点（dot 用 h.01 短线口径） */
+export const IconOutline = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M5.5 3.5H13M5.5 8H13M5.5 12.5H13" />
+      <path d="M3 3.5h.01M3 8h.01M3 12.5h.01" />
+    </>,
+    size,
+  )
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */

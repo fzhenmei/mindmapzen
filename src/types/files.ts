@@ -23,6 +23,17 @@ export function parseThemePref(v: unknown): ThemePref {
   return THEME_PREFS.has(v as ThemePref) ? (v as ThemePref) : 'auto'
 }
 
+/** 预览大纲三态偏好（2026-09 大纲面板）：auto = 跟随预览主区宽（≥900px 默认显示，实时联动）；
+ *  显式 on/off 覆盖响应式默认（用户手动开关后记住） */
+export type PreviewOutlinePref = 'auto' | 'on' | 'off'
+
+const PREVIEW_OUTLINE_PREFS = new Set<PreviewOutlinePref>(['auto', 'on', 'off'])
+
+/** 宽容解析配置中的预览大纲偏好：非法/缺失回退 auto（旧配置无字段按 auto 兼容） */
+export function parsePreviewOutlinePref(v: unknown): PreviewOutlinePref {
+  return PREVIEW_OUTLINE_PREFS.has(v as PreviewOutlinePref) ? (v as PreviewOutlinePref) : 'auto'
+}
+
 /** 复制行为设置（M5b Task 4）：copyIncludeNote=复制 md 时包含节点备注引用块；copyIncludeLinks=保留 [[..]] 双链标记 */
 export interface CopySettings {
   copyIncludeNote: boolean
@@ -52,6 +63,8 @@ export interface AppConfig {
   preferredLayout: LayoutKind | null
   /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
   theme: ThemePref
+  /** 预览大纲三态偏好（auto = 跟随预览主区宽；显式 on/off 记住用户手动开关） */
+  previewOutline: PreviewOutlinePref
   /** 复制行为设置（设置页两开关） */
   settings: CopySettings
   /** 版本管理（M20 想法8）：自动 commit + 远程备份 */
@@ -89,6 +102,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   recentOpened: [],
   preferredLayout: null,
   theme: 'auto',
+  previewOutline: 'auto',
   settings: DEFAULT_COPY_SETTINGS,
   git: DEFAULT_GIT_CONFIG,
 }

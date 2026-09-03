@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, type ComponentProps, type ReactElement } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { stripMarkers } from '../services/linkMarkers'
@@ -131,7 +131,9 @@ interface Props {
 }
 
 /** markdown 预览（M15 文件详情态下层）：react-markdown + remark-gfm 渲染真实 md，
- *  样式与层级视觉见模块级 MD_COMPONENTS 注释。img 经 imgMap 解析工作区相对路径（M19） */
+ *  样式与层级视觉见模块级 MD_COMPONENTS 注释。img 经 imgMap 解析工作区相对路径（M19）。
+ *  标题锚点（2026-09 大纲联动）：渲染后按文档序注入 zen-h-N，与 mdOutline 同解析器
+ *  （remark）同序号对齐；不在渲染期计数（React 并发下渲染重放不可靠） */
 export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
   // 连线/图标标记按行剥离（标记永不跨行，与画布显示层同口径——md 原文仍是唯一事实源）
   const display = text
@@ -139,10 +141,16 @@ export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
     .map((l) => stripIconMarkers(stripMarkers(l)))
     .join('\n')
   const components = useMemo(() => ({ ...MD_COMPONENTS, img: imgRenderer(imgMap) }), [imgMap])
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let i = 0
+    for (const el of rootRef.current?.querySelectorAll('h1,h2,h3,h4,h5,h6') ?? [])
+      el.id = `zen-h-${i++}`
+  }, [display])
   return (
     // p-6：顶距 2026-09 补齐——首个标题（h1 无 mt）原零距贴住页首工具栏，顶距改与
     // 正文左右距一致（24px）；pb-2 只留滚动尾部呼吸位（卡脚已承接尾距，原 pb-6 偏空）
-    <div data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto p-6 pb-2">
+    <div ref={rootRef} data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto p-6 pb-2">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {display}
       </ReactMarkdown>
