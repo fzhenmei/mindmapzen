@@ -51,8 +51,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     }
     for (const { fromPath, toPath, fromOrdinal, toOrdinal } of registryToLinks(tree, reg)) {
       const from = pick(fromPath, fromOrdinal)
-      const uid = pick(toPath, toOrdinal)?.data.uid
-      if (!from || typeof uid !== 'string') continue
+      const to = pick(toPath, toOrdinal)
+      const uid = to?.data.uid
+      if (!from || !to || from === to || typeof uid !== 'string') continue
       const list = targets.get(from) ?? []
       if (!list.includes(uid)) list.push(uid)
       targets.set(from, list)

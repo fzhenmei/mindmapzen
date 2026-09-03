@@ -215,10 +215,18 @@ test('节点连线：同父同名孪生按 #n 精确连线、保存重开复现'
 
   // 重开：按 #n 序号重建，线复现（画布文本无标记——净化语义）
   await page.getByTestId('btn-back').click()
+  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
   await page.getByTestId('dir-node-all').click()
   await expect(page.getByTestId('map-item')).toBeVisible()
   await page.getByTestId('map-item').dblclick()
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A [[/孪生连线/S#2]]')).toHaveCount(0)
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
+
+  // 闭环校验：count=2 只证线存在，未证落位第 2 孪生——再保存一次，harvestRegistry 的
+  // identityMarker 仅当目标确为同路径第 2 孪生时产 #2；若重开错连第 1 孪生，md 会漂移为
+  // /孪生连线/S（无 #2），断言失败（重开落位 → 再保存 → 标记不漂移）
+  await page.keyboard.press('Control+s')
+  const md2 = await readMd(page, '/ws/孪生连线.md')
+  expect(md2).toBe('# 孪生连线\n\n## A [[/孪生连线/S#2]]\n\n## S\n\n## S\n')
 })

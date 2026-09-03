@@ -1,5 +1,5 @@
 // src/editor/linkRegistry.ts —— 连线净化会话注册表（M5d Task 2）：纯函数，无引擎/DOM 依赖。
-// md 是连线唯一事实源；打开时从标记文本建表（uid → 目标名列表），显示层剥离后连线、
+// md 是连线唯一事实源；打开时从标记文本建表（uid → 目标标记列表），显示层剥离后连线、
 // 序列化注入、画线桥接全部以注册表为数据源（源节点改名/编辑下 uid 稳定，不断链）。
 // 2026-09-03 同名消歧：目标标记统一"名称唯一→裸名，否则路径（孪生 n>1 缀 #n）"，源端带孪生序号。
 // v0.7.0 验收修复（删线复活）：保存链改以**引擎现态**收割建表（harvestRegistry，替换语义）——
@@ -10,7 +10,7 @@ import { resolveLinks, type MindLink, type ResolvedLink } from '../services/link
 import { engineTreeToZen } from '../services/mdTree'
 import type { EngineNode } from '../types/engine'
 
-/** 会话注册表：源节点 uid → 目标名列表（每次打开由 md 重建，无持久化） */
+/** 会话注册表：源节点 uid → 目标标记列表（统一消歧标记：裸名/路径/#n；每次打开由 md 重建，无持久化） */
 export interface LinkRegistry {
   byUid: Map<string, string[]>
 }
@@ -93,7 +93,7 @@ function harvestNodeTargets(
 }
 
 /** 按引擎树**当前状态**重建注册表（v0.7.0 验收修复）：data.associativeLineTargets
- *  （引擎 removeLine / rebuildEngineLinks 的写入口）经 uid→节点名映射归为目标名；
+ *  （引擎 removeLine / rebuildEngineLinks 的写入口）经 uid→节点身份映射产出统一消歧标记（裸名/路径/#n）；
  *  显示文本中残留的 [[..]] 标记（会话内手写/粘贴，下次净化前仍在）一并收割去重。
  *  **替换而非并集**：旧表条目（已删线、已删目标）不得残留——删线复活正源于并集收割把
  *  陈旧条目带回 md（序列化注入）→ 重开重建 → 线复活。目标 uid 失联（节点已删）自然丢弃；
