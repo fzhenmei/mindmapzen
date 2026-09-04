@@ -28,9 +28,22 @@ describe('FileDetail', () => {
     expect(await screen.findByTestId('md-preview')).toHaveTextContent('周计划')
   })
 
-  test('读取失败显示「无法预览」兜底', async () => {
+  test('读取失败显示友好错误块（2026-09：说明原因与路径）', async () => {
     render(<FileDetail info={{ ...info, mdPath: '/ws/不存在.md' }} />)
-    expect(await screen.findByText('无法预览')).toBeInTheDocument()
+    expect(await screen.findByText('无法预览此文件')).toBeInTheDocument()
+    expect(screen.getByText(/文件可能已被移动、删除或没有访问权限/)).toBeInTheDocument()
+    expect(screen.getByText('/ws/不存在.md')).toBeInTheDocument()
+  })
+
+  // Windows 路径出口（2026-09，同「复制文件路径」修复）：给人看的路径归一为原生 '\'
+  test('Windows 下错误路径分隔符归一为反斜杠', async () => {
+    Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+    try {
+      render(<FileDetail info={{ ...info, mdPath: 'C:\\ws\\docs\\周计划/a.md' }} />)
+      expect(await screen.findByText('C:\\ws\\docs\\周计划\\a.md')).toBeInTheDocument()
+    } finally {
+      Reflect.deleteProperty(navigator, 'platform')
+    }
   })
 })
 

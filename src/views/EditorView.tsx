@@ -6,8 +6,6 @@ import { applyCopySettings } from '../services/copyFilter'
 import { absolutizeImagePaths } from '../services/aiImagePaths'
 import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
-import MindMapCanvas from '../editor/MindMapCanvas'
-import { engineThemeName } from '../editor/engineThemes'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -29,7 +27,7 @@ import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hoo
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import EditorCaption from '../components/EditorCaption'
-import EditorErrorPanel from '../components/EditorErrorPanel'
+import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import EditorDialogs from '../components/EditorDialogs'
@@ -67,7 +65,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [errorInfo, setErrorInfo] = useState<{ error: string; raw: string } | null>(null)
+  const [errorInfo, setErrorInfo] = useState<OpenFailInfo | null>(null)
   const [engineTree, setEngineTree] = useState<EngineNode | null>(null)
   const [stamp, setStamp] = useState<{ kind: StampKind; seq: number } | null>(null) // 印记：显式保存/复制成功后闪现 1.2s；seq 每次触发自增，作 SaveStamp 的 key 强制重挂载
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
@@ -210,10 +208,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty })
 
   // 打开文档加载链（2026-09 拆至 useOpenDocument，行数护栏）：读 md → parse → sidecar →
-  // 忽略块/弯曲记忆上报 → 布局三处同步 → 插图元数据 → 引擎树落 state
-  const failLoad = (error: string, raw = ''): void => {
+  // 忽略块/弯曲记忆上报 → 布局三处同步 → 插图元数据 → 引擎树落 state。
+  // 失败统一出口（2026-09 优雅恢复分型，见 useOpenDocument.onFail 注释）：面板只占画布内容区
+  const onOpenFail = (kind: OpenFailInfo['kind'], error: string, raw: string): void => {
     setState('error')
-    setErrorInfo({ error, raw })
+    setErrorInfo({ kind, error, raw })
   }
   useOpenDocument({
     adapter,
@@ -236,8 +235,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     onRaw: pipeline.initBaseline, // 冲突检测基线（打开时的磁盘原文）
     onFileTime: stats.initSavedAt, // 「保存于」初值 = 文件 mtime（会话内保存链成功后刷新）
     onReady: () => setState('ready'),
-    onParseError: failLoad,
-    onReadError: failLoad,
+    onFail: onOpenFail,
   })
 
   // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
@@ -273,37 +271,38 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     void useAppStore.getState().setPreferredLayout(kind)
   }
 
-  if (state === 'loading') return <div className="editor-loading">正在打开…</div>
-
-  if (state === 'error' && errorInfo)
-    return <EditorErrorPanel error={errorInfo.error} raw={errorInfo.raw} mdPath={mdPath} onRawEdit={openInEditor} />
+  // 壳层保留（2026-09 优雅恢复）：内容区三态在 EditorCanvasArea，ZenBar/题签仅就绪态渲染，
+  // 对话框组（含快速切换浮层）始终挂载——打开失败时 Ctrl+P / Ctrl+Tab / 返回案头照常可达
+  const docReady = state === 'ready'
 
   return (
     <div className="editor"><TooltipProvider>
       <div className="canvas-host">
-        {engineTree && (
-          <MindMapCanvas
-            key={mdPath}
-            tree={engineTree}
-            registry={registry}
-            layout={layoutToEngine(initialLayout)}
-            theme={engineThemeName(resolvedTheme)}
-            onReady={(mm) => {
-              mmRef.current = mm
-              // 连线净化（M5d Task 2）：等首帧渲染后建注册表 → 剥离显示文本 → 按注册表落初始连线
-              purify(mm)
-              undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
-            }}
-            onDataChange={(data) => {
-              stats.onDataChange(data) // 统计行（2026-09）：携带快照时重数节点
-              pipeline.onTreeDataChange(data)
-            }}
-            onActiveChange={selection.handleActiveChange}
-            onEditorPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
-            // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
-            onNodeCopy={() => flashCopy('copied-node')}
-          />
-        )}
+        <EditorCanvasArea
+          state={state}
+          errorInfo={errorInfo}
+          mdPath={mdPath}
+          openInEditor={openInEditor}
+          onBack={() => void quick.leaveTo(backToLibrary)}
+          onSwitch={quick.open}
+          engineTree={engineTree}
+          registry={registry}
+          initialLayout={initialLayout}
+          resolvedTheme={resolvedTheme}
+          mmRef={mmRef}
+          onCanvasReady={(mm) => {
+            purify(mm) // 连线净化（M5d Task 2）：首帧后建注册表 → 剥显示文本 → 落初始连线
+            undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
+          }}
+          onDataChange={(data) => {
+            stats.onDataChange(data) // 统计行（2026-09）：携带快照时重数节点
+            pipeline.onTreeDataChange(data)
+          }}
+          onActiveChange={selection.handleActiveChange}
+          onPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
+          // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
+          onNodeCopy={() => flashCopy('copied-node')}
+        />
       </div>
       {/* 选中节点浮动条（验收轮）：备注笔 + 连线箭头，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
       {nodePos && !anyDialog && (
@@ -319,7 +318,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           }
         />
       )}
-      {/* 浮动砚栏（M5a 拆分至 ZenBar）：静置淡化，悬停/聚焦浮现（spec §4.4 UI 隐身） */}
+      {/* 浮动砚栏（M5a 拆分至 ZenBar）。仅就绪态渲染（2026-09）：错误/加载态引擎未建，按钮无意义 */}
+      {docReady && (
       <ZenBar
         onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
         onSwitchClick={quick.open}
@@ -339,6 +339,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         layout={layout}
         onSwitchLayout={switchLayout}
       />
+      )}
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
@@ -346,9 +347,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {copyStamp && (
         <CopyStamp key={copyStamp.seq} kind={copyStamp.kind} pos={{ left: copyStamp.left, top: copyStamp.top }} onDone={() => setCopyStamp(null)} />
       )}
-      {/* 左下题签 + 朱砂脏印 + 统计行；右下主题钮（M5a 拆分至 EditorCaption）；
-          复制文件路径钮在砚栏复制 md 钮旁（IconRoute 区分） */}
-      <EditorCaption name={name} dirty={dirty} nodeCount={stats.nodeCount} savedAt={stats.savedAt} />
+      {/* 左下题签 + 朱砂脏印 + 统计行；右下主题钮（M5a 拆分至 EditorCaption）。仅就绪态渲染（2026-09） */}
+      {docReady && <EditorCaption name={name} dirty={dirty} nodeCount={stats.nodeCount} savedAt={stats.savedAt} />}
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}
       {flow.ignored.length > 0 && <IgnoredBlocksBanner blocks={flow.ignored} />}
       {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——guarding 优先于 flow.confirming

@@ -216,7 +216,7 @@ test('解析失败显示错误面板与原文', async () => {
   expect(openInEditor).toHaveBeenCalledWith('/ws/bad.md')
 })
 
-test('读取失败显示错误面板并可纯文本打开', async () => {
+test('读取失败显示错误面板（分型文案，无修复按钮——文件不在无从修复）', async () => {
   render(
     <EditorView
       mdPath="/ws/missing.md"
@@ -229,9 +229,9 @@ test('读取失败显示错误面板并可纯文本打开', async () => {
       exitApp={noopExitApp}
           />,
   )
-  expect(await screen.findByText(/无法读取文件/)).toBeInTheDocument()
-  fireEvent.click(screen.getByTestId('btn-raw-edit'))
-  expect(openInEditor).toHaveBeenCalledWith('/ws/missing.md')
+  expect(await screen.findByText('无法打开此文件')).toBeInTheDocument()
+  expect(screen.getByText(/文件可能已被移动、删除或没有访问权限/)).toBeInTheDocument()
+  expect(screen.queryByTestId('btn-raw-edit')).not.toBeInTheDocument()
 })
 
 test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
@@ -2056,6 +2056,80 @@ describe('快速切换（v2.5）', () => {
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // 同图 no-op（浮层关闭）
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 再呼
     fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+})
+
+// ── 打开失败优雅恢复（2026-09）：错误/加载态壳层保留——错误面板只占画布内容区，
+// 对话框照常挂载（Ctrl+P/Ctrl+Tab 可用）、可返回案头；读失败自动移出最近清单 ──────
+describe('打开失败优雅恢复（2026-09）', () => {
+  /** 渲染指定路径的编辑器视图（打开失败用例共用） */
+  const renderEditorAt = (mdPath: string) => {
+    render(
+      <EditorView
+        mdPath={mdPath}
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+  }
+
+  test('读失败：错误面板占画布并留出路，砚栏卸载（引擎未就绪其按钮无意义）', async () => {
+    useAppStore.setState({
+      recentOpened: ['/ws/missing.md', '/ws/b.md'],
+      sessionRecent: ['/ws/missing.md', '/ws/b.md'],
+    })
+    renderEditorAt('/ws/missing.md')
+    expect(await screen.findByText('无法打开此文件')).toBeInTheDocument()
+    expect(screen.getByText('/ws/missing.md')).toBeInTheDocument()
+    expect(screen.queryByTestId('zen-bar')).not.toBeInTheDocument()
+    // Ctrl+P 浮层照常呼出（旧实现：浮层随早退卸载，按键被 anyDialogRef 闩死）
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(await screen.findByTestId('switch-input')).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument())
+    // 面板「返回案头」直接可达
+    fireEvent.click(screen.getByTestId('btn-error-back'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('library'))
+  })
+
+  test('读失败：坏路径自动移出最近清单（recentOpened 持久化 + 会话 MRU）', async () => {
+    useAppStore.setState({
+      configPath: '/cfg.json',
+      recentOpened: ['/ws/missing.md', '/ws/b.md'],
+      sessionRecent: ['/ws/missing.md', '/ws/b.md'],
+    })
+    renderEditorAt('/ws/missing.md')
+    expect(await screen.findByText('无法打开此文件')).toBeInTheDocument()
+    await waitFor(() => expect(useAppStore.getState().recentOpened).toEqual(['/ws/b.md']))
+    expect(useAppStore.getState().sessionRecent).toEqual(['/ws/b.md'])
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.recentOpened).toEqual(['/ws/b.md'])
+  })
+
+  test('解析失败：保留最近清单（文件仍在），Ctrl+P 与 Ctrl+Tab 均可用', async () => {
+    await fs.writeTextFileAtomic('/ws/bad.md', '## 没有根\n')
+    useAppStore.setState({
+      recentOpened: ['/ws/bad.md', '/ws/b.md'],
+      sessionRecent: ['/ws/bad.md', '/ws/b.md'],
+    })
+    renderEditorAt('/ws/bad.md')
+    expect(await screen.findByText('无法打开此导图')).toBeInTheDocument()
+    expect(useAppStore.getState().recentOpened).toContain('/ws/bad.md') // 不清理：修复后仍可达
+    // Ctrl+P 搜索浮层
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(await screen.findByTestId('switch-input')).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument())
+    // Ctrl+Tab 轮换切到上一张（sessionRecent MRU：[bad, b]，首按高亮 b）
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    await screen.findByTestId('switch-list')
+    fireEvent.keyUp(window, { key: 'Control' })
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
 })

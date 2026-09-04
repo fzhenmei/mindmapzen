@@ -116,6 +116,29 @@ describe('sessionRecent（会话内打开 MRU）', () => {
   })
 })
 
+// 打开失败清理（2026-09 优雅恢复）：文件读不到（被删/移动/权限）时移出最近清单——
+// recentOpened 持久化 + sessionRecent 内存（Ctrl+Tab 数据源）；解析失败不清理（文件仍在）
+describe('dropRecent（打开失败清理）', () => {
+  test('从 recentOpened 与 sessionRecent 移除并持久化', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().openMap('/ws/b.md')
+    await useAppStore.getState().dropRecent('/ws/b.md')
+    const s = useAppStore.getState()
+    expect(s.recentOpened).toEqual(['/ws/a.md'])
+    expect(s.sessionRecent).toEqual(['/ws/a.md'])
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.recentOpened).toEqual(['/ws/a.md'])
+  })
+  test('清单中不存在的路径 no-op（不写盘不报错）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().dropRecent('/ws/无此路径.md')
+    expect(useAppStore.getState().recentOpened).toEqual(['/ws/a.md'])
+    expect(useAppStore.getState().sessionRecent).toEqual(['/ws/a.md'])
+  })
+})
+
 describe('preferredLayout（验收轮三）', () => {
   test('setPreferredLayout 更新状态并持久化', async () => {
     useAppStore.getState().setPreferredLayout('org')

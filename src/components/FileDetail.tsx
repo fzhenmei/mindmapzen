@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { buildImageMetaFromSrcs } from '../services/imageAssets'
+import { toNativePath } from '../services/nativePath'
 import { extractImageMarker } from '../services/imageMarkers'
 import { mdOutline } from '../services/mdOutline'
 import type { MapInfo } from '../types/files'
@@ -86,6 +87,19 @@ export default function FileDetail({ info }: Readonly<Props>) {
   const outlineVisible = outlinePref === 'on' || (outlinePref === 'auto' && wide)
   const headings = useMemo(() => (state.kind === 'text' ? mdOutline(state.text) : []), [state])
 
+  /** 非正文占位（loading/error 分离，2026-09 友好化）：读取失败给说明与路径——
+   *  预览不阻塞详情区，点左侧其他文件/目录即离开 */
+  const placeholder =
+    state.kind === 'error' ? (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+        <p className="text-base font-medium text-foreground">无法预览此文件</p>
+        <p>文件可能已被移动、删除或没有访问权限</p>
+        <p className="break-all text-xs">{toNativePath(info.mdPath)}</p>
+      </div>
+    ) : (
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">…</div>
+    )
+
   return (
     <div
       ref={rootRef}
@@ -98,9 +112,7 @@ export default function FileDetail({ info }: Readonly<Props>) {
           {outlineVisible && <OutlinePanel headings={headings} />}
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          {state.kind === 'loading' ? '…' : '无法预览'}
-        </div>
+        placeholder
       )}
       {/* 大纲开关钮（常驻右上，不透明底防与滚动正文混叠）；首次点击即从 auto 转显式偏好。
           自带 TooltipProvider（同 ThemeFab——FileDetail 不在 SidebarProvider 上下文内） */}
