@@ -1,5 +1,6 @@
 // src/services/desk.ts —— 案头目录服务（M5a）：目录树读取、递归建目录、导图移动
 import type { FsAdapter, MapInfo } from '../types/files'
+import { ASSETS_DIR } from './imageAssets'
 import { INVALID, joinPath, normalizeRel, resolveDir, statTail } from './workspace'
 
 /** 目录树节点：path 为工作区相对路径（不含首尾斜杠，'/' 分隔）；根不出现在树中（「全部」项由 UI 提供） */
@@ -15,6 +16,10 @@ export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode
       // .git 不进案头目录树（M20 启用版本管理后工作区会出现；git 内部仓库非用户内容，
       // 左树与内容区文件夹 tile 同源本过滤）。只精确匹配 .git——不过滤其他点开头目录
       if (e.name === '.git') continue
+      // 根层 assets 不进树（2026-09 保护）：插图资产目录（imageAssets.ASSETS_DIR）是
+      // app 基础设施，非用户内容——树中隐去即所有管理面（选中/右键/移动目标）一并
+      // 不可达；仅根层精确匹配，子目录里用户自建的同名目录仍是用户内容照常显示
+      if (rel === '' && e.name === ASSETS_DIR) continue
       const path = rel === '' ? e.name : `${rel}/${e.name}`
       nodes.push({ name: e.name, path, children: await walk(joinPath(dir, e.name), path) })
     }

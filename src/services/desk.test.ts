@@ -82,6 +82,21 @@ describe('隐藏 git 内部目录（M20 验收）', () => {
   })
 })
 
+describe('保护插图资产目录（2026-09：根层 assets 与 .git 同口径隐去）', () => {
+  test('readDirTree 不含根层 assets；子层同名目录仍是用户内容照常保留', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws/assets')
+    await fs.writeTextFileAtomic('/ws/assets/选图.png', 'png-bytes')
+    await fs.mkdir('/ws/项目/assets')
+    await fs.mkdir('/ws/真目录')
+    const tree = await readDirTree(fs, '/ws')
+    // 根层 assets 隐去（树/右键/移动目标一并不可达）；zh collation 下 项目 < 真目录
+    expect(tree.map((n) => n.name)).toEqual(['项目', '真目录'])
+    // 子层 assets（用户自建）不受影响
+    expect(tree[0]!.children.map((n) => n.name)).toEqual(['assets'])
+  })
+})
+
 describe('filterTree（侧栏搜索过滤）', () => {
   // 树形：项目/{前端, 后端}；灵感/；根直挂 note.md；文件分布见 files
   const tree = [

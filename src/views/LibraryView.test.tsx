@@ -283,6 +283,19 @@ describe('案头目录（M5a）', () => {
     expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
   })
 
+  // 2026-09 插图资产目录保护：根层 assets 是 app 基础设施，不进左树（右键/移动目标随树一并不可达）
+  test('根层 assets 目录不进左树', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.mkdir('/ws/assets')
+    await dirFs.writeTextFileAtomic('/ws/assets/选图.png', 'png-bytes')
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    expect(await screen.findByTestId('file-node-根图')).toBeInTheDocument()
+    expect(screen.queryByTestId('dir-node-assets')).not.toBeInTheDocument()
+  })
+
   // 设置入口（M5b Task 4）：页首 btn-settings 打开设置对话框，开关切换写入 store
   test('页首设置按钮打开设置对话框并可切换复制开关', async () => {
     const dirFs = new MemoryFsAdapter()
