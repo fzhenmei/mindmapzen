@@ -551,3 +551,87 @@ describe('案头三区与交互（M5d）', () => {
     expect(screen.getByTestId('file-node-甲')).toBeInTheDocument()
   })
 })
+
+describe('案头左树拖拽移动（2026-09）', () => {
+  // jsdom 无原生 DataTransfer：fireEvent 附加 dataTransfer 属性即可（载荷走组件 ref，
+  // dataTransfer 仅标准位写 setData/effectAllowed，测试断言不依赖读回）
+  const dragDT = () => ({ setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: 'move', dropEffect: 'move' })
+
+  beforeEach(async () => {
+    fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/ws/想法A.md', '# 想法A\n\n## 分支\n')
+    await fs.mkdir('/ws/项目')
+    await fs.writeTextFileAtomic('/ws/项目/甲.md', '# 甲\n')
+    useAppStore.getState().setAdapter(fs)
+    await useAppStore.getState().setWorkspace('/ws')
+  })
+
+  test('拖文件行到目录行：文件落位目标目录（重名自动后缀语义同对话框流），无错误', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('file-node-想法A'), { dataTransfer: dt })
+    fireEvent.dragOver(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('file-node-想法A'), { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().maps.find((m) => m.name === '想法A')?.relDir).toBe('项目'))
+    expect(await fs.exists('/ws/项目/想法A.md')).toBe(true)
+    expect(useAppStore.getState().error).toBeNull()
+  })
+
+  test('拖文件行到树根：从子目录上提回根层', async () => {
+    await fs.writeTextFileAtomic('/ws/项目/乙.md', '# 乙\n')
+    await useAppStore.getState().setWorkspace('/ws') // 乙.md 写于 beforeEach 扫描后，重扫入册
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('file-node-乙'), { dataTransfer: dt })
+    fireEvent.dragOver(screen.getByTestId('dir-node-all'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-all'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('file-node-乙'), { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().maps.find((m) => m.name === '乙')?.relDir).toBe(''))
+    expect(await fs.exists('/ws/乙.md')).toBe(true)
+  })
+
+  test('拖目录到另一目录：整子树迁移，选中目录在被移子树内时前缀随迁', async () => {
+    await fs.mkdir('/ws/乙')
+    useAppStore.setState({ selectedDir: '项目' })
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.dragOver(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('乙/项目'))
+    expect(await fs.exists('/ws/乙/项目/甲.md')).toBe(true)
+    expect(useAppStore.getState().error).toBeNull()
+  })
+
+  test('拖目录到自身子孙：不落不移动、无错误（真实浏览器中非法落点本就不触发 drop，此处直发 drop 验防御）', async () => {
+    await fs.mkdir('/ws/项目/子')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-子'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    // 留一拍异步窗口：文件仍在原位、无选中副作用、无错误
+    await new Promise((r) => setTimeout(r, 50))
+    expect(await fs.exists('/ws/项目/甲.md')).toBe(true)
+    expect(useAppStore.getState().selectedDir).toBe('')
+    expect(useAppStore.getState().error).toBeNull()
+  })
+
+  test('目标下同名目录：拒绝并提示（不静默改名不合并），原位不动', async () => {
+    await fs.mkdir('/ws/项目/子')
+    await fs.mkdir('/ws/乙/子')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    // 树中两处「子」同名撞 testid（dir-node-<name> 用名不用路径），按 title=path 圈定被拖方
+    const src = (await screen.findAllByTestId('dir-node-子')).find((el) => el.title === '项目/子')!
+    fireEvent.dragStart(src, { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
+    fireEvent.dragEnd(src, { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().error).toContain('目标目录下已存在同名目录'))
+    // 被拖目录原位不动（乙/子 也未被覆盖）
+    expect(await fs.exists('/ws/项目/子')).toBe(true)
+    expect(await fs.exists('/ws/乙/子')).toBe(true)
+  })
+})
