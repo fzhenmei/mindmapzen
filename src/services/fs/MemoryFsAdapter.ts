@@ -73,10 +73,37 @@ export class MemoryFsAdapter implements FsAdapter {
 
   async rename(a: string, b: string): Promise<void> {
     const e = this.files.get(a)
-    if (!e) throw new Error(`文件不存在：${a}`)
-    this.files.delete(a)
-    // createdAt 保留（改名不改创建时间，同真实 FS birthtime）
-    this.files.set(b, { contents: e.contents, createdAt: e.createdAt, modifiedAt: Date.now() })
+    if (e) {
+      this.files.delete(a)
+      // createdAt 保留（改名不改创建时间，同真实 FS birthtime）
+      this.files.set(b, { contents: e.contents, createdAt: e.createdAt, modifiedAt: Date.now() })
+      return
+    }
+    // 目录语义（2026-09 moveDir）：显式集合或前缀推导命中即目录，整子树记录迁移
+    //（对齐真实 FS rename 对目录的一步迁移——TauriFsAdapter 走 fs::rename 天然支持）
+    const base = this.trimSlash(a)
+    const isDir = this.dirs.has(base)
+      || [...this.files.keys(), ...this.binaries.keys()].some((k) => k.startsWith(base + '/'))
+    if (!isDir) throw new Error(`文件不存在：${a}`)
+    const dest = this.trimSlash(b)
+    const prefix = base + '/'
+    for (const key of [...this.files.keys()]) {
+      if (!key.startsWith(prefix)) continue
+      const entry = this.files.get(key)!
+      this.files.delete(key)
+      this.files.set(dest + key.slice(base.length), entry) // 原条目直迁，元数据不动
+    }
+    for (const key of [...this.binaries.keys()]) {
+      if (!key.startsWith(prefix)) continue
+      this.binaries.set(dest + key.slice(base.length), this.binaries.get(key)!)
+      this.binaries.delete(key)
+    }
+    for (const dir of [...this.dirs]) {
+      if (dir === base || dir.startsWith(prefix)) {
+        this.dirs.delete(dir)
+        this.dirs.add(dest + dir.slice(base.length))
+      }
+    }
   }
 
   async remove(p: string): Promise<void> {
@@ -98,7 +125,11 @@ export class MemoryFsAdapter implements FsAdapter {
   }
 
   async exists(p: string): Promise<boolean> {
-    return this.files.has(p) || this.binaries.has(p)
+    const base = this.trimSlash(p)
+    // 目录也算存在（2026-09 moveDir 同名检测依赖；对齐真实 fs.exists 语义）：显式集合
+    // 或任一后代文件前缀推导命中即可
+    return this.files.has(base) || this.binaries.has(base) || this.dirs.has(base)
+      || [...this.files.keys(), ...this.binaries.keys()].some((k) => k.startsWith(base + '/'))
   }
 
   async ensureDir(p?: string): Promise<void> {
@@ -131,6 +162,13 @@ export class MemoryFsAdapter implements FsAdapter {
       names.set(rest, true)
     }
     return [...names].map(([name, isDir]) => ({ name, isDir }))
+  }
+
+  /** 去尾斜杠（rename/exists 的目录路径归一） */
+  private trimSlash(p: string): string {
+    let base = p
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    return base
   }
 
   /** 记入目录及其全部祖先（'/' 分隔），与递归 mkdir 语义一致 */

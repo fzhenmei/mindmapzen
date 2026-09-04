@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { createDir, deleteDir, dirDeleteSummary, filterTree, moveMap, readDirTree } from './desk'
+import { createDir, deleteDir, dirDeleteSummary, filterTree, isUnderDir, moveDir, moveMap, readDirTree } from './desk'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
@@ -57,6 +57,71 @@ describe('deleteDir（2026-09 树右键删除目录）', () => {
     await expect(deleteDir(fs, '/ws', '/')).rejects.toThrow('不能删除工作区根目录')
   })
 })
+describe('moveDir（2026-09 树拖拽移动目录）', () => {
+  test('整目录移动：后代文件与子目录随迁，原位消失（树重建后挂在目标下）', async () => {
+    await fs.mkdir('/ws/甲'); await fs.mkdir('/ws/甲/子')
+    await fs.writeTextFileAtomic('/ws/甲/图.md', '# a\n'); await fs.writeTextFileAtomic('/ws/甲/子/深.md', '# b\n')
+    await fs.mkdir('/ws/乙')
+    await moveDir(fs, '/ws', '甲', '乙')
+    expect(await fs.readTextFile('/ws/乙/甲/图.md')).toBe('# a\n')
+    expect(await fs.readTextFile('/ws/乙/甲/子/深.md')).toBe('# b\n')
+    // 树重建：甲（含子树）挂到乙下，原位不再有甲
+    expect(await readDirTree(fs, '/ws')).toEqual([
+      { name: '乙', path: '乙', children: [
+        { name: '甲', path: '乙/甲', children: [{ name: '子', path: '乙/甲/子', children: [] }] },
+      ] },
+    ])
+  })
+
+  test('移动到根（toDir 为工作区根）：目录上提一层', async () => {
+    await fs.mkdir('/ws/乙/甲')
+    await fs.writeTextFileAtomic('/ws/乙/甲/图.md', '# a\n')
+    await moveDir(fs, '/ws', '乙/甲', '')
+    expect(await fs.readTextFile('/ws/甲/图.md')).toBe('# a\n')
+    // zh 拼音序 jiǎ(甲) < yǐ(乙)
+    expect(await readDirTree(fs, '/ws')).toEqual([
+      { name: '甲', path: '甲', children: [] },
+      { name: '乙', path: '乙', children: [] },
+    ])
+  })
+
+  test('工作区根本体拒绝移动（rel 归一为空即抛，含首尾斜杠变体）', async () => {
+    await fs.mkdir('/ws/乙')
+    await expect(moveDir(fs, '/ws', '', '乙')).rejects.toThrow('不能移动工作区根目录')
+    await expect(moveDir(fs, '/ws', '/', '乙')).rejects.toThrow('不能移动工作区根目录')
+  })
+
+  test('同目录早返回：fromRel/toRel 归一后相同无操作不报错', async () => {
+    await fs.mkdir('/ws/甲'); await fs.writeTextFileAtomic('/ws/甲/图.md', '# a\n')
+    await moveDir(fs, '/ws', '甲', '/甲/')
+    expect(await fs.exists('/ws/甲/图.md')).toBe(true)
+  })
+
+  test('移动到自身子孙拒绝', async () => {
+    await fs.mkdir('/ws/甲/子')
+    await expect(moveDir(fs, '/ws', '甲', '甲/子')).rejects.toThrow('不能移动到自身或其子目录内')
+  })
+
+  test('目标下同名目录拒绝（不静默改名，用户先改名再拖），原位不动', async () => {
+    await fs.mkdir('/ws/甲'); await fs.mkdir('/ws/乙/甲')
+    await expect(moveDir(fs, '/ws', '甲', '乙')).rejects.toThrow('目标目录下已存在同名目录')
+    expect(await readDirTree(fs, '/ws')).toEqual([
+      { name: '甲', path: '甲', children: [] },
+      { name: '乙', path: '乙', children: [{ name: '甲', path: '乙/甲', children: [] }] },
+    ])
+  })
+})
+
+describe('isUnderDir（树拖拽落点守卫：path 是否在 ancestor 子树内，含自身）', () => {
+  test('前缀须带 / 边界；入参归一（首尾斜杠变体同判）', () => {
+    expect(isUnderDir('甲/子', '甲')).toBe(true)
+    expect(isUnderDir('甲', '甲')).toBe(true) // 含自身：拖目录到自己上=同目录，同为非法落点
+    expect(isUnderDir('甲乙', '甲')).toBe(false) // 前缀但不带斜杠边界，非子孙
+    expect(isUnderDir('', '甲')).toBe(false)
+    expect(isUnderDir('/甲/子/', '/甲/')).toBe(true) // 归一后同判
+  })
+})
+
 describe('dirDeleteSummary（删除目录确认框文案）', () => {
   test('三分支：报子树导图数 / 无导图但含子目录如实相告 / 真空目录才说「为空」', () => {
     const maps = [{ relDir: '项目' }, { relDir: '项目/子' }]

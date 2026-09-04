@@ -196,6 +196,54 @@ test('案头：右键目录删除——子树整删、树根菜单无删除项',
   await page.keyboard.press('Escape')
 })
 
+// 2026-09 树拖拽移动（HTML5 DnD，载荷走组件 ref——Playwright 原生 dragTo 即可驱动）：
+// 文件行拖入目录（moveMap 语义）+ 目录行拖到树根（moveDir 整子树上提）
+test('案头：树拖拽移动——文件拖入目录、目录整子树拖回树根', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 备料：右键「项目」新建子目录「归档」（/ws/项目/归档）
+  await page.getByTestId('dir-node-项目').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-new-dir').click()
+  await page.getByTestId('input-name').fill('归档')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByTestId('dir-node-归档')).toBeVisible()
+
+  // 文件拖入目录：根图 → 归档（深层目录落点）
+  await page.getByTestId('file-node-根图').dragTo(page.getByTestId('dir-node-归档'))
+  // 磁盘断言：文件已落 /ws/项目/归档/根图.md
+  const moved = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/项目/归档/根图.md',
+    ),
+  )
+  expect(moved).toBe('# 根图\n')
+
+  // 目录拖到树根：归档（含根图）整子树上提回 /ws/归档
+  await page.getByTestId('dir-node-归档').dragTo(page.getByTestId('dir-node-all'))
+  const lifted = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/归档/根图.md',
+    ),
+  )
+  expect(lifted).toBe('# 根图\n')
+  // 原位已空：旧路径不可读
+  const oldGone = await page.evaluate(async () => {
+    try {
+      await (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+        '/ws/项目/归档/根图.md',
+      )
+      return false
+    } catch {
+      return true
+    }
+  })
+  expect(oldGone).toBe(true)
+  // 树重读后归档行仍在（现挂根层，与项目平级），项目也未被波及
+  await expect(page.getByTestId('dir-node-归档')).toBeVisible()
+  await expect(page.getByTestId('dir-node-项目')).toBeVisible()
+})
+
 // v2.4 欢迎页：最近打开列表（VSCode Welcome 布局）——打开过的导图出现在右列，点击直达
 test('欢迎页：最近打开列表展示与直达', async ({ page }) => {
   test.setTimeout(30_000)

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
-import { createDir, deleteDir, dirDeleteSummary, moveMap, readDirTree, type DirNode } from '../services/desk'
+import { createDir, deleteDir, dirDeleteSummary, readDirTree, type DirNode } from '../services/desk'
+import { useTreeMoves } from '../hooks/useTreeMoves'
 import { parse } from '../services/mdTree'
 import { parseXmind } from '../services/xmindImport'
 import type { WriteClipboard } from '../services/clipboard'
@@ -181,22 +182,18 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     setDialog(null)
   }
 
-  /** 移动导图：两文件同移到目标层；同目录无操作（对话框已禁该项，服务层亦有守卫，此处双保险）。
-   *  移动后刷新列表与左树，停留当前目录视图 */
-  const moveTarget = async (toRel: string) => {
+  /** 树移动收口（2026-09 拖拽 + 对话框流共用 useTreeMoves）：刷新 = maps 重扫 + 左树
+   *  重读 + 预览 prune；同目录/守卫拒绝等语义见 hook 与 desk 服务注释 */
+  const { moveFile, moveDir } = useTreeMoves(async () => {
+    await store.refreshMaps()
+    await reloadTree()
+    pruneSelectedMap()
+  })
+  const moveTarget = (toRel: string) => {
     const t = target
-    if (!workspaceDir || t === null) return
+    if (t === null) return
     closeDialog()
-    if (toRel === t.relDir) return
-    try {
-      await moveMap(store.adapter, workspaceDir, t.name, t.relDir, toRel)
-      await store.refreshMaps()
-      setTree(await readDirTree(store.adapter, workspaceDir))
-      pruneSelectedMap()
-      store.setError(null)
-    } catch (e) {
-      store.setError('移动失败：' + (e instanceof Error ? e.message : String(e)))
-    }
+    void moveFile(t.name, t.relDir, toRel)
   }
 
   // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
@@ -317,6 +314,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               setDirTarget({ rel, name: segs.at(-1) ?? rel })
               setDialog('deletedir')
             }}
+            onMoveFile={(f, toRel) => { void moveFile(f.name, f.relDir, toRel) }}
+            onMoveDir={(fromRel, toRel) => { void moveDir(fromRel, toRel) }}
           />
           <SidebarFooter>
             <SidebarMenu>

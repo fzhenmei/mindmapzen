@@ -1,6 +1,6 @@
 import { ChevronRight, Search } from 'lucide-react'
-import { useState, type JSX } from 'react'
-import { filterTree, type DirNode } from '../services/desk'
+import { useRef, useState, type DragEvent, type JSX } from 'react'
+import { filterTree, isUnderDir, type DirNode } from '../services/desk'
 import type { MapAction } from './DetailActions'
 import {
   Collapsible,
@@ -32,6 +32,11 @@ import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconTrash } f
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
 
+/** 拖拽载荷（2026-09 树拖拽）：dragstart 存组件 ref——组件内通信不依赖 dataTransfer
+ *  读回（Playwright 合成拖拽读不回自定义 MIME，e2e 直用原生 dragAndDrop 即可测）；
+ *  dataTransfer 仍写标准位（application/x-zen-tree + effectAllowed），兼容宿主惯例 */
+type DragPayload = { kind: 'file'; file: TreeFile } | { kind: 'dir'; rel: string }
+
 interface Props {
   /** 工作区目录树（desk.readDirTree 产出；根不在其中，树根行由本组件提供） */
   tree: DirNode[]
@@ -57,6 +62,11 @@ interface Props {
   onCreateDirIn(rel: string): void
   /** 目录行右键「删除目录」（rel = 目标目录相对路径；整目录进回收站，树根不提供） */
   onDeleteDir(rel: string): void
+  /** 拖文件行落到目录行/树根（toRel=''=根）：moveMap 语义（重名自动后缀，同对话框流） */
+  onMoveFile(f: TreeFile, toRel: string): void
+  /** 拖目录行落到目录行/树根（toRel=''=根）：moveDir 语义（同目录无操作；目标为自身
+   *  子孙或目标下重名时由服务层拒绝报错） */
+  onMoveDir(fromRel: string, toRel: string): void
 }
 
 /** 案头左树（M15 官方 collapsible 文件树，仿 shadcn "A sidebar with a collapsible
@@ -84,6 +94,8 @@ export default function DirectoryTree({
   onCreateMapIn,
   onCreateDirIn,
   onDeleteDir,
+  onMoveFile,
+  onMoveDir,
 }: Readonly<Props>) {
   // 侧栏搜索（v2.5）：占位原 SidebarHeader（logo 上移 TitleBar 后空出的位）。
   //  过滤在 desk.filterTree（纯函数）；搜索态强制全树展开（defaultOpen 非受控只在
@@ -92,6 +104,49 @@ export default function DirectoryTree({
   const q = query.trim()
   const searching = q !== ''
   const filtered = searching ? filterTree(tree, files, q) : { tree, files }
+
+  // 拖拽态（2026-09）：drag ref 存载荷；dragging 标识被拖行（半透明）；dropTarget 高亮
+  //  合法落点行。落点守卫：目录行/树根可落（isUnderDir 含自身——拖目录到自己上不高亮）；
+  //  文件行不是落点。drop 后 dragend 前载荷即清，防串次拖拽
+  const drag = useRef<DragPayload | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const canDrop = (toRel: string): boolean => {
+    const d = drag.current
+    return d !== null && (d.kind === 'file' || !isUnderDir(toRel, d.rel))
+  }
+  const startDrag = (p: DragPayload, key: string) => (e: DragEvent<HTMLElement>) => {
+    drag.current = p
+    setDragging(key)
+    if (e.dataTransfer !== null) {
+      e.dataTransfer.setData('application/x-zen-tree', JSON.stringify(p))
+      e.dataTransfer.effectAllowed = 'move'
+    }
+  }
+  const dragOver = (rel: string) => (e: DragEvent<HTMLElement>) => {
+    if (!canDrop(rel)) return
+    e.preventDefault()
+    if (e.dataTransfer !== null) e.dataTransfer.dropEffect = 'move'
+    setDropTarget(rel)
+  }
+  const dragLeave = (rel: string) => (e: DragEvent<HTMLElement>) => {
+    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return // 行内子元素间移动不算离开
+    setDropTarget((cur) => (cur === rel ? null : cur))
+  }
+  const drop = (rel: string) => (e: DragEvent<HTMLElement>) => {
+    e.preventDefault()
+    setDropTarget(null)
+    const d = drag.current
+    if (d === null || !canDrop(rel)) return // 非法落点直发 drop 亦无操作（防御）
+    if (d.kind === 'file') onMoveFile(d.file, rel)
+    else onMoveDir(d.rel, rel)
+    drag.current = null
+  }
+  const endDrag = () => {
+    drag.current = null
+    setDragging(null)
+    setDropTarget(null)
+  }
 
   const isFileSelected = (f: TreeFile) =>
     selectedFile !== null && selectedFile.name === f.name && selectedFile.relDir === f.relDir
@@ -140,12 +195,18 @@ export default function DirectoryTree({
   const chevronSlot = 'flex size-5 shrink-0 items-center justify-center'
 
   /** 文件行（叶子）：[占位][图标][名称] 等宽文件声道；行面包 ContextMenu（右键开菜单，
-   *  右键即选中切预览——VSCode 惯例） */
+   *  右键即选中切预览——VSCode 惯例）。可拖（draggable）不可落——文件不作落点 */
   const renderFile = (f: TreeFile, key: string) => (
     <SidebarMenuSubItem key={key}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelectFile(f)}>
+          <div
+            className={`flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
+            draggable
+            onDragStart={startDrag({ kind: 'file', file: f }, key)}
+            onDragEnd={endDrag}
+            onContextMenu={() => onSelectFile(f)}
+          >
             <span aria-hidden="true" className={chevronSlot} />
             <SidebarMenuSubButton
               asChild
@@ -174,7 +235,8 @@ export default function DirectoryTree({
     filtered.files.filter((f) => f.relDir === relDir).map((f) => renderFile(f, `file:${relDir}/${f.name}`))
 
   /** 目录行：有子（目录或文件）→ Collapsible（行首箭头折叠 + 行面选中）；无子 → 占位
-   *  普通行。行面均包 ContextMenu（右键开菜单，右键即选中目录） */
+   *  普通行。行面均包 ContextMenu（右键开菜单，右键即选中目录）。既可拖亦可落：
+   *  拖 = moveDir（dropTarget 高亮合法落点），拖到自身/子孙不高亮不落 */
   const renderDir = (n: DirNode, key: string): JSX.Element => {
     const childFiles = renderFiles(n.path)
     const hasChildren = n.children.length > 0 || childFiles.length > 0
@@ -183,7 +245,16 @@ export default function DirectoryTree({
         <SidebarMenuSubItem key={key}>
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect(n.path)}>
+              <div
+                className={`flex min-w-0 flex-1 items-center rounded-sm ${dragging === key ? 'opacity-50' : ''} ${dropTarget === n.path ? 'bg-sidebar-accent' : ''}`}
+                draggable
+                onDragStart={startDrag({ kind: 'dir', rel: n.path }, key)}
+                onDragEnd={endDrag}
+                onDragOver={dragOver(n.path)}
+                onDragLeave={dragLeave(n.path)}
+                onDrop={drop(n.path)}
+                onContextMenu={() => onSelect(n.path)}
+              >
                 <span aria-hidden="true" className={chevronSlot} />
                 <SidebarMenuSubButton
                   asChild
@@ -211,7 +282,16 @@ export default function DirectoryTree({
         <SidebarMenuSubItem>
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect(n.path)}>
+              <div
+                className={`flex min-w-0 flex-1 items-center rounded-sm ${dragging === key ? 'opacity-50' : ''} ${dropTarget === n.path ? 'bg-sidebar-accent' : ''}`}
+                draggable
+                onDragStart={startDrag({ kind: 'dir', rel: n.path }, key)}
+                onDragEnd={endDrag}
+                onDragOver={dragOver(n.path)}
+                onDragLeave={dragLeave(n.path)}
+                onDrop={drop(n.path)}
+                onContextMenu={() => onSelect(n.path)}
+              >
                 {/* 折叠扳机（行首箭头，资源管理器式）：与行面选中解耦的独立按钮 */}
                 <CollapsibleTrigger asChild>
                   <button
@@ -279,12 +359,19 @@ export default function DirectoryTree({
         <SidebarGroupLabel>目录</SidebarGroupLabel>
         <SidebarMenu>
           {/* 树根 = 工作区：本身即最外层 Collapsible（点行首箭头收起全树），行面选中根视图；
-                  右键同目录菜单但无删除（工作区本体不删，rel=''=根） */}
+                  右键同目录菜单但无删除（工作区本体不删，rel=''=根）。拖拽只作落点不可拖
+                  （moveDir 守卫亦拒绝移动根），拖文件/目录到根 = 上提回工作区顶层 */}
           <Collapsible asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
             <SidebarMenuItem>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect('')}>
+                  <div
+                    className={`flex min-w-0 flex-1 items-center rounded-sm ${dropTarget === '' ? 'bg-sidebar-accent' : ''}`}
+                    onDragOver={dragOver('')}
+                    onDragLeave={dragLeave('')}
+                    onDrop={drop('')}
+                    onContextMenu={() => onSelect('')}
+                  >
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"

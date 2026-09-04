@@ -47,6 +47,36 @@ export async function deleteDir(fs: FsAdapter, wsDir: string, rel: string): Prom
   await fs.remove(joinPath(wsDir, relNorm))
 }
 
+/** path 是否在 ancestor 子树内（含自身）：树拖拽落点守卫，组件 dragover 与服务层
+ *  moveDir 共用。入参先归一（容首尾斜杠变体）；前缀须带 '/' 边界（'甲乙' 非 '甲' 子孙） */
+export function isUnderDir(path: string, ancestor: string): boolean {
+  const p = normalizeRel(path)
+  const a = normalizeRel(ancestor)
+  if (a === '') return true // 根子树即全工作区
+  return p === a || p.startsWith(a + '/')
+}
+
+/** 移动目录（2026-09 树拖拽）：整子树 fs.rename 一步迁移（后代导图与子目录随走，上层
+ *  refreshMaps + readDirTree 重建即可）。守卫链（同 reject-and-report 语义，中文报错走
+ *  setError 提示）：根不可移；同目录早返回；目标是自身子孙拒绝；目标下同名目录拒绝
+ *  （2026-09 拖拽策略裁决：不静默改名不合并，用户先改名再拖） */
+export async function moveDir(
+  fs: FsAdapter,
+  wsDir: string,
+  fromRel: string,
+  toRel: string,
+): Promise<void> {
+  const fromRelNorm = normalizeRel(fromRel)
+  const toRelNorm = normalizeRel(toRel)
+  if (fromRelNorm === '') throw new Error('不能移动工作区根目录')
+  if (fromRelNorm === toRelNorm) return
+  if (isUnderDir(toRelNorm, fromRelNorm)) throw new Error('不能移动到自身或其子目录内')
+  const toDir = resolveDir(wsDir, toRelNorm)
+  const name = fromRelNorm.split('/').at(-1) ?? fromRelNorm
+  if (await fs.exists(joinPath(toDir, name))) throw new Error('目标目录下已存在同名目录')
+  await fs.rename(joinPath(wsDir, fromRelNorm), joinPath(toDir, name))
+}
+
 /** 目录子树内导图数（删除目录确认框报数）：所在层为其本身或以其为前缀 */
 function countMapsInDir(maps: ReadonlyArray<{ relDir: string }>, rel: string): number {
   return maps.filter((m) => m.relDir === rel || m.relDir.startsWith(rel + '/')).length
