@@ -36,8 +36,7 @@ test('模板：内置「AI 协作开发」实例化——根名替换、结构�
 
   // 返回案头进详情态：md 预览渲染模板层级
   await page.getByTestId('btn-back').click()
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: 'Mind Map Zen 规划' }).click()
+  await page.getByTestId('file-node-Mind Map Zen 规划').click()
   await expect(page.getByTestId('md-preview')).toContainText('待我验收')
 })
 

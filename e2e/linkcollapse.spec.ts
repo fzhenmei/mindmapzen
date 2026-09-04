@@ -57,9 +57,8 @@ test('收起态连线：隐藏源节点全量净化，展开即复现（不残�
 
   // 重开（A 隐藏）：净化走数据树，隐藏节点标记已剥离、targets 已落位
   await page.getByTestId('btn-back').click()
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-收起丢线').dblclick()
   await expect(page.getByText('P', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A', { exact: true })).toHaveCount(0) // 折叠态保持
 
@@ -112,9 +111,8 @@ test('收起态连线：重开展开后立即编辑源节点文本，连线不�
   await page.keyboard.press('Control+s')
   await expect(page.getByTestId('save-stamp')).toBeVisible()
   await page.getByTestId('btn-back').click()
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-编辑吞线').dblclick()
   await expect(page.getByText('P', { exact: true }).first()).toBeVisible()
 
   // 展开 P → 立即编辑 A 文本提交（不等 5s 自动保存自愈——修复前残留标记随编辑被吞，线永久丢失）
@@ -138,9 +136,8 @@ test('收起态连线：重开展开后立即编辑源节点文本，连线不�
     .poll(() => readMd(page, '/ws/编辑吞线.md'), { timeout: 10_000 })
     .toBe('# 编辑吞线\n\n## P\n\n### A2 [[B]]\n\n## B\n')
   await page.getByTestId('btn-back').click()
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-编辑吞线').dblclick()
   await expect(page.getByText('A2', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A2 [[B]]')).toHaveCount(0) // 净化剥离照常
   await expect(page.locator(LINE_PATHS)).toHaveCount(2) // 连线复现

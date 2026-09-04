@@ -17,7 +17,6 @@ import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import NewMapDialog from '../components/NewMapDialog'
-import FileExplorer, { type MapAction } from '../components/FileExplorer'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
@@ -59,11 +58,12 @@ interface ImportPreview {
   blocks: IgnoredBlock[]
 }
 
-/** 案头（M15 文件化三态）：SidebarProvider + inset 骨架；主区三态——
- *  idle（进案头未选任何 → 空态引导）/ 目录态（FileExplorer 资源管理器大图标网格）/
- *  详情态（容器合并改版：页首即详情卡头——md 标题 + 动作钮上移，主区即预览面板）。
- *  交互语义：树/文件夹 tile 单击=选目录，文件 tile/树文件行单击=选中进详情，双击=进纸面；
- *  悬停操作钮（移动/重命名/删除）沿旧口径 */
+/** 案头（2026-09 主区纯预览化）：SidebarProvider + inset 骨架；主区两态——
+ *  未选文件（idle/选中目录）→ 欢迎页；详情态（容器合并改版：页首即详情卡头——
+ *  md 标题 + 动作钮上移，主区即预览面板）。主区只承担 markdown 预览，文件浏览与
+ *  导航全部由左树承担（目录下直列文件行）；文件操作（移动/重命名/删除）收敛到
+ *  详情页首动作钮。交互语义：树目录行单击=选中目录（主区欢迎页），树文件行
+ *  单击=选中进详情，双击=进纸面 */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
   const { workspaceDir, maps, error, selectedDir } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
@@ -83,7 +83,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const [dirParent, setDirParent] = useState('')
   // 选中导图（单击 tile/树文件行=选中进详情，双击=进纸面）
   const [selectedMap, setSelectedMap] = useState<string | null>(null)
-  // 三态初始位（M15）：进案头未选任何 → 空态引导；点目录/文件即离开 idle
+  // 进案头未选任何（true）：左树无激活行；点目录/文件后置 false（主区两态化后 idle 仅剩树激活行显示职责）
   const [idle, setIdle] = useState(true)
 
   /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
@@ -201,9 +201,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     }
   }
 
-  // 目录层导图（store.maps 恒为工作区全量）：资源管理器按当前层精确过滤
-  const visibleMaps = maps.filter((m) => m.relDir === selectedDir)
-
   // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
   const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
   const selectedInfo = maps.find((m) => m.mdPath === selectedMap) ?? null
@@ -229,9 +226,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   }
   const workspaceName = workspaceDir ? trimSeparators(workspaceDir).split(/[\\/]/).pop() ?? '' : ''
 
-  /** 右侧内容（M15 三态）：工作区空 → 全局空态；详情态（选中文件）→ FileDetail；
-   *  idle（未选任何）→ 空态引导；目录态 → FileExplorer（文件夹 + 导图大图标 tile）。
-   *  map-item/选中/双击/悬停操作语义全沿旧口径，testid 不变 */
+  /** 右侧内容（2026-09 两态）：工作区空 → 全局空态；详情态（选中文件）→ FileDetail
+   *  （容器合并：动作钮/标题在页首，主区即预览面板）；其余（idle/选中目录）→ 欢迎页。
+   *  主区不再承担文件列表——文件浏览与导航全在左树 */
   const renderRight = () => {
     if (maps.length === 0)
       return (
@@ -248,34 +245,13 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       )
     // 详情态（容器合并）：动作钮/标题在页首（见 header），主区只剩预览面板
     if (selectedInfo !== null) return <FileDetail info={selectedInfo} />
-    if (idle)
-      // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）
-      return (
-        <WelcomePane
-          recent={recent}
-          onNew={() => setDialog('new')}
-          onImport={() => void startImport()}
-          onOpen={(m) => void store.openMap(m.mdPath)}
-        />
-      )
+    // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）
     return (
-      <FileExplorer
-        dirRel={selectedDir}
-        tree={tree}
-        maps={visibleMaps}
-        onSelectDir={(rel) => {
-          setIdle(false)
-          store.setSelectedDir(rel)
-        }}
-        onSelectMap={(m) => {
-          setSelectedMap(m.mdPath)
-          setIdle(false)
-        }}
-        onOpenMap={(m) => void store.openMap(m.mdPath)}
-        onAction={(a: MapAction, m) => {
-          setTarget(m)
-          setDialog(a)
-        }}
+      <WelcomePane
+        recent={recent}
+        onNew={() => setDialog('new')}
+        onImport={() => void startImport()}
+        onOpen={(m) => void store.openMap(m.mdPath)}
       />
     )
   }
@@ -361,9 +337,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                 <DetailActions
                   info={selectedInfo}
                   onBack={() => {
-                    // 返回目录视图：清文件选中即回落到 selectedDir 的资源管理器态
+                    // 关闭预览：清文件选中即回落欢迎页
                     setSelectedMap(null)
-                    setIdle(false)
                   }}
                   onAction={(a, m) => {
                     // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
@@ -380,8 +355,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
-          {/* 主区（官方 p-6）：M15 三态（idle 空态引导 / 目录态资源管理器 / 详情态预览面板）；
-              详情态 p-0——容器合并后预览区 edge-to-edge 铺满 SidebarInset（bg-muted 贴圆角边） */}
+          {/* 主区（官方 p-6）：两态（欢迎页 / 详情态预览面板）；详情态 p-0——容器
+              合并后预览区 edge-to-edge 铺满 SidebarInset（bg-muted 贴圆角边） */}
           <main className={selectedInfo !== null ? 'flex min-h-0 flex-1 p-0' : 'flex min-h-0 flex-1 p-6'}>
             {renderRight()}
           </main>

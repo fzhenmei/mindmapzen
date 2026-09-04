@@ -39,10 +39,8 @@ test('节点备注：对话框编辑保存后 md 含引用块，重开持久', a
 
   // 返回案头重开：引用块解析回 data.note，引擎渲染备注角标（.smm-node-note）
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick() // M5d 交互变更：双击打开
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-备注测试').dblclick()
   await expect(page.getByText('要点').first()).toBeVisible()
   await expect(page.locator('.smm-node-note').first()).toBeVisible()
 })

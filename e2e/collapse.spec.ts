@@ -56,10 +56,8 @@ test('折叠状态持久化：折叠→保存→重开保持', async ({ page }) 
 
   // 返回文件库 → 重新打开 → 折叠应保持（apply 侧）
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-折叠图').dblclick()
   await expect(page.getByText('折叠图').first()).toBeVisible()
   await expect(page.getByText('叶一')).toHaveCount(0)
 })
@@ -100,10 +98,8 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
   await expect(page.getByTestId('save-stamp')).toBeVisible()
   await expect(page.getByTestId('dirty-badge')).toHaveCount(0)
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-竞态图').dblclick()
   await expect(page.getByText('竞态图').first()).toBeVisible()
 
   // 同一 JS 任务连发「展开点击 + Ctrl+S」（引擎 data_change 尾随节流 100ms 窗内）：
@@ -129,9 +125,7 @@ test('折叠竞态：干净图同瞬时折叠+保存不丢失', async ({ page })
 
   // 重开验证展开态被持久化（子树重新可见）
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-竞态图').dblclick()
   await expect(page.getByText('分支甲').first()).toBeVisible()
 })

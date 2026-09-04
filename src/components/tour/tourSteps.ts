@@ -49,13 +49,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'library',
     target: 'dir-panel',
     title: '目录组织',
-    body: '左侧目录树管理工作区里的文件夹，导图多了也不乱。',
-  },
-  {
-    view: 'library',
-    target: 'map-item',
-    title: '文件网格',
-    body: '单击查看详情，双击进入编辑；悬停可移动、重命名、删除。',
+    body: '左侧目录树管理工作区里的文件夹与导图——单击文件即可预览，双击直接进入编辑。',
   },
   {
     view: 'library',
