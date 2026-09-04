@@ -10,10 +10,12 @@
 // 复制路径出口分隔符归一 +1）。
 // 2026-09（v2.7 后续）：420→440（补记 161d9b0「画布砚栏新建导图入口」批 +20 漏账：
 // newMapOpen 态 + anyDialog 互斥列 + 砚栏钮 + newMap 槽组装——功能性增长，无腐化）。
+// 2026-09（圈选批量操作批）：440→450（多选浮条 MultiSelectBar 渲染接线 + import，+7；
+// 选中镜像派生在 useActiveSelection，浮条本体在 MultiSelectBar.tsx——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 440 },
+  { path: '../src/views/EditorView.tsx', limit: 450 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

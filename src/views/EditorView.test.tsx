@@ -74,7 +74,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
     }: {
       onReady: (h: MindMapHandle) => void
       onDataChange: () => void
-      onActiveChange?: (uid: string | null) => void
+      onActiveChange?: (uids: string[]) => void
       onEditorPaste?: (rawText: string) => void
       onNodeCopy?: () => void
       layout?: string
@@ -128,8 +128,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     ;(globalThis as unknown as Record<string, unknown>).__emitHistory = (index: number, length: number) =>
       (listeners.get('back_forward') ?? []).forEach((cb) => cb(index, length))
     ;(globalThis as unknown as Record<string, unknown>).__emitChange = () => onDataChange()
+    // 圈选多选镜像（2026-09）：桩对外仍收单 uid/null，转发时包装为 uid 数组（新契约，空数组 = 无选中）
     ;(globalThis as unknown as Record<string, unknown>).__emitActive = (uid: string | null) =>
-      onActiveChange?.(uid)
+      onActiveChange?.(uid ? [uid] : [])
     ;(globalThis as unknown as Record<string, unknown>).__emitPaste = (raw: string) =>
       onEditorPaste?.(raw)
     // 快捷键对调：Control+Shift+c 引擎节点复制成功上报（真实链路见 MindMapCanvas remap 闭包）

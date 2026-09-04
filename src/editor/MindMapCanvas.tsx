@@ -4,6 +4,7 @@ import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
 import Export from 'simple-mind-map/src/plugins/Export.js'
 import KeyboardNavigation from 'simple-mind-map/src/plugins/KeyboardNavigation.js'
+import Select from 'simple-mind-map/src/plugins/Select.js'
 // 关联线几何工具（M5d Task 5 弯曲记忆）：端点定位与默认控制点算式，与引擎 addLine 同源（见下方 defaultControlOffsets）
 import {
   computeNodePoints,
@@ -47,6 +48,15 @@ MindMap.usePlugin(Export)
 // docs/notes/engine-api.md「v1.2 核验」
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
 MindMap.usePlugin(KeyboardNavigation)
+
+// 框选多选插件（2026-09 圈选批量操作）：默认选项下两种起手手势——空白处 Ctrl/Cmd+左键拖拽
+// （View.js:44 Ctrl 拖拽不触发平移，与左键 pan 天然咬合）或空白处裸右键拖拽（Select.js:49-54
+// which===3 分支；右键松开的 contextmenu 清选中有 5px 位移判定兜底，Render.js:470-486，拖拽
+// 圈选不误清）。命中测试 300ms 节流（checkInNodes），框内节点动态进出 activeNodeList；批量删除
+// （REMOVE_NODE 无参删全部激活节点）与批量拖拽（Drag.js:258-273 按激活列表拖全部顶层祖先）
+// 引擎原生支持。圈选框颜色引擎硬编码 #0984e3，宿主以 CSS 覆盖（见 App.css，不改 node_modules）。
+// eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报，同上）
+MindMap.usePlugin(Select)
 
 // 主题注册必须先于任何实例构造：构造 opt.theme 未注册时引擎静默回退默认主题
 // （index.js:370-373 theme[opt.theme] || theme.default，见 docs/notes/engine-api.md「M4 核验」(11)）
@@ -246,7 +256,7 @@ interface Props {
   onReady: (mm: MindMapHandle) => void
   /** 引擎数据变化回调；data 为引擎随事件附带的整树快照（无载荷的调用视为必有变化，见下） */
   onDataChange: (data?: EngineNode) => void
-  onActiveChange?: (uid: string | null) => void
+  onActiveChange?: (uids: string[]) => void
   onEditorPaste?: (rawText: string) => void
   /** Control+Shift+c 画布内复制节点成功（有选中，快捷键对调后的引擎路径）→ 宿主盖印记 */
   onNodeCopy?: () => void
@@ -339,12 +349,17 @@ export default function MindMapCanvas({
       if (typeof name === 'string' && EXPAND_COMMANDS.has(name)) cbRef.current.onDataChange()
     }
     mm.on('afterExecCommand', syncExpand)
-    // 选中态上报：引擎无 node_active_clear，取消选中同样经 node_active 发出（首参为 null），
-    // 见 docs/notes/engine-api.md「M3 核验」(1)。uid 取节点实例的 .uid（引擎无 getUid 方法，防御式保留）
+    // 选中态上报：引擎无 node_active_clear，取消选中同样经 node_active 发出。事件载荷为
+    // (node, activeNodeList) 二参（Render.js:456-467，setTimeout(0) 去抖 + 同表不发）——单选时
+    // 两参一致，圈选/多选时首参可为 null（Select.checkInNodes → emitNodeActiveEvent() 无参调用），
+    // 故以第二参激活列表为权威，提取 uid 数组上报（圈选镜像，docs/notes/engine-api.md）。
+    // uid 取节点实例的 .uid（引擎无 getUid 方法，防御式保留）
     const onActive = (...args: unknown[]) => {
-      const node = args[0] as { getUid?: () => string; uid?: string } | null | undefined
-      const uid = node?.getUid ? node.getUid() : node?.uid
-      cbRef.current.onActiveChange?.(typeof uid === 'string' ? uid : null)
+      const list = args[1] as Array<{ getUid?: () => string; uid?: string } | null | undefined> | null | undefined
+      const uids = (list ?? [])
+        .map((n) => (n?.getUid ? n.getUid() : n?.uid))
+        .filter((u): u is string => typeof u === 'string')
+      cbRef.current.onActiveChange?.(uids)
     }
     mm.on('node_active', onActive)
     // 快捷键对调：裸 Ctrl+C 让给宿主复制 Markdown（useEditorHotkeys doCopy，md 复制高频），

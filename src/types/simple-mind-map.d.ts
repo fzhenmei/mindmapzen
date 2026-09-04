@@ -54,6 +54,14 @@ declare module 'simple-mind-map/src/plugins/Export.js' {
   export default Export
 }
 
+// 框选多选插件（2026-09 圈选）：instanceName 'select'（Select.js:237），默认选项下空白处
+// Ctrl/Cmd+左键拖拽或裸右键拖拽画选框，框内节点动态进出 activeNodeList（300ms 节流命中测试）；
+// 核验见 docs/notes/engine-api.md「圈选核验」
+declare module 'simple-mind-map/src/plugins/Select.js' {
+  const Select: unknown
+  export default Select
+}
+
 // 方向键导航插件（M12a Task 3）：instanceName 'keyboardNavigation'（KeyboardNavigation.js:285），
 // 注册 Left/Up/Right/Down 快捷键按几何最近移动选中；核验见 docs/notes/engine-api.md「v1.2 核验」
 declare module 'simple-mind-map/src/plugins/KeyboardNavigation.js' {

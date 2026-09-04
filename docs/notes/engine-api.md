@@ -414,3 +414,33 @@
 - 同窗双监听顺序：引擎 `KeyCommand.onKeydown` 在构造时绑定（KeyCommand.js:88），宿主兜底在 useEffect 内后绑——引擎先收。方向键命中时引擎 `preventDefault()+stopPropagation()`（KeyCommand.js:135-137；stopPropagation 不拦同节点后续监听，preventDefault 可见），宿主以 `e.defaultPrevented` 守卫早退（MindMapCanvas.tsx onKeydown 首行）；Tab/Enter/Delete 同理由引擎原生快捷键先应答（Render.js:384/392/407），宿主仅兜「焦点落在非 body 元素」的引擎不响应场景——无双发（该序在 E2E 复制用例中已实证，见 M2 核验「键盘处理」节）
 - KeyboardNavigation 不触碰 Tab/Enter/Delete：插件只 addShortcut 四个方向键（KeyboardNavigation.js:20-32），Tab 建子/Enter 建同级/Delete 删节点语义不变
 - 引擎核心不注册裸方向键：Render.js 快捷键全集（:384-452）仅含 Control+Up/Down 缩放组合（:430/:434，M3 笔记所称「方向键」即此）——键码多重集与插件裸方向键不同，Ctrl+上下缩放不受插件影响
+
+## 圈选核验（2026-09，Select 插件：圈选多节点批量操作）
+
+接入方式：`MindMap.usePlugin(Select)`（`src/plugins/Select.js`，239 行，instanceName `'select'`，:237）。结论先行：**默认选项（`useLeftKeySelectionRightKeyDrag: false`）下插件同时支持空白处 Ctrl/Cmd+左键拖拽与裸右键拖拽两种圈选起手，左键平移语义零改动**；批量删除（REMOVE_NODE 无参）与批量拖拽（Drag 按激活列表）为引擎既有能力，宿主仅修选中镜像。E2E 锚点：`multi-select-bar` / `multi-select-delete`（e2e/multiselect.spec.ts）。
+
+### (a) 触发条件与平移不冲突 —— 成立
+
+- 触发判定（Select.js:49-54）：`!(e.ctrlKey || e.metaKey) && (opt ? e.which !== 1 : e.which !== 3)` 才跳过——默认（false）下 **Ctrl/Cmd+任意键** 或 **裸右键（which===3）** 进入圈选；置 true 则翻转为裸左键圈选 + 右键拖画布（本仓不用，保持左键 pan 原语义）
+- 左键 pan 不受影响：'drag' 平移事件仅在 `isLeftMousedown`（默认选项）时派发（Event.js:123-131），裸右键圈选根本不进 drag 分支；Ctrl+左键虽进 drag 分支但 View.js:44 对 Ctrl/Cmd 早退——两种圈选起手均不 pan（中键平移亦不变）
+- 节点上起手不圈选：节点 group 的 mousedown 对非中键 `stopPropagation()`（MindMapNode.js:353-376），el 层监听收不到——圈选只能从空白起手；在节点上右键=激活该节点+派发 `node_contextmenu`（宿主未监听），Ctrl+左键=切换多选（`enableCtrlKeyNodeSelection`，MindMapNode.js:377-391），均为既有语义
+- 拖拽阈值 10px（Select.js:77-82），未超阈值不进圈选态（`isSelecting`）
+
+### (b) 右键圈选松开不清选中 —— 成立（contextmenu 的 5px 位移判定）
+
+- 右键松开后 Windows 在同点位派发 contextmenu：svg 的 contextmenu 监听（Event.js 注册）→ `clearActiveNodeListOnDrawClick(e, 'contextmenu')`（Render.js:154-156）
+- 该函数对 contextmenu 事件在默认选项下启用 5px 位移判定（Render.js:477-486）：mousedownPos 与松开点距离 ≤5px 才视为真点击清空——圈选拖拽必然 >10px（插件自身阈值），**不会误清**；右键单击空白（<5px）清选中为既有语义不变
+- 圈选进行中右键点节点不激活：MindMapNode.js:441-447 对 `node_contextmenu` 有 `mindMap.select.hasSelectRange()`（Select.js:221-224，即 isSelecting）避让
+
+### (c) 命中测试与事件载荷 —— node_active 第二参为权威
+
+- `checkInNodes`（Select.js:179-219，300ms 节流）：`draw.transform()` 取 {scale, translate} 把选区与节点盒（left/top/width/height）统一到容器像素坐标后 `checkTwoRectIsOverlap`；BFS 全树含概要节点，框内/框外动态 `addNodeToActiveList` / `removeNodeFromActiveList` 并逐次 `emitNodeActiveEvent()`
+- **载荷陷阱**：圈选过程中的 `emitNodeActiveEvent()` 无参调用 → `node_active` 首参为 `null`、激活列表只在第二参（Render.js:456-467，setTimeout(0) 去抖 + 同表不发）——宿主 `onActive` 此前只读第一参（单选语义成立），圈选下必须读第二参提取 uid 数组（MindMapCanvas.tsx 圈选镜像，useActiveSelection.activeUid 退化为「恰好单选」语义）
+- 拖到画布边缘 <50px 触发 AutoMove 自动滚屏（Select.js:83-118）——E2E 圈选框坐标须留边距，否则视口漂移导致断言集意外
+
+### (d) 选框颜色与批量语义
+
+- 选框颜色硬编码 `#0984e3` 蓝（Select.js:165-176，svg.js 写 stroke/fill 为 presentation attribute）；宿主以 CSS 属性选择器覆盖为青松主题色（App.css，CSS 规则优先级恒高于 presentation attribute，不改 node_modules）
+- 批量删除：`REMOVE_NODE` 无参即删全部 `activeNodeList` 各连带子树（Render.js:1413-1461；选中含根=清空根的所有子树，一条撤销记录）；Del/Backspace 引擎原生注册（Render.js:406-409）+ 宿主 engineKeyboard 兜底，圈选后直接生效
+- 批量移动：Drag 插件按下激活节点时 `beingDragNodeList` = 激活列表的顶层祖先集合（Drag.js:258-273），`MOVE_NODE_TO`（reparent，Render.js:1589-1604）与 `INSERT_BEFORE/AFTER`（调序）均收数组——圈选后拖任一选中节点即批量移动
+- readonly 守卫：插件 onMousedown/onMousemove 对 `opt.readonly` 早退（本仓未启用 readonly）

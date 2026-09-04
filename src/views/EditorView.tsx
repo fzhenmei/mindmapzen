@@ -30,6 +30,7 @@ import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
+import MultiSelectBar from '../components/MultiSelectBar'
 import EditorDialogs from '../components/EditorDialogs'
 import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
@@ -317,6 +318,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             imageEdit.openDialog(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeImageOf(mmRef.current, selection.activeUidRef.current))
           }
         />
+      )}
+      {/* 多选浮条（2026-09 圈选批量操作）：圈选/Ctrl 多选 >1 节点时出现于砚栏上方，计数 + 批量删除
+          （REMOVE_NODE 删全部激活节点及子树，一条撤销记录）。单选时 activeUid 退化为 null，
+          上方 NodeActions 已隐藏，两者互斥不并现 */}
+      {selection.activeCount > 1 && !anyDialog && (
+        <MultiSelectBar count={selection.activeCount} onDelete={() => mmRef.current?.execCommand('REMOVE_NODE')} />
       )}
       {/* 浮动砚栏（M5a 拆分至 ZenBar）。仅就绪态渲染（2026-09）：错误/加载态引擎未建，按钮无意义 */}
       {docReady && (
