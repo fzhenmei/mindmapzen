@@ -1,0 +1,45 @@
+import { describeIgnoredType } from '../services/ignoredType'
+import type { IgnoredBlock, ZenNode } from '../types/tree'
+import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
+
+/** 导入预览挂起态：解析成功但存在忽略块，待用户确认后才入库（取消则丢弃） */
+export interface ImportPreview {
+  name: string
+  tree: ZenNode
+  blocks: IgnoredBlock[]
+}
+
+interface Props {
+  preview: ImportPreview
+  onCancel(): void
+  onConfirm(): void
+}
+
+/** 导入预览确认框（M21 双流共用；2026-09 自 LibraryView 抽取）：未映射内容块先列
+ *  摘要（类型 + 节选），确认才入库 */
+export default function ImportPreviewDialog({ preview, onCancel, onConfirm }: Readonly<Props>) {
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
+      <DialogContent data-testid="import-preview" aria-label={`导入「${preview.name}」`}>
+        <DialogTitle>{`导入「${preview.name}」`}</DialogTitle>
+        <p className="text-sm">{preview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
+        <ul className="list-disc pl-5 text-xs text-muted-foreground">
+          {preview.blocks.map((b) => (
+            <li key={`${b.type}:${b.excerpt}`}>
+              {describeIgnoredType(b.type)}：{b.excerpt}
+            </li>
+          ))}
+        </ul>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" data-testid="import-cancel" onClick={onCancel}>
+            取消
+          </Button>
+          <Button size="sm" data-testid="import-confirm" onClick={onConfirm}>
+            导入
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

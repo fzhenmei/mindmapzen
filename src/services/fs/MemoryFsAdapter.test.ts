@@ -133,3 +133,28 @@ describe('stat 元数据（M15）', () => {
     await expect(fs.stat('/ws/none.md')).rejects.toThrow('文件不存在')
   })
 })
+
+describe('remove 目录语义（2026-09：对齐 Tauri trash_delete 整目录回收）', () => {
+  test('目录 remove 递归清尽后代（文本/二进制/显式目录集合），removeLog 只记入口路径', async () => {
+    await fs.mkdir('/ws/项目'); await fs.mkdir('/ws/项目/子')
+    await fs.writeTextFileAtomic('/ws/项目/a.md', 'x')
+    await fs.writeBytes('/ws/项目/b.png', Uint8Array.of(1))
+    await fs.writeTextFileAtomic('/ws/项目/子/c.md', 'y')
+    await fs.remove('/ws/项目/') // 尾斜杠归一
+    expect(await fs.exists('/ws/项目/a.md')).toBe(false)
+    expect(await fs.exists('/ws/项目/b.png')).toBe(false)
+    expect(await fs.exists('/ws/项目/子/c.md')).toBe(false)
+    // 显式目录集合同被清除：父层 entries 不再报出「项目」
+    expect(await fs.readDirEntries('/ws')).toEqual([])
+    expect(fs.removeLog).toEqual(['/ws/项目'])
+  })
+
+  test('前缀边界：remove 目录 /ws/a 不动同前缀文件 /ws/ab.md', async () => {
+    await fs.mkdir('/ws/a')
+    await fs.writeTextFileAtomic('/ws/a/里.md', 'x')
+    await fs.writeTextFileAtomic('/ws/ab.md', 'y')
+    await fs.remove('/ws/a')
+    expect(await fs.exists('/ws/a/里.md')).toBe(false)
+    expect(await fs.exists('/ws/ab.md')).toBe(true)
+  })
+})

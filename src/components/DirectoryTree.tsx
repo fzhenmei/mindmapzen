@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from './ui/sidebar'
-import { IconFile, IconFolder, IconOpen, IconPencil, IconPlus, IconTrash } from './icons'
+import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconTrash } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
@@ -55,17 +55,20 @@ interface Props {
   onCreateMapIn(rel: string): void
   /** 目录行右键「新建子目录」（rel = 父目录相对路径，''=根） */
   onCreateDirIn(rel: string): void
+  /** 目录行右键「删除目录」（rel = 目标目录相对路径；整目录进回收站，树根不提供） */
+  onDeleteDir(rel: string): void
 }
 
 /** 案头左树（M15 官方 collapsible 文件树，仿 shadcn "A sidebar with a collapsible
  *  file tree"）：目录行 = Collapsible + ChevronRight 官方旋入动画，子目录与文件行进
- *  SidebarMenuSub（官方缩进导轨），任意深度递归。交互分工：行面单击 = 选中，行尾
- *  箭头 = 折叠/展开（CollapsibleTrigger 独立按钮，行面不承担折叠——选中与折叠解耦，
- *  点已展开目录不会误收起子树）。全部 defaultOpen（进案头即全树展开，延续旧行为）；
- *  空目录无死箭头（普通行）。
- *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/移动/重命名/删除（ctx-* testid，
- *  与详情页首同名钮以 ctx- 前缀区分避严格模式撞名）；目录行与树根 = 在此新建导图/
- *  新建子目录。右键即选中（VSCode 惯例）——文件行切预览、目录行切选中态。
+ *  SidebarMenuSub（官方缩进导轨），任意深度递归。交互分工：行面单击 = 选中，行首
+ *  箭头 = 折叠/展开（2026-09 资源管理器式：CollapsibleTrigger 独立按钮居于图标左侧，
+ *  与行面选中解耦——点已展开目录不会误收起子树；空目录/文件行以等宽占位对齐图标列）。
+ *  全部 defaultOpen（进案头即全树展开，延续旧行为）。
+ *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/移动/重命名/删除；目录行 = 在此
+ *  新建导图/新建子目录/删除目录；树根 = 同目录行但无删除（工作区本体不删）。ctx-*
+ *  testid 与详情页首同名钮区分避严格模式撞名。右键即选中（VSCode 惯例）——文件行切
+ *  预览、目录行切选中态。
  *  testid 沿用：目录 `dir-node-<name>`、文件 `file-node-<name>`、树根 `dir-node-all` */
 export default function DirectoryTree({
   tree,
@@ -80,6 +83,7 @@ export default function DirectoryTree({
   onFileAction,
   onCreateMapIn,
   onCreateDirIn,
+  onDeleteDir,
 }: Readonly<Props>) {
   // 侧栏搜索（v2.5）：占位原 SidebarHeader（logo 上移 TitleBar 后空出的位）。
   //  过滤在 desk.filterTree（纯函数）；搜索态强制全树展开（defaultOpen 非受控只在
@@ -111,8 +115,9 @@ export default function DirectoryTree({
     </ContextMenuContent>
   )
 
-  /** 目录行右键菜单（rel = 目标目录；''=根）：新建导图于此 / 新建子目录 */
-  const dirMenu = (rel: string) => (
+  /** 目录行右键菜单（rel = 目标目录）：新建导图于此 / 新建子目录 /（可删时）删除目录。
+   *  树根（deletable=false）不提供删除——工作区本体走设置页「退出工作区」流 */
+  const dirMenu = (rel: string, deletable: boolean) => (
     <ContextMenuContent aria-label="目录操作">
       <ContextMenuItem data-testid="ctx-btn-new-map" onClick={() => onCreateMapIn(rel)}>
         <IconPlus />在此新建导图
@@ -120,32 +125,45 @@ export default function DirectoryTree({
       <ContextMenuItem data-testid="ctx-btn-new-dir" onClick={() => onCreateDirIn(rel)}>
         <IconFolder />新建子目录
       </ContextMenuItem>
+      {deletable && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem data-testid="ctx-btn-delete-dir" variant="destructive" onClick={() => onDeleteDir(rel)}>
+            <IconTrash />删除目录
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 
-  /** 文件行（叶子）：SidebarMenuSubButton asChild → button（等宽文件声道）。
-   *  行面包 ContextMenu（右键开菜单，右键即选中切预览——VSCode 惯例） */
+  /** 行首箭头槽（资源管理器式）：有子目录/文件 → 折叠扳机；否则等宽占位，图标列对齐 */
+  const chevronSlot = 'flex size-5 shrink-0 items-center justify-center'
+
+  /** 文件行（叶子）：[占位][图标][名称] 等宽文件声道；行面包 ContextMenu（右键开菜单，
+   *  右键即选中切预览——VSCode 惯例） */
   const renderFile = (f: TreeFile, key: string) => (
     <SidebarMenuSubItem key={key}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <SidebarMenuSubButton
-            asChild
-            isActive={isFileSelected(f)}
-            data-testid={`file-node-${f.name}`}
-            title={`${f.name}.md`}
-          >
-            <button
-              type="button"
-              className="font-file text-xs"
-              onClick={() => onSelectFile(f)}
-              onDoubleClick={() => onOpenFile(f)}
-              onContextMenu={() => onSelectFile(f)}
+          <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelectFile(f)}>
+            <span aria-hidden="true" className={chevronSlot} />
+            <SidebarMenuSubButton
+              asChild
+              isActive={isFileSelected(f)}
+              data-testid={`file-node-${f.name}`}
+              title={`${f.name}.md`}
             >
-              <IconFile />
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-            </button>
-          </SidebarMenuSubButton>
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left font-file text-xs"
+                onClick={() => onSelectFile(f)}
+                onDoubleClick={() => onOpenFile(f)}
+              >
+                <IconMarkdown />
+                <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              </button>
+            </SidebarMenuSubButton>
+          </div>
         </ContextMenuTrigger>
         {fileMenu(f)}
       </ContextMenu>
@@ -155,8 +173,8 @@ export default function DirectoryTree({
   const renderFiles = (relDir: string) =>
     filtered.files.filter((f) => f.relDir === relDir).map((f) => renderFile(f, `file:${relDir}/${f.name}`))
 
-  /** 目录行：有子（目录或文件）→ Collapsible（箭头折叠 + 行面选中）；无子 → 普通行。
-   *  行面均包 ContextMenu（右键开菜单，右键即选中目录） */
+  /** 目录行：有子（目录或文件）→ Collapsible（行首箭头折叠 + 行面选中）；无子 → 占位
+   *  普通行。行面均包 ContextMenu（右键开菜单，右键即选中目录） */
   const renderDir = (n: DirNode, key: string): JSX.Element => {
     const childFiles = renderFiles(n.path)
     const hasChildren = n.children.length > 0 || childFiles.length > 0
@@ -165,33 +183,8 @@ export default function DirectoryTree({
         <SidebarMenuSubItem key={key}>
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <SidebarMenuSubButton
-                asChild
-                isActive={selected === n.path}
-                data-testid={`dir-node-${n.name}`}
-                title={n.path}
-              >
-                <button
-                  type="button"
-                  className="font-file text-xs"
-                  onClick={() => onSelect(n.path)}
-                  onContextMenu={() => onSelect(n.path)}
-                >
-                  <IconFolder />
-                  <span className="min-w-0 flex-1 truncate">{n.name}</span>
-                </button>
-              </SidebarMenuSubButton>
-            </ContextMenuTrigger>
-            {dirMenu(n.path)}
-          </ContextMenu>
-        </SidebarMenuSubItem>
-      )
-    return (
-      <Collapsible key={key} asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
-        <SidebarMenuSubItem>
-          <div className="relative">
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
+              <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect(n.path)}>
+                <span aria-hidden="true" className={chevronSlot} />
                 <SidebarMenuSubButton
                   asChild
                   isActive={selected === n.path}
@@ -200,28 +193,54 @@ export default function DirectoryTree({
                 >
                   <button
                     type="button"
-                    className="pr-7 font-file text-xs"
+                    className="min-w-0 flex-1 text-left font-file text-xs"
                     onClick={() => onSelect(n.path)}
-                    onContextMenu={() => onSelect(n.path)}
                   >
                     <IconFolder />
                     <span className="min-w-0 flex-1 truncate">{n.name}</span>
                   </button>
                 </SidebarMenuSubButton>
-              </ContextMenuTrigger>
-              {dirMenu(n.path)}
-            </ContextMenu>
-            {/* 折叠扳机（行尾箭头，SidebarMenuAction 位）：与行面选中解耦的独立按钮 */}
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                aria-label={`折叠「${n.name}」`}
-                className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-              </button>
-            </CollapsibleTrigger>
-          </div>
+              </div>
+            </ContextMenuTrigger>
+            {dirMenu(n.path, true)}
+          </ContextMenu>
+        </SidebarMenuSubItem>
+      )
+    return (
+      <Collapsible key={key} asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
+        <SidebarMenuSubItem>
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect(n.path)}>
+                {/* 折叠扳机（行首箭头，资源管理器式）：与行面选中解耦的独立按钮 */}
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`折叠「${n.name}」`}
+                    className={`${chevronSlot} rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
+                  >
+                    <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                  </button>
+                </CollapsibleTrigger>
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={selected === n.path}
+                  data-testid={`dir-node-${n.name}`}
+                  title={n.path}
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left font-file text-xs"
+                    onClick={() => onSelect(n.path)}
+                  >
+                    <IconFolder />
+                    <span className="min-w-0 flex-1 truncate">{n.name}</span>
+                  </button>
+                </SidebarMenuSubButton>
+              </div>
+            </ContextMenuTrigger>
+            {dirMenu(n.path, true)}
+          </ContextMenu>
           <CollapsibleContent>
             <SidebarMenuSub>
               {n.children.map((c) => renderDir(c, `dir:${c.path}`))}
@@ -259,41 +278,40 @@ export default function DirectoryTree({
       <SidebarGroup>
         <SidebarGroupLabel>目录</SidebarGroupLabel>
         <SidebarMenu>
-          {/* 树根 = 工作区：本身即最外层 Collapsible（点箭头收起全树），行面选中根视图；
-                  右键同目录菜单（在此新建导图/新建目录，rel=''=根） */}
+          {/* 树根 = 工作区：本身即最外层 Collapsible（点行首箭头收起全树），行面选中根视图；
+                  右键同目录菜单但无删除（工作区本体不删，rel=''=根） */}
           <Collapsible asChild defaultOpen open={searching ? true : undefined} className="group/collapsible">
             <SidebarMenuItem>
-              <div className="relative">
-                <ContextMenu>
-                  <ContextMenuTrigger asChild>
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div className="flex min-w-0 flex-1 items-center" onContextMenu={() => onSelect('')}>
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="折叠全部"
+                        className={`${chevronSlot} rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
+                      >
+                        <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      </button>
+                    </CollapsibleTrigger>
                     <SidebarMenuButton
                       asChild
                       data-testid="dir-node-all"
                       isActive={selected === ''}
-                      className="pr-7 font-file text-xs"
+                      className="min-w-0 flex-1 text-left font-file text-xs"
                     >
                       <button
                         type="button"
                         title={rootTooltip}
                         onClick={() => onSelect('')}
-                        onContextMenu={() => onSelect('')}
                       >
                         <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
                       </button>
                     </SidebarMenuButton>
-                  </ContextMenuTrigger>
-                  {dirMenu('')}
-                </ContextMenu>
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="折叠全部"
-                    className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  >
-                    <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </button>
-                </CollapsibleTrigger>
-              </div>
+                  </div>
+                </ContextMenuTrigger>
+                {dirMenu('', false)}
+              </ContextMenu>
               <CollapsibleContent>
                 <SidebarMenuSub>
                   {searching && filtered.tree.length === 0 && filtered.files.length === 0 ? (

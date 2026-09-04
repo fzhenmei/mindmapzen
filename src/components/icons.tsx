@@ -155,17 +155,20 @@ export const IconOpen = ({ size }: IconProps) =>
     </>,
     size,
   )
-/** 导图文件（M5d 案头目录树文件行）：文档轮廓 + 右上折角 */
-export const IconFile = ({ size }: IconProps) =>
+/** Markdown 文档（2026-09 树文件行/欢迎页最近列表）：无框大「M↓」（Markdown 标志
+ *  性语汇，VSCode Seti / Obsidian 的 md 文件图标同形）——16px 下框内 M↓ 三元素过密，
+ *  去框放大到全网格保辨识；M 与箭头底部基线对齐 */
+export const IconMarkdown = ({ size }: IconProps) =>
   base(
     <>
-      <path d="M4 1.5h5L12.5 5v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1z" />
-      <path d="M9 1.5V5h3.5" />
+      <path d="M1.5 12V4l2.25 2.75L7 4v8" />
+      <path d="M12 4v8M10 9.5l2 2 2-2" />
     </>,
     size,
   )
 /** 新建导图（2026-09 画布砚栏）：文档轮廓 + 中央加号——画布内 IconPlus 已被「放大」
- *  占用，借文档形区分（案头无放大钮，新建仍用 IconPlus）；轮廓同 IconFile */
+ *  占用，借文档形区分（案头无放大钮，新建仍用 IconPlus）；通用文档形（树行文件
+ *  已换 IconMarkdown 的 M↓ 标志，此处的语义是「新建」而非「md 文档」） */
 export const IconFilePlus = ({ size }: IconProps) =>
   base(
     <>

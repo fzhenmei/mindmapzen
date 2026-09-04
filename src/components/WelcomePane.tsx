@@ -1,5 +1,5 @@
 import { Button } from './ui/button'
-import { IconFile, IconImport, IconPlus } from './icons'
+import { IconImport, IconMarkdown, IconPlus } from './icons'
 import AppLogo from './AppLogo'
 import type { MapInfo } from '../types/files'
 
@@ -87,7 +87,7 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
                   onClick={() => onOpen(m)}
                 >
                   <span className="shrink-0 text-muted-foreground group-hover:text-primary">
-                    <IconFile size={16} />
+                    <IconMarkdown size={16} />
                   </span>
                   <span className="min-w-0 flex-1 truncate font-file text-[13px]">{m.name}</span>
                   {m.relDir !== '' && (

@@ -80,9 +80,21 @@ export class MemoryFsAdapter implements FsAdapter {
   }
 
   async remove(p: string): Promise<void> {
-    this.files.delete(p)
-    this.binaries.delete(p)
-    this.removeLog.push(p)
+    // 文件或目录（2026-09 目录右键删除）：目录时递归清尽后代（对齐 Tauri trash_delete
+    // 的整目录回收语义——文件/二进制/显式目录集合按前缀清除），removeLog 只记本次入口路径
+    let base = p
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    const prefix = base + '/'
+    for (const key of this.files.keys()) {
+      if (key === base || key.startsWith(prefix)) this.files.delete(key)
+    }
+    for (const key of this.binaries.keys()) {
+      if (key === base || key.startsWith(prefix)) this.binaries.delete(key)
+    }
+    for (const dir of this.dirs) {
+      if (dir === base || dir.startsWith(prefix)) this.dirs.delete(dir)
+    }
+    this.removeLog.push(base)
   }
 
   async exists(p: string): Promise<boolean> {
