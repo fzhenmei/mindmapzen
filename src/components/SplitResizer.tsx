@@ -33,7 +33,7 @@ export default function SplitResizer({ side, width, min, max, label, onResize, o
     } catch {
       // jsdom 无 setPointerCapture 实现；window 兜底监听仍在
     }
-    document.documentElement.setAttribute('data-split-resizing', '')
+    document.documentElement.dataset.splitResizing = ''
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return
       const delta = side === 'right' ? ev.clientX - d.startX : d.startX - ev.clientX
@@ -45,7 +45,7 @@ export default function SplitResizer({ side, width, min, max, label, onResize, o
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
-      document.documentElement.removeAttribute('data-split-resizing')
+      delete document.documentElement.dataset.splitResizing
       if (d.moved) onCommit(d.last)
     }
     window.addEventListener('pointermove', onMove)
@@ -54,14 +54,16 @@ export default function SplitResizer({ side, width, min, max, label, onResize, o
   }
 
   return (
-    <div
-      role="separator"
+    <hr
       aria-orientation="vertical"
       aria-label={label}
       title="拖拽调整宽度，双击恢复默认"
       className={cn(
+        'split-resizer absolute inset-y-0 z-20 h-auto w-2 cursor-col-resize touch-none border-0',
         'split-resizer absolute inset-y-0 z-20 w-2 cursor-col-resize touch-none',
-        'after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:bg-border after:opacity-0 after:transition-opacity hover:after:opacity-100',
+        // 竖线（after）上下各缩 20px：避开 SidebarInset 浮层的 m-2 边距 + rounded-xl
+        // 圆角（8+12px），端点落在浮层直边段，不越圆角；热区保持全高不影响抓取
+        'after:absolute after:top-5 after:bottom-5 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:bg-border after:opacity-0 after:transition-opacity hover:after:opacity-100',
         side === 'right' ? '-right-1' : '-left-1',
         className,
       )}

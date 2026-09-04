@@ -69,4 +69,12 @@ describe('SplitResizer（分区拖拽手柄）', () => {
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 400 })
     expect(onResize).not.toHaveBeenCalled()
   })
+
+  test('视觉竖线上下缩进 20px（不越 SidebarInset 浮层圆角），热区保持全高', () => {
+    const { handle } = harness()
+    expect(handle.className).toContain('after:top-5')
+    expect(handle.className).toContain('after:bottom-5')
+    expect(handle.className).toContain('inset-y-0')
+    expect(handle.className).not.toContain('after:inset-y-0')
+  })
 })
