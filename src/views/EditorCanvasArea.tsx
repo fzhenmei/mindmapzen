@@ -36,7 +36,8 @@ interface Props {
   onCanvasReady(mm: MindMapHandle): void
   /** 引擎数据变更（统计行 + 保存管线） */
   onDataChange(data?: EngineNode): void
-  onActiveChange(uid: string | null): void
+  /** 引擎激活列表变化（圈选多选镜像：uid 数组，空数组 = 无选中） */
+  onActiveChange(uids: string[]): void
   onPaste(rawText: string): void
   onNodeCopy(): void
 }

@@ -65,6 +65,12 @@ html, body { overflow: hidden; }
   font-size: var(--font-size-sm); border-radius: 6px; animation: copy-in var(--duration-2) ease-out;
   pointer-events: none; background: var(--card); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 @keyframes copy-in { from { opacity: 0; } to { opacity: 1; } }
+/* 圈选框主题色（2026-09）：引擎 Select 插件选框硬编码 #0984e3 蓝（svg.js 写 stroke/fill 为
+   presentation attribute，Select.js:165-176），CSS 规则优先级恒高于 presentation attribute，
+   据此覆盖为青松主题色（与选中环 hoverRectColor 同源，engineThemes.ts）；属性选择器精确匹配
+   引擎色值不误伤其他 polygon。明暗随 data-theme 切换（theme.ts 挂 html[data-theme]） */
+.editor svg polygon[stroke="#0984e3"] { stroke: #1D7A6B; fill: rgba(29, 122, 107, 0.12); }
+[data-theme='dark'] .editor svg polygon[stroke="#0984e3"] { stroke: #4CBFA8; fill: rgba(76, 191, 168, 0.15); }
 /* 忽略块横幅（Task 6 迁移前沿用旧结构）：浮于画布上方居中（命令栏已停泊底部，M12b Task 4） */
 .zen-banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9;
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); max-width: 70vw;
