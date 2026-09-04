@@ -155,7 +155,7 @@ export default function DirectoryTree({
             >
               <button
                 type="button"
-                className="min-w-0 flex-1 font-file text-xs"
+                className="min-w-0 flex-1 text-left font-file text-xs"
                 onClick={() => onSelectFile(f)}
                 onDoubleClick={() => onOpenFile(f)}
               >
@@ -193,7 +193,7 @@ export default function DirectoryTree({
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 font-file text-xs"
+                    className="min-w-0 flex-1 text-left font-file text-xs"
                     onClick={() => onSelect(n.path)}
                   >
                     <IconFolder />
@@ -230,7 +230,7 @@ export default function DirectoryTree({
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 font-file text-xs"
+                    className="min-w-0 flex-1 text-left font-file text-xs"
                     onClick={() => onSelect(n.path)}
                   >
                     <IconFolder />
@@ -298,7 +298,7 @@ export default function DirectoryTree({
                       asChild
                       data-testid="dir-node-all"
                       isActive={selected === ''}
-                      className="min-w-0 flex-1 font-file text-xs"
+                      className="min-w-0 flex-1 text-left font-file text-xs"
                     >
                       <button
                         type="button"
