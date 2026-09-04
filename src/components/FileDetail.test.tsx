@@ -34,6 +34,17 @@ describe('FileDetail', () => {
     expect(screen.getByText(/文件可能已被移动、删除或没有访问权限/)).toBeInTheDocument()
     expect(screen.getByText('/ws/不存在.md')).toBeInTheDocument()
   })
+
+  // Windows 路径出口（2026-09，同「复制文件路径」修复）：给人看的路径归一为原生 '\'
+  test('Windows 下错误路径分隔符归一为反斜杠', async () => {
+    Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+    try {
+      render(<FileDetail info={{ ...info, mdPath: 'C:\\ws\\docs\\周计划/a.md' }} />)
+      expect(await screen.findByText('C:\\ws\\docs\\周计划\\a.md')).toBeInTheDocument()
+    } finally {
+      Reflect.deleteProperty(navigator, 'platform')
+    }
+  })
 })
 
 /** 可控 ResizeObserver 桩：observe 即按规范同步首回调指定宽度（覆盖 setup.ts 空桩） */

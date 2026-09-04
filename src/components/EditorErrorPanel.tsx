@@ -4,6 +4,7 @@
 // 返回案头 / 打开其他导图；「以纯文本打开修复」仅解析失败提供（文件还在才有得修）
 import { Button } from './ui/button'
 import { IconArrowLeft, IconPencil, IconSwitch } from './icons'
+import { toNativePath } from '../services/nativePath'
 
 interface Props {
   /** 失败分型：read = 文件读不到（可能已被移动/删除/无权限）；parse = 内容解析失败（文件仍在） */
@@ -29,7 +30,8 @@ export default function EditorErrorPanel({ kind, error, raw, onRawEdit, onBack, 
       {kind === 'read' ? (
         <>
           <p className="error-detail">文件可能已被移动、删除或没有访问权限</p>
-          <p className="error-path text-muted-foreground break-all text-xs">{mdPath}</p>
+          {/* 路径出口归一（同「复制文件路径」修复）：给人看的分隔符按平台转原生形态 */}
+          <p className="error-path text-muted-foreground break-all text-xs">{toNativePath(mdPath)}</p>
         </>
       ) : (
         <>

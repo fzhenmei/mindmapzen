@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { buildImageMetaFromSrcs } from '../services/imageAssets'
+import { toNativePath } from '../services/nativePath'
 import { extractImageMarker } from '../services/imageMarkers'
 import { mdOutline } from '../services/mdOutline'
 import type { MapInfo } from '../types/files'
@@ -93,7 +94,7 @@ export default function FileDetail({ info }: Readonly<Props>) {
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
         <p className="text-base font-medium text-foreground">无法预览此文件</p>
         <p>文件可能已被移动、删除或没有访问权限</p>
-        <p className="break-all text-xs">{info.mdPath}</p>
+        <p className="break-all text-xs">{toNativePath(info.mdPath)}</p>
       </div>
     ) : (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">…</div>
