@@ -260,3 +260,62 @@ test('欢迎页：最近打开列表展示与直达', async ({ page }) => {
   await recent.click()
   await expect(page.getByText('根图').first()).toBeVisible()
 })
+
+// 2026-09 分区拖拽（左栏）：右缘手柄拖拽实时改宽（gap 随 --sidebar-width 联动），
+// 松手提交 store 并持久化到 /cfg.json（内存 fs 经 __zenE2e.readFile 断言；
+// 「重启保持」由 LibraryView.test init 载入用例覆盖）
+test('案头：左栏拖拽调宽并持久化', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  const gap = page.locator('[data-slot="sidebar-gap"]')
+  const handle = page.getByRole('separator', { name: '调整侧栏宽度' })
+  await expect(handle).toBeVisible()
+  const before = (await gap.boundingBox())!.width
+
+  const hb = (await handle.boundingBox())!
+  const y = hb.y + 60
+  await page.mouse.move(hb.x + hb.width / 2, y)
+  await page.mouse.down()
+  await page.mouse.move(hb.x + hb.width / 2 + 100, y, { steps: 5 })
+  await page.mouse.up()
+
+  // 拖 100px：gap 256 → 356（浮动断言容差留给 inset 边距舍入）
+  const after = (await gap.boundingBox())!.width
+  expect(after).toBeGreaterThan(before + 90)
+  const cfg = JSON.parse(
+    await page.evaluate(() =>
+      (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile('/cfg.json'),
+    ),
+  )
+  expect(cfg.sidebarWidth).toBeGreaterThan(300)
+})
+
+// 2026-09 分区拖拽（大纲）：详情态大纲面板左缘手柄向左拖增宽，双击恢复默认
+test('案头：大纲面板拖拽调宽与双击恢复', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  await page.getByTestId('file-node-根图').click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  // 默认视口 1280：详情区 ≈1016px ≥ 900，auto 大纲显示
+  const panel = page.getByTestId('outline-panel')
+  await expect(panel).toBeVisible()
+  const before = (await panel.boundingBox())!.width
+  expect(before).toBeGreaterThan(200) // 默认 224
+
+  const hb = (await page.getByRole('separator', { name: '调整大纲宽度' }).boundingBox())!
+  const y = hb.y + 60
+  await page.mouse.move(hb.x + hb.width / 2, y)
+  await page.mouse.down()
+  await page.mouse.move(hb.x + hb.width / 2 - 80, y, { steps: 4 })
+  await page.mouse.up()
+  const dragged = (await panel.boundingBox())!.width
+  expect(dragged).toBeGreaterThan(before + 70)
+
+  // 双击恢复默认（224）
+  await page.getByRole('separator', { name: '调整大纲宽度' }).dblclick()
+  await expect
+    .poll(async () => (await panel.boundingBox())!.width, { timeout: 5000 })
+    .toBeLessThan(before + 10)
+})

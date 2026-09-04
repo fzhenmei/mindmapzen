@@ -34,6 +34,10 @@ interface AppState {
   themePref: ThemePref
   /** 预览大纲三态偏好（2026-09 大纲面板；auto = 跟随预览主区宽，显式 on/off 记住手动开关） */
   previewOutline: PreviewOutlinePref
+  /** 案头左树侧栏像素宽（2026-09 分区拖拽）：null = 默认 16rem；拖拽松手/双击恢复时提交 */
+  sidebarWidth: number | null
+  /** 预览大纲面板像素宽（2026-09 分区拖拽）：null = 默认 14rem；提交语义同 sidebarWidth */
+  outlineWidth: number | null
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
   /** 顶部条（自定义标题栏）取色令牌：案头 '--sidebar'（视口顶是 sidebar 色场）、编辑器/
@@ -78,6 +82,9 @@ interface AppState {
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
   setPreviewOutline: (pref: PreviewOutlinePref) => Promise<void>
+  /** 分区宽度提交（2026-09 拖拽）：null = 恢复默认宽（双击手柄路径） */
+  setSidebarWidth: (w: number | null) => Promise<void>
+  setOutlineWidth: (w: number | null) => Promise<void>
   setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
   /** 版本管理配置变更（M20）：即时生效 + load-merge-save 持久化 */
   setGitConfig: (patch: Partial<GitConfig>) => Promise<void>
@@ -118,6 +125,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   preferredLayout: 'mindmap',
   themePref: 'auto',
   previewOutline: 'auto',
+  sidebarWidth: null,
+  outlineWidth: null,
   resolvedTheme: 'light',
   titlebarBg: '--background',
   settings: DEFAULT_COPY_SETTINGS,
@@ -138,7 +147,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
@@ -216,6 +225,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ previewOutline: pref })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, previewOutline: pref })
+  },
+
+  /** 分区宽度提交（2026-09 左栏/大纲拖拽）：即时生效 + load-merge-save 持久化；
+   *  null = 恢复默认（双击手柄）。拖拽过程只走组件内存态，不触本 setter（免逐帧写盘） */
+  setSidebarWidth: async (w) => {
+    const { adapter, configPath } = get()
+    set({ sidebarWidth: w })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, sidebarWidth: w })
+  },
+
+  setOutlineWidth: async (w) => {
+    const { adapter, configPath } = get()
+    set({ outlineWidth: w })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, outlineWidth: w })
   },
 
   /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */

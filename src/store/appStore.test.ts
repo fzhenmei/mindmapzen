@@ -246,3 +246,33 @@ describe('漫游引导状态（onboarding tour）', () => {
     expect(useAppStore.getState().tourDone).toBe(true)
   })
 })
+
+describe('分区拖拽宽度（2026-09 左栏/大纲）', () => {
+  test('setSidebarWidth/setOutlineWidth 更新内存并 load-merge-save 持久化', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().setSidebarWidth(320)
+    await useAppStore.getState().setOutlineWidth(260)
+    expect(useAppStore.getState().sidebarWidth).toBe(320)
+    expect(useAppStore.getState().outlineWidth).toBe(260)
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.sidebarWidth).toBe(320)
+    expect(cfg.outlineWidth).toBe(260)
+    expect(cfg.workspaceDir).toBe('/ws') // merge 未覆盖
+  })
+  test('设 null 即恢复默认（双击手柄路径）：内存与盘面同步清', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().setSidebarWidth(320)
+    await useAppStore.getState().setSidebarWidth(null)
+    expect(useAppStore.getState().sidebarWidth).toBeNull()
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).sidebarWidth).toBeNull()
+  })
+  test('init 自 config 载入两栏宽度', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', sidebarWidth: 300, outlineWidth: 240 }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().sidebarWidth).toBe(300)
+    expect(useAppStore.getState().outlineWidth).toBe(240)
+  })
+})

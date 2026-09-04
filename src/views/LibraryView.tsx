@@ -4,6 +4,7 @@ import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { createDir, deleteDir, dirDeleteSummary, readDirTree, type DirNode } from '../services/desk'
 import { useTreeMoves } from '../hooks/useTreeMoves'
+import { useSidebarResize } from '../hooks/useSidebarResize'
 import { parse } from '../services/mdTree'
 import { parseXmind } from '../services/xmindImport'
 import type { WriteClipboard } from '../services/clipboard'
@@ -83,6 +84,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const [selectedMap, setSelectedMap] = useState<string | null>(null)
   // 进案头未选任何（true）：左树无激活行；点目录/文件后置 false（主区两态化后 idle 仅剩树激活行显示职责）
   const [idle, setIdle] = useState(true)
+  const sidebarResize = useSidebarResize()
 
   /** 重读左树：从 store 取实时 adapter/工作区；工作区切换（effect）与移动取消（onCancel）共用。
    *  useCallback 固定身份（体仅引用稳定的 setTree 与模块导入，无反应式依赖，无陈旧闭包） */
@@ -269,7 +271,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
 
   return (
     <div className="library flex h-full flex-col bg-background">
-      <SidebarProvider className="min-h-0 flex-1">
+      {/* --sidebar-width 覆盖（2026-09 分区拖拽，详见 useSidebarResize） */}
+      <SidebarProvider className="min-h-0 flex-1" style={sidebarResize.style}>
         {/* variant=inset（M14b 区块化）：官方机器承担分区——侧栏去 border-r 改留悬浮呼吸位，
             wrapper 自动换 bg-sidebar 色场，SidebarInset 自动成 rounded-xl shadow-sm 白色浮层。
             分区靠「色场 vs 圆角浮层」，不靠线条。
@@ -334,6 +337,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
+          {sidebarResize.resizer}
         </Sidebar>
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
