@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { deleteMap, renameMap } from '../services/workspace'
 import { commitImport } from '../services/importMap'
-import { createDir, moveMap, readDirTree, type DirNode } from '../services/desk'
+import { createDir, deleteDir, dirDeleteSummary, moveMap, readDirTree, type DirNode } from '../services/desk'
 import { parse } from '../services/mdTree'
 import { parseXmind } from '../services/xmindImport'
-import { describeIgnoredType } from '../services/ignoredType'
 import type { WriteClipboard } from '../services/clipboard'
 import NameDialog from '../components/NameDialog'
 import SettingsDialog from '../components/SettingsDialog'
@@ -17,10 +16,11 @@ import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import MoveMapDialog from '../components/MoveMapDialog'
 import NewMapDialog from '../components/NewMapDialog'
+import DeleteConfirmDialog from '../components/DeleteConfirmDialog'
+import ImportPreviewDialog, { type ImportPreview } from '../components/ImportPreviewDialog'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
-import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../components/ui/dialog'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
 import { Separator } from '../components/ui/separator'
@@ -51,13 +51,6 @@ interface Props {
   writeClipboard: WriteClipboard
 }
 
-/** 导入预览挂起态：解析成功但存在忽略块，待用户确认后才入库（取消则丢弃） */
-interface ImportPreview {
-  name: string
-  tree: ZenNode
-  blocks: IgnoredBlock[]
-}
-
 /** 案头（2026-09 主区纯预览化）：SidebarProvider + inset 骨架；主区两态——
  *  未选文件（idle/选中目录）→ 欢迎页；详情态（容器合并改版：页首即详情卡头——
  *  md 标题 + 动作钮上移，主区即预览面板）。主区只承担 markdown 预览，文件浏览与
@@ -73,9 +66,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     .filter((m): m is MapInfo => m !== null)
     .slice(0, 8)
   const store = useAppStore.getState()
-  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'move' | 'newdir' | 'settings' | 'history' | null>(null)
+  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'deletedir' | 'move' | 'newdir' | 'settings' | 'history' | null>(null)
   // 重命名/删除/移动对话框当前操作的导图（由所在 tile 的按钮选定，而非 maps[0]）
   const [target, setTarget] = useState<MapInfo | null>(null)
+  // 删除目录对话框当前操作的目标（2026-09 树右键）：rel 相对工作区，name 末段显示名
+  const [dirTarget, setDirTarget] = useState<{ rel: string; name: string } | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   // 案头左树（目录结构在 workspaceDir 变化与目录增删后重读）
   const [tree, setTree] = useState<DirNode[]>([])
@@ -108,6 +103,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const closeDialog = () => {
     setDialog(null)
     setTarget(null)
+    setDirTarget(null)
   }
 
   /** 选中态失效清理（M5d 审查修复）：重命名/删除/移动/切换工作区后，选中图 mdPath 失联则清空
@@ -316,6 +312,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               setDirParent(rel)
               setDialog('newdir')
             }}
+            onDeleteDir={(rel) => {
+              const segs = rel.split('/')
+              setDirTarget({ rel, name: segs.at(-1) ?? rel })
+              setDialog('deletedir')
+            }}
           />
           <SidebarFooter>
             <SidebarMenu>
@@ -440,37 +441,55 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           onConfirm={(name) => void confirmCreateDir(name)}
         />
       )}
+      {/* 删除目录（2026-09 树右键）：整目录进回收站——内含导图数实时取自 maps（确认框
+          报数，用户知情）；删除后选中目录若在被删子树内则回根视图 */}
+      {dialog === 'deletedir' && dirTarget && (
+        <DeleteConfirmDialog
+          title={`删除目录「${dirTarget.name}」？`}
+          body={dirDeleteSummary(maps, tree, dirTarget.rel)}
+          onCancel={closeDialog}
+          onConfirm={() => {
+            const rel = dirTarget.rel
+            closeDialog()
+            void (async () => {
+              try {
+                await deleteDir(store.adapter, workspaceDir!, rel)
+                await store.refreshMaps()
+                setTree(await readDirTree(store.adapter, workspaceDir!))
+                pruneSelectedMap()
+                // 选中目录在被删子树内（含本身）→ 回根视图；文件选中已由 prune 清
+                const cur = useAppStore.getState().selectedDir
+                if (cur === rel || cur.startsWith(rel + '/')) {
+                  store.setSelectedDir('')
+                  setSelectedMap(null)
+                  setIdle(true)
+                }
+                store.setError(null)
+              } catch (e) {
+                store.setError('删除目录失败：' + (e instanceof Error ? e.message : String(e)))
+              }
+            })()
+          }}
+        />
+      )}
       {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——dialog（新建/重命名/删除/移动/新建目录）
           与 importPreview 互不并存：Radix Dialog 为 modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥 */}
       {dialog === 'delete' && target && (
-        <Dialog open onOpenChange={(o) => { if (!o) closeDialog() }}>
-          <DialogContent aria-label={`删除「${target.name}」？`}>
-            <DialogTitle>{`删除「${target.name}」？`}</DialogTitle>
-            <p className="text-sm">将移入回收站（.md 与 .zen.json 一起删除）。</p>
-            <DialogFooter>
-              <Button variant="secondary" size="sm" onClick={closeDialog}>
-                取消
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                data-testid="btn-delete-confirm"
-                onClick={async () => {
-                  closeDialog()
-                  try {
-                    await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
-                    await store.refreshMaps()
-                    pruneSelectedMap()
-                  } catch (e) {
-                    store.setError('删除失败：' + String(e))
-                  }
-                }}
-              >
-                删除
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <DeleteConfirmDialog
+          title={`删除「${target.name}」？`}
+          body="将移入回收站（.md 与 .zen.json 一起删除）。"
+          onCancel={closeDialog}
+          onConfirm={async () => {
+            closeDialog()
+            try {
+              await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
+              await store.refreshMaps()
+              pruneSelectedMap()
+            } catch (e) {
+              store.setError('删除失败：' + String(e))
+            }
+          }}
+        />
       )}
       {dialog === 'move' && target && (
         <MoveMapDialog
@@ -487,27 +506,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         />
       )}
       {importPreview && (
-        <Dialog open onOpenChange={(o) => { if (!o) setImportPreview(null) }}>
-          <DialogContent data-testid="import-preview" aria-label={`导入「${importPreview.name}」`}>
-            <DialogTitle>{`导入「${importPreview.name}」`}</DialogTitle>
-            <p className="text-sm">{importPreview.blocks.length} 个内容块未映射，这些内容不会出现在导图中：</p>
-            <ul className="list-disc pl-5 text-xs text-muted-foreground">
-              {importPreview.blocks.map((b) => (
-                <li key={`${b.type}:${b.excerpt}`}>
-                  {describeIgnoredType(b.type)}：{b.excerpt}
-                </li>
-              ))}
-            </ul>
-            <DialogFooter>
-              <Button variant="secondary" size="sm" data-testid="import-cancel" onClick={() => setImportPreview(null)}>
-                取消
-              </Button>
-              <Button size="sm" data-testid="import-confirm" onClick={() => void confirmImport()}>
-                导入
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ImportPreviewDialog
+          preview={importPreview}
+          onCancel={() => setImportPreview(null)}
+          onConfirm={() => void confirmImport()}
+        />
       )}
     </div>
   )

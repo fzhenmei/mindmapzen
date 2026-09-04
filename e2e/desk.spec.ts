@@ -160,6 +160,42 @@ test('案头：文件树折叠扳机收起子树、行面选中不折叠', async
   await expect(page.getByTestId('file-node-项目图')).toBeVisible()
 })
 
+// 2026-09 目录右键删除：整目录（含子目录与导图）进回收站；树根菜单不提供删除（工作区本体不删）
+test('案头：右键目录删除——子树整删、树根菜单无删除项', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 「项目」内预置 1 张导图（项目图）：确认框报数后确认
+  await page.getByTestId('dir-node-项目').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-delete-dir').click()
+  await expect(page.getByText('该目录下 1 张导图将随目录一并移入回收站。')).toBeVisible()
+  await page.getByTestId('btn-delete-confirm').click()
+
+  // 目录行与其中文件行俱失；根层导图不受影响
+  await expect(page.getByTestId('dir-node-项目')).toHaveCount(0)
+  await expect(page.getByTestId('file-node-项目图')).toHaveCount(0)
+  await expect(page.getByTestId('file-node-根图')).toBeVisible()
+
+  // 磁盘断言（内存 fs）：目录内导图已不可读
+  const gone = await page.evaluate(async () => {
+    try {
+      await (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+        '/ws/项目/项目图.md',
+      )
+      return false
+    } catch {
+      return true
+    }
+  })
+  expect(gone).toBe(true)
+
+  // 树根右键：有新建项但无删除项
+  await page.getByTestId('dir-node-all').click({ button: 'right' })
+  await expect(page.getByTestId('ctx-btn-new-dir')).toBeVisible()
+  await expect(page.getByTestId('ctx-btn-delete-dir')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+})
+
 // v2.4 欢迎页：最近打开列表（VSCode Welcome 布局）——打开过的导图出现在右列，点击直达
 test('欢迎页：最近打开列表展示与直达', async ({ page }) => {
   test.setTimeout(30_000)

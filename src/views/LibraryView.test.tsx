@@ -503,8 +503,51 @@ describe('案头三区与交互（M5d）', () => {
     fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
     // 对话框标题（heading 角色，避开侧栏「新建目录」按钮同名文本）
     expect(screen.getByRole('heading', { name: '新建目录' })).toBeInTheDocument()
+    // 树根菜单不提供删除（工作区本体走设置页「退出工作区」流）
+    expect(screen.queryByTestId('ctx-btn-delete-dir')).not.toBeInTheDocument()
     fireEvent.input(screen.getByTestId('input-name'), { target: { value: '根下层' } })
     fireEvent.click(screen.getByTestId('btn-confirm'))
     expect(await screen.findByTestId('dir-node-根下层')).toBeInTheDocument()
+  })
+
+  // 2026-09 目录右键删除：整目录进回收站（含子树导图），选中目录在被删子树内则回根视图
+  test('右键目录行：删除走二次确认（确认框报导图数），子树整删不动根层其他导图', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-delete-dir'))
+    expect(screen.getByText('删除目录「项目」？')).toBeInTheDocument()
+    expect(screen.getByText('该目录下 1 张导图将随目录一并移入回收站。')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    // 目录行与其中文件行俱失；根层想法A不受影响
+    await waitFor(() => expect(screen.queryByTestId('dir-node-项目')).not.toBeInTheDocument())
+    expect(screen.queryByTestId('file-node-甲')).not.toBeInTheDocument()
+    expect(screen.getByTestId('file-node-想法A')).toBeInTheDocument()
+    await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1))
+    expect(fs.removeLog).toEqual(['/ws/项目'])
+  })
+
+  test('右键目录行：选中目录在被删子树内时，删除后回根视图（idle 置位）', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('dir-node-项目'))
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('项目'))
+    fireEvent.contextMenu(screen.getByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-delete-dir'))
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    // 选中目录已失联 → 回根视图 idle（树无激活行，主区欢迎页）
+    await waitFor(() => expect(useAppStore.getState().selectedDir).toBe(''))
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
+  })
+
+  test('右键目录行：目录含子目录但无导图时，确认框不说「为空」', async () => {
+    await fs.mkdir('/ws/项目/空巢层/内层')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-空巢层'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-delete-dir'))
+    expect(screen.getByText('该目录下没有导图，但含子目录，将随目录一并移入回收站。')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    await waitFor(() => expect(screen.queryByTestId('dir-node-空巢层')).not.toBeInTheDocument())
+    // 父目录「项目」与其导图仍在
+    expect(screen.getByTestId('dir-node-项目')).toBeInTheDocument()
+    expect(screen.getByTestId('file-node-甲')).toBeInTheDocument()
   })
 })

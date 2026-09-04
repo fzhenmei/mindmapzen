@@ -38,6 +38,46 @@ export async function createDir(fs: FsAdapter, wsDir: string, relPath: string): 
   if (segments.length > 0) await fs.mkdir(joinPath(wsDir, segments.join('/')))
 }
 
+/** 删除目录（2026-09 树右键）：整目录进回收站（Tauri trash::delete 递归语义，含全部
+ *  后代导图与子目录）。rel 归一后为空（工作区根本体）抛错拒绝——删工作区须走设置页
+ *  「退出工作区」流，不入本通道 */
+export async function deleteDir(fs: FsAdapter, wsDir: string, rel: string): Promise<void> {
+  const relNorm = normalizeRel(rel)
+  if (relNorm === '') throw new Error('不能删除工作区根目录')
+  await fs.remove(joinPath(wsDir, relNorm))
+}
+
+/** 目录子树内导图数（删除目录确认框报数）：所在层为其本身或以其为前缀 */
+function countMapsInDir(maps: ReadonlyArray<{ relDir: string }>, rel: string): number {
+  return maps.filter((m) => m.relDir === rel || m.relDir.startsWith(rel + '/')).length
+}
+
+/** 子树内是否还有子目录（删除目录确认框文案辅助：无导图但含子目录时不能说「为空」） */
+function dirHasSubDirs(tree: DirNode[], rel: string): boolean {
+  const find = (nodes: DirNode[]): DirNode | null => {
+    for (const n of nodes) {
+      if (n.path === rel) return n
+      const hit = find(n.children)
+      if (hit !== null) return hit
+    }
+    return null
+  }
+  return (find(tree)?.children.length ?? 0) > 0
+}
+
+/** 删除目录确认框说明文案：报子树内导图数（用户知情）；无导图但含子目录时如实相告；
+ *  真空目录才说「为空」。供 DeleteConfirmDialog body */
+export function dirDeleteSummary(
+  maps: ReadonlyArray<{ relDir: string }>,
+  tree: DirNode[],
+  rel: string,
+): string {
+  const count = countMapsInDir(maps, rel)
+  if (count > 0) return `该目录下 ${count} 张导图将随目录一并移入回收站。`
+  if (dirHasSubDirs(tree, rel)) return '该目录下没有导图，但含子目录，将随目录一并移入回收站。'
+  return '该目录为空，将直接移入回收站。'
+}
+
 /** 移动导图（.md + .zen.json 两文件同移）到目标目录；源 sidecar 缺失则只移 .md。
  *  同目录自碰撞守卫（Task 2 复审修复）：fromRel 与 toRel 归一后相同则早返回原 MapInfo——
  *  否则重名循环第一步就撞上源文件自身，会把导图误改名成 `名称-YYYYMMDD-HHmm`。

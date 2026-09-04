@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { createDir, filterTree, moveMap, readDirTree } from './desk'
+import { createDir, deleteDir, dirDeleteSummary, filterTree, moveMap, readDirTree } from './desk'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
@@ -35,6 +35,39 @@ describe('createDir', () => {
     await expect(createDir(fs, '/ws', 'a:b')).rejects.toThrow('名称不能包含')
     await createDir(fs, '/ws', '新目录/子')
     expect((await fs.readDirEntries('/ws/新目录')).map((e) => e.name)).toContain('子')
+  })
+})
+describe('deleteDir（2026-09 树右键删除目录）', () => {
+  test('整目录移入回收站（含后代文件与子目录），根层其余内容不动', async () => {
+    await fs.mkdir('/ws/项目'); await fs.mkdir('/ws/项目/子层')
+    await fs.writeTextFileAtomic('/ws/项目/图.md', '# a\n')
+    await fs.writeTextFileAtomic('/ws/项目/子层/深.md', '# b\n')
+    await fs.writeTextFileAtomic('/ws/根图.md', '# c\n')
+    await deleteDir(fs, '/ws', '项目')
+    expect(await fs.exists('/ws/项目/图.md')).toBe(false)
+    expect(await fs.exists('/ws/项目/子层/深.md')).toBe(false)
+    // 显式目录集合同被清（否则空目录残迹仍会出现在 readDirTree）
+    expect(await readDirTree(fs, '/ws')).toEqual([])
+    expect(await fs.exists('/ws/根图.md')).toBe(true)
+    expect(fs.removeLog).toEqual(['/ws/项目'])
+  })
+
+  test('工作区根本体拒绝删除（rel 归一为空即抛，含首尾斜杠变体）', async () => {
+    await expect(deleteDir(fs, '/ws', '')).rejects.toThrow('不能删除工作区根目录')
+    await expect(deleteDir(fs, '/ws', '/')).rejects.toThrow('不能删除工作区根目录')
+  })
+})
+describe('dirDeleteSummary（删除目录确认框文案）', () => {
+  test('三分支：报子树导图数 / 无导图但含子目录如实相告 / 真空目录才说「为空」', () => {
+    const maps = [{ relDir: '项目' }, { relDir: '项目/子' }]
+    const tree = [
+      { name: '项目', path: '项目', children: [{ name: '子', path: '项目/子', children: [] }] },
+    ]
+    expect(dirDeleteSummary(maps, tree, '项目')).toBe('该目录下 2 张导图将随目录一并移入回收站。')
+    expect(dirDeleteSummary([{ relDir: '别处' }], tree, '项目')).toBe(
+      '该目录下没有导图，但含子目录，将随目录一并移入回收站。',
+    )
+    expect(dirDeleteSummary([{ relDir: '别处' }], [], '不存在')).toBe('该目录为空，将直接移入回收站。')
   })
 })
 describe('moveMap', () => {
