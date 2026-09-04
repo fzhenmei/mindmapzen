@@ -126,6 +126,8 @@ const editor: Dict['editor'] = {
     title: 'Node icon',
     removeIcon: 'Remove {{name}}',
     searchPlaceholder: 'Search the full lucide set (by name or tag, e.g. flag / clock)',
+    // Save gating: tooltip while a picked non-curated icon's svg is in flight
+    svgLoading: 'Loading icon…',
   },
   tagPicker: {
     title: 'Node tags',
