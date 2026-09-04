@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mind-map-zen — 每张导图,就是一个 Markdown 文件</title>
+    <meta
+      name="description"
+      content="本地优先的免费思维导图桌面应用。画布上整理想法,文件里与 AI 对话:免费、本地、离线、无账号。"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // 防 FOUC:首帧前按系统偏好定主题(官网无手动切换,始终跟随系统)
+      ;(function () {
+        document.documentElement.dataset.theme = window.matchMedia(
+          '(prefers-color-scheme: dark)',
+        ).matches
+          ? 'dark'
+          : 'light'
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
