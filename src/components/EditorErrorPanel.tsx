@@ -3,6 +3,7 @@
 // 面板只占画布内容区（壳层保留：对话框照常挂载），任何失败都留逃生门——
 // 返回案头 / 打开其他导图；「以纯文本打开修复」仅解析失败提供（文件还在才有得修）
 import { Button } from './ui/button'
+import { IconArrowLeft, IconPencil, IconSwitch } from './icons'
 
 interface Props {
   /** 失败分型：read = 文件读不到（可能已被移动/删除/无权限）；parse = 内容解析失败（文件仍在） */
@@ -38,13 +39,16 @@ export default function EditorErrorPanel({ kind, error, raw, onRawEdit, onBack, 
       )}
       <div className="error-actions flex gap-2">
         <Button type="button" data-testid="btn-error-back" onClick={onBack}>
+          <IconArrowLeft />
           返回案头
         </Button>
         <Button type="button" variant="outline" data-testid="btn-error-switch" onClick={onSwitch}>
+          <IconSwitch />
           打开其他导图
         </Button>
         {kind === 'parse' && (
           <Button type="button" variant="outline" data-testid="btn-raw-edit" onClick={() => onRawEdit(mdPath)}>
+            <IconPencil />
             以纯文本打开修复
           </Button>
         )}
