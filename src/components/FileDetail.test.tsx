@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import FileDetail from './FileDetail'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -130,5 +130,55 @@ describe('FileDetail 大纲面板', () => {
     fireEvent.click(screen.getByTestId('outline-zen-h-2'))
     expect(spy).toHaveBeenCalledTimes(1)
     expect(document.getElementById('zen-h-2')).not.toBeNull()
+  })
+})
+
+// 2026-09 分区拖拽：大纲面板左缘手柄（向左拖增宽）；宽拖实时、松手提交、双击恢复默认 224px
+describe('FileDetail 大纲面板拖拽', () => {
+  beforeEach(async () => {
+    // 大纲常显（显式 on），不依赖响应式宽判定；宽字段清回默认防用例间残留
+    useAppStore.setState({ previewOutline: 'on', configPath: '/cfg.json', outlineWidth: null })
+    await useAppStore.getState().adapter.writeTextFileAtomic('/ws/周计划.md', '# 周计划\n## 上午\n')
+  })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  test('向左拖增宽：面板实时变宽，松手提交 store 并持久化', async () => {
+    stubViewport(1200)
+    render(<FileDetail info={info} />)
+    const panel = await screen.findByTestId('outline-panel')
+    expect(panel.style.width).toBe('224px') // 默认 14rem（w-56）
+    const handle = screen.getByRole('separator', { name: '调整大纲宽度' })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 900 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 850 })
+    expect(panel.style.width).toBe('274px')
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    await waitFor(() => expect(useAppStore.getState().outlineWidth).toBe(274))
+    const cfg = JSON.parse(await useAppStore.getState().adapter.readTextFile('/cfg.json'))
+    expect(cfg.outlineWidth).toBe(274)
+  })
+
+  test('双击手柄恢复默认：面板回 224px，store 落 null', async () => {
+    stubViewport(1200)
+    useAppStore.setState({ outlineWidth: 300 })
+    render(<FileDetail info={info} />)
+    expect((await screen.findByTestId('outline-panel')).style.width).toBe('300px')
+    fireEvent.dblClick(screen.getByRole('separator', { name: '调整大纲宽度' }))
+    await waitFor(() => expect(useAppStore.getState().outlineWidth).toBeNull())
+    expect(screen.getByTestId('outline-panel').style.width).toBe('224px')
+  })
+
+  test('越界 clamp：向右拖不小于 160px', async () => {
+    stubViewport(1200)
+    render(<FileDetail info={info} />)
+    await screen.findByTestId('outline-panel')
+    const handle = screen.getByRole('separator', { name: '调整大纲宽度' })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 900 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 1500 })
+    expect(screen.getByTestId('outline-panel').style.width).toBe('160px')
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    await waitFor(() => expect(useAppStore.getState().outlineWidth).toBe(160))
   })
 })

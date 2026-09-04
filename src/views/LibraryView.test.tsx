@@ -635,3 +635,60 @@ describe('案头左树拖拽移动（2026-09）', () => {
     expect(await fs.exists('/ws/乙/子')).toBe(true)
   })
 })
+
+// 2026-09 分区拖拽（左栏）：手柄拖拽实时覆盖 --sidebar-width（内存态），松手提交 store
+// 并持久化；双击恢复默认；折叠态手柄不渲染
+describe('左栏分区拖拽', () => {
+  /** 渲染案头并等左树出现，返回手柄与 wrapper（--sidebar-width 挂载点） */
+  const setup = async () => {
+    // 上一用例提交的宽度会残留 store（全局 beforeEach 不含新字段），先清回默认
+    useAppStore.setState({ configPath: '/cfg.json', sidebarWidth: null })
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+    const handle = await screen.findByRole('separator', { name: '调整侧栏宽度' })
+    const wrapper = screen.getByTestId('dir-panel').closest<HTMLElement>('[data-slot="sidebar-wrapper"]')!
+    return { handle, wrapper }
+  }
+
+  test('拖拽中实时覆盖 --sidebar-width，松手提交宽度并持久化', async () => {
+    const { handle, wrapper } = await setup()
+    expect(wrapper.style.getPropertyValue('--sidebar-width')).toBe('16rem') // 官方默认
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 256 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 356 })
+    expect(wrapper.style.getPropertyValue('--sidebar-width')).toBe('356px')
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    await waitFor(() => expect(useAppStore.getState().sidebarWidth).toBe(356))
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).sidebarWidth).toBe(356)
+  })
+
+  test('双击手柄恢复默认：变量清空、store 落 null', async () => {
+    const { handle, wrapper } = await setup()
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 256 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 356 })
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    await waitFor(() => expect(useAppStore.getState().sidebarWidth).toBe(356))
+    expect(wrapper.style.getPropertyValue('--sidebar-width')).toBe('356px')
+    fireEvent.dblClick(handle)
+    await waitFor(() => expect(useAppStore.getState().sidebarWidth).toBeNull())
+    expect(wrapper.style.getPropertyValue('--sidebar-width')).toBe('16rem') // 回落官方默认
+  })
+
+  test('折叠侧栏后手柄不渲染，展开恢复', async () => {
+    await setup()
+    fireEvent.click(screen.getByTestId('dir-panel-toggle'))
+    expect(screen.queryByRole('separator', { name: '调整侧栏宽度' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('dir-panel-toggle'))
+    expect(await screen.findByRole('separator', { name: '调整侧栏宽度' })).toBeInTheDocument()
+  })
+
+  test('init 载入已存宽度：启动即覆盖变量（350px）', async () => {
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().setSidebarWidth(350)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+    await waitFor(() => {
+      const w = screen.getByTestId('dir-panel').closest<HTMLElement>('[data-slot="sidebar-wrapper"]')!
+      expect(w.style.getPropertyValue('--sidebar-width')).toBe('350px')
+    })
+  })
+})

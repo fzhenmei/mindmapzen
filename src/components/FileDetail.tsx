@@ -24,6 +24,8 @@ type DetailState =
 /** 大纲响应式阈值（auto 偏好）：详情区宽 ≥ 此值默认显示大纲。观察详情区整体而非
  *  正文剩余宽——大纲显隐不反馈进判定，避免「显示→变窄→隐藏→变宽」震荡 */
 const OUTLINE_WIDE_MIN = 900
+/** 大纲默认宽（px）＝原 w-56（14rem） */
+const DEFAULT_OUTLINE_PX = 224
 
 /** 案头文件详情态预览面板（容器合并改版）：原 Card 骨架已拆——卡头（标题/六枚
  *  动作钮）上移 LibraryView 主容器页首，卡脚元信息并入页首标题 tooltip，本组件
@@ -38,6 +40,10 @@ export default function FileDetail({ info }: Readonly<Props>) {
   // 大纲三态偏好（2026-09）：auto 跟随详情区宽，显式 on/off 覆盖（开关钮写入，跨会话记忆）
   const outlinePref = useAppStore((s) => s.previewOutline)
   const setOutlinePref = useAppStore((s) => s.setPreviewOutline)
+  // 大纲宽（2026-09 分区拖拽）：拖拽会话临时宽（每帧内存态）；松手/双击提交 store 持久化
+  const outlineStored = useAppStore((s) => s.outlineWidth)
+  const [outlineDragPx, setOutlineDragPx] = useState<number | null>(null)
+  const outlinePx = outlineDragPx ?? outlineStored
   const [wide, setWide] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -109,7 +115,21 @@ export default function FileDetail({ info }: Readonly<Props>) {
       {state.kind === 'text' ? (
         <>
           <MarkdownPreview text={state.text} imgMap={imgMap} />
-          {outlineVisible && <OutlinePanel headings={headings} />}
+          {outlineVisible && (
+            <OutlinePanel
+              headings={headings}
+              width={outlinePx ?? DEFAULT_OUTLINE_PX}
+              onResize={setOutlineDragPx}
+              onCommit={(w) => {
+                setOutlineDragPx(null)
+                void useAppStore.getState().setOutlineWidth(w)
+              }}
+              onReset={() => {
+                setOutlineDragPx(null)
+                void useAppStore.getState().setOutlineWidth(null)
+              }}
+            />
+          )}
         </>
       ) : (
         placeholder

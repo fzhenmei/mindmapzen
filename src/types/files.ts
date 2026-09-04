@@ -72,6 +72,10 @@ export interface AppConfig {
   /** 漫游引导完成标记（2026-09 onboarding tour）：完成或跳过即 true；缺省 false——
    *  老用户升级后首次启动也会看一次（spec §3.1 已确认口径） */
   tourDone: boolean
+  /** 案头左树侧栏像素宽（2026-09 分区拖拽）；null = 默认 16rem */
+  sidebarWidth: number | null
+  /** 预览大纲面板像素宽（2026-09 分区拖拽）；null = 默认 14rem（w-56） */
+  outlineWidth: number | null
 }
 /** 版本管理配置（M20）：宽容解析见 config.ts（parseGitConfig） */
 export interface GitConfig {
@@ -104,6 +108,12 @@ export function parseTourDone(v: unknown): boolean {
   return typeof v === 'boolean' ? v : false
 }
 
+/** 宽容解析分区拖拽宽度（2026-09 案手左栏/大纲面板）：仅正有限数保留，其余回 null（默认宽）；
+ *  范围 clamp 不在此做——旧配置存了超范围值由 UI 层挂载时收敛 */
+export function parsePanelWidth(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
+
 export const DEFAULT_CONFIG: AppConfig = {
   workspaceDir: null,
   lastOpened: null,
@@ -114,6 +124,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   settings: DEFAULT_COPY_SETTINGS,
   git: DEFAULT_GIT_CONFIG,
   tourDone: false,
+  sidebarWidth: null,
+  outlineWidth: null,
 }
 /** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
  *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，

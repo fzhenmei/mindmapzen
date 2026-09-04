@@ -19,6 +19,11 @@ html, body { overflow: hidden; }
 ::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
 .sb-hot::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--muted-foreground) 40%, transparent); }
+/* 分区拖拽中（SplitResizer 挂 html[data-split-resizing]）：全局禁过渡（侧栏 200ms
+   width 过渡会拖坏跟手感）、锁文本选择、统一 col-resize 光标；手柄指示线常亮 */
+[data-split-resizing], [data-split-resizing] * {
+  transition: none !important; user-select: none !important; cursor: col-resize !important; }
+[data-split-resizing] .split-resizer::after { opacity: 1 !important; }
 /* .app 类退役（2026-09 暗色修复）：App shell 根元素 M14 起未挂载本类，一直是死类；
    color/background/font-family 职责由 theme.css @layer base 的 body 规则（官方 v4 迁移
    补齐）与 @theme --font-sans 承担，此处保留档记防回潮 */
