@@ -81,6 +81,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const [tree, setTree] = useState<DirNode[]>([])
   // 新建目录的父目录（''=工作区根）
   const [dirParent, setDirParent] = useState('')
+  // 新建导图目标目录（2026-09 树右键「在此新建导图」）：''=工作区根；页首/欢迎页/空态入口一律归零
+  const [newMapDir, setNewMapDir] = useState('')
   // 选中导图（单击 tile/树文件行=选中进详情，双击=进纸面）
   const [selectedMap, setSelectedMap] = useState<string | null>(null)
   // 进案头未选任何（true）：左树无激活行；点目录/文件后置 false（主区两态化后 idle 仅剩树激活行显示职责）
@@ -213,6 +215,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       setIdle(false)
     }
   }
+  /** 打开新建导图对话框（rel = 目标目录；三个常驻入口传 ''，树右键传所在目录） */
+  const openNewMap = (rel: string) => {
+    setNewMapDir(rel)
+    setDialog('new')
+  }
   const openFile = (f: TreeFile) => {
     const p = mdPathOf(f)
     if (p !== undefined) void store.openMap(p)
@@ -238,7 +245,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         >
           <AppLogo size={48} />
           <p className="text-sm">空白的纸。新建一张导图，让想法落成 .md。</p>
-          <Button size="sm" data-testid="library-empty-new" onClick={() => setDialog('new')}>
+          <Button size="sm" data-testid="library-empty-new" onClick={() => openNewMap('')}>
             新建导图
           </Button>
         </div>
@@ -249,7 +256,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     return (
       <WelcomePane
         recent={recent}
-        onNew={() => setDialog('new')}
+        onNew={() => openNewMap('')}
         onImport={() => void startImport()}
         onOpen={(m) => void store.openMap(m.mdPath)}
       />
@@ -296,6 +303,19 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             }}
             onSelectFile={selectFile}
             onOpenFile={openFile}
+            onFileAction={(a, f) => {
+              // 右键菜单操作：TreeFile 按 name+relDir 反查 MapInfo（对话框流与详情页首同源）
+              const m = maps.find((x) => x.name === f.name && x.relDir === f.relDir)
+              if (m !== undefined) {
+                setTarget(m)
+                setDialog(a)
+              }
+            }}
+            onCreateMapIn={openNewMap}
+            onCreateDirIn={(rel) => {
+              setDirParent(rel)
+              setDialog('newdir')
+            }}
           />
           <SidebarFooter>
             <SidebarMenu>
@@ -351,7 +371,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               )}
               {iconBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
               {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
-              {iconBtn('新建导图', 'btn-new', IconPlus, () => setDialog('new'))}
+              {iconBtn('新建导图', 'btn-new', IconPlus, () => openNewMap(''))}
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
@@ -365,13 +385,15 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         </SidebarInset>
       </SidebarProvider>
 
-      {/* 新建导图（M16 换 NewMapDialog）：名称 + 模板选择；三个入口（页首 btn-new/
-          空态 library-empty-new/idle 态 desk-idle-new）共用本对话框 */}
+      {/* 新建导图（M16 换 NewMapDialog）：名称 + 模板选择；四个入口（页首 btn-new/
+          空态 library-empty-new/欢迎页 desk-idle-new/树目录行右键 ctx-btn-new-map）
+          共用本对话框——右键入口带目标目录（标题示目录、落盘建在彼处） */}
       {dialog === 'new' && (
         <NewMapDialog
+          inDirLabel={newMapDir === '' ? undefined : newMapDir}
           onCancel={() => setDialog(null)}
           onConfirm={async (name, templateContent) => {
-            await store.createAndOpen(name, templateContent)
+            await store.createAndOpen(name, templateContent, newMapDir)
             setDialog(null)
           }}
         />

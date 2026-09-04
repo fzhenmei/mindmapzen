@@ -62,11 +62,14 @@ export async function createMap(
    *  缺省 = 空白导图，根节点即文件名（v2.0 验收：'根主题' 占位符退役）；
    *  模板解析失败回退同缺省（不阻断创建） */
   templateContent?: string,
+  /** 目标子目录（相对工作区，''=根；2026-09 树右键「在此新建导图」）。调用方
+   *  传已存在目录（树右键目标必在树上），不存在时由 adapter 写入自然报错 */
+  relDir: string = '',
 ): Promise<MapInfo> {
   const trimmed = name.trim()
   if (trimmed === '') throw new Error('名称不能为空')
   if (INVALID.test(trimmed)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
-  const mdPath = joinPath(wsDir, trimmed + '.md')
+  const mdPath = relToDir(wsDir, relDir, trimmed + '.md')
   if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
   let content = `# ${trimmed}\n`
   if (templateContent !== undefined) {
@@ -75,7 +78,7 @@ export async function createMap(
   }
   await fs.writeTextFileAtomic(mdPath, content)
   await writeSidecar(fs, mdPath, { ...DEFAULT_SIDECAR, layout })
-  return { name: trimmed, mdPath, relDir: '', ...(await statTail(fs, mdPath)) }
+  return { name: trimmed, mdPath, relDir, ...(await statTail(fs, mdPath)) }
 }
 
 /** 重命名导图（.md 与 .zen.json 同步改名）。relDir 为导图所在相对目录（'' = 工作区根）——

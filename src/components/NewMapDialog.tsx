@@ -17,12 +17,14 @@ interface Props {
   /** 确认（M16 抛错语义）：resolve = 成功（调用方在成功路径上关框）；抛错 = 对话框
    *  就地显示 error.message、不关框——输入类错误不再散落到全局 banner */
   onConfirm(name: string, templateContent?: string): void | Promise<void>
+  /** 目标目录显示名（2026-09 树右键「在此新建导图」）：缺省 = 工作区根（标题不示目录） */
+  inDirLabel?: string
 }
 
 /** 新建导图对话框（M16）：名称输入 + 模板选择（ui Select，内置 + 工作区 templates/）。
  *  testid 沿用 NameDialog 契约（input-name/btn-confirm）——既有 E2E 新建流零适配
  *  （默认空白模板，直接输名称回车 = v1.5.0 行为）。模板清单挂载时拉取一次 */
-export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
+export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readonly<Props>) {
   const [name, setName] = useState('')
   const [templates, setTemplates] = useState<readonly TemplateInfo[]>([])
   const [picked, setPicked] = useState<string>('builtin:blank')
@@ -58,7 +60,7 @@ export default function NewMapDialog({ onCancel, onConfirm }: Readonly<Props>) {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
       <DialogContent aria-label="新建导图">
-        <DialogTitle>新建导图</DialogTitle>
+        <DialogTitle>{inDirLabel === undefined ? '新建导图' : `在「${inDirLabel}」新建导图`}</DialogTitle>
         <Input
           data-testid="input-name"
           value={name}

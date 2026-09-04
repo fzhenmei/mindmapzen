@@ -68,8 +68,9 @@ interface AppState {
   exitWorkspace: () => Promise<void>
   refreshMaps: () => Promise<void>
   setSelectedDir: (rel: string) => void
-  /** 模板 md 可选参（M16）：传入即以模板实例化（根名替换为 name） */
-  createAndOpen: (name: string, templateContent?: string) => Promise<void>
+  /** 模板 md 可选参（M16）：传入即以模板实例化（根名替换为 name）；
+   *  relDir（2026-09 树右键「在此新建导图」）：目标子目录，缺省 ''=工作区根 */
+  createAndOpen: (name: string, templateContent?: string, relDir?: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
   /** 打开失败清理（2026-09 优雅恢复）：文件读不到（被删/移动/权限）时移出最近清单——
    *  recentOpened 持久化 + sessionRecent 内存（Ctrl+Tab 数据源）；解析失败不调用（文件仍在，修复后可达） */
@@ -178,10 +179,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   /** 抛错语义（M16 验收）：输入类错误（空名/非法字符/重名）抛给调用方，由
    *  新建对话框就地显示、不关框——不再吞进全局 error-banner */
-  createAndOpen: async (name, templateContent) => {
+  createAndOpen: async (name, templateContent, relDir = '') => {
     const { adapter, configPath, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
-    const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent)
+    const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent, relDir)
     set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)] })
     // 新建即最近（v2.5）：与 openMap 同款 MRU 维护——新图立即可达快速切换浮层与案头欢迎页
     const recentOpened = [info.mdPath, ...get().recentOpened.filter((p) => p !== info.mdPath)].slice(0, 10)

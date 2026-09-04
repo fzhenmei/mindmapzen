@@ -110,6 +110,37 @@ test('案头：目录树含文件行，双击文件行打开进纸面', async ({
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
+// 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中切预览，VSCode 惯例）；
+// 目录行 = 在此新建导图/新建子目录。此处覆盖重命名与目录内新建（vitest 已覆盖删除/移动/树根）
+test('案头：树右键菜单——文件行重命名、目录行在此新建导图', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 右键根图文件行：即选中进详情态 + 弹出菜单，重命名走对话框流
+  await page.getByTestId('file-node-根图').click({ button: 'right' })
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await page.getByTestId('ctx-btn-rename').click()
+  await page.getByTestId('input-name').fill('改名图')
+  await page.getByTestId('btn-confirm').click()
+  // 树行换名；详情态随 mdPath 失联清理回欢迎页
+  await expect(page.getByTestId('file-node-改名图')).toBeVisible()
+  await expect(page.getByTestId('file-detail')).toHaveCount(0)
+
+  // 右键「项目」目录行：在此新建导图（标题示目录、落盘建在彼处）
+  await page.getByTestId('dir-node-项目').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-new-map').click()
+  await expect(page.getByText('在「项目」新建导图')).toBeVisible()
+  await page.getByTestId('input-name').fill('项目新图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('项目新图').first()).toBeVisible() // 创建即打开进编辑器
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/项目/项目新图.md',
+    ),
+  )
+  expect(md).toBe('# 项目新图\n')
+})
+
 test('案头：文件树折叠扳机收起子树、行面选中不折叠', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')

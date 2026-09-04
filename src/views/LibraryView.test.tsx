@@ -434,4 +434,64 @@ describe('案头三区与交互（M5d）', () => {
     await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
     expect(useAppStore.getState().currentMdPath).toBe('/ws/想法A.md')
   })
+
+  // 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中——VSCode 惯例）
+  test('右键文件行：即选中进详情态，菜单重命名走对话框流', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
+    // 右键即选中：主区切详情态（预览该文件）
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    const menu = await screen.findByTestId('ctx-menu-file-想法A')
+    expect(within(menu).getByRole('menuitem', { name: '打开' })).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('ctx-btn-rename'))
+    // 与详情页首同源对话框流：确认框内改名
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '改名图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps.some((m) => m.name === '改名图')).toBe(true))
+    expect(await fs.exists('/ws/改名图.md')).toBe(true)
+  })
+
+  test('右键文件行：菜单删除走二次确认', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-delete'))
+    expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1)) // 只剩 项目/甲
+    expect(fs.removeLog).toEqual(['/ws/想法A.md'])
+  })
+
+  test('右键目录行：在此新建导图落盘到该目录', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-map'))
+    // 对话框标题示目标目录
+    expect(screen.getByText('在「项目」新建导图')).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '项目新图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
+    expect(await fs.exists('/ws/项目/项目新图.md')).toBe(true)
+  })
+
+  test('右键目录行：新建子目录落在该目录下', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
+    expect(screen.getByText('在「项目」新建目录')).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '子层' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    // 树重读后子层目录行出现（exists() 不查目录集合，落盘以 readDirTree 侧证）
+    expect(await screen.findByTestId('dir-node-子层')).toBeInTheDocument()
+  })
+
+  test('右键树根：新建目录落工作区根', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-all'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
+    // 对话框标题（heading 角色，避开侧栏「新建目录」按钮同名文本）
+    expect(screen.getByRole('heading', { name: '新建目录' })).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '根下层' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    expect(await screen.findByTestId('dir-node-根下层')).toBeInTheDocument()
+  })
 })
