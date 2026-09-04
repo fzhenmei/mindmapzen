@@ -27,7 +27,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from './ui/sidebar'
-import { IconFile, IconFolder, IconOpen, IconPencil, IconPlus, IconTrash } from './icons'
+import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconTrash } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
@@ -159,7 +159,7 @@ export default function DirectoryTree({
                 onClick={() => onSelectFile(f)}
                 onDoubleClick={() => onOpenFile(f)}
               >
-                <IconFile />
+                <IconMarkdown />
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
               </button>
             </SidebarMenuSubButton>

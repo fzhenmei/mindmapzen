@@ -398,7 +398,7 @@ describe('案头三区与交互（M5d）', () => {
     expect(screen.getByTestId('file-node-想法A')).toBeInTheDocument()
     // 目录节点图标化（spec §3）：IconFolder 存在于目录行
     expect(screen.getByTestId('dir-node-项目').querySelector('svg')).toBeInTheDocument()
-    // 文件行图标（IconFile）
+    // 文件行图标（IconMarkdown：M↓ 标志一眼即知 .md）
     expect(screen.getByTestId('file-node-甲').querySelector('svg')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('file-node-甲'))
     // 选中态走官方 isActive（data-active=true）；主区切详情态（md 预览渲染甲）
