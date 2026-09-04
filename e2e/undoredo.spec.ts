@@ -95,10 +95,8 @@ test('回退不切回含标记态：含连线文件重开后撤销至栈底，[[
 
   // 返回案头重开：onReady 净化（显示文本剥离标记）——撤销基线应取净化后现态
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-撤销连线').dblclick()
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A [[B]]')).toHaveCount(0) // 净化已剥离显示标记
 

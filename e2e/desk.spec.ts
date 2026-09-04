@@ -1,48 +1,39 @@
 import { expect, test } from '@playwright/test'
 
 // 案头用例走 ?desk=1 预置（见 e2eHarness）：/ws/项目/项目图.md + /ws/根图.md，
-// 工作区已设为 /ws。M15 三态：进案头 idle 空态 → 点目录进资源管理器态（文件夹 +
-// 导图大图标 tile）→ 点文件进详情态（摘要 + md 预览）
-test('案头：三态切换、目录过滤与移动', async ({ page }) => {
+// 工作区已设为 /ws。2026-09 主区纯预览化两态：未选文件（idle/选中目录）→ 欢迎页；
+// 树文件行单击 → 详情态（md 预览）。文件浏览与导航全在左树（目录下直列文件行）
+test('案头：目录选中主区欢迎页、树文件行进详情与移动', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 左树出现预置目录「项目」；初始 idle 空态（未选任何）
+  // 左树出现预置目录「项目」与直列文件行；初始欢迎页（未选任何）
   await expect(page.getByTestId('dir-node-项目')).toBeVisible()
+  await expect(page.getByTestId('file-node-根图')).toBeVisible()
+  await expect(page.getByTestId('file-node-项目图')).toBeVisible()
   await expect(page.getByTestId('desk-idle')).toBeVisible()
 
-  // 目录态：点「项目」→ 该层导图 tile 一张
+  // 选中目录「项目」：主区仍是欢迎页（纯预览化：目录态不换主区内容）
   await page.getByTestId('dir-node-项目').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
-  await expect(page.getByTestId('map-item')).toHaveText(/项目图/)
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
+  await expect(page.getByTestId('file-detail')).toHaveCount(0)
 
-  // 返回根：根层导图一张 + 子目录「项目」文件夹 tile（资源管理器模式）
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
-  await expect(page.getByTestId('folder-tile-项目')).toBeVisible()
+  // 树文件行单击 = 选中进详情态（md 预览铺满主区）
+  await page.getByTestId('file-node-根图').click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await expect(page.getByTestId('md-preview')).toHaveText(/根图/)
 
-  // 文件夹 tile 单击 = 选中该目录（左树联动，进项目层）
-  await page.getByTestId('folder-tile-项目').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
-  await expect(page.getByTestId('map-item')).toHaveText(/项目图/)
-
-  // 移动流：回根层，根图 tile btn-move → move-dialog → 选目录 → 确认。
+  // 移动流：详情页首 btn-move → move-dialog → 选目录 → 确认。
   // 对话框树复用 dir-node-<name> testid（与左树同名），严格模式下必须以 move-dialog 圈定
-  await page.getByTestId('dir-node-all').click()
-  await page.locator('.map-card', { hasText: '根图' }).getByTestId('btn-move').click()
+  await page.getByTestId('btn-move').click()
   const dialog = page.getByTestId('move-dialog')
   await expect(dialog).toBeVisible()
   await dialog.getByTestId('dir-node-项目').click()
   await dialog.getByTestId('move-confirm').click()
 
-  // 移动后停留根视图：根层不再有根图 tile（只剩文件夹 tile），不回全部视图
-  await expect(page.getByTestId('map-item')).toHaveCount(0)
-  await expect(page.getByTestId('folder-tile-项目')).toBeVisible()
-
-  // 项目层：项目图 + 根图两张
-  await page.getByTestId('dir-node-项目').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(2)
-  await expect(page.getByTestId('map-item').filter({ hasText: '根图' })).toBeVisible()
+  // 移动后左树重读：根图文件行消失于根层，「项目」下两行俱在（树按目录归位）
+  await expect(page.getByTestId('file-node-项目图')).toBeVisible()
+  await expect(page.getByTestId('file-node-根图')).toBeVisible()
 
   // 磁盘断言（内存 fs）：根图内容移入项目层、根位文件消失
   const moved = await page.evaluate(() =>
@@ -73,36 +64,34 @@ test('案头：窄窗详情动作收纳进「更多」浮层', async ({ page }) 
   await page.goto('/?e2e=1&desk=1')
 
   // 进详情态：宽组整组收起（btn-move 隐藏），「更多」钮出现
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '根图' }).click()
+  await page.getByTestId('file-node-根图').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   await expect(page.getByTestId('btn-move')).toBeHidden()
   await expect(page.getByTestId('btn-detail-more')).toBeVisible()
 
-  // 浮层平铺全部详情动作；菜单「返回目录」回资源管理器态
+  // 浮层平铺全部详情动作；菜单「关闭预览」回欢迎页
   await page.getByTestId('btn-detail-more').click()
   await expect(page.getByTestId('more-btn-detail-back')).toBeVisible()
   await page.getByTestId('more-btn-detail-back').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
 })
 
-// M15 交互语义：tile/树文件行单击=选中进详情态（摘要 + md 预览），双击或详情「打开」=进纸面
-test('案头：tile 单击出详情、详情打开进纸面', async ({ page }) => {
+// 2026-09 交互语义：树文件行单击=选中进详情态（md 预览），双击或详情「打开」=进纸面
+test('案头：树文件行单击出详情、详情打开进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 进根目录资源管理器态，单击根图 tile：主区切文件详情态（页首即卡头 + markdown 预览）
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '根图' }).click()
+  // 单击根图文件行：主区切文件详情态（页首即卡头 + markdown 预览）
+  await page.getByTestId('file-node-根图').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   await expect(page.getByTestId('md-preview')).toHaveText(/根图/)
   // 仍是案头，未进纸面（命令栏不可见）
   await expect(page.getByTestId('zen-bar')).toHaveCount(0)
 
-  // 详情态「返回目录」回根资源管理器；再进详情走「打开」按钮（双击手势的兜底入口）
+  // 详情态「关闭预览」回欢迎页；再进详情走「打开」按钮（双击手势的兜底入口）
   await page.getByTestId('btn-detail-back').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
-  await page.getByTestId('map-item').filter({ hasText: '根图' }).click()
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
+  await page.getByTestId('file-node-根图').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   await page.getByTestId('btn-detail-open').click()
   await expect(page.getByText('根图').first()).toBeVisible()
@@ -121,19 +110,50 @@ test('案头：目录树含文件行，双击文件行打开进纸面', async ({
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
+// 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中切预览，VSCode 惯例）；
+// 目录行 = 在此新建导图/新建子目录。此处覆盖重命名与目录内新建（vitest 已覆盖删除/移动/树根）
+test('案头：树右键菜单——文件行重命名、目录行在此新建导图', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 右键根图文件行：即选中进详情态 + 弹出菜单，重命名走对话框流
+  await page.getByTestId('file-node-根图').click({ button: 'right' })
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await page.getByTestId('ctx-btn-rename').click()
+  await page.getByTestId('input-name').fill('改名图')
+  await page.getByTestId('btn-confirm').click()
+  // 树行换名；详情态随 mdPath 失联清理回欢迎页
+  await expect(page.getByTestId('file-node-改名图')).toBeVisible()
+  await expect(page.getByTestId('file-detail')).toHaveCount(0)
+
+  // 右键「项目」目录行：在此新建导图（标题示目录、落盘建在彼处）
+  await page.getByTestId('dir-node-项目').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-new-map').click()
+  await expect(page.getByText('在「项目」新建导图')).toBeVisible()
+  await page.getByTestId('input-name').fill('项目新图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('项目新图').first()).toBeVisible() // 创建即打开进编辑器
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/项目/项目新图.md',
+    ),
+  )
+  expect(md).toBe('# 项目新图\n')
+})
+
 test('案头：文件树折叠扳机收起子树、行面选中不折叠', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 点「项目」行面：选中进目录态，子树保持展开（file-node-项目图 仍可见）
+  // 点「项目」行面：选中目录，子树保持展开（file-node-项目图 仍可见）；主区欢迎页
   await page.getByTestId('dir-node-项目').click()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
   await expect(page.getByTestId('file-node-项目图')).toBeVisible()
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
 
-  // 点「项目」行尾折叠扳机（aria-label）：子树收起（文件行不可见），目录态不受影响
+  // 点「项目」行尾折叠扳机（aria-label）：子树收起（文件行不可见），主区不受影响
   await page.getByRole('button', { name: '折叠「项目」' }).click()
   await expect(page.getByTestId('file-node-项目图')).toBeHidden()
-  await expect(page.getByTestId('map-item')).toHaveCount(1)
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
 
   // 再点扳机展开恢复
   await page.getByRole('button', { name: '折叠「项目」' }).click()
@@ -145,9 +165,8 @@ test('欢迎页：最近打开列表展示与直达', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 打开根图（从资源管理器双击）→ 返回案头（落 idle 态）
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '根图' }).dblclick()
+  // 打开根图（树文件行双击）→ 返回案头（落欢迎页）
+  await page.getByTestId('file-node-根图').dblclick()
   await expect(page.getByText('根图').first()).toBeVisible()
   await page.getByTestId('btn-back').click()
 

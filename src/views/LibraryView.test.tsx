@@ -52,11 +52,9 @@ test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框',
   expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument()
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws2'))
   expect(pick).toHaveBeenCalledTimes(1)
-  // M15：切换工作区回 idle 空态；点树根进根层资源管理器可见新图 tile
+  // 切换工作区回欢迎页；左树（默认全展开）直列新图文件行
   expect(await screen.findByTestId('desk-idle')).toBeInTheDocument()
-  fireEvent.click(screen.getByTestId('dir-node-all'))
-  const card = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('新家'))
-  expect(card).toBeTruthy()
+  expect(await screen.findByTestId('file-node-新家')).toBeInTheDocument()
 })
 
 // v0.7.0 验收：设置页「退出工作区（回到开屏）」——清 workspaceDir 回开屏页并持久化 null
@@ -68,10 +66,10 @@ test('设置退出工作区：回到开屏页，配置落 workspaceDir:null（�
   fireEvent.click(screen.getByTestId('btn-settings'))
   fireEvent.click(screen.getByTestId('settings-workspace-exit'))
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
-  // 开屏页重新渲染，页首工具栏随无工作区态隐藏
+  // 开屏页重新渲染，页首工具栏随无工作区态隐藏；案头骨架（侧栏）整体卸载
   expect(await screen.findByTestId('welcome-screen')).toBeInTheDocument()
   expect(screen.queryByTestId('btn-settings')).not.toBeInTheDocument()
-  expect(screen.queryByTestId('map-item')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('dir-panel')).not.toBeInTheDocument()
   const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
   expect(cfg.workspaceDir).toBeNull()
   expect(cfg.lastOpened).toBeNull()
@@ -87,9 +85,8 @@ test('空态引导文案', async () => {
 test('已有工作区时列出导图，双击打开进纸面', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
-  // M15：idle 空态先点树根进资源管理器，双击 tile 进纸面
-  fireEvent.click(await screen.findByTestId('dir-node-all'))
-  fireEvent.dblClick((await screen.findAllByTestId('map-item'))[0]!)
+  // 树文件行双击进纸面（主区纯预览化后打开文件的唯一案头入口）
+  fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
   await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
 })
 
@@ -129,30 +126,31 @@ test('新建重名：服务错误框内显示、对话框保留', async () => {
 test('删除需二次确认', async () => {
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
-  fireEvent.click(await screen.findByTestId('dir-node-all'))
+  // 选中文件进详情态，删除入口在页首动作组
+  fireEvent.click(await screen.findByTestId('file-node-想法A'))
+  expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-delete'))
-  expect(screen.getByTestId('map-item')).toBeInTheDocument()
+  expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-delete-confirm'))
   await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(0))
   expect(fs.removeLog).toEqual(['/ws/想法A.md'])
 })
 
-test('多导图时删除按钮作用于所在行（第二行），而非首行', async () => {
-  // 想法B 后写入，listMaps 按 mtime 降序（同毫秒并列按 readDir 顺序）→ B 在第一行、A 在第二行
+test('删除按钮作用于当前选中文件，不误伤其他导图', async () => {
   await fs.writeTextFileAtomic('/ws/想法B.md', '# B\n')
   await useAppStore.getState().setWorkspace('/ws')
   render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
-  fireEvent.click(await screen.findByTestId('dir-node-all'))
-  const rows = await screen.findAllByTestId('map-item')
-  expect(rows).toHaveLength(2)
-  expect(rows[0]).toHaveTextContent('想法B')
-  expect(rows[1]).toHaveTextContent('想法A')
-  // 第二行（想法A）的删除按钮：确认框必须显示该行导图名
-  fireEvent.click(screen.getAllByTestId('btn-delete')[1]!)
+  // 树中两行文件行俱在；选中想法A进详情态
+  expect(await screen.findByTestId('file-node-想法A')).toBeInTheDocument()
+  expect(screen.getByTestId('file-node-想法B')).toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('file-node-想法A'))
+  expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+  // 确认框显示当前选中导图名
+  fireEvent.click(screen.getByTestId('btn-delete'))
   expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-delete-confirm'))
   await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1))
-  // 只删了第二行自己的导图想法A，首行想法B 未被误删
+  // 只删了选中的想法A，想法B 未被误删
   expect(fs.removeLog).toEqual(['/ws/想法A.md'])
   expect(await fs.exists('/ws/想法B.md')).toBe(true)
 })
@@ -173,7 +171,7 @@ test('导入：有忽略块先预览，确认后入库并打开', async () => {
 })
 
 describe('案头目录（M5a）', () => {
-  test('目录树渲染与过滤', async () => {
+  test('目录树渲染：目录下直列文件行；选中目录主区显示欢迎页', async () => {
     const dirFs = new MemoryFsAdapter()
     await dirFs.mkdir('/ws/项目')
     await dirFs.writeTextFileAtomic('/ws/项目/甲.md', '# 甲\n')
@@ -181,17 +179,19 @@ describe('案头目录（M5a）', () => {
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    // 默认全展开：根下与子目录下的 .md 均有文件行；主区欢迎页（主区不再有文件列表）
     expect(await screen.findByTestId('dir-node-项目')).toBeInTheDocument()
+    expect(screen.getByTestId('file-node-甲')).toBeInTheDocument()
+    expect(screen.getByTestId('file-node-根图')).toBeInTheDocument()
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
+    expect(screen.queryByTestId('map-item')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('dir-node-项目'))
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('项目'))
-    // 只剩项目目录的图
-    expect(screen.getByTestId('map-item')).toHaveTextContent('甲')
+    // 选中目录仍显示欢迎页（纯预览化：目录态不换主区内容）
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('dir-node-all'))
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe(''))
-    // M15 根层资源管理器：根层导图一张 + 子目录「项目」文件夹 tile
-    expect(screen.getAllByTestId('map-item')).toHaveLength(1)
-    expect(screen.getByTestId('map-item')).toHaveTextContent('根图')
-    expect(screen.getByTestId('folder-tile-项目')).toBeInTheDocument()
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
   })
 
   test('移动导图：对话框选目录后两文件进新目录', async () => {
@@ -202,9 +202,10 @@ describe('案头目录（M5a）', () => {
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    // M15：idle 空态先点树根进资源管理器（tile 悬停钮才在渲染树中）
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    // 选中文件进详情态，移动入口在页首动作组
+    fireEvent.click(await screen.findByTestId('file-node-根图'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-move'))
     const dlg = await screen.findByTestId('move-dialog')
     // 导图当前所在层（根）作为目标被禁用，防同目录自碰撞
     expect(within(dlg).getByTestId('dir-node-root')).toBeDisabled()
@@ -223,9 +224,10 @@ describe('案头目录（M5a）', () => {
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    // M15：idle 空态先点树根进资源管理器（tile 悬停钮才在渲染树中）
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    // 选中文件进详情态，移动入口在页首动作组
+    fireEvent.click(await screen.findByTestId('file-node-根图'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-move'))
     const dlg = await screen.findByTestId('move-dialog')
     fireEvent.input(within(dlg).getByTestId('move-newdir-input'), { target: { value: '新层' } })
     fireEvent.click(within(dlg).getByTestId('move-newdir-add'))
@@ -244,9 +246,10 @@ describe('案头目录（M5a）', () => {
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    // M15：idle 空态先点树根进资源管理器（tile 悬停钮才在渲染树中）
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    fireEvent.click((await screen.findAllByTestId('btn-move'))[0]!)
+    // 选中文件进详情态，移动入口在页首动作组
+    fireEvent.click(await screen.findByTestId('file-node-根图'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-move'))
     const dlg = await screen.findByTestId('move-dialog')
     fireEvent.input(within(dlg).getByTestId('move-newdir-input'), { target: { value: '临时层' } })
     fireEvent.click(within(dlg).getByTestId('move-newdir-add'))
@@ -267,7 +270,7 @@ describe('案头目录（M5a）', () => {
     expect(await screen.findByTestId('dir-node-新层')).toBeInTheDocument()
   })
 
-  test('空目录过滤后显示空态文案', async () => {
+  test('空目录选中后主区显示欢迎页（无空态文件列表）', async () => {
     const dirFs = new MemoryFsAdapter()
     await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
     await dirFs.mkdir('/ws/空层')
@@ -276,7 +279,21 @@ describe('案头目录（M5a）', () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('dir-node-空层'))
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('空层'))
-    expect(await screen.findByTestId('dir-empty-state')).toHaveTextContent('这一层还是空的')
+    // 主区纯预览化：选中目录不切换主区内容，仍是欢迎页
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
+  })
+
+  // 2026-09 插图资产目录保护：根层 assets 是 app 基础设施，不进左树（右键/移动目标随树一并不可达）
+  test('根层 assets 目录不进左树', async () => {
+    const dirFs = new MemoryFsAdapter()
+    await dirFs.mkdir('/ws/assets')
+    await dirFs.writeTextFileAtomic('/ws/assets/选图.png', 'png-bytes')
+    await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
+    useAppStore.getState().setAdapter(dirFs)
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    expect(await screen.findByTestId('file-node-根图')).toBeInTheDocument()
+    expect(screen.queryByTestId('dir-node-assets')).not.toBeInTheDocument()
   })
 
   // 设置入口（M5b Task 4）：页首 btn-settings 打开设置对话框，开关切换写入 store
@@ -328,15 +345,13 @@ describe('案头三区与交互（M5d）', () => {
     expect(root).toHaveAttribute('title', '/ws')
   })
 
-  test('tile 单击 = 选中进详情态（header 标题/动作钮上移 + md 预览），不进纸面', async () => {
+  test('树文件行单击 = 选中进详情态（header 标题/动作钮上移 + md 预览），不进纸面', async () => {
     const writeClipboard = vi.fn(async () => {})
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={writeClipboard} />)
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    const tile = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
     expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument()
     // 详情动作钮仅详情态渲染（容器合并：自卡头上移页首）
     expect(screen.queryByTestId('btn-detail-back')).not.toBeInTheDocument()
-    fireEvent.click(tile)
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
     // 容器合并：主区即预览面板——真实 markdown 渲染（H1 渲染想法A），无 Card 包裹
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     expect(await screen.findByTestId('md-preview')).toHaveTextContent('想法A')
@@ -366,9 +381,7 @@ describe('案头三区与交互（M5d）', () => {
 
   test('详情态「更多」浮层：平铺全部动作，菜单项直达（打开导图）', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    const tile = (await screen.findAllByTestId('map-item')).find((el) => el.textContent!.includes('想法A'))!
-    fireEvent.click(tile)
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     // pointerdown 开菜单（Radix Trigger 口径，同 ui/dropdown-menu.test 模式）；条目 testid 加 more- 前缀与宽组同名钮区分（E2E 严格模式）
     fireEvent.pointerDown(screen.getByTestId('btn-detail-more'), { button: 0 })
@@ -394,44 +407,37 @@ describe('案头三区与交互（M5d）', () => {
     expect(screen.getByTestId('md-preview')).toHaveTextContent('甲')
   })
 
-  test('选中态失效清理：重命名/删除选中图后详情态清空回资源管理器', async () => {
+  test('选中态失效清理：重命名/删除选中图后详情态清空回欢迎页', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    // tile 引用会随重渲染失效：按文本名现查现用
-    const tileOf = (name: string) =>
-      screen.getAllByTestId('map-item').find((el) => el.textContent!.includes(name))!
-    // 选中 想法A（根层 tile）进详情态
-    fireEvent.click(tileOf('想法A'))
+    // 选中 想法A（树文件行）进详情态
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
-    // 详情态「返回目录」回资源管理器后重命名 → mdPath 失联 → 选中清空不回详情
-    fireEvent.click(screen.getByTestId('btn-detail-back'))
-    fireEvent.click(tileOf('想法A').parentElement!.querySelector('[data-testid="btn-rename"]')!)
+    // 详情态页首重命名 → mdPath 失联 → 选中清空不回详情（回欢迎页）
+    fireEvent.click(screen.getByTestId('btn-rename'))
     fireEvent.input(screen.getByTestId('input-name'), { target: { value: '改名图' } })
     fireEvent.click(screen.getByTestId('btn-confirm'))
     await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
-    // 重新选中后删除 → 详情态同样清空
-    fireEvent.click(tileOf('改名图'))
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
+    // 重新选中后删除 → 详情态同样清空回欢迎页
+    fireEvent.click(await screen.findByTestId('file-node-改名图'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('btn-detail-back'))
-    fireEvent.click(tileOf('改名图').parentElement!.querySelector('[data-testid="btn-delete"]')!)
+    fireEvent.click(screen.getByTestId('btn-delete'))
     fireEvent.click(screen.getByTestId('btn-delete-confirm'))
     await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
   })
 
-  test('详情态就地操作：删除按钮在摘要条可用，确认后删除并回目录态', async () => {
+  test('详情态就地操作：删除按钮在页首动作组可用，确认后删除并回欢迎页', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
-    fireEvent.click(await screen.findByTestId('dir-node-all'))
-    const tileOf = (name: string) =>
-      screen.getAllByTestId('map-item').find((el) => el.textContent!.includes(name))!
-    fireEvent.click(tileOf('想法A'))
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
-    // 详情态摘要条的三枚操作钮与 tile 同 testid（两态互斥渲染）
     fireEvent.click(screen.getByTestId('btn-delete'))
     expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('btn-delete-confirm'))
     await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1)) // 只剩 项目/甲
-    // 选中失联 → 详情态清空，回落资源管理器
+    // 选中失联 → 详情态清空，回落欢迎页
     await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
     expect(useAppStore.getState().maps.some((m) => m.name === '想法A')).toBe(false)
   })
 
@@ -440,5 +446,65 @@ describe('案头三区与交互（M5d）', () => {
     fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
     await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
     expect(useAppStore.getState().currentMdPath).toBe('/ws/想法A.md')
+  })
+
+  // 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中——VSCode 惯例）
+  test('右键文件行：即选中进详情态，菜单重命名走对话框流', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
+    // 右键即选中：主区切详情态（预览该文件）
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    const menu = await screen.findByTestId('ctx-menu-file-想法A')
+    expect(within(menu).getByRole('menuitem', { name: '打开' })).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('ctx-btn-rename'))
+    // 与详情页首同源对话框流：确认框内改名
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '改名图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps.some((m) => m.name === '改名图')).toBe(true))
+    expect(await fs.exists('/ws/改名图.md')).toBe(true)
+  })
+
+  test('右键文件行：菜单删除走二次确认', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-delete'))
+    expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-delete-confirm'))
+    await waitFor(() => expect(useAppStore.getState().maps).toHaveLength(1)) // 只剩 项目/甲
+    expect(fs.removeLog).toEqual(['/ws/想法A.md'])
+  })
+
+  test('右键目录行：在此新建导图落盘到该目录', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-map'))
+    // 对话框标题示目标目录
+    expect(screen.getByText('在「项目」新建导图')).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '项目新图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
+    expect(await fs.exists('/ws/项目/项目新图.md')).toBe(true)
+  })
+
+  test('右键目录行：新建子目录落在该目录下', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
+    expect(screen.getByText('在「项目」新建目录')).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '子层' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    // 树重读后子层目录行出现（exists() 不查目录集合，落盘以 readDirTree 侧证）
+    expect(await screen.findByTestId('dir-node-子层')).toBeInTheDocument()
+  })
+
+  test('右键树根：新建目录落工作区根', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('dir-node-all'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
+    // 对话框标题（heading 角色，避开侧栏「新建目录」按钮同名文本）
+    expect(screen.getByRole('heading', { name: '新建目录' })).toBeInTheDocument()
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '根下层' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    expect(await screen.findByTestId('dir-node-根下层')).toBeInTheDocument()
   })
 })

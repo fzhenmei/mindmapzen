@@ -157,25 +157,18 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   const tipPad = await page.evaluate((el) => getComputedStyle(el).padding, await tip.first().elementHandle())
   expect(tipPad).toBe('6px 12px')
 
-  // ④ 导图 tile 圆角 = rounded-lg（8px，页面组合层指定），经 theme.css 圆角阶梯 var(--radius)：
-  //    --radius 0.5rem 连令牌一并锁死。（M15：卡面 Card 12px 断言随卡片网格退役，
-  //    tile 为 ui Button ghost 纵向解剖 + 圆角阶梯消费）
+  // ④ 圆角令牌锁：资源管理器 tile 退役后改锁 :root 阶梯令牌（--radius 0.5rem），
+  //    消费面断言移交详情态容器（⑤ 同段）
   const radiusToken = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
   )
   expect(radiusToken).toBe('0.5rem')
   await page.getByTestId('btn-back').click()
-  // M15：返回案头为 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  const card = page.getByTestId('map-item').first()
-  await expect(card).toBeVisible()
-  const cardRadius = await page.evaluate((el) => getComputedStyle(el).borderRadius, await card.elementHandle())
-  expect(cardRadius).toBe('8px')
 
   // ⑤ 边框色回归锁（M15 根因修复）：Tailwind v4 裸 border 类不设颜色（默认 currentColor
   //    =文字色≈黑），官方靠 theme.css base 层通配重置回 --border——曾漏抄致全 app 边框
-  //    近黑（「纯黑线条」反馈真源）。锁计算值：进详情态，官方 Card 解剖的边框必须等于令牌色
-  await page.getByTestId('map-item').first().click()
+  //    近黑（「纯黑线条」反馈真源）。锁计算值：树文件行单击进详情态，容器边框必须等于令牌色
+  await page.locator('[data-testid^="file-node-"]').first().click()
   const detail = page.getByTestId('file-detail')
   await expect(detail).toBeVisible()
   const detailBorder = await page.evaluate(

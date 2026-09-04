@@ -46,8 +46,7 @@ test('插图：选图流——复制入 assets/、落盘行尾标记、画布渲
   expect(md).toContain('# 插图图 ![选图](assets/选图.png)')
 
   // 重开：预览（imgMap 构建自磁盘字节）+ 对话框现状
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '插图图' }).dblclick()
+  await page.getByTestId('file-node-插图图').dblclick()
   await expect(page.getByText('插图图').first()).toBeVisible()
   await expect(page.locator('.canvas-host image').first()).toBeVisible()
 })
@@ -66,8 +65,7 @@ test('插图：手写/AI 改 md 标记 → 打开即渲染；文件缺失宽容�
     await z.writeBytes('/ws/assets/hand.png', pngBase64)
     await z.writeFile('/ws/手写插图.md', '# 手写插图 ![配图](assets/hand.png)\n\n## 缺失 ![丢图](assets/gone.png)\n')
   })
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '手写插图' }).dblclick()
+  await page.getByTestId('file-node-手写插图').dblclick()
   await expect(page.getByText('手写插图').first()).toBeVisible()
   // 存在的图渲染（引擎 image 元素 ≥1）；缺失的宽容跳过（不渲、不崩）
   await expect(page.locator('.canvas-host image').first()).toBeVisible()
@@ -199,8 +197,7 @@ test('插图：详情态预览显示图片（imgMap dataURL 解析）', async ({
     )
     await z.writeFile('/ws/预览图.md', '# 预览图 ![配图](assets/prev.png)\n')
   })
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '预览图' }).click()
+  await page.getByTestId('file-node-预览图').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   // 预览 img 渲染且 src 已解析为 dataURL（未解析会是 404 的相对路径）
   const img = page.getByTestId('md-preview').locator('img')

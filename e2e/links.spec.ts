@@ -50,10 +50,8 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
 
   // 返回案头重开：onReady 净化（建注册表 + 显示剥离）后按注册表重建，连线复现
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick() // M5d 交互变更：单击=选中预览，双击=打开
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-连线测试').dblclick()
   // 画布文本无 [[ ]] 标记（M5d Task 2 显示层剥离），连线照常复现
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A [[B]]')).toHaveCount(0)
@@ -173,10 +171,8 @@ test('节点连线：删除后不复活（自动保存移除 md 标记，重开�
 
   // 重开不复活：md 是唯一事实源，无标记即无线
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-删线测试').dblclick()
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.locator(LINE_PATHS)).toHaveCount(0)
 })
@@ -215,10 +211,8 @@ test('节点连线：同父同名孪生按 #n 精确连线、保存重开复现'
 
   // 重开：按 #n 序号重建，线复现（画布文本无标记——净化语义）
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-孪生连线').dblclick()
   await expect(page.getByText('A', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('A [[/孪生连线/S#2]]')).toHaveCount(0)
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)

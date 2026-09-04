@@ -19,12 +19,14 @@ import {
   IconPencil,
   IconTrash,
 } from './icons'
-import type { MapAction } from './FileExplorer'
+
+/** 详情态对话框流操作三态（LibraryView 统一管理对话框；FileExplorer 退役后类型迁此） */
+export type MapAction = 'move' | 'rename' | 'delete'
 
 interface Props {
   /** 当前选中的导图（动作寻址数据源） */
   info: MapInfo
-  /** 返回目录视图（回到该图所在目录的资源管理器态） */
+  /** 关闭预览（清文件选中回落欢迎页） */
   onBack(): void
   /** 对话框流操作（移动/重命名/删除），对话框在 LibraryView 统一管理 */
   onAction(a: MapAction, m: MapInfo): void
@@ -49,7 +51,7 @@ export const detailMeta = (m: Readonly<MapInfo>): string =>
  *  零 JS 测量）。条目 testid 加 more- 前缀（与宽组同名钮区分，E2E 严格模式不撞名） */
 export default function DetailActions({ info, onBack, onAction, onCopyPath, onOpen }: Readonly<Props>) {
   const groups = [
-    [{ testid: 'btn-detail-back', label: '返回目录', Icon: IconArrowLeft, run: onBack }],
+    [{ testid: 'btn-detail-back', label: '关闭预览', Icon: IconArrowLeft, run: onBack }],
     (
       [
         ['btn-move', '移动到目录', IconFolder, 'move'],

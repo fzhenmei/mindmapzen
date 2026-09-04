@@ -27,6 +27,18 @@ describe('workspace', () => {
     await expect(createMap(fs, '/ws', 'a')).rejects.toThrow('已存在同名导图')
   })
 
+  // 2026-09 树右键「在此新建导图」：relDir 指定目标子目录（既有调用缺省 '' 行为不变）
+  test('createMap relDir 落盘子目录并带元信息', async () => {
+    await fs.mkdir('/ws/项目')
+    const info = await createMap(fs, '/ws', '子图', 'mindmap', undefined, '项目')
+    expect(info.relDir).toBe('项目')
+    expect(info.mdPath).toBe('/ws/项目/子图.md')
+    expect(await fs.readTextFile('/ws/项目/子图.md')).toBe('# 子图\n')
+    expect(await fs.exists('/ws/项目/子图.zen.json')).toBe(true)
+    // 同目录重名仍拦截（检测路径随 relDir 走）
+    await expect(createMap(fs, '/ws', '子图', 'mindmap', undefined, '项目')).rejects.toThrow('已存在同名导图')
+  })
+
   test('listMaps 忽略非 .md 文件且按修改时间降序', async () => {
     const a = await createMap(fs, '/ws', 'a')
     await createMap(fs, '/ws', 'b')

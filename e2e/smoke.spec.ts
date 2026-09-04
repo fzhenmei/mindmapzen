@@ -27,12 +27,10 @@ test('冒烟 1：新建 → 编辑 → 保存 → 重开 → 内容一致', asyn
   await expect(page.locator('div.smm-node-edit-wrap')).toBeHidden()
   await page.keyboard.press('Control+s')
 
-  // 返回文件库并重新打开（M5d 交互变更：单击=选中预览，双击=打开）
+  // 返回文件库并重新打开（树文件行双击 = 打开）
   await page.getByTestId('btn-back').click()
-  // M15：案头初始 idle 空态，先点树根进根目录资源管理器态
-  await page.getByTestId('dir-node-all').click()
-  await expect(page.getByTestId('map-item')).toBeVisible()
-  await page.getByTestId('map-item').dblclick()
+  // 主区纯预览化：树文件行双击重开
+  await page.getByTestId('file-node-测试图').dblclick()
   await expect(page.getByText('分支一').first()).toBeVisible()
 
   // 磁盘内容断言（内存 fs）

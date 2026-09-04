@@ -36,8 +36,7 @@ test('mermaid：备注围栏在详情态预览渲染成 SVG；语法错误降级
   })
 
   // 详情态：好图渲染出 SVG
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '架构图解' }).click()
+  await page.getByTestId('file-node-架构图解').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
   const svg = page.getByTestId('mermaid-svg')
   await expect(svg).toBeVisible({ timeout: 15_000 }) // mermaid 库懒加载首渲染

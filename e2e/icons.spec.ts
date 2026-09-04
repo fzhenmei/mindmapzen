@@ -41,8 +41,7 @@ test('图标：管理器设图标 → 落盘 ::flag → 重开持久（管理器
   expect(md).toContain('# 图标图 ::flag ::star')
 
   // 重开：管理器现状高亮（parse 提取回 icons）
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '图标图' }).dblclick()
+  await page.getByTestId('file-node-图标图').dblclick()
   await expect(page.getByText('图标图').first()).toBeVisible()
   await page.getByText('图标图').first().click()
   await page.getByTestId('node-action-icon').click()
@@ -96,8 +95,7 @@ test('图标：非精选图标（全集搜索、跨搜索词多选）→ 当场�
     ),
   )
   expect(md).toContain('# 非精选图 ::shield-alert ::book-search')
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '非精选图' }).dblclick()
+  await page.getByTestId('file-node-非精选图').dblclick()
   await expect(page.getByText('非精选图').first()).toBeVisible()
   await expect(page.locator('.canvas-host svg.lucide-shield-alert').first()).toBeVisible()
   await expect(page.locator('.canvas-host svg.lucide-book-search').first()).toBeVisible()
@@ -120,8 +118,7 @@ test('图标：已选行移除非精选——重开后不搜索，点已选 chip
   await page.getByTestId('btn-back').click()
 
   // 重开 → 打开管理器：不搜索，已选行 chip 直接在场，点击移除 → 保存
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '删图标图' }).dblclick()
+  await page.getByTestId('file-node-删图标图').dblclick()
   await expect(page.getByText('删图标图').first()).toBeVisible()
   await page.getByText('删图标图').first().click()
   await page.getByTestId('node-action-icon').click()
@@ -155,8 +152,7 @@ test('图标：手写/AI 直接改 md 标记 → 打开即生效（画布净化 
       ['# 手写图标 ::star', '', '## 子节点', '', '## 普通 ::bug', ''].join('\n'),
     )
   })
-  await page.getByTestId('dir-node-all').click()
-  await page.getByTestId('map-item').filter({ hasText: '手写图标' }).dblclick()
+  await page.getByTestId('file-node-手写图标').dblclick()
   await expect(page.getByText('手写图标').first()).toBeVisible()
 
   // 手写标记 parse 提取：管理器现状显示 star

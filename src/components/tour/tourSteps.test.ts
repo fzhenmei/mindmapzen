@@ -12,8 +12,8 @@ beforeEach(async () => {
 })
 
 describe('TOUR_STEPS 步骤表', () => {
-  test('共 11 步，view 分段 library 在前 editor 在后（单调不交叉）', () => {
-    expect(TOUR_STEPS).toHaveLength(11)
+  test('共 10 步，view 分段 library 在前 editor 在后（单调不交叉）', () => {
+    expect(TOUR_STEPS).toHaveLength(10)
     const views = TOUR_STEPS.map((s) => s.view)
     expect(views).toEqual([...views.filter((v) => v === 'library'), ...views.filter((v) => v === 'editor')])
   })
@@ -22,7 +22,7 @@ describe('TOUR_STEPS 步骤表', () => {
     expect(TOUR_STEPS[TOUR_STEPS.length - 1].target).toBeNull()
     const withBefore = TOUR_STEPS.filter((s) => s.before !== undefined)
     expect(withBefore).toHaveLength(1)
-    expect(withBefore[0]).toBe(TOUR_STEPS[6]) // 唯一 before 固定在索引 6：守护跨视图时序契约
+    expect(withBefore[0]).toBe(TOUR_STEPS[5]) // 唯一 before 固定在索引 5：守护跨视图时序契约
   })
 })
 

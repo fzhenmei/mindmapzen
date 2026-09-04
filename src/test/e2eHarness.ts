@@ -20,7 +20,7 @@ function harnessPngBytes(): Uint8Array {
  *  末尾自动 setWorkspace('/ws')，规避 web 模式下无 Tauri 目录选择对话框的问题。
  *  ?desk=1 追加班头预置（/ws/项目/项目图.md + /ws/根图.md）：仅 desk.spec 使用——
  *  预置须先于 setWorkspace 写盘（refreshMaps/左树在 setWorkspace 时生成），
- *  且不能无条件预置：多卡片会破坏既有用例对 map-item 的单例（严格模式）断言。
+ *  且不能无条件预置：多文件会破坏既有用例对树文件行的单例（严格模式）断言。
  *  ?nows=1 跳过 setWorkspace（保持无工作区首启态）：仅 welcome.spec 开屏流程使用——
  *  点 btn-welcome-create 后经 pickDirectory 桩（固定返回 /ws）走真实 setWorkspace 链路。
  *  引导预设：默认预写 /cfg.json tourDone:true（须先于 setWorkspace，load-merge-save 保留），

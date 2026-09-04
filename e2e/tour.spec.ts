@@ -7,14 +7,14 @@ test('引导：全流程走完（案头→编辑器跨视图）并落盘 tourDon
   test.setTimeout(60_000)
   await page.goto('/?e2e=1&tour=1')
   await expect(page.getByTestId('tour-overlay')).toBeVisible()
-  await expect(page.getByTestId('tour-step-indicator')).toHaveText('1 / 11')
-  // 案头段步进到「进入编辑器」提示步（步 6，索引 5）
-  for (let i = 0; i < 5; i++) await page.getByTestId('tour-next').click()
-  await expect(page.getByTestId('tour-step-indicator')).toHaveText('6 / 11')
+  await expect(page.getByTestId('tour-step-indicator')).toHaveText('1 / 10')
+  // 案头段步进到「进入编辑器」提示步（步 5，索引 4）
+  for (let i = 0; i < 4; i++) await page.getByTestId('tour-next').click()
+  await expect(page.getByTestId('tour-step-indicator')).toHaveText('5 / 10')
   // 跨视图：下一步触发 before（打开漫游示例）→ 编辑器段命令栏步
   await page.getByTestId('tour-next').click()
   await expect(page.getByTestId('zen-bar')).toBeVisible()
-  await expect(page.getByTestId('tour-step-indicator')).toHaveText('7 / 11')
+  await expect(page.getByTestId('tour-step-indicator')).toHaveText('6 / 10')
   // 跨视图后锚点（zen-bar）随编辑器异步挂载：有界重试内成功定位，高亮不降级
   await expect(page.getByTestId('tour-highlight')).toBeVisible()
   // 走到末步（完成）
@@ -55,5 +55,5 @@ test('引导：设置页重看再次出现', async ({ page }) => {
   await page.getByTestId('btn-settings').click()
   await page.getByTestId('tour-replay').click()
   await expect(page.getByTestId('tour-overlay')).toBeVisible()
-  await expect(page.getByTestId('tour-step-indicator')).toHaveText('1 / 11')
+  await expect(page.getByTestId('tour-step-indicator')).toHaveText('1 / 10')
 })
