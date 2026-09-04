@@ -1,5 +1,5 @@
 // src/hooks/useOpenDocument.ts —— 打开文档加载链（2026-09 自 EditorView 拆出，行数护栏）：
-// 读 md → parse（失败走错误面板）→ sidecar（布局/弯曲记忆/折叠）→ 忽略块上报 →
+// 读 md → parse → sidecar（布局/弯曲记忆/折叠）→ 忽略块上报 →
 // 插图元数据 → 引擎树落 state。纯编排：解析产物经回调上抛，EditorView 持全部 state；
 // cancelled 守卫防切换文档（父组件 key 重挂载）后的迟到写入。
 // 文档内容由父组件 key 重挂载切换——本 hook 仅挂载时执行一次（exhaustive-deps 豁免同旧内联 effect）。
@@ -33,10 +33,9 @@ export interface OpenDocumentDeps {
   onFileTime(ms: number): void
   /** 全链成功（loading → ready） */
   onReady(): void
-  /** 解析失败（错误面板显示 parse 错误与原文） */
-  onParseError(error: string, raw: string): void
-  /** 读文件失败（如已被移动/删除） */
-  onReadError(message: string): void
+  /** 打开失败统一出口（2026-09 优雅恢复分型）：read=文件读不到（被删/移动/权限，hook 内
+   *  自动移出最近清单——坏条目彻底无用）；parse=内容解析失败（保留最近清单，修复后仍可达） */
+  onFail(kind: 'read' | 'parse', error: string, raw: string): void
 }
 
 export function useOpenDocument(deps: OpenDocumentDeps): void {
@@ -50,7 +49,7 @@ export function useOpenDocument(deps: OpenDocumentDeps): void {
         const r = parse(raw)
         if (cancelled) return
         if (!r.ok) {
-          deps.onParseError(r.error, raw)
+          deps.onFail('parse', r.error, raw)
           return
         }
         // 冲突检测基线（parse 成功即记）：此后磁盘内容相对此基线的变化即「外部改写」
@@ -76,9 +75,11 @@ export function useOpenDocument(deps: OpenDocumentDeps): void {
         deps.onTree(zenToEngineTree(r.tree, new Set(sc?.collapsed ?? []), '', imgMeta))
         deps.onReady()
       } catch (e) {
-        // 读文件失败（如已被移动/删除）与解析失败走同一错误面板
+        // 读文件失败（如已被移动/删除）：自动移出最近清单（持久化 + 会话 MRU）——
+        // 坏条目彻底无用；错误面板只占画布内容区（壳层保留），不再锁死编辑器
         if (cancelled) return
-        deps.onReadError(`无法读取文件（可能已被移动或删除）：${e instanceof Error ? e.message : String(e)}`)
+        void useAppStore.getState().dropRecent(mdPath)
+        deps.onFail('read', `无法读取文件（可能已被移动或删除）：${e instanceof Error ? e.message : String(e)}`, '')
       }
     })()
     return () => {

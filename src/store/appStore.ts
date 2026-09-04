@@ -71,6 +71,9 @@ interface AppState {
   /** 模板 md 可选参（M16）：传入即以模板实例化（根名替换为 name） */
   createAndOpen: (name: string, templateContent?: string) => Promise<void>
   openMap: (mdPath: string) => Promise<void>
+  /** 打开失败清理（2026-09 优雅恢复）：文件读不到（被删/移动/权限）时移出最近清单——
+   *  recentOpened 持久化 + sessionRecent 内存（Ctrl+Tab 数据源）；解析失败不调用（文件仍在，修复后可达） */
+  dropRecent: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
   setPreviewOutline: (pref: PreviewOutlinePref) => Promise<void>
@@ -290,6 +293,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ recentOpened })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, lastOpened: mdPath, recentOpened })
+  },
+
+  dropRecent: async (mdPath) => {
+    const recentOpened = get().recentOpened.filter((p) => p !== mdPath)
+    set({ recentOpened, sessionRecent: get().sessionRecent.filter((p) => p !== mdPath) })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, recentOpened })
   },
 
   markDirty: () => set({ dirty: true }),
