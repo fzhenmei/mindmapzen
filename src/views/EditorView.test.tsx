@@ -1272,10 +1272,12 @@ test('保存在途点放弃被挡下：不清脏不退出，落盘完成后才�
 // ---- 忽略块横幅与显式保存确认（spec §3.5 实施细化：自动保存静默）----
 
 /** 渲染带未映射段落（「一段说明。」）的文档：打开成功即顶部横幅可见。
- *  独立路径 /ws/ignored.md，避免与 beforeEach 的 /ws/a.md 内容互相干扰。 */
+ *  独立路径 /ws/ignored.md，避免与 beforeEach 的 /ws/a.md 内容互相干扰。
+ *  段落置于根 H1 之前——正文功能（2026-09）后标题下的段落收进 body 不再进 ignoredBlocks，
+ *  根前块无归属仍进 ignored（触发载体换了位置，忽略流/横幅断言语义不变） */
 const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
   const exitApp = vi.fn()
-  await fs.writeTextFileAtomic('/ws/ignored.md', '# 根\n\n一段说明。\n\n## A\n')
+  await fs.writeTextFileAtomic('/ws/ignored.md', '一段说明。\n\n# 根\n\n## A\n')
   render(
     <EditorView
       mdPath="/ws/ignored.md"
