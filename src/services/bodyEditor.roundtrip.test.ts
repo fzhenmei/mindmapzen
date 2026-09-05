@@ -14,7 +14,9 @@
 //      认领的 mdast 节点直接抛 parserMatchError,还需自写 remark 变换把 heading/list 字面化为
 //      段落。实测输出 '\# x\n\n\- y'(转义保字面,再 parse 无 heading/list 节点)。
 // 二、Tiptap(@tiptap/core|pm|starter-kit|extension-table 3.31.3 + tiptap-markdown 0.9.0,均 MIT)→ Go:
-//   1. roundtrip:8/8 逐字节恒等,且 getMarkdown() 原始输出不带尾换行,零规范化即恒等
+//   1. roundtrip:8/8 恒等,唯一豁免 = 恰好一个文末换行(实测仅表格块触发,tiptap-markdown
+//      表格序列化 closeBlock 所致,其余 7 例原始输出零尾空白;本测试用 /\n$/ 精确豁免该形态,
+//      文末空格/多换行等其它漂移一律报警)。
 //      (代码块保 ```lang;tiptap-markdown 表格分隔行硬编码 ---;行内标记/链接/引用全保真)。
 //   2. 禁用 heading/list = 双管齐下,缺一不可:
 //      ① StarterKit.configure({ heading/bulletList/orderedList/listItem: false }) 移除节点与输入规则;
@@ -23,7 +25,8 @@
 //      实测输出 '\# x\n\n\- y'(prosemirror-markdown 对行首 #/- 转义),再 parse 无 heading/list 节点。
 // 三、Task 5(BodyEditor 组件封装)依据:
 //   - 装配:[StarterKit, TableKit, Markdown];content 传 md 字符串即自动 parse;
-//     取值 editor.storage.markdown.getMarkdown(),输出无需任何后处理;
+//     取值 editor.storage.markdown.getMarkdown(),存库前去掉恰好一个文末换行(表格块才有,
+//     与本测试 mdOfEditor 同一口径);
 //   - 禁块:扩展 configure 关节点 + literalBlocks 扩展禁 md 块规则(本文件 literalBlocks 常量);
 //   - 依赖全 MIT,满足对外发布合规约束。
 import { afterAll, describe, expect, test } from 'vitest'
@@ -52,8 +55,10 @@ const editors: Editor[] = []
 afterAll(() => {
   editors.forEach((e) => e.destroy())
 })
+// 唯一豁免的规范化差异:恰好一个文末换行(实测仅表格块触发,tiptap-markdown 表格序列化
+// closeBlock 所致)。刻意不用 /\s+$/:文末空格/tab/多换行等其它形态一律不许,升级引入即报警。
 const mdOfEditor = (editor: Editor): string =>
-  (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown().replace(/\s+$/, '')
+  (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown().replace(/\n$/, '')
 const roundtrip = (md: string, extensions: Extensions): string => {
   const editor = new Editor({ content: md, extensions })
   editors.push(editor)
