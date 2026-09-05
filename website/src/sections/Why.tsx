@@ -1,5 +1,7 @@
 import { Check, X } from 'lucide-react'
+import { motion } from 'motion/react'
 import { BrandMark } from '../components/BrandMark'
+import { fadeUp, rowIn, rowStagger, stagger } from '../lib/motion'
 import { cn } from '../lib/utils'
 import { SectionHeading } from './SectionHeading'
 
@@ -33,13 +35,24 @@ function MarkCell({ cell }: { readonly cell: Cell }) {
 export function Why() {
   return (
     <section id="why" className="scroll-mt-20 py-24">
-      <div className="mx-auto max-w-5xl px-4">
-        <SectionHeading
-          eyebrow="## 为什么"
-          title="找不到,就自己写一个"
-          description="用导图整理想法、再转成 Markdown 喂给 AI,是每周都在重复的工作流。找遍市面工具,没有一个同时做到这几件事:"
-        />
-        <div className="mt-10 overflow-x-auto rounded-xl border bg-card shadow-sm">
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.15 }}
+        className="mx-auto max-w-5xl px-4"
+      >
+        <motion.div variants={fadeUp}>
+          <SectionHeading
+            eyebrow="## 为什么"
+            title="找不到,就自己写一个"
+            description="用导图整理想法、再转成 Markdown 喂给 AI,是每周都在重复的工作流。找遍市面工具,没有一个同时做到这几件事:"
+          />
+        </motion.div>
+        <motion.div
+          variants={fadeUp}
+          className="mt-10 overflow-x-auto rounded-xl border bg-card shadow-sm"
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
@@ -64,9 +77,9 @@ export function Why() {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <motion.tbody variants={rowStagger}>
               {ABILITIES.map((ability, i) => (
-                <tr key={ability} className="border-b last:border-b-0">
+                <motion.tr key={ability} variants={rowIn} className="border-b last:border-b-0">
                   <th
                     scope="row"
                     className="px-3 py-3 text-left font-normal text-muted-foreground whitespace-nowrap"
@@ -81,16 +94,19 @@ export function Why() {
                       <MarkCell cell={tool.cells[i]} />
                     </td>
                   ))}
-                </tr>
+                </motion.tr>
               ))}
-            </tbody>
+            </motion.tbody>
           </table>
-        </div>
-        <p className="mx-auto mt-10 max-w-2xl text-center text-balance text-muted-foreground">
+        </motion.div>
+        <motion.p
+          variants={fadeUp}
+          className="mx-auto mt-10 max-w-2xl text-center text-balance text-muted-foreground"
+        >
           Markdown 是与 AI 交流的通用语——它不该藏在导图软件的「导出为…」菜单里,
           它应该就是导图本身。
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
     </section>
   )
 }

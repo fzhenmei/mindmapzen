@@ -1,4 +1,6 @@
+import { motion } from 'motion/react'
 import { Button } from '../components/ui/button'
+import { fadeUp, fadeUpThenStagger, stagger } from '../lib/motion'
 import { SectionHeading } from './SectionHeading'
 
 type Package = { name: string; description: string; file: string }
@@ -12,16 +14,25 @@ const PACKAGES: Package[] = [
 export function Download() {
   return (
     <section id="download" className="scroll-mt-20 border-t bg-secondary/30 py-24">
-      <div className="mx-auto max-w-5xl px-4">
-        <SectionHeading
-          eyebrow="## 下载"
-          title="装上就用"
-          description="免费,无账号,无导图数量限制。所有文件都保存在你自己的工作区文件夹里。"
-        />
-        <div className="mx-auto mt-10 max-w-xl space-y-3">
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.15 }}
+        className="mx-auto max-w-5xl px-4"
+      >
+        <motion.div variants={fadeUp}>
+          <SectionHeading
+            eyebrow="## 下载"
+            title="装上就用"
+            description="免费,无账号,无导图数量限制。所有文件都保存在你自己的工作区文件夹里。"
+          />
+        </motion.div>
+        <motion.div variants={fadeUpThenStagger} className="mx-auto mt-10 max-w-xl space-y-3">
           {PACKAGES.map((p) => (
-            <div
+            <motion.div
               key={p.name}
+              variants={fadeUp}
               className="flex items-center justify-between gap-4 rounded-xl border bg-card px-6 py-4 shadow-sm"
             >
               <div className="min-w-0">
@@ -34,13 +45,16 @@ export function Download() {
               <Button asChild className="shrink-0">
                 <a href="#download">下载</a>
               </Button>
-            </div>
+            </motion.div>
           ))}
-        </div>
-        <p className="mt-8 text-center font-mono text-xs text-muted-foreground">
+        </motion.div>
+        <motion.p
+          variants={fadeUp}
+          className="mt-8 text-center font-mono text-xs text-muted-foreground"
+        >
           v2.9.0 · Windows 10 及以上
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
     </section>
   )
 }

@@ -17,6 +17,9 @@ const LINKS_L2 = [
   'M372,248 C410,248 410,248 448,248',
 ]
 
+/** 入场时间轴偏移:等 Hero 文案交错入场(Hero.tsx,约 0.5s 演完)再起笔 */
+const T = 500
+
 function MindMapCanvas() {
   return (
     <svg
@@ -28,15 +31,27 @@ function MindMapCanvas() {
       {/* 连线(先画,压在节点下) */}
       <g fill="none" stroke="var(--primary)" strokeWidth="2" opacity="0.4">
         {LINKS_L1.map((d) => (
-          <path key={d} d={d} pathLength={1} className="mm-link" style={{ animationDelay: '150ms' }} />
+          <path
+            key={d}
+            d={d}
+            pathLength={1}
+            className="mm-link"
+            style={{ animationDelay: `${T + 150}ms` }}
+          />
         ))}
         {LINKS_L2.map((d) => (
-          <path key={d} d={d} pathLength={1} className="mm-link" style={{ animationDelay: '450ms' }} />
+          <path
+            key={d}
+            d={d}
+            pathLength={1}
+            className="mm-link"
+            style={{ animationDelay: `${T + 450}ms` }}
+          />
         ))}
       </g>
 
       {/* 根节点 */}
-      <g className="mm-node">
+      <g className="mm-node" style={{ animationDelay: `${T}ms` }}>
         <rect x="24" y="136" width="112" height="48" rx="8" fill="var(--primary)" />
         <text x="36" y="160" dominantBaseline="middle" fontSize="16" fontWeight="600" fill="var(--primary-foreground)">
           周报提纲
@@ -49,7 +64,7 @@ function MindMapCanvas() {
         { y: 142, label: '数据与结论' },
         { y: 230, label: '下周计划' },
       ].map((n, i) => (
-        <g key={n.label} className="mm-node" style={{ animationDelay: `${300 + i * 60}ms` }}>
+        <g key={n.label} className="mm-node" style={{ animationDelay: `${T + 300 + i * 60}ms` }}>
           <rect x="240" y={n.y} width="132" height="36" rx="7" fill="var(--card)" stroke="var(--border)" />
           <text x="252" y={n.y + 18} dominantBaseline="middle" fontSize="14" fill="var(--foreground)">
             {n.label}
@@ -63,7 +78,7 @@ function MindMapCanvas() {
         { y: 82, label: '修复连线弯曲' },
         { y: 232, label: '打磨导出' },
       ].map((n, i) => (
-        <g key={n.label} className="mm-node" style={{ animationDelay: `${600 + i * 60}ms` }}>
+        <g key={n.label} className="mm-node" style={{ animationDelay: `${T + 600 + i * 60}ms` }}>
           <rect x="448" y={n.y} width="152" height="32" rx="6" fill="var(--muted)" stroke="var(--border)" />
           <text x="460" y={n.y + 16} dominantBaseline="middle" fontSize="13" fill="var(--muted-foreground)">
             {n.label}
