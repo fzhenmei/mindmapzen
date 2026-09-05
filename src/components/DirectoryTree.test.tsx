@@ -92,10 +92,64 @@ describe('DirectoryTree 收藏入口', () => {
     expect(await screen.findByText('取消收藏')).toBeInTheDocument()
   })
 
-  test('已收藏文件在目录树行尾显示星标', () => {
+  test('已收藏文件行尾收藏钮常显（aria-pressed 示态，文案取消收藏）', () => {
     renderTree({ favorites: [{ name: '甲图', relDir: 'docs' }] })
-    expect(screen.getByTestId('fav-star-甲图')).toBeInTheDocument()
-    expect(screen.queryByTestId('fav-star-乙图')).toBeNull()
+    // 树行与收藏组行各一枚，均示已收藏态
+    for (const btn of screen.getAllByTestId('fav-btn-甲图')) {
+      expect(btn).toHaveAttribute('aria-pressed', 'true')
+      expect(btn).toHaveAttribute('aria-label', '取消收藏')
+    }
+    expect(screen.getByTestId('fav-btn-乙图')).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+// 行内悬停收藏钮（2026-09 微调）：文件行悬停显「收藏」浮层，点击即收藏/取消——
+// 已收藏常显（状态指示），未收藏 hover 显示（CSS opacity，jsdom 不断言视觉只断言行）
+describe('DirectoryTree 行内收藏钮', () => {
+  test('未收藏行：点击收藏钮回调待收藏文件', () => {
+    const onToggleFavorite = vi.fn()
+    renderTree({ onToggleFavorite })
+    fireEvent.click(screen.getByTestId('fav-btn-乙图'))
+    expect(onToggleFavorite).toHaveBeenCalledWith({ name: '乙图', relDir: '' })
+  })
+
+  test('收藏组行同样提供收藏钮（取消收藏直达）', () => {
+    const onToggleFavorite = vi.fn()
+    renderTree({ favorites: [{ name: '甲图', relDir: 'docs' }], onToggleFavorite })
+    // 树行 + 收藏组行两枚，点击任一均回调同一文件
+    const btns = screen.getAllByTestId('fav-btn-甲图')
+    expect(btns).toHaveLength(2)
+    fireEvent.click(btns[1])
+    expect(onToggleFavorite).toHaveBeenCalledWith({ name: '甲图', relDir: 'docs' })
+  })
+
+  test('收藏钮点击不触发行选中（收藏动作与选中/进详情解耦）', () => {
+    const onSelectFile = vi.fn()
+    renderTree({ onSelectFile })
+    fireEvent.click(screen.getByTestId('fav-btn-乙图'))
+    expect(onSelectFile).not.toHaveBeenCalled()
+  })
+})
+
+// 收藏组折叠（2026-09 微调）：组标签即折叠扳机（官方 collapsible group 模式），
+// 搜索时强制展开（收藏命中不被折叠态藏住）
+describe('DirectoryTree 收藏组折叠', () => {
+  test('标签点击收起/展开；收起后搜索强制展开', async () => {
+    renderTree({ favorites: [{ name: '甲图', relDir: 'docs' }] })
+    expect(screen.getByTestId('fav-node-甲图')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('fav-toggle'))
+    await waitFor(() => expect(screen.queryByTestId('fav-node-甲图')).toBeNull())
+    // 组标签仍在（可再展开）
+    fireEvent.click(screen.getByTestId('fav-toggle'))
+    expect(await screen.findByTestId('fav-node-甲图')).toBeInTheDocument()
+    // 收起后搜索：强制展开，收藏命中可见
+    fireEvent.click(screen.getByTestId('fav-toggle'))
+    await waitFor(() => expect(screen.queryByTestId('fav-node-甲图')).toBeNull())
+    fireEvent.change(screen.getByTestId('dir-search'), { target: { value: '甲' } })
+    expect(await screen.findByTestId('fav-node-甲图')).toBeInTheDocument()
+    // 清空搜索回落折叠态语义不回滚（受控 open 仅在搜索时置位）
+    fireEvent.change(screen.getByTestId('dir-search'), { target: { value: '' } })
+    await waitFor(() => expect(screen.queryByTestId('fav-node-甲图')).toBeNull())
   })
 })
 

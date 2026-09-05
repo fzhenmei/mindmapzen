@@ -228,10 +228,11 @@ export default function DirectoryTree({
   /** 行首箭头槽（资源管理器式）：有子目录/文件 → 折叠扳机；否则等宽占位，图标列对齐 */
   const chevronSlot = 'flex size-5 shrink-0 items-center justify-center'
 
-  /** 文件行（叶子）：[占位][图标][名称] 等宽文件声道；行面包 ContextMenu（右键开菜单，
-   *  右键即选中切预览——VSCode 惯例）。可拖（draggable）不可落——文件不作落点。
-   *  2026-09 收藏：favRow 变体（收藏组行）用主菜单骨架与星标图标、testid fav-node-*；
-   *  树内行已收藏时行尾小星标示意（fav-star-*），图标声道仍为 md */
+  /** 文件行（叶子）：[占位][图标][名称][收藏钮] 等宽文件声道；行面包 ContextMenu（右键
+   *  开菜单，右键即选中切预览——VSCode 惯例）。可拖（draggable）不可落——文件不作落点。
+   *  2026-09 收藏：行尾悬停收藏钮（fav-btn-*）——已收藏常显（状态指示兼一键取消），未
+   *  收藏 hover 显示；favRow 变体（收藏组行）用主菜单骨架与星标图标、testid fav-node-*，
+   *  收藏钮仅 hover 显示（行首星标已示态，钮是移除动作） */
   const renderFile = (f: TreeFile, key: string, favRow = false) => {
     const fav = favSet.has(fileKey(f))
     const Item = favRow ? SidebarMenuItem : SidebarMenuSubItem
@@ -241,7 +242,7 @@ export default function DirectoryTree({
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
-              className={`flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
+              className={`group/frow flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
               draggable
               onDragStart={startDrag({ kind: 'file', file: f }, key)}
               onDragEnd={endDrag}
@@ -262,13 +263,26 @@ export default function DirectoryTree({
                 >
                   {favRow ? <IconStar /> : <IconMarkdown />}
                   <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  {!favRow && fav && (
-                    <span data-testid={`fav-star-${f.name}`} aria-label="已收藏" className="ml-auto shrink-0 text-sidebar-foreground/60">
-                      <IconStar size={12} />
-                    </span>
-                  )}
                 </button>
               </Btn>
+              {/* 悬停收藏浮层：与行选中/双击解耦（兄弟节点不冒泡进行按钮）；钮上禁拖拽
+                  （draggable=false + dragstart 阻断——不带走行拖拽语义） */}
+              <button
+                type="button"
+                data-testid={`fav-btn-${f.name}`}
+                aria-pressed={fav}
+                aria-label={fav ? '取消收藏' : '收藏'}
+                title={fav ? '取消收藏' : '收藏'}
+                draggable={false}
+                onDragStart={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={() => onToggleFavorite(f)}
+                className={`shrink-0 rounded-sm p-1 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 ${fav && !favRow ? 'opacity-100' : 'opacity-0 group-hover/frow:opacity-100'}`}
+              >
+                <IconStar size={12} />
+              </button>
             </div>
           </ContextMenuTrigger>
           {fileMenu(f)}
@@ -432,13 +446,24 @@ export default function DirectoryTree({
       <SidebarContent>
       {/* 收藏组（2026-09 收藏置顶）：跨目录聚合置顶于「目录」组之上——文件多而重要者少，
           星标文件不问所在目录一屏可达；空收藏整组隐藏。行交互与树文件行同语义（单击
-          预览/双击进纸面/右键菜单），行本身可拖（拖到目录=移动，载荷同为 TreeFile） */}
+          预览/双击进纸面/右键菜单），行本身可拖（拖到目录=移动，载荷同为 TreeFile）。
+          组标签即折叠扳机（官方 collapsible group 模式）；搜索时强制展开（与目录树同
+          口径——收藏命中不被折叠态藏住） */}
       {favFiles.length > 0 && (
         <SidebarGroup>
-          <SidebarGroupLabel>收藏</SidebarGroupLabel>
-          <SidebarMenu>
-            {favFiles.map((f) => renderFile(f, `fav:${fileKey(f)}`, true))}
-          </SidebarMenu>
+          <Collapsible defaultOpen open={searching ? true : undefined} className="group/favcollapsible">
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger data-testid="fav-toggle" aria-label="收起或展开收藏">
+                收藏
+                <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/favcollapsible:rotate-90" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <CollapsibleContent>
+              <SidebarMenu>
+                {favFiles.map((f) => renderFile(f, `fav:${fileKey(f)}`, true))}
+              </SidebarMenu>
+            </CollapsibleContent>
+          </Collapsible>
         </SidebarGroup>
       )}
       <SidebarGroup>
