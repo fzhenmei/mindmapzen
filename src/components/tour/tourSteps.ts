@@ -68,7 +68,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'editor',
     target: 'layout-mindmap',
     title: '布局切换',
-    body: '同一份内容可在思维导图、逻辑图、组织结构图三种布局间切换。',
+    body: '常用布局一键直达：思维导图、逻辑图、组织结构图；时间轴、鱼骨图收在「更多」里。',
   },
   {
     view: 'editor',

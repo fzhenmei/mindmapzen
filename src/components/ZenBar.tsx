@@ -16,6 +16,8 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import {
@@ -28,7 +30,9 @@ import {
   IconImage,
   IconLayoutBoth,
   IconLayoutDown,
+  IconLayoutFishbone,
   IconLayoutRight,
+  IconLayoutTimeline,
   IconMinus,
   IconNote,
   IconPlus,
@@ -90,6 +94,13 @@ function Tip({ label, children }: Readonly<{ label: string; children: ReactNode 
   )
 }
 
+/** 收起的非常用布局（2026-09 时间轴/鱼骨图）：不占常驻钮位，收进「更多」单选下拉；
+ *  当前激活时触发钮点亮并换显该布局图标 + 语义名（aria-label），不点开也知当前布局 */
+const MORE_LAYOUTS = [
+  ['timeline', '时间轴', <IconLayoutTimeline key="t" />],
+  ['fishbone', '鱼骨图', <IconLayoutFishbone key="f" />],
+] as const
+
 /** 纸面命令栏：返回/回退/重做/复制/保存/备注/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
@@ -117,6 +128,8 @@ export default function ZenBar({
     scope === 'branch'
       ? '复制选中分支为 Markdown（Ctrl+C）'
       : '复制整图为 Markdown（Ctrl+C）'
+  // 更多布局触发钮的激活态：当前布局是收起项时点亮（Toggle pressed → data-state=on，同组点亮语言）
+  const moreActive = MORE_LAYOUTS.find(([kind]) => kind === layout) ?? null
   return (
     // zen-bar 类名保留为视觉冒烟钩子（skin 已全转 utility，App.css 无对应规则）
     <header
@@ -359,6 +372,37 @@ export default function ZenBar({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+      {/* 更多布局 = 单选下拉（2026-09 时间轴/鱼骨图）：收起非常用布局，不占常驻钮位。
+       *  触发钮不用 ui Toggle：DropdownMenuTrigger 的 data-state(open/closed) 会遮蔽 Toggle 的
+       *  on/off 点亮信号（同布局组 TooltipTrigger 冲突家族），激活态走 data-active 通道
+       *  （官方 sidebar 同款规避）；语义名由 aria-label 承担，激活收起项时换显该布局图标 */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="btn-layout-more"
+            data-active={moreActive !== null ? '' : undefined}
+            aria-label={moreActive ? moreActive[1] : '更多布局'}
+            className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+          >
+            {moreActive ? moreActive[2] : <IconChevronDown />}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuRadioGroup
+            value={layout}
+            onValueChange={(v) => onSwitchLayout(v as LayoutKind)}
+          >
+            {MORE_LAYOUTS.map(([kind, label]) => (
+              <DropdownMenuRadioItem key={kind} value={kind} data-testid={`layout-${kind}`}>
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   )
 }

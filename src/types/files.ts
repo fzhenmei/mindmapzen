@@ -3,10 +3,11 @@
  *  createdAt/size（M15 资源管理器视图）= 创建时间毫秒与字节大小 */
 export interface MapInfo { name: string; mdPath: string; relDir: string; modifiedAt: number; createdAt: number; size: number }
 
-/** 语义布局三态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用） */
-export type LayoutKind = 'mindmap' | 'logic' | 'org'
+/** 语义布局五态（引擎名映射见 editor/layoutMap.ts；此处定义供 AppConfig/Sidecar 共用；
+ *  timeline/fishbone 为 2026-09 新增，ZenBar 收进「更多布局」下拉不常驻布局组） */
+export type LayoutKind = 'mindmap' | 'logic' | 'org' | 'timeline' | 'fishbone'
 
-const LAYOUT_KINDS = new Set<LayoutKind>(['mindmap', 'logic', 'org'])
+const LAYOUT_KINDS = new Set<LayoutKind>(['mindmap', 'logic', 'org', 'timeline', 'fishbone'])
 
 /** 宽容解析配置中的布局偏好：非法/缺失返回 null */
 export function parseLayoutKind(v: unknown): LayoutKind | null {

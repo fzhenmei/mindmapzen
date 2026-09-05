@@ -57,6 +57,13 @@ describe('preferredLayout（验收轮三：记住默认布局）', () => {
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: null }))
     expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBeNull()
   })
+  test('新增布局值往返（2026-09 时间轴/鱼骨图）', async () => {
+    const fs = new MemoryFsAdapter()
+    await saveConfig(fs, '/cfg.json', cfg({ preferredLayout: 'timeline' }))
+    expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('timeline')
+    await saveConfig(fs, '/cfg.json', cfg({ preferredLayout: 'fishbone' }))
+    expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('fishbone')
+  })
 })
 
 describe('theme（M4 禅意视觉）', () => {

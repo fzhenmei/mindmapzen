@@ -1445,6 +1445,30 @@ test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', as
   expect(sc.layout).toBe('org')
 })
 
+test('更多布局下拉切换时间轴：走同一切换链路（引擎 setLayout + sidecar 即时落盘）', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle // ready 时刻实例即 mmRef 所持（同前用例理由）
+  fireEvent.pointerDown(screen.getByTestId('btn-layout-more'), { button: 0 })
+  fireEvent.click(screen.getByTestId('layout-timeline'))
+  expect(handle.setLayout).toHaveBeenCalledWith(layoutToEngine('timeline'))
+  await act(async () => {}) // 排空 fire-and-forget 落盘微任务
+  const sc = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/ws/a.zen.json'))
+  expect(sc.layout).toBe('timeline')
+})
+
 test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', async () => {
   await fs.writeTextFileAtomic(
     '/ws/b.zen.json',
