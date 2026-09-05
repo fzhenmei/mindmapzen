@@ -16,6 +16,10 @@ interface AppState {
   /** 会话内打开 MRU（v2.5 编辑器快速切换）：内存态不落盘，Ctrl+Tab ping-pong 的数据源
    *  （「上一张」= 首个 ≠ 当前图的项；区别于跨会话的 recentOpened） */
   sessionRecent: string[]
+  /** 会话内 tab 稳定序（2026-09 顶部导图胶囊条）：内存态不落盘。区别于 recentOpened/
+   *  sessionRecent 的 MRU 置顶（切换即跳动，连点翻图时鼠标记忆失效）——已在列不重排、
+   *  新开尾部追加，胶囊位置恒定防误触；init 自 recentOpened 初始化（重启后胶囊仍在） */
+  mapTabs: string[]
   workspaceDir: string | null
   maps: MapInfo[]
   /** 案头左树当前选中目录（''=全部；相对工作区路径，'/' 分隔）。maps 在 store 中不过滤，由 LibraryView 渲染时派生 */
@@ -121,11 +125,16 @@ interface AppState {
   setError: (e: string | null) => void
 }
 
+/** tab 稳定序维护（2026-09 顶部胶囊条）：已在列不动、新开尾部追加，超 10 淘汰最早（同 recentOpened 上限） */
+const appendTab = (tabs: string[], mdPath: string): string[] =>
+  tabs.includes(mdPath) ? tabs : [...tabs, mdPath].slice(-10)
+
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
   booted: false,
   recentOpened: [],
   sessionRecent: [],
+  mapTabs: [],
   workspaceDir: null,
   maps: [],
   selectedDir: '',
@@ -165,7 +174,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
-      set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
+      // mapTabs 初始 = 持久 MRU 序（2026-09 顶部胶囊条）：重启后胶囊仍在，跨会话保留
+      set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened })
       await get().refreshMaps()
     }
     // v2.4：不再自动回到上次打开的导图——启动恒定落案头（上次内容在「最近打开」一键可达）
@@ -186,7 +196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
    *  （无工作区不得残留打开指针，否则换工作区重进会被旧指针劫持） */
   exitWorkspace: async () => {
     const { adapter, configPath } = get()
-    set({ workspaceDir: null, maps: [], selectedDir: '', currentMdPath: null, sessionRecent: [] })
+    set({ workspaceDir: null, maps: [], selectedDir: '', currentMdPath: null, sessionRecent: [], mapTabs: [] })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, workspaceDir: null, lastOpened: null })
   },
@@ -207,7 +217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, configPath, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
     const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent, relDir)
-    set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)] })
+    set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)], mapTabs: appendTab(get().mapTabs, info.mdPath) })
     // 新建即最近（v2.5）：与 openMap 同款 MRU 维护——新图立即可达快速切换浮层与案头欢迎页
     const recentOpened = [info.mdPath, ...get().recentOpened.filter((p) => p !== info.mdPath)].slice(0, 10)
     set({ recentOpened })
@@ -371,7 +381,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openMap: async (mdPath) => {
     // 会话内 MRU 置顶（v2.5 快速切换）：与持久化的 recentOpened 分开维护（各取各的语义）
-    set({ currentMdPath: mdPath, route: 'editor', error: null, sessionRecent: [mdPath, ...get().sessionRecent.filter((p) => p !== mdPath)] })
+    set({ currentMdPath: mdPath, route: 'editor', error: null, sessionRecent: [mdPath, ...get().sessionRecent.filter((p) => p !== mdPath)], mapTabs: appendTab(get().mapTabs, mdPath) })
     const { adapter, configPath } = get()
     // 最近打开清单：置顶去重截断（v2.4 案头欢迎页），随 lastOpened 一并持久化
     const recentOpened = [mdPath, ...get().recentOpened.filter((p) => p !== mdPath)].slice(0, 10)
@@ -382,7 +392,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   dropRecent: async (mdPath) => {
     const recentOpened = get().recentOpened.filter((p) => p !== mdPath)
-    set({ recentOpened, sessionRecent: get().sessionRecent.filter((p) => p !== mdPath) })
+    set({ recentOpened, sessionRecent: get().sessionRecent.filter((p) => p !== mdPath), mapTabs: get().mapTabs.filter((p) => p !== mdPath) })
     const { adapter, configPath } = get()
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, recentOpened })

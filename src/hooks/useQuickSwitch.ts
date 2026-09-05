@@ -81,6 +81,15 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     [sessionRecent, workspaceDir],
   )
 
+  // 顶部胶囊条候选（2026-09 鼠标流切换）：mapTabs 稳定序（含当前图，高亮锚点）——
+  // 区别于上两路 MRU 候选：切换不重排，胶囊位置恒定防连点误触
+  const mapTabs = useAppStore((s) => s.mapTabs)
+  const mapTabCandidates = useMemo<SwitchCandidate[]>(
+    () => mapTabs.map(toCandidate),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
+    [mapTabs, workspaceDir],
+  )
+
   /** Ctrl+Tab 步进（未开则呼出）：首按高亮跳过当前（索引 0）到上一张（一按即松 = ping-pong；
    *  列表仅当前一张时高亮唯一项），reverse = Shift 反向从未项起；此后 mod 循环含索引 0 */
   const cycleStep = (reverse: boolean): void => {
@@ -142,6 +151,7 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     candidates, // 搜索候选
     cycle, // 轮换高亮索引（null = 未开）
     cycleCandidates, // 轮换候选（会话 MRU）
+    mapTabCandidates, // 顶部胶囊条候选（mapTabs 稳定序，2026-09）
     cycleStep, // Ctrl+Tab 步进/呼出（hotkeys 与轮换监听共用）
     setCycleActive: (i: number) => setCycle(i), // hover 同步（受控浮层）
     cancelCycle: () => setCycle(null),

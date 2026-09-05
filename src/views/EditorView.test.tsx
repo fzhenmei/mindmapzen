@@ -176,6 +176,7 @@ beforeEach(async () => {
     error: null,
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
+    mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
     settings: { copyIncludeNote: false, copyIncludeLinks: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
@@ -2061,6 +2062,34 @@ describe('快速切换（v2.5）', () => {
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true }) // 再呼
     fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+})
+
+// ---- 顶部导图胶囊条（2026-09 鼠标流切换）：mapTabs 稳定序平铺、当前图高亮、点选走安全链 ----
+
+describe('顶部导图胶囊条（2026-09）', () => {
+  test('mapTabs ≥2 渲染平铺胶囊：当前图高亮，点选经安全链切换', async () => {
+    useAppStore.setState({ mapTabs: ['/ws/a.md', '/ws/b.md', '/ws/子/c.md'] })
+    await renderForSwitch()
+    const items = screen.getAllByTestId('map-tab')
+    expect(items).toHaveLength(3)
+    expect(items[1]).toHaveTextContent('b')
+    expect(items[0]).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(items[1])
+    await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
+  })
+
+  test('点击当前胶囊 no-op（仍在当前图）', async () => {
+    useAppStore.setState({ mapTabs: ['/ws/a.md', '/ws/b.md'] })
+    await renderForSwitch()
+    fireEvent.click(screen.getAllByTestId('map-tab')[0])
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
+  })
+
+  test('仅当前一张不渲染整条（保持沉浸）', async () => {
+    useAppStore.setState({ mapTabs: ['/ws/a.md'] })
+    await renderForSwitch()
+    expect(screen.queryByTestId('map-tabs')).not.toBeInTheDocument()
   })
 })
 

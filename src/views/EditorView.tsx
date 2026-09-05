@@ -34,6 +34,7 @@ import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
 import EditorDialogs from '../components/EditorDialogs'
 import QuickSwitchDialog from '../components/QuickSwitchDialog'
+import MapTabs from '../components/MapTabs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
@@ -310,6 +311,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onNodeCopy={() => flashCopy('copied-node')}
         />
       </div>
+      {/* 顶部导图胶囊条（2026-09 鼠标流切换）：最近打开常驻平铺，点选走安全链；仅一张时
+          组件内不渲染。悬浮顶部居中（悬浮停泊同 ZenBar——canvas-host 恒满屏，引擎零配合） */}
+      <MapTabs tabs={quick.mapTabCandidates} currentMdPath={mdPath} onPick={(p) => void quick.switchTo(p)} />
       {/* 选中节点浮动条（验收轮）：备注笔 + 连线箭头，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
       {nodePos && !anyDialog && (
         <NodeActions
