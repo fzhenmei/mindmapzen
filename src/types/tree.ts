@@ -10,6 +10,9 @@ export interface ZenNode {
   /** 节点插图（M19）：md 行尾 ![alt](src) 标记 ⇄ 此字段；src 相对工作区路径，
    *  画布经引擎 imgMap（src→dataURL）渲染；每节点至多一枚 */
   image?: { src: string; alt: string }
+  /** 节点正文(2026-09 写作):原始 md 片段(标题下非结构块:段落/代码/表格等),
+   *  md 映射为节点行与备注之间的原样块;空串视为无正文 */
+  body?: string
   /** 引擎节点 uid 透传（M5d Task 2）：仅 engineTreeToZen 方向携带（连线注册表键/序列化注入查表），
    *  parse 永不设置——不进 md，roundtrip 属性测试不受影响 */
   uid?: string

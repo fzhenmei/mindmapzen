@@ -147,6 +147,22 @@ function assignNote(node: ZenNode, note: string): void {
   node.note = node.note ? node.note + '\n' + note : note
 }
 
+/** 块级源码原文(2026-09 正文):按 position 行区间整段取(保留内部空行/缩进,
+ *  与序列化原样写回逐字互逆;不剥任何前缀——正文块是顶层块,无前缀) */
+function rawBlockText(md: string, block: MNode): string {
+  const lines = md.split('\n')
+  const start = (block.position?.start.line ?? 1) - 1
+  const end = (block.position?.end.line ?? 1) - 1
+  const out: string[] = []
+  for (let i = start; i <= end; i++) out.push((lines[i] ?? '').replace(/\r$/, ''))
+  return out.join('\n')
+}
+
+/** 归属正文:多块以空行合并(宽容,与序列化"块间空行"约定互逆;spec 正文归一) */
+function assignBody(node: ZenNode, body: string): void {
+  node.body = node.body ? node.body + '\n\n' + body : body
+}
+
 /** 列表块挂到最近标题下（嵌套列表递进一层），列表项首段落即其文本不计入 ignored，
  *  项内引用块收为该项备注，其余非列表内容收进 ignored */
 function visitList(md: string, list: MNode, parentNode: ZenNode, state: OutlineState): void {
@@ -186,6 +202,9 @@ interface OutlineState {
   ignored: IgnoredBlock[]
   /** 最近产出的节点（标题或列表项）：无缩进的顶层引用块归属它 */
   lastNode: ZenNode | null
+  /** 最近标题级节点(2026-09 正文):非结构块的归属目标;仅 visitHeading 更新,
+   *  列表项不更新(列表项 v1 无正文,spec 深度限制) */
+  lastHeading: ZenNode | null
 }
 
 /** 处理标题块：首个 H1 立为根；其余标题挂 outline 栈（多余 H1 成为根的一级子节点）。返回错误信息（null 表示正常） */
@@ -194,16 +213,19 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
   if (state.root !== null) {
     attachHeading(md, block, d, state.stack)
     state.lastNode = state.stack.at(-1)?.node ?? null
+    state.lastHeading = state.stack.at(-1)?.node ?? null
     return null
   }
   if (d !== 1) return NO_ROOT_ERROR
   state.root = makeNode(headingText(md, block))
   state.stack.push({ depth: 1, node: state.root })
   state.lastNode = state.root
+  state.lastHeading = state.root
   return null
 }
 
-/** 处理单个顶层块：标题/列表归树，引用块归属最近节点（无归属收进 ignored），其余收进 ignored。返回错误信息（null 表示正常） */
+/** 处理单个顶层块：标题/列表归树，引用块归属最近节点（无归属收进 ignored），
+ *  其余非结构块（段落/代码/表格等）归属最近标题级节点为正文（无归属收进 ignored）。返回错误信息（null 表示正常） */
 function visitBlock(md: string, block: MNode, state: OutlineState): string | null {
   if (block.type === 'heading') return visitHeading(md, block, state)
   if (block.type === 'blockquote') {
@@ -214,7 +236,11 @@ function visitBlock(md: string, block: MNode, state: OutlineState): string | nul
     return null
   }
   if (block.type !== 'list') {
-    state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
+    // 正文(2026-09 写作):非结构块(段落/代码/表格等)归属最近标题级节点;
+    // 根 H1 之前无归属,仍收进 ignored(spec 兼容性:段落从静默忽略变为正文可见)
+    const target = state.lastHeading
+    if (target === null) state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
+    else assignBody(target, rawBlockText(md, block))
     return null
   }
   const top = state.stack.at(-1)
@@ -232,7 +258,7 @@ export function parse(md: string): ParseResult {
   } catch (e) {
     return { ok: false, error: `Markdown 解析失败：${String(e)}` }
   }
-  const state: OutlineState = { root: null, stack: [], ignored: [], lastNode: null }
+  const state: OutlineState = { root: null, stack: [], ignored: [], lastNode: null, lastHeading: null }
   for (const block of ast.children ?? []) {
     const err = visitBlock(md, block, state)
     if (err !== null) return { ok: false, error: err }
