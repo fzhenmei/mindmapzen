@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
-import { deleteMap, renameMap } from '../services/workspace'
+import { deleteMap, joinPath, renameMap, resolveDir } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { createDir, deleteDir, dirDeleteSummary, readDirTree, type DirNode } from '../services/desk'
 import { useTreeMoves } from '../hooks/useTreeMoves'
@@ -60,7 +60,7 @@ interface Props {
  *  详情页首动作钮。交互语义：树目录行单击=选中目录（主区欢迎页），树文件行
  *  单击=选中进详情，双击=进纸面 */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
-  const { workspaceDir, maps, error, selectedDir } = useAppStore()
+  const { workspaceDir, maps, error, selectedDir, favorites, librarySort } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
   // 最近打开清单 → 导图信息（已删/移出工作区的宽容剔除，最多 8 条）
   const recent = recentOpened
@@ -198,8 +198,19 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     void moveFile(t.name, t.relDir, toRel)
   }
 
-  // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）
+  // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）。
+  //  排序（2026-09 收藏与排序）：modified 沿用 listMaps 序（新→旧，零成本原序）；name 与
+  //  目录行同 localeCompare 口径（zh-Hans-CN 拼音序），目录内文件行与收藏组行统一适用
+  const byName = (a: TreeFile, b: TreeFile): number => a.name.localeCompare(b.name, 'zh-Hans-CN')
   const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
+  // 收藏行清单（2026-09 收藏置顶）：自 maps 过滤派生——失联项（文件被删/换工作区）自动
+  //  剔除，切回工作区即恢复；modified 序天然继承 maps（新→旧）
+  const favMdPaths = new Set(favorites)
+  const favoriteFiles: TreeFile[] = maps.filter((m) => favMdPaths.has(m.mdPath)).map((m) => ({ name: m.name, relDir: m.relDir }))
+  if (librarySort === 'name') {
+    files.sort(byName)
+    favoriteFiles.sort(byName)
+  }
   const selectedInfo = maps.find((m) => m.mdPath === selectedMap) ?? null
   const mdPathOf = (f: TreeFile): string | undefined =>
     maps.find((m) => m.name === f.name && m.relDir === f.relDir)?.mdPath
@@ -218,6 +229,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const openFile = (f: TreeFile) => {
     const p = mdPathOf(f)
     if (p !== undefined) void store.openMap(p)
+  }
+  /** 收藏切换（2026-09 收藏置顶）：TreeFile 反查 mdPath 后交 store（含持久化） */
+  const toggleFavorite = (f: TreeFile) => {
+    const p = mdPathOf(f)
+    if (p !== undefined) void store.toggleFavorite(p)
   }
   // 树根显示工作区名（title 承担原页首路径职能）；开屏态（无工作区）不进树，占位空串。
   // 尾部分隔符收敛用字符串修剪（anchored class 正则无 ^ 锚最坏 O(n²)，Sonar S8786）
@@ -292,6 +308,10 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             rootTooltip={workspaceDir}
             selected={idle ? null : selectedDir}
             selectedFile={selectedInfo === null ? null : { name: selectedInfo.name, relDir: selectedInfo.relDir }}
+            favorites={favoriteFiles}
+            onToggleFavorite={toggleFavorite}
+            sort={librarySort}
+            onSortChange={(s) => void store.setLibrarySort(s)}
             onSelect={(rel) => {
               setSelectedMap(null)
               setIdle(false)
@@ -360,6 +380,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               {selectedInfo !== null && (
                 <DetailActions
                   info={selectedInfo}
+                  favorite={favMdPaths.has(selectedInfo.mdPath)}
+                  onToggleFavorite={() => void store.toggleFavorite(selectedInfo.mdPath)}
                   onBack={() => {
                     // 关闭预览：清文件选中即回落欢迎页
                     setSelectedMap(null)
@@ -430,6 +452,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           onConfirm={async (name) => {
             // M16 抛错语义：renameMap 失败抛给对话框框内显示，成功才关框
             await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
+            // 收藏跟随换址（2026-09）：改名即换 mdPath，先 relocate 再刷新（星标不随改名丢失）
+            await store.relocateFavorite(target.mdPath, joinPath(resolveDir(workspaceDir!, target.relDir), name.trim() + '.md'))
             await store.refreshMaps()
             pruneSelectedMap()
             closeDialog()

@@ -14,11 +14,14 @@
 // 选中镜像派生在 useActiveSelection，浮条本体在 MultiSelectBar.tsx——功能性增长，无腐化）。
 // 2026-09（复制选项移入砚栏批）：450→460（copySettings 订阅 + 砚栏两 props 接线，+4；
 // split button 本体在 ZenBar.tsx（无护栏）——功能性增长，无腐化）。
+// 2026-09（收藏与排序批）：520→550（收藏行派生/排序适用 + 树四 props 接线 + 重命名
+//  relocate + 详情星标钮两 props——收藏组与排序钮本体在 DirectoryTree.tsx（无护栏），
+//  relocate 在 appStore/useTreeMoves——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
   { path: '../src/views/EditorView.tsx', limit: 460 },
-  { path: '../src/views/LibraryView.tsx', limit: 520 },
+  { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计

@@ -54,6 +54,21 @@ export const IconCopy = ({ size }: IconProps) =>
   )
 /** 下拉箭头（2026-09 复制选项下拉）：复制钮旁的展开指示，收窄网格 chevron */
 export const IconChevronDown = ({ size }: IconProps) => base(<path d="M4 6l4 4 4-4" />, size)
+/** 五角星（2026-09 收藏置顶）：正五角星外接 R6.4/内接 r2.9，圆心 (8,8) 网格点位几何核算 */
+export const IconStar = ({ size }: IconProps) => base(
+  <path d="M8 1.6L9.7 5.65L14.09 6.02L10.76 8.9L11.76 13.18L8 10.9L4.24 13.18L5.24 8.9L1.91 6.02L6.3 5.65Z" />,
+  size,
+)
+/** 排序（2026-09 列表排序）：左升右降双箭头并列，16 网格 */
+export const IconSort = ({ size }: IconProps) => base(
+  <>
+    <path d="M5.5 13V3" />
+    <path d="M2.5 6l3-3 3 3" />
+    <path d="M10.5 3v10" />
+    <path d="M7.5 10l3 3 3-3" />
+  </>,
+  size,
+)
 /** 粘贴（剪贴板+内容条）：外框圆角矩形 + 顶部夹片 + 两条内容线 */
 export const IconPaste = ({ size }: IconProps) =>
   base(

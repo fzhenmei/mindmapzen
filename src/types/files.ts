@@ -29,6 +29,24 @@ export type PreviewOutlinePref = 'auto' | 'on' | 'off'
 
 const PREVIEW_OUTLINE_PREFS = new Set<PreviewOutlinePref>(['auto', 'on', 'off'])
 
+/** 案头文件列表排序两档（2026-09 收藏与排序）：modified = 修改时间新→旧（现状默认）；
+ *  name = 名称 A→Z（中文拼音序，与目录行同 localeCompare 口径） */
+export type LibrarySort = 'modified' | 'name'
+
+const LIBRARY_SORTS = new Set<LibrarySort>(['modified', 'name'])
+
+/** 宽容解析列表排序偏好：非法/缺失回退 modified（旧配置无字段按现状兼容） */
+export function parseLibrarySort(v: unknown): LibrarySort {
+  return LIBRARY_SORTS.has(v as LibrarySort) ? (v as LibrarySort) : 'modified'
+}
+
+/** 宽容解析收藏清单（mdPath 寻址）：仅字符串数组项保留，不设上限（收藏的语义即
+ *  「重要的少数」，用户自会节制；区别于 recentOpened 截 10） */
+export function parseFavorites(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  return v.filter((x): x is string => typeof x === 'string')
+}
+
 /** 宽容解析配置中的预览大纲偏好：非法/缺失回退 auto（旧配置无字段按 auto 兼容） */
 export function parsePreviewOutlinePref(v: unknown): PreviewOutlinePref {
   return PREVIEW_OUTLINE_PREFS.has(v as PreviewOutlinePref) ? (v as PreviewOutlinePref) : 'auto'
@@ -65,6 +83,11 @@ export interface AppConfig {
   theme: ThemePref
   /** 预览大纲三态偏好（auto = 跟随预览主区宽；显式 on/off 记住用户手动开关） */
   previewOutline: PreviewOutlinePref
+  /** 收藏清单（2026-09 收藏置顶）：mdPath 寻址，渲染时失联项宽容剔除（文件被删/换
+   *  工作区自动隐藏，切回即恢复）；重命名/移动由 store relocate 跟随 */
+  favorites: string[]
+  /** 文件列表排序偏好（2026-09 收藏与排序）：modified=新→旧（默认）；name=A→Z */
+  librarySort: LibrarySort
   /** 复制行为设置（设置页两开关） */
   settings: CopySettings
   /** 版本管理（M20 想法8）：自动 commit + 远程备份 */
@@ -121,6 +144,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   preferredLayout: null,
   theme: 'auto',
   previewOutline: 'auto',
+  favorites: [],
+  librarySort: 'modified',
   settings: DEFAULT_COPY_SETTINGS,
   git: DEFAULT_GIT_CONFIG,
   tourDone: false,

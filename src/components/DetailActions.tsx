@@ -17,6 +17,7 @@ import {
   IconMore,
   IconOpen,
   IconPencil,
+  IconStar,
   IconTrash,
 } from './icons'
 
@@ -26,6 +27,10 @@ export type MapAction = 'move' | 'rename' | 'delete'
 interface Props {
   /** 当前选中的导图（动作寻址数据源） */
   info: MapInfo
+  /** 收藏态（2026-09 收藏置顶）：星标钮切换文案与 aria 之据 */
+  favorite: boolean
+  /** 星标切换（收藏/取消收藏）：LibraryView 反查 mdPath 后走 store（含持久化） */
+  onToggleFavorite(): void
   /** 关闭预览（清文件选中回落欢迎页） */
   onBack(): void
   /** 对话框流操作（移动/重命名/删除），对话框在 LibraryView 统一管理 */
@@ -49,9 +54,11 @@ export const detailMeta = (m: Readonly<MapInfo>): string =>
  *  同一份数据喂两处渲染——宽容器整组平铺（Tooltip 纯图标）、窄容器「更多」下拉
  *  （icon + 文字，浮层平铺）。宽窄由页首 @container 容器查询纯 CSS 分流（680px 阈值，
  *  零 JS 测量）。条目 testid 加 more- 前缀（与宽组同名钮区分，E2E 严格模式不撞名） */
-export default function DetailActions({ info, onBack, onAction, onCopyPath, onOpen }: Readonly<Props>) {
+export default function DetailActions({ info, favorite, onToggleFavorite, onBack, onAction, onCopyPath, onOpen }: Readonly<Props>) {
   const groups = [
     [{ testid: 'btn-detail-back', label: '关闭预览', Icon: IconArrowLeft, run: onBack }],
+    // 星标切换（2026-09 收藏置顶）：选中预览时顺手点星；文案随收藏态切换
+    [{ testid: 'btn-detail-favorite', label: favorite ? '取消收藏' : '收藏', Icon: IconStar, run: onToggleFavorite }],
     (
       [
         ['btn-move', '移动到目录', IconFolder, 'move'],

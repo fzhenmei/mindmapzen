@@ -691,3 +691,102 @@ describe('左栏分区拖拽', () => {
     })
   })
 })
+
+// 2026-09 收藏与排序：左树收藏组全链路（右键收藏/组内可达/取消隐藏）+ 排序切换 +
+// 重命名/移动/目录迁移的收藏跟随（「永远置顶」承诺）+ 详情页首星标钮
+describe('案头收藏与排序（2026-09）', () => {
+  const dragDT = () => ({ setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: 'move', dropEffect: 'move' })
+
+  beforeEach(async () => {
+    fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/ws/想法A.md', '# 想法A\n')
+    await fs.mkdir('/ws/项目')
+    await fs.writeTextFileAtomic('/ws/项目/甲.md', '# 甲\n')
+    useAppStore.getState().setAdapter(fs)
+    useAppStore.setState({ configPath: '/cfg.json', favorites: [], librarySort: 'modified' })
+    await useAppStore.getState().setWorkspace('/ws')
+  })
+
+  test('右键收藏：收藏组出现且行可进详情；再取消收藏组隐藏', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
+    fireEvent.click(await screen.findByTestId('ctx-btn-favorite'))
+    // 组出现在目录组之上，行交互与文件行同语义（单击进详情）
+    expect(await screen.findByTestId('fav-node-想法A')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('fav-node-想法A'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual(['/ws/想法A.md']))
+    // 收藏行右键取消 → 组隐藏
+    fireEvent.contextMenu(screen.getByTestId('fav-node-想法A'), { button: 2 })
+    fireEvent.click(screen.getByTestId('ctx-btn-favorite'))
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual([]))
+    await waitFor(() => expect(screen.queryByTestId('fav-node-想法A')).not.toBeInTheDocument())
+  })
+
+  test('排序切换 name：文件行序改拼音序并持久化，重启口径（store）同步', async () => {
+    // 初稿先写（旧）最新稿后写（新）：modified 序=最新稿前；name 拼音序=初稿(chū)前于最新稿(zuì)
+    await fs.writeTextFileAtomic('/ws/初稿.md', '# 初\n')
+    await fs.writeTextFileAtomic('/ws/最新稿.md', '# 新\n')
+    await useAppStore.getState().setWorkspace('/ws') // 重扫纳入新文件
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const order = () =>
+      Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="file-node-"]')).map((el) => el.dataset.testid)
+    await screen.findByTestId('file-node-最新稿')
+    expect(order().indexOf('file-node-最新稿')).toBeLessThan(order().indexOf('file-node-初稿'))
+    // 切名称序（Radix 触发 pointerDown 口径）
+    fireEvent.pointerDown(screen.getByTestId('dir-sort'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('sort-name'))
+    await waitFor(() =>
+      expect(order().indexOf('file-node-初稿')).toBeLessThan(order().indexOf('file-node-最新稿')),
+    )
+    expect(useAppStore.getState().librarySort).toBe('name')
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).librarySort).toBe('name')
+  })
+
+  test('重命名跟随：收藏的图改名后收藏不丢（组内行随新名）', async () => {
+    useAppStore.setState({ favorites: ['/ws/想法A.md'] })
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-rename'))
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '改名图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual(['/ws/改名图.md']))
+    expect(await screen.findByTestId('fav-node-改名图')).toBeInTheDocument()
+  })
+
+  test('拖拽移动跟随：收藏文件拖进目录后 mdPath 随迁，收藏组仍可达', async () => {
+    useAppStore.setState({ favorites: ['/ws/想法A.md'] })
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('file-node-想法A'), { dataTransfer: dt })
+    fireEvent.dragOver(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('file-node-想法A'), { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual(['/ws/项目/想法A.md']))
+    expect(await screen.findByTestId('fav-node-想法A')).toBeInTheDocument()
+  })
+
+  test('目录拖拽跟随：子树整体迁移，子内收藏前缀随迁', async () => {
+    await fs.mkdir('/ws/乙')
+    useAppStore.setState({ favorites: ['/ws/项目/甲.md'] })
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    const dt = dragDT()
+    fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
+    fireEvent.dragOver(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
+    fireEvent.dragEnd(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual(['/ws/乙/项目/甲.md']))
+  })
+
+  test('详情页首星标钮切换收藏（宽组与更多浮层共用动作）', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
+    expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-detail-favorite'))
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual(['/ws/想法A.md']))
+    // 再点即取消
+    fireEvent.click(screen.getByTestId('btn-detail-favorite'))
+    await waitFor(() => expect(useAppStore.getState().favorites).toEqual([]))
+  })
+})
