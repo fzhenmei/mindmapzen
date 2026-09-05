@@ -65,21 +65,23 @@ describe('MapTabs（顶部导图胶囊条）', () => {
 
   // 长名防线（2026-09 用户验收）：胶囊 truncate+max-w+min-w-0、容器限宽——nowrap 文本的
   // min-content=全文本宽，无 min-w-0 则 flex 收缩失效照样溢出；全名经 Tooltip 可达
-  test('长名不破布局：胶囊单宽截断、容器限宽可收缩', () => {
+  test('长名不破布局：胶囊单宽截断（truncate 挂内层 span）、容器限宽可收缩', () => {
     renderTabs([cand('/ws/a.md', '这张导图的名字特别长特别长特别长'), cand('/ws/b.md', 'b')], '/ws/a.md')
     expect(screen.getByTestId('map-tabs').className).toContain('max-w-[calc(100vw-2rem)]')
     const pill = screen.getAllByTestId('map-tab')[0]
-    expect(pill.className).toContain('truncate')
     expect(pill.className).toContain('max-w-[10em]')
     expect(pill.className).toContain('min-w-0')
+    // truncate 在内层 span 上：Button 基类 inline-flex，text-overflow 对 flex 容器无效
+    expect(pill.querySelector('span')?.className).toContain('truncate')
   })
 
   // 高亮变体锚点（2026-09 修复回归）：Tailwind 无 aria-current 内置变体，须任意值语法
-  // aria-[current=page]:——写成 aria-current:bg-primary 时不报错但类永不生成、高亮静默失效
-  test('当前图高亮类为任意值变体（aria-current 非内置，简写静默失效）', () => {
+  // aria-[current=page]:——写成 aria-current:bg-primary 时不报错但类永不生成、高亮静默失效；
+  // 点亮色与砚栏布局组（ToggleGroup data-state=on）同款 accent（2026-09 用户验收）
+  test('当前图高亮类为任意值变体 accent 点亮（同布局组）', () => {
     renderTabs([cand('/ws/a.md', '图A'), cand('/ws/b.md', '图B')], '/ws/a.md')
     const pill = screen.getAllByTestId('map-tab')[0]
-    expect(pill.className).toContain('aria-[current=page]:bg-primary')
+    expect(pill.className).toContain('aria-[current=page]:bg-accent')
     expect(pill.className).not.toContain('aria-current:')
   })
 })

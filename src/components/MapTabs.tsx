@@ -34,12 +34,14 @@ export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>
               size="sm"
               data-testid="map-tab"
               aria-current={c.mdPath === currentMdPath ? 'page' : undefined}
-              className="h-7 min-w-0 max-w-[10em] truncate rounded-full px-3 font-file text-xs aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground"
+              className="h-7 min-w-0 max-w-[10em] shrink rounded-full px-3 font-file text-xs aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground"
               onClick={() => {
                 if (c.mdPath !== currentMdPath) onPick(c.mdPath)
               }}
             >
-              {c.name}
+              {/* truncate 挂 span 不挂 Button：基类 inline-flex，text-overflow 对 flex 容器
+                  无效（硬裁无省略号、文字贴边）；span 为 flex item，min-w-0 破除内容宽下限 */}
+              <span className="min-w-0 truncate">{c.name}</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
