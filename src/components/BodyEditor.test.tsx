@@ -99,6 +99,37 @@ describe('BodyEditor', () => {
     expect(md.endsWith('\n')).toBe(false)
   })
 
+  test('外部替换走 md 解析路径:表格/加粗/代码块 value 产出对应结构(锁 setContent 重载)', () => {
+    // I-1:外部替换用例的 value 此前全是纯文本——即使 setContent 丢了 tiptap-markdown 的
+    // md 解析重载(字符串按 HTML/纯文本处理)也能过;roundtrip 契约只锁构造路径不锁 setContent。
+    // 本例钉死:rerender 到结构化 md → doc 级出现对应节点/mark,序列化回 md 而非 HTML/纯文本。
+    const onChange = vi.fn()
+    const rich = '论述。\n\n```js\nx = 1\n```\n\n| **粗** | b |\n| --- | --- |\n| 1 | 2 |'
+    const { container, rerender } = render(<BodyEditor value="纯文本" onChange={onChange} />)
+    rerender(<BodyEditor value={rich} onChange={onChange} />)
+    const editor = editorOf(container)
+    const types = new Set<string>()
+    const marks = new Set<string>()
+    editor.state.doc.descendants((node) => {
+      types.add(node.type.name)
+      node.marks.forEach((mark) => marks.add(mark.type.name))
+    })
+    for (const expected of ['codeBlock', 'table', 'tableRow', 'tableHeader', 'tableCell']) {
+      expect(types.has(expected), `缺 ${expected} 节点`).toBe(true)
+    }
+    expect(marks.has('bold')).toBe(true)
+    // DOM 级同证:表格以 <table> 结构渲染,而非管道符纯文本段落
+    expect(container.querySelector('table')).not.toBeNull()
+    // 序列化级:替换后继续输入,onChange 发出结构保真的 md(无 HTML 标签、代码块/表格语法在)
+    act(() => {
+      editor.commands.insertContentAt(endOfLastTextblock(editor), 'x')
+    })
+    const md = onChange.mock.lastCall?.[0] ?? ''
+    expect(md).toContain('```js\nx = 1\n```')
+    expect(md.replace(/\\/g, '')).toContain('| **粗** | b |')
+    expect(md).not.toContain('<')
+  })
+
   test('schema 无 heading/list:md 输入不产生结构节点,# 与 - 以字面留存', () => {
     const onChange = vi.fn()
     const { container } = render(<BodyEditor value="# 标题\n\n- 列表项" onChange={onChange} />)

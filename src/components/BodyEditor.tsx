@@ -63,7 +63,8 @@ export default function BodyEditor({ value, onChange, readOnly = false }: Readon
   const editorRef = useRef<Editor | null>(null)
   // 防回环基线:最近一次外部流入的 value;update 事件序列化与之相同 → 视为外部替换的回声,不回调
   const valueRef = useRef(value)
-  // onChange 经 ref 取最新,避免回调身份变化导致重订阅;readOnly 同理(建编辑器只建一次)
+  // onChange 经 ref 取最新,避免回调身份变化导致重订阅;readOnly 同理(建编辑器只建一次)。
+  // readOnlyRef 仅构造期消费一次,不随后续翻转同步——翻转走下方 [readOnly] effect 的 setEditable
   const onChangeRef = useRef(onChange)
   const readOnlyRef = useRef(readOnly)
 
