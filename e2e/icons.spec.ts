@@ -171,3 +171,38 @@ test('图标：手写/AI 直接改 md 标记 → 打开即生效（画布净化 
   expect(md).toContain('# 手写图标 ::star')
   expect(md).toContain('## 普通 ::bug')
 })
+
+// 2026-09 双树错乱修复的回归：打开带非精选图标的图时，registerIconsInto 异步 resolve 会触发
+// 整树 reRender（打开期图标恢复）；若 resolve 恰逢引擎渲染进行中（大图 doLayout 经 asyncRun 跨
+// 多个宏任务，窗口可达数百毫秒），裸 reRender 的 clearCache 会清掉进行中渲染的销毁名单、clearDraw
+// 后节点又被渲染回调 add 回来——旧树实例无人销毁，画布出现新旧两份完整树（实验复现：53 节点图
+// 冷加载 ×8/8 全翻倍至 106；用户实案 47×2=94，随后窗口最大化把新树按新尺寸重排、旧树停留旧布局，
+// 两树错位重叠即「导图错乱/节点重复/无法拖动」，重开文档才恢复）。修复=safeReRender（渲染中挂
+// node_tree_render_end 延后调用，见 src/editor/zenIcons.ts）。本用例走宿主真实链路：非精选图打开
+// 与窗口尺寸变化并发（打开后立即改视口=用户「打开后马上最大化」），断言画布不出现双树。
+test('图标：非精选图标打开期与窗口尺寸变化并发——不产生双树（2026-09 双树错乱修复）', async ({ page }) => {
+  await page.goto('/?e2e=1')
+  await expect
+    .poll(() => page.evaluate(() => Boolean((window as unknown as { __zenE2e?: object }).__zenE2e)))
+    .toBe(true) // harness 异步装配(main.tsx 顶层 await),早于其就绪的 evaluate 拿不到 __zenE2e
+  await page.evaluate(() => {
+    const z = (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e
+    const lines = ['# 双树回归图 ::arrow-big-down-dash']
+    for (let b = 1; b <= 4; b++) {
+      lines.push(`\n## B${b}`)
+      for (let l = 1; l <= 12; l++) lines.push(`\n### L${b}-${l}`)
+    }
+    return z.writeFile('/ws/双树回归图.md', lines.join('\n') + '\n')
+  })
+  // 打开后立即改视口(打开链异步进行中,贴近用户「打开后马上最大化」的并发时序)
+  await page.getByTestId('file-node-双树回归图').dblclick()
+  await page.setViewportSize({ width: 1500, height: 950 })
+  await expect(page.getByText('双树回归图').first()).toBeVisible()
+  // 非精选图标已注册渲染(链路完整走完)
+  await expect(page.locator('.canvas-host svg.lucide-arrow-big-down-dash').first()).toBeVisible()
+  // 树 53 节点;双树错乱时翻倍至 106(CI/本地时序未必命中竞态,本断言至少锁宿主链路无回归;
+  // 竞态守卫行为由 zenIcons.test 的 safeReRender 用例锁定)
+  await expect
+    .poll(() => page.locator('.smm-node').count(), { message: '画布节点数应等于树节点数(53),不出现双树' })
+    .toBe(53)
+})

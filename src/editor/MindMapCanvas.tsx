@@ -15,7 +15,7 @@ import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
-import { collectUncuratedIcons, registerIconsInto, toEngineIconList } from './zenIcons'
+import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
 import {
   normalizeEngineOffsets,
   resolveLinkOffsets,
@@ -419,12 +419,14 @@ export default function MindMapCanvas({
     // 打开期图标恢复（2026-09 修复）：非精选图标（如 ::shield-alert）此前只在图标管理器
     // 确认时运行时注册进 iconList，重开导图后此处 iconList 只剩精选 64，引擎对无 svg 的
     // data.icon 渲染空占位——挂载后扫描整树补注册并整树重渲染（与 useIconPicker.apply 的
-    // 注册段同构）。mmRef 同引用守卫防卸载后迟到 reRender
+    // 注册段同构）。mmRef 同引用守卫防卸载后迟到 reRender；reRender 须走 safeReRender
+    // （2026-09 双树错乱修复）：registerIconsInto 异步 resolve 可能恰逢渲染进行中，裸
+    // reRender 会致画布新旧两份完整树并存（详见 zenIcons.ts safeReRender 注释）
     const uncurated = collectUncuratedIcons(tree)
     const iconTarget = (mm as MindMapHandle).opt?.iconList?.[0]
     if (uncurated.length > 0 && iconTarget !== undefined) {
       void registerIconsInto(iconTarget.list, uncurated).then((added) => {
-        if (added > 0 && mmRef.current === (mm as MindMapHandle)) (mm as MindMapHandle).reRender?.()
+        if (added > 0 && mmRef.current === (mm as MindMapHandle)) safeReRender(mm as unknown as ReRenderTarget)
       })
     }
     cbRef.current.onReady(mm)
