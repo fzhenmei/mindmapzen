@@ -398,9 +398,11 @@ export default function DirectoryTree({
           工作区文件搜索；Esc 清空复原。pt-0 顶掉默认 p-2 的顶距——搜索框贴侧栏顶，
           与右侧 SidebarInset 浮层上边框齐平（见 LibraryView Sidebar className 注释）。
           2026-09 移出 SidebarContent 滚动容器（与 SidebarFooter 同级固定——此前在
-          容器内随树滚、滚动条还从搜索框顶起延伸）；pb-5 = 原 pb-3(12px)+容器内
-          gap-2(8px)，gap 随移出消失由 pb 补足，与「目录」组保持 28px 原间距 */}
-      <SidebarHeader className="pt-0 pb-5">
+          容器内随树滚、滚动条还从搜索框顶起延伸）。
+          2026-09 间距收紧：pb-1(4px)+组 py-1(4px)——搜索框→首组盒距 8px（原 28px）；
+          组标签行 h-8→h-6（32px 行装 16px 字、两端各 ~8px 内部留白是视觉空隙的主源，
+          见组标签处注释） */}
+      <SidebarHeader className="pt-0 pb-1">
         <div className="flex items-center gap-1.5 px-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
@@ -443,16 +445,20 @@ export default function DirectoryTree({
           </DropdownMenu>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      {/* gap-0 + 组 py-1：组间距由组自身纵距承担（2026-09 收紧，见上注） */}
+      <SidebarContent className="gap-0">
       {/* 收藏组（2026-09 收藏置顶）：跨目录聚合置顶于「目录」组之上——文件多而重要者少，
           星标文件不问所在目录一屏可达；空收藏整组隐藏。行交互与树文件行同语义（单击
           预览/双击进纸面/右键菜单），行本身可拖（拖到目录=移动，载荷同为 TreeFile）。
           组标签即折叠扳机（官方 collapsible group 模式）；搜索时强制展开（与目录树同
           口径——收藏命中不被折叠态藏住） */}
       {favFiles.length > 0 && (
-        <SidebarGroup>
+        <SidebarGroup className="px-2 py-1">
           <Collapsible defaultOpen open={searching ? true : undefined} className="group/favcollapsible">
-            <SidebarGroupLabel asChild>
+            {/* h-6（2026-09 收紧）：标签行 32→24px。h-8 行装 16px 字、两端各 ~8px 内部
+                留白——盒间距 12px 时视觉空隙实为 27px；类须落在本组件（经 cn/tw-merge
+                顶掉基类 h-8），落 asChild 子按钮会被 Slot 简单拼接、CSS 序让 h-8 反杀 */}
+            <SidebarGroupLabel asChild className="h-6">
               <CollapsibleTrigger data-testid="fav-toggle" aria-label="收起或展开收藏">
                 收藏
                 <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/favcollapsible:rotate-90" />
@@ -466,8 +472,8 @@ export default function DirectoryTree({
           </Collapsible>
         </SidebarGroup>
       )}
-      <SidebarGroup>
-        <SidebarGroupLabel>目录</SidebarGroupLabel>
+      <SidebarGroup className="px-2 py-1">
+        <SidebarGroupLabel className="h-6">目录</SidebarGroupLabel>
         <SidebarMenu>
           {/* 树根 = 工作区：本身即最外层 Collapsible（点行首箭头收起全树），行面选中根视图；
                   右键同目录菜单但无删除（工作区本体不删，rel=''=根）。拖拽只作落点不可拖

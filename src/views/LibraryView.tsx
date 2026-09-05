@@ -23,9 +23,9 @@ import ImportPreviewDialog, { type ImportPreview } from '../components/ImportPre
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
+import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
-import { Separator } from '../components/ui/separator'
 import {
   Sidebar,
   SidebarFooter,
@@ -34,7 +34,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
 } from '../components/ui/sidebar'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
@@ -343,33 +342,51 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  data-testid="dir-create"
-                  tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
-                  onClick={() => {
-                    setDirParent(selectedDir)
-                    setDialog('newdir')
-                  }}
-                >
-                  <IconPlus />
-                  <span>新建目录</span>
-                </SidebarMenuButton>
+                {/* 底栏弹性行（2026-09）：新建目录占满余宽，右端成对图标钮 = 设置 +
+                    收起面板（设置自页首移入，居隐藏钮左侧）；两钮同款侧栏令牌样式
+                    （SIDEBAR_ICON_BTN），收起钮见 SidebarToggles */}
+                <div className="flex items-center gap-1">
+                  <SidebarMenuButton
+                    data-testid="dir-create"
+                    tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
+                    className="w-auto min-w-0 flex-1"
+                    onClick={() => {
+                      setDirParent(selectedDir)
+                      setDialog('newdir')
+                    }}
+                  >
+                    <IconPlus />
+                    <span>新建目录</span>
+                  </SidebarMenuButton>
+                  <button
+                    type="button"
+                    data-testid="btn-settings"
+                    aria-label="设置"
+                    title="设置"
+                    className={SIDEBAR_ICON_BTN}
+                    onClick={() => setDialog('settings')}
+                  >
+                    <IconSettings />
+                  </button>
+                  <HideSidebarAction />
+                </div>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
           {sidebarResize.resizer}
         </Sidebar>
+        {/* 唤回签（2026-09 重定位）：面板滑出后浮于视口左缘，fixed 定位不参与 flex 布局 */}
+        <ShowSidebarTab />
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
-              线色走 --border 令牌，夜航令牌已调亮非黑）：折叠钮 | 分隔 | 标题 … 动作钮
-              （主题钮 2026-09 移出页首，与纸面统一挂右下角 theme-fab，见下方 main 后）。
+              线色走 --border 令牌，夜航令牌已调亮非黑）：标题 … 动作钮（折叠钮 2026-09
+              重定位移出页首——可见态在侧栏底栏、隐藏态在左缘浮签，见 SidebarToggles；
+              主题钮 2026-09 移出页首，与纸面统一挂右下角 theme-fab，见下方 main 后）。
               容器合并改版：@container 承担详情动作收纳（页首宽 = SidebarInset 宽，随窗体/
               侧栏折叠变化，容器查询比视口断点更准）；详情态标题换 md 文件名（truncate 截断
               加 …），元信息并入 title 悬停。无固定高（零固定）——内部控件全 h-8 档撑出
               行高 32px+1px 线，与侧栏搜索框（32px）同高对齐 */}
           <header className="@container flex shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger data-testid="dir-panel-toggle" />
-            <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
             <h1
               className="truncate text-sm font-semibold tracking-wide text-foreground"
               title={selectedInfo === null ? undefined : `${detailTitle(selectedInfo)}\n${detailMeta(selectedInfo)}`}
@@ -395,9 +412,10 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                   onOpen={(m) => void store.openMap(m.mdPath)}
                 />
               )}
-              {iconBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
-              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
+              {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
+                  设置已移入侧栏底栏（居隐藏面板钮左侧） */}
               {iconBtn('新建导图', 'btn-new', IconPlus, () => openNewMap(''))}
+              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
