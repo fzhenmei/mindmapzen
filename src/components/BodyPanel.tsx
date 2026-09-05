@@ -1,8 +1,8 @@
 // src/components/BodyPanel.tsx —— 右侧常驻正文面板（2026-09 写作）：标题=节点文本，
 // BodyEditor 主体（Task 5 契约：value/onChange/readOnly，testid body-editor 由其自带），
-// 底部字数（中文字符口径：去除空白后的 Unicode 码点数）。无选中空态；深层列表节点空态。
-// 状态与命令全在 useBodyPanel（本组件纯展示，props 即其返回值整体展开）；不进 anyDialog
-// ——面板与画布并存（spec：常驻侧栏而非对话框）。
+// 面板底部显示正文字数（设计文档口径；中文字符口径：去除空白后的 Unicode 码点数）。
+// 无选中空态；深层列表节点空态。状态与命令全在 useBodyPanel（本组件纯展示，props 即其
+// 返回值整体展开）；不进 anyDialog——面板与画布并存（spec：常驻侧栏而非对话框）。
 import BodyEditor from './BodyEditor'
 import type { BodyPanel as BodyPanelState } from '../hooks/useBodyPanel'
 
@@ -13,20 +13,25 @@ const Hint = ({ text }: Readonly<{ text: string }>) => (
   </p>
 )
 
-/** 右侧正文面板：头部（节点文本截断 + 字数 + 收起）+ 空态文案 + 编辑器主体。
+/** 空态文案解析：null = 可编辑正常态（nodeText 空串 = 无选中；有选中不可编辑 = 深层列表） */
+const hintOf = (nodeText: string, editable: boolean): string | null => {
+  if (nodeText === '') return '在画布选中节点后在此撰写正文'
+  if (!editable) return '深层列表节点暂不支持正文'
+  return null
+}
+
+/** 右侧正文面板：头部（节点文本截断 + 收起）+ 空态文案 + 编辑器主体 + 底部字数条。
  *  nodeText === '' 兼作「无选中」信号（useBodyPanel 载入口径），!editable 且有选中
  *  即深层列表节点（layerIndex≥6 门禁）——两态分别出文案，编辑器恒挂载保布局稳定 */
 export default function BodyPanel({ bodyDraft, nodeText, editable, close, edit }: Readonly<BodyPanelState>) {
   const draft = bodyDraft ?? ''
   const count = [...draft.replace(/\s/g, '')].length
+  const hint = hintOf(nodeText, editable)
   return (
     <aside data-testid="body-panel" className="body-panel" aria-label="节点正文面板">
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium" title={nodeText}>
           {nodeText}
-        </span>
-        <span data-testid="body-wordcount" className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {count} 字
         </span>
         <button
           type="button"
@@ -38,12 +43,13 @@ export default function BodyPanel({ bodyDraft, nodeText, editable, close, edit }
           ×
         </button>
       </header>
-      {nodeText === '' ? (
-        <Hint text="在画布选中节点后在此撰写正文" />
-      ) : !editable ? (
-        <Hint text="深层列表节点暂不支持正文" />
-      ) : null}
+      {hint !== null && <Hint text={hint} />}
       <BodyEditor value={draft} onChange={edit} readOnly={!editable} />
+      <footer className="shrink-0 border-t border-border px-3 py-1.5 text-right">
+        <span data-testid="body-wordcount" className="text-xs tabular-nums text-muted-foreground">
+          {count} 字
+        </span>
+      </footer>
     </aside>
   )
 }

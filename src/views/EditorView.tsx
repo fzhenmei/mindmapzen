@@ -202,8 +202,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }
 
   /** 显式保存统一入口（spec §3.5）：有未映射块且本会话未确认过 → 经 flow 门弹确认挂起本次保存，返回 false
-   *  与「保存失败」同义（留在原界面）；自动保存不经此入口（每 5 秒弹窗扰人，静默丢弃，横幅已知情） */
+   *  与「保存失败」同义（留在原界面）；自动保存不经此入口（每 5 秒弹窗扰人，静默丢弃，横幅已知情）。
+   *  2026-09（I-2）：先冲刷正文防抖草稿——否则 Ctrl+S 落盘的 md 缺防抖窗内尾部输入，
+   *  「已存」印记强化错觉，Ctrl+S→立刻关窗路径尾部永久丢失 */
   const explicitSave = async (): Promise<boolean> => {
+    bodyPanel.flushNow()
     if (!flow.gateExplicitSave()) return false
     return saveAndStamp()
   }

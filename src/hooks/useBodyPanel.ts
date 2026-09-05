@@ -143,5 +143,17 @@ export function useBodyPanel(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载期一次订阅，回调经 ref 闭包读最新
   }, [])
 
+  // 卸载清理（I-1）：只清防抖计时器、不提交——否则返回案头/切导图后 ≤500ms 内 timer
+  // 仍触发 flushNow，对已 destroy 的引擎 execCommand（销毁竞态）。「卸载不冲刷」由此
+  // 真正兑现；防抖窗内的收尾由关面板/切节点/失焦三处 flush 兜住
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [])
+
   return { open: bodyDraft !== null, bodyDraft, nodeText, editable, toggle, close, edit, flushNow }
 }

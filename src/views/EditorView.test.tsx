@@ -2457,6 +2457,60 @@ test('btn-body：无选中开面板显示空态文案；面板非对话框（画
   expect(handle.execCommand).not.toHaveBeenCalled()
 })
 
+test('关面板即 flush 未提交草稿（close 分支），计时器清空不二次提交', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // 草稿在防抖窗内
+    fireEvent.click(screen.getByTestId('body-close')) // 关面板 → 立即冲刷
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'],
+    })
+    expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(600) // 计时器已随 flush 清空，不再产生第二条命令
+    })
+    expect(handle.execCommand).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('窗口失焦即 flush 防抖中的草稿（blur 分支）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire'))
+    fireEvent(window, new Event('blur')) // 切窗口 → 防抖草稿立即落引擎
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'],
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('Ctrl+S 显式保存先冲刷正文防抖草稿（审查 I-2：落盘 md 不缺尾部输入）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // 尾部输入悬在 500ms 窗内
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // explicitSave 开头 flushNow
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'],
+    })
+    await act(async () => {}) // 排空保存链微任务（数据树为 mock，不真落 body——只锁「保存前冲刷」时序）
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 // ── 图标管理器 zen_body 回补（2026-09 正文，Task 4 移交修复）：SET_NODE_ICON 整组
 //    覆写，确认数组不含保留名时「有正文」角标会被抹掉；apply 落下前按 data.body 重补 ──
 
