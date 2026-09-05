@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], tourActive: false, tourStep: 0, tourDone: false })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
 })
 
 describe('appStore', () => {
@@ -274,5 +274,68 @@ describe('分区拖拽宽度（2026-09 左栏/大纲）', () => {
     await useAppStore.getState().init()
     expect(useAppStore.getState().sidebarWidth).toBe(300)
     expect(useAppStore.getState().outlineWidth).toBe(240)
+  })
+})
+
+// 收藏置顶与列表排序（2026-09）：favorites = mdPath 寻址的收藏清单 + librarySort 排序偏好，
+// 均走 load-merge-save 持久化；relocate 系动作让收藏在重命名/移动后跟随（保住「永远置顶」）
+describe('favorites + librarySort（收藏与排序）', () => {
+  test('toggleFavorite 收藏→取消：内存与盘面同步，load-merge 不覆盖他字段', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().toggleFavorite('/ws/已有.md')
+    expect(useAppStore.getState().favorites).toEqual(['/ws/已有.md'])
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.favorites).toEqual(['/ws/已有.md'])
+    expect(cfg.workspaceDir).toBe('/ws') // merge 未覆盖
+    await useAppStore.getState().toggleFavorite('/ws/已有.md') // 再点即取消
+    expect(useAppStore.getState().favorites).toEqual([])
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).favorites).toEqual([])
+  })
+  test('relocateFavorite 已收藏路径换址跟随（改名/移动不丢星标）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().toggleFavorite('/ws/旧名.md')
+    await useAppStore.getState().relocateFavorite('/ws/旧名.md', '/ws/新名.md')
+    expect(useAppStore.getState().favorites).toEqual(['/ws/新名.md'])
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).favorites).toEqual(['/ws/新名.md'])
+  })
+  test('relocateFavorite 未收藏路径 no-op（不写盘）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    const before = await fs.readTextFile('/cfg.json')
+    await useAppStore.getState().relocateFavorite('/ws/无关.md', '/ws/别处.md')
+    expect(useAppStore.getState().favorites).toEqual([])
+    expect(await fs.readTextFile('/cfg.json')).toBe(before) // 盘面原样
+  })
+  test('relocateFavoritesUnder 前缀重写（目录整子树移动，子内收藏随迁）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().toggleFavorite('/ws/a/图1.md')
+    await useAppStore.getState().toggleFavorite('/ws/b/图2.md')
+    await useAppStore.getState().relocateFavoritesUnder('/ws/a', '/ws/c/a')
+    expect(useAppStore.getState().favorites).toEqual(['/ws/c/a/图1.md', '/ws/b/图2.md'])
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).favorites).toEqual(['/ws/c/a/图1.md', '/ws/b/图2.md'])
+  })
+  test('relocateFavoritesUnder 无命中 no-op', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().toggleFavorite('/ws/b/图2.md')
+    await useAppStore.getState().relocateFavoritesUnder('/ws/a', '/ws/c/a')
+    expect(useAppStore.getState().favorites).toEqual(['/ws/b/图2.md'])
+  })
+  test('setLibrarySort 更新内存并持久化', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setLibrarySort('name')
+    expect(useAppStore.getState().librarySort).toBe('name')
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).librarySort).toBe('name')
+  })
+  test('init 自 config 载入收藏与排序偏好（缺失回退默认）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', favorites: ['/ws/已有.md'], librarySort: 'name' }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().favorites).toEqual(['/ws/已有.md'])
+    expect(useAppStore.getState().librarySort).toBe('name')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().favorites).toEqual([])
+    expect(useAppStore.getState().librarySort).toBe('modified')
   })
 })

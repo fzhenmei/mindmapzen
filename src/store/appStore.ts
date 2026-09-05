@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -34,6 +34,11 @@ interface AppState {
   themePref: ThemePref
   /** 预览大纲三态偏好（2026-09 大纲面板；auto = 跟随预览主区宽，显式 on/off 记住手动开关） */
   previewOutline: PreviewOutlinePref
+  /** 收藏清单（2026-09 收藏置顶）：mdPath 寻址，不设上限；渲染时失联项由视图层宽容
+   *  剔除（文件被删/换工作区自动隐藏，切回恢复）；重命名/移动经 relocate 系跟随换址 */
+  favorites: string[]
+  /** 文件列表排序偏好（2026-09 收藏与排序）：modified=修改时间新→旧（默认）；name=A→Z */
+  librarySort: LibrarySort
   /** 案头左树侧栏像素宽（2026-09 分区拖拽）：null = 默认 16rem；拖拽松手/双击恢复时提交 */
   sidebarWidth: number | null
   /** 预览大纲面板像素宽（2026-09 分区拖拽）：null = 默认 14rem；提交语义同 sidebarWidth */
@@ -82,6 +87,14 @@ interface AppState {
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
   setPreviewOutline: (pref: PreviewOutlinePref) => Promise<void>
+  /** 收藏切换（2026-09 收藏置顶）：已在清单=移除，不在=追加；load-merge-save 持久化 */
+  toggleFavorite: (mdPath: string) => Promise<void>
+  /** 收藏换址跟随（重命名/移动导图后由视图层调用）：未收藏 no-op 不写盘 */
+  relocateFavorite: (from: string, to: string) => Promise<void>
+  /** 目录整子树移动的前缀重写：fromDir/toDir = 目录绝对路径，子内收藏随迁 */
+  relocateFavoritesUnder: (fromDir: string, toDir: string) => Promise<void>
+  /** 列表排序偏好（2026-09）：即时生效 + load-merge-save 持久化 */
+  setLibrarySort: (s: LibrarySort) => Promise<void>
   /** 分区宽度提交（2026-09 拖拽）：null = 恢复默认宽（双击手柄路径） */
   setSidebarWidth: (w: number | null) => Promise<void>
   setOutlineWidth: (w: number | null) => Promise<void>
@@ -125,6 +138,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   preferredLayout: 'mindmap',
   themePref: 'auto',
   previewOutline: 'auto',
+  favorites: [],
+  librarySort: 'modified',
   sidebarWidth: null,
   outlineWidth: null,
   resolvedTheme: 'light',
@@ -147,7 +162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened })
@@ -225,6 +240,50 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ previewOutline: pref })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, previewOutline: pref })
+  },
+
+  /** 收藏与排序（2026-09）：四动作共用 load-merge-save 模式；relocate 系在路径未命中
+   *  收藏清单时 no-op 提前返回——移动/改名是高频操作，不收藏的文件不产生配置写盘 */
+  toggleFavorite: async (mdPath) => {
+    const cur = get().favorites
+    const favorites = cur.includes(mdPath) ? cur.filter((p) => p !== mdPath) : [...cur, mdPath]
+    set({ favorites })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, favorites })
+  },
+
+  relocateFavorite: async (from, to) => {
+    const cur = get().favorites
+    if (!cur.includes(from)) return
+    const favorites = cur.map((p) => (p === from ? to : p))
+    set({ favorites })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, favorites })
+  },
+
+  relocateFavoritesUnder: async (fromDir, toDir) => {
+    // 前缀归一（去尾斜杠）后以 from + '/' 锚定子树；to 同步归一防双斜杠
+    let from = fromDir
+    while (from.endsWith('/')) from = from.slice(0, -1)
+    let to = toDir
+    while (to.endsWith('/')) to = to.slice(0, -1)
+    const prefix = from + '/'
+    const cur = get().favorites
+    if (!cur.some((p) => p.startsWith(prefix))) return
+    const favorites = cur.map((p) => (p.startsWith(prefix) ? to + p.slice(from.length) : p))
+    set({ favorites })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, favorites })
+  },
+
+  setLibrarySort: async (s) => {
+    set({ librarySort: s })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, librarySort: s })
   },
 
   /** 分区宽度提交（2026-09 左栏/大纲拖拽）：即时生效 + load-merge-save 持久化；

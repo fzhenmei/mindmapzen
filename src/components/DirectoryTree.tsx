@@ -1,6 +1,7 @@
 import { ChevronRight, Search } from 'lucide-react'
 import { useRef, useState, type DragEvent, type JSX } from 'react'
 import { filterTree, isUnderDir, type DirNode } from '../services/desk'
+import type { LibrarySort } from '../types/files'
 import type { MapAction } from './DetailActions'
 import {
   Collapsible,
@@ -14,7 +15,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from './ui/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 import { Input } from './ui/input'
+import { Button } from './ui/button'
 import {
   SidebarContent,
   SidebarGroup,
@@ -27,7 +36,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from './ui/sidebar'
-import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconTrash } from './icons'
+import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconSort, IconStar, IconTrash } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
@@ -67,6 +76,15 @@ interface Props {
   /** 拖目录行落到目录行/树根（toRel=''=根）：moveDir 语义（同目录无操作；目标为自身
    *  子孙或目标下重名时由服务层拒绝报错） */
   onMoveDir(fromRel: string, toRel: string): void
+  /** 收藏清单（2026-09 收藏置顶）：已解析已排序的 TreeFile（视图层自 store∩maps 宽容
+   *  派生）；渲染顶部收藏组（空则整组隐藏），兼作行级收藏态判据（relDir+name 寻址） */
+  favorites: TreeFile[]
+  /** 收藏切换（收藏组行/文件行右键）：视图层换址 mdPath 后调 store.toggleFavorite */
+  onToggleFavorite(f: TreeFile): void
+  /** 列表排序当前档（2026-09）：单选指示；两档作用于目录内文件行与收藏组行 */
+  sort: LibrarySort
+  /** 排序切换（搜索框旁排序钮下拉） */
+  onSortChange(s: LibrarySort): void
 }
 
 /** 案头左树（M15 官方 collapsible 文件树，仿 shadcn "A sidebar with a collapsible
@@ -75,10 +93,12 @@ interface Props {
  *  箭头 = 折叠/展开（2026-09 资源管理器式：CollapsibleTrigger 独立按钮居于图标左侧，
  *  与行面选中解耦——点已展开目录不会误收起子树；空目录/文件行以等宽占位对齐图标列）。
  *  全部 defaultOpen（进案头即全树展开，延续旧行为）。
- *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/移动/重命名/删除；目录行 = 在此
+ *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/收藏/移动/重命名/删除；目录行 = 在此
  *  新建导图/新建子目录/删除目录；树根 = 同目录行但无删除（工作区本体不删）。ctx-*
  *  testid 与详情页首同名钮区分避严格模式撞名。右键即选中（VSCode 惯例）——文件行切
  *  预览、目录行切选中态。
+ *  收藏与排序（2026-09）：顶部收藏组（空则整组隐藏，行 testid fav-node-<name>）+
+ *  搜索框旁排序钮（dir-sort，两档单选，目录内文件行与收藏行统一适用；目录仍按名称）。
  *  testid 沿用：目录 `dir-node-<name>`、文件 `file-node-<name>`、树根 `dir-node-all` */
 export default function DirectoryTree({
   tree,
@@ -96,6 +116,10 @@ export default function DirectoryTree({
   onDeleteDir,
   onMoveFile,
   onMoveDir,
+  favorites,
+  onToggleFavorite,
+  sort,
+  onSortChange,
 }: Readonly<Props>) {
   // 侧栏搜索（v2.5）：占位原 SidebarHeader（logo 上移 TitleBar 后空出的位）。
   //  过滤在 desk.filterTree（纯函数）；搜索态强制全树展开（defaultOpen 非受控只在
@@ -104,6 +128,12 @@ export default function DirectoryTree({
   const q = query.trim()
   const searching = q !== ''
   const filtered = searching ? filterTree(tree, files, q) : { tree, files }
+
+  // 收藏（2026-09 收藏置顶）：行级判据与渲染清单同源于 favorites 单一 prop——relDir+name
+  //  寻址（与文件选中态同口径）；搜索时收藏组同口径过滤（文件名包含命中）
+  const fileKey = (f: TreeFile): string => `${f.relDir}/${f.name}`
+  const favSet = new Set(favorites.map(fileKey))
+  const favFiles = searching ? favorites.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())) : favorites
 
   // 拖拽态（2026-09）：drag ref 存载荷；dragging 标识被拖行（半透明）；dropTarget 高亮
   //  合法落点行。落点守卫：目录行/树根可落（isUnderDir 含自身——拖目录到自己上不高亮）；
@@ -151,11 +181,15 @@ export default function DirectoryTree({
   const isFileSelected = (f: TreeFile) =>
     selectedFile !== null && selectedFile.name === f.name && selectedFile.relDir === f.relDir
 
-  /** 文件行右键菜单（对话框流在 LibraryView；条目 ctx-* testid 与详情页首同名钮区分） */
+  /** 文件行右键菜单（对话框流在 LibraryView；条目 ctx-* testid 与详情页首同名钮区分）。
+   *  2026-09 收藏：「打开」下增收藏切换（按行级收藏态换文案） */
   const fileMenu = (f: TreeFile) => (
     <ContextMenuContent data-testid={`ctx-menu-file-${f.name}`} aria-label={`「${f.name}」操作`}>
       <ContextMenuItem data-testid="ctx-btn-open" onClick={() => onOpenFile(f)}>
         <IconOpen />打开
+      </ContextMenuItem>
+      <ContextMenuItem data-testid="ctx-btn-favorite" onClick={() => onToggleFavorite(f)}>
+        <IconStar />{favSet.has(fileKey(f)) ? '取消收藏' : '收藏'}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem data-testid="ctx-btn-move" onClick={() => onFileAction('move', f)}>
@@ -195,41 +229,53 @@ export default function DirectoryTree({
   const chevronSlot = 'flex size-5 shrink-0 items-center justify-center'
 
   /** 文件行（叶子）：[占位][图标][名称] 等宽文件声道；行面包 ContextMenu（右键开菜单，
-   *  右键即选中切预览——VSCode 惯例）。可拖（draggable）不可落——文件不作落点 */
-  const renderFile = (f: TreeFile, key: string) => (
-    <SidebarMenuSubItem key={key}>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div
-            className={`flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
-            draggable
-            onDragStart={startDrag({ kind: 'file', file: f }, key)}
-            onDragEnd={endDrag}
-            onContextMenu={() => onSelectFile(f)}
-          >
-            <span aria-hidden="true" className={chevronSlot} />
-            <SidebarMenuSubButton
-              asChild
-              isActive={isFileSelected(f)}
-              data-testid={`file-node-${f.name}`}
-              title={`${f.name}.md`}
+   *  右键即选中切预览——VSCode 惯例）。可拖（draggable）不可落——文件不作落点。
+   *  2026-09 收藏：favRow 变体（收藏组行）用主菜单骨架与星标图标、testid fav-node-*；
+   *  树内行已收藏时行尾小星标示意（fav-star-*），图标声道仍为 md */
+  const renderFile = (f: TreeFile, key: string, favRow = false) => {
+    const fav = favSet.has(fileKey(f))
+    const Item = favRow ? SidebarMenuItem : SidebarMenuSubItem
+    const Btn = favRow ? SidebarMenuButton : SidebarMenuSubButton
+    return (
+      <Item key={key}>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              className={`flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
+              draggable
+              onDragStart={startDrag({ kind: 'file', file: f }, key)}
+              onDragEnd={endDrag}
+              onContextMenu={() => onSelectFile(f)}
             >
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-left font-file text-xs"
-                onClick={() => onSelectFile(f)}
-                onDoubleClick={() => onOpenFile(f)}
+              <span aria-hidden="true" className={chevronSlot} />
+              <Btn
+                asChild
+                isActive={isFileSelected(f)}
+                data-testid={favRow ? `fav-node-${f.name}` : `file-node-${f.name}`}
+                title={`${f.name}.md`}
               >
-                <IconMarkdown />
-                <span className="min-w-0 flex-1 truncate">{f.name}</span>
-              </button>
-            </SidebarMenuSubButton>
-          </div>
-        </ContextMenuTrigger>
-        {fileMenu(f)}
-      </ContextMenu>
-    </SidebarMenuSubItem>
-  )
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left font-file text-xs"
+                  onClick={() => onSelectFile(f)}
+                  onDoubleClick={() => onOpenFile(f)}
+                >
+                  {favRow ? <IconStar /> : <IconMarkdown />}
+                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  {!favRow && fav && (
+                    <span data-testid={`fav-star-${f.name}`} aria-label="已收藏" className="ml-auto shrink-0 text-sidebar-foreground/60">
+                      <IconStar size={12} />
+                    </span>
+                  )}
+                </button>
+              </Btn>
+            </div>
+          </ContextMenuTrigger>
+          {fileMenu(f)}
+        </ContextMenu>
+      </Item>
+    )
+  }
 
   const renderFiles = (relDir: string) =>
     filtered.files.filter((f) => f.relDir === relDir).map((f) => renderFile(f, `file:${relDir}/${f.name}`))
@@ -341,20 +387,60 @@ export default function DirectoryTree({
           容器内随树滚、滚动条还从搜索框顶起延伸）；pb-5 = 原 pb-3(12px)+容器内
           gap-2(8px)，gap 随移出消失由 pb 补足，与「目录」组保持 28px 原间距 */}
       <SidebarHeader className="pt-0 pb-5">
-        <div className="relative px-2">
-          <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
-          <Input
-            data-testid="dir-search"
-            aria-label="搜索工作区文件"
-            placeholder="搜索工作区文件…"
-            value={query}
-            className="h-8 pl-7 text-xs"
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
-          />
+        <div className="flex items-center gap-1.5 px-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
+            <Input
+              data-testid="dir-search"
+              aria-label="搜索工作区文件"
+              placeholder="搜索工作区文件…"
+              value={query}
+              className="h-8 pl-7 text-xs"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
+            />
+          </div>
+          {/* 排序钮（2026-09 收藏与排序）：与搜索框同高（size-8），两档单选——modified
+              即现状（listMaps 修改时间新→旧），name 与目录行同 localeCompare 口径 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                data-testid="dir-sort"
+                aria-label="排序"
+                title="排序"
+                className="size-8 shrink-0"
+              >
+                <IconSort />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup value={sort} onValueChange={(v) => onSortChange(v as LibrarySort)}>
+                <DropdownMenuRadioItem data-testid="sort-modified" value="modified">
+                  修改时间（新→旧）
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem data-testid="sort-name" value="name">
+                  名称（A→Z）
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </SidebarHeader>
       <SidebarContent>
+      {/* 收藏组（2026-09 收藏置顶）：跨目录聚合置顶于「目录」组之上——文件多而重要者少，
+          星标文件不问所在目录一屏可达；空收藏整组隐藏。行交互与树文件行同语义（单击
+          预览/双击进纸面/右键菜单），行本身可拖（拖到目录=移动，载荷同为 TreeFile） */}
+      {favFiles.length > 0 && (
+        <SidebarGroup>
+          <SidebarGroupLabel>收藏</SidebarGroupLabel>
+          <SidebarMenu>
+            {favFiles.map((f) => renderFile(f, `fav:${fileKey(f)}`, true))}
+          </SidebarMenu>
+        </SidebarGroup>
+      )}
       <SidebarGroup>
         <SidebarGroupLabel>目录</SidebarGroupLabel>
         <SidebarMenu>
