@@ -258,6 +258,11 @@ interface Props {
   onDataChange: (data?: EngineNode) => void
   onActiveChange?: (uids: string[]) => void
   onEditorPaste?: (rawText: string) => void
+  /** 画布态（非编辑框/输入框/对话框）粘贴图片：clipboardData 由 paste 事件同步携带
+   *  （免 navigator.clipboard.read 权限弹窗）；宿主异步读 bytes 并落盘 assets/ 应用 */
+  onCanvasImagePaste?: (clipboardData: DataTransfer) => void
+  /** 画布态粘贴文本（smm 节点 JSON 或普通文本）：宿主分派（canvasPaste.ts） */
+  onCanvasPasteText?: (text: string) => void
   /** Control+Shift+c 画布内复制节点成功（有选中，快捷键对调后的引擎路径）→ 宿主盖印记 */
   onNodeCopy?: () => void
   layout?: string
@@ -274,6 +279,8 @@ export default function MindMapCanvas({
   onDataChange,
   onActiveChange,
   onEditorPaste,
+  onCanvasImagePaste,
+  onCanvasPasteText,
   onNodeCopy,
   layout,
   theme,
@@ -284,8 +291,8 @@ export default function MindMapCanvas({
   // tipRef 供主题 effect 引用
   const tipRef = useRef<NoteTooltip | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
-  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, onNodeCopy, registry })
-  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, onNodeCopy, registry }
+  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry })
+  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry }
 
   useEffect(() => {
     // 悬停窗先建后传（引擎构造期即可能注册 mouseover 钩子）；主题取挂载期值
@@ -374,6 +381,15 @@ export default function MindMapCanvas({
       // 印记经 cbRef 上报 EditorView 盖「已复制为节点」墨青印
       if ((mm.renderer.activeNodeList ?? []).length > 0) cbRef.current.onNodeCopy?.()
     })
+    // 画布粘贴接管（2026-09 贴图落盘修复）：引擎原生 Control+v（Render.js:446）→ paste()
+    // 第一步 navigator.clipboard.read() 触发 WebView2「是否允许访问剪贴板」权限弹窗
+    // （拒绝后连文本粘贴一并失效），且剪贴板图片被 loadImage 转 base64 dataURL 直写
+    // data.image——保存链把整段 base64 糊进 md 文件（AI 不可读、文件膨胀）。移除引擎
+    // 快捷键后由下方 window paste 监听接管：clipboardData 免权限、图片走宿主落盘链
+    // （assets/ 相对路径），文本/smm 分派复刻引擎语义（canvasPaste.ts）。
+    // 编辑框打开期 keyCommand.save()/restore() 缓存/恢复 shortcutMap 引用——本移除
+    // 先于任何 save 执行，缓存表已不含 Control+v，同 Control+c 接管（见上）
+    mm.keyCommand.removeShortcut('Control+v')
     // 双链重建入口挂引擎句柄（M5b Task 3）：EditorView 在保存成功后经 mmRef 调用。
     // 旧差值在重建内按 uid 留档回填（M5d Task 5），故此入口无需 adjust——引擎现存即最新
     ;(mm as MindMapHandle).rebuildLinks = (links) => rebuildEngineLinks(mm, links)
@@ -489,15 +505,37 @@ export default function MindMapCanvas({
     }
     window.addEventListener('focus', onHealCheck)
 
-    // 多行粘贴拦截：引擎编辑框（contenteditable，挂在 document.body）收到含换行的文本时
-    // 阻止原生单框粘贴，把原始文本上报给宿主（拆子节点由 EditorView/Task 4 执行）；单行放行给引擎原生行为
+    // 粘贴三分派（2026-09 画布贴图落盘）：①引擎编辑框（contenteditable，挂在
+    // document.body）含换行文本 → 拦截上报宿主拆子节点（既有行为；单行放行给引擎
+    // handleInputPasteText，框内贴图被其总 preventDefault 后丢弃，安全 no-op）；
+    // ②输入框/对话框 → 不接管（原生文本粘贴、ImageDialog 自理 Ctrl+V 贴图）；
+    // ③画布态（焦点在 body/容器）→ 宿主接管：图片优先（bytes 读取与落盘由宿主异步
+    // 处理，preventDefault 必须在事件派发内同步完成），否则文本分派（smm/普通）。
+    // 引擎 Control+v 已移除（见上），keydown 无人消费 → 浏览器照发 paste 事件，
+    // clipboardData 同步可读且不经 navigator.clipboard.read 权限 API
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target
-      if (!(t instanceof Element) || !t.closest('[contenteditable="true"]')) return
-      const text = e.clipboardData?.getData('text/plain') ?? ''
-      if (!text.includes('\n') && !text.includes('\r')) return
+      if (!(t instanceof Element)) return
+      if (t.closest('[contenteditable="true"]')) {
+        const text = e.clipboardData?.getData('text/plain') ?? ''
+        if (!text.includes('\n') && !text.includes('\r')) return
+        e.preventDefault()
+        cbRef.current.onEditorPaste?.(text)
+        return
+      }
+      if (t.closest('input, textarea, [role="dialog"]')) return
+      const cd = e.clipboardData
+      if (cd === null) return
+      const hasImg = Array.from(cd.items ?? []).some((i) => i.type.startsWith('image/'))
+      if (hasImg) {
+        e.preventDefault()
+        cbRef.current.onCanvasImagePaste?.(cd)
+        return
+      }
+      const text = cd.getData('text/plain')
+      if (text === '') return
       e.preventDefault()
-      cbRef.current.onEditorPaste?.(text)
+      cbRef.current.onCanvasPasteText?.(text)
     }
     window.addEventListener('paste', onPaste)
 

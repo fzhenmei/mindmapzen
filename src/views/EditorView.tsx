@@ -8,6 +8,7 @@ import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
+import { useCanvasPaste } from '../hooks/useCanvasPaste'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
 import { useSavePipeline } from '../hooks/useSavePipeline'
@@ -124,6 +125,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     readClipboardImage,
     () => pipeline.onTreeDataChange(),
   )
+  const canvasPaste = useCanvasPaste(mmRef, selection.activeUidsRef, imageEdit.pasteToNodes)
 
   // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
   const nodePos = useNodeActions(mmRef, selection.activeUid)
@@ -301,6 +303,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           }}
           onActiveChange={selection.handleActiveChange}
           onPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
+          {...canvasPaste}
           // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
           onNodeCopy={() => flashCopy('copied-node')}
         />

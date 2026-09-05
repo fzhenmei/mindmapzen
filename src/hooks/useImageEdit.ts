@@ -37,6 +37,9 @@ export interface ImageEditState {
   pasteAndApply(image: PickedImage | null): Promise<string | null>
   /** 「粘贴」按钮：读剪贴板端口并应用（无图/失败置错）；返回 src（null = 未应用） */
   pasteFromClipboard(): Promise<string | null>
+  /** 画布贴图（2026-09 宿主接管 Control+v）：防撞名落盘 + 逐 uid 应用（多选批量，引擎
+   *  paste 的 activeNodeList.forEach 同语义）；uids 空或工作区缺失静默 no-op */
+  pasteToNodes(uids: readonly string[], image: PickedImage): Promise<void>
   /** 移除插图 */
   remove(): void
 }
@@ -105,6 +108,21 @@ export function useImageEdit(
 
   const close = useCallback(() => setOpen(false), [])
 
+  /** imgMap 运行时注入（getImageUrl 读 renderer.renderTree.data.imgMap；无则建）——
+   *  插图对话框与画布贴图共用（md 存相对路径、画布渲 dataURL） */
+  const injectImgMap = useCallback(
+    (src: string, bytes: Uint8Array) => {
+      const mm = mmRef.current
+      const tree = (mm as unknown as { renderer?: { renderTree?: { data?: Record<string, unknown> } } }).renderer
+        ?.renderTree?.data
+      if (tree === undefined) return
+      const map = (tree.imgMap as Record<string, string> | undefined) ?? {}
+      map[src] = `data:${mimeOf(src)};base64,${toBase64(bytes)}`
+      tree.imgMap = map
+    },
+    [mmRef],
+  )
+
   /** 应用到引擎：imgMap 运行时注入 + SET_NODE_IMAGE（尺寸解析失败回退 96×96） */
   const applyToEngine = useCallback(
     (src: string, alt: string, bytes: Uint8Array) => {
@@ -112,25 +130,18 @@ export function useImageEdit(
       const uid = targetUidRef.current
       if (mm === null || uid === null) return
       const size = parseImageSize(bytes) ?? { width: 96, height: 96 }
-      // imgMap 运行时注入（getImageUrl 读 renderer.renderTree.data.imgMap；无则建）
-      const tree = (mm as unknown as { renderer?: { renderTree?: { data?: Record<string, unknown> } } }).renderer
-        ?.renderTree?.data
-      if (tree !== undefined) {
-        const map = (tree.imgMap as Record<string, string> | undefined) ?? {}
-        map[src] = `data:${mimeOf(src)};base64,${toBase64(bytes)}`
-        tree.imgMap = map
-      }
+      injectImgMap(src, bytes)
       mm.execCommandImage?.(uid, { image: src, imageTitle: alt, imageSize: { ...size, custom: false } })
       onDataChanged()
     },
-    [mmRef, onDataChanged],
+    [mmRef, injectImgMap, onDataChanged],
   )
 
-  /** bytes 落盘 + 应用 + 刷新现状/预览（选图与粘贴共用；wsDir 为空返回 null 兜底） */
-  const applyBytes = useCallback(
-    async (name: string, bytes: Uint8Array): Promise<string | null> => {
+  /** 防撞名落盘入 assets/（同名已存在则加 -N 序号）；wsDir 为空返回 null 兜底——
+   *  选图/对话框粘贴/画布贴图共用 */
+  const writeAsset = useCallback(
+    async (name: string, bytes: Uint8Array): Promise<{ src: string; stem: string } | null> => {
       if (wsDir === null) return null
-      // 复制入 assets/（防撞名：同名已存在则加 -N 序号）
       const dot = name.lastIndexOf('.')
       const stem = dot > 0 ? name.slice(0, dot) : name
       const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : 'png'
@@ -142,13 +153,24 @@ export function useImageEdit(
       }
       await adapter.ensureDir(joinPath(wsDir, ASSETS_DIR))
       await adapter.writeBytes(joinPath(wsDir, src), bytes)
+      return { src, stem }
+    },
+    [wsDir, adapter],
+  )
+
+  /** bytes 落盘 + 应用 + 刷新现状/预览（选图与粘贴共用；wsDir 为空返回 null 兜底） */
+  const applyBytes = useCallback(
+    async (name: string, bytes: Uint8Array): Promise<string | null> => {
+      const written = await writeAsset(name, bytes)
+      if (written === null) return null
+      const { src, stem } = written
       applyToEngine(src, stem, bytes)
       setCurrent({ src, alt: stem })
       // 预览同步更新（openDialog 只构建一次现状图，选新图后须刷新）
       setPreview(`data:${mimeOf(src)};base64,${toBase64(bytes)}`)
       return src
     },
-    [wsDir, adapter, applyToEngine],
+    [writeAsset, applyToEngine],
   )
 
   const pickAndApply = useCallback(async (): Promise<string | null> => {
@@ -181,6 +203,26 @@ export function useImageEdit(
     }
   }, [wsDir, readClipboardImage, pasteAndApply])
 
+  /** 画布贴图（2026-09 宿主接管 Control+v）：一次落盘 + imgMap 注入一次 + 逐 uid SET_NODE_IMAGE
+   *  （引擎 paste 的 activeNodeList.forEach 同语义，多选 = 批量插图）；uids 空/落盘失败静默
+   *  no-op（同引擎无选中跳过），不动对话框 UI 态（画布贴图时对话框未开） */
+  const pasteToNodes = useCallback(
+    async (uids: readonly string[], image: PickedImage): Promise<void> => {
+      if (uids.length === 0) return
+      const written = await writeAsset(image.name, image.bytes)
+      if (written === null) return
+      const { src, stem } = written
+      const size = parseImageSize(image.bytes) ?? { width: 96, height: 96 }
+      injectImgMap(src, image.bytes)
+      const mm = mmRef.current
+      for (const uid of uids) {
+        mm?.execCommandImage?.(uid, { image: src, imageTitle: stem, imageSize: { ...size, custom: false } })
+      }
+      onDataChanged()
+    },
+    [writeAsset, injectImgMap, mmRef, onDataChanged],
+  )
+
   const remove = useCallback(() => {
     const mm = mmRef.current
     const uid = targetUidRef.current
@@ -190,5 +232,5 @@ export function useImageEdit(
     onDataChanged()
   }, [mmRef, onDataChanged])
 
-  return { open, nodeText, current, preview, pasteError, openDialog, close, pickAndApply, pasteAndApply, pasteFromClipboard, remove }
+  return { open, nodeText, current, preview, pasteError, openDialog, close, pickAndApply, pasteAndApply, pasteFromClipboard, pasteToNodes, remove }
 }
