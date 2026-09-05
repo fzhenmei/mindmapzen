@@ -17,8 +17,13 @@ const noop = (): void => {}
 // bind 属引擎挂载钩（ZenBar 不触达），桩里补 no-op 只为满足 UndoRedo 形状
 const undoRedoStub: UndoRedo = { canUndo: false, canRedo: false, onUndo: noop, onRedo: noop, bind: noop }
 
-/** 全 props 桩（纯展示组件）：复制组三项由用例覆盖注入，其余状态无关项全 no-op */
-function renderBar(overrides: { copySettings?: typeof DEFAULT_COPY_SETTINGS; onToggleCopySetting?: (key: 'copyIncludeNote' | 'copyIncludeLinks') => void } = {}): void {
+/** 全 props 桩（纯展示组件）：复制组三项与布局组两项由用例覆盖注入，其余状态无关项全 no-op */
+function renderBar(overrides: {
+  copySettings?: typeof DEFAULT_COPY_SETTINGS
+  onToggleCopySetting?: (key: 'copyIncludeNote' | 'copyIncludeLinks') => void
+  layout?: LayoutKind
+  onSwitchLayout?: (kind: LayoutKind) => void
+} = {}): void {
   render(
     <TooltipProvider>
       <ZenBar
@@ -39,8 +44,8 @@ function renderBar(overrides: { copySettings?: typeof DEFAULT_COPY_SETTINGS; onT
         onZoomIn={noop}
         onCenterRoot={noop}
         onFit={noop}
-        layout={'mindmap' satisfies LayoutKind}
-        onSwitchLayout={noop}
+        layout={overrides.layout ?? ('mindmap' satisfies LayoutKind)}
+        onSwitchLayout={overrides.onSwitchLayout ?? noop}
       />
     </TooltipProvider>,
   )
@@ -103,5 +108,44 @@ describe('ZenBar 复制选项下拉', () => {
     expect(cfg.workspaceDir).toBe('/ws') // 合并保存保留其他字段
     expect(cfg.preferredLayout).toBe('logic')
     expect(cfg.theme).toBe('dark')
+  })
+})
+
+// ---- 更多布局下拉（2026-09 时间轴/鱼骨图）：常用三钮常驻，非常用收进「更多」单选菜单 ----
+
+describe('ZenBar 更多布局下拉', () => {
+  beforeEach(() => {
+    useAppStore.getState().setAdapter(new MemoryFsAdapter())
+    useAppStore.setState({ configPath: '/cfg.json', settings: { ...DEFAULT_COPY_SETTINGS } })
+  })
+  afterEach(cleanup)
+
+  test('常用三钮常驻；时间轴/鱼骨图收进更多钮，展开为单选菜单、点击即回调', () => {
+    const onSwitch = vi.fn()
+    renderBar({ onSwitchLayout: onSwitch })
+    expect(screen.getByTestId('layout-mindmap')).toBeInTheDocument()
+    expect(screen.getByTestId('layout-logic')).toBeInTheDocument()
+    expect(screen.getByTestId('layout-org')).toBeInTheDocument()
+    expect(screen.queryByTestId('layout-timeline')).not.toBeInTheDocument() // 未展开不可见
+    fireEvent.pointerDown(screen.getByTestId('btn-layout-more'), { button: 0 })
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(screen.getByTestId('layout-timeline')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByTestId('layout-fishbone')).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByTestId('layout-timeline'))
+    expect(onSwitch).toHaveBeenCalledWith('timeline')
+  })
+
+  test('当前布局为收起项时：更多钮点亮（data-active 通道，规避 DropdownMenuTrigger 遮蔽 data-state）、语义名换成当前布局', () => {
+    renderBar({ layout: 'fishbone' })
+    const more = screen.getByTestId('btn-layout-more')
+    expect(more).toHaveAttribute('data-active', '')
+    expect(more).toHaveAttribute('aria-label', '鱼骨图')
+  })
+
+  test('当前布局为常用项时：更多钮常态收起（无 data-active、语义名「更多布局」）', () => {
+    renderBar({ layout: 'org' })
+    const more = screen.getByTestId('btn-layout-more')
+    expect(more).not.toHaveAttribute('data-active')
+    expect(more).toHaveAttribute('aria-label', '更多布局')
   })
 })

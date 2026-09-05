@@ -124,6 +124,29 @@ export const IconLayoutDown = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 时间轴布局（2026-09 更多布局）：根在左，节点沿主轴向右排开、二级挂下方
+ *  （同族语言：r1.2 节点圆，线段止于圆缘不穿越） */
+export const IconLayoutTimeline = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="2.8" cy="8" r="1.2" />
+      <circle cx="7" cy="8" r="1.2" />
+      <circle cx="11.8" cy="8" r="1.2" />
+      <path d="M4.1 8h1.5M8.3 8h2.1M7 9.3v1.2" />
+      <circle cx="7" cy="11.8" r="1.2" />
+    </>,
+    size,
+  )
+/** 鱼骨图布局（2026-09 更多布局）：根（鱼头）在左，脊线向右，两对鱼刺上下斜叉 */
+export const IconLayoutFishbone = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="2.5" cy="8" r="1.2" />
+      <path d="M3.8 8h9.7" />
+      <path d="M6.2 8l1.8-3.3M6.2 8l1.8 3.3M9.6 8l1.8-3.3M9.6 8l1.8 3.3" />
+    </>,
+    size,
+  )
 export const IconTheme = ({ size }: IconProps) =>
   base(
     <>

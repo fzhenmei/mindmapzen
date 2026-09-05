@@ -10,6 +10,10 @@ export function layoutToEngine(layout: LayoutKind): string {
       return 'mindMap' // CONSTANTS.LAYOUT.MIND_MAP：根居中、左右发散
     case 'org':
       return 'organizationStructure' // CONSTANTS.LAYOUT.ORGANIZATION_STRUCTURE：向下组织结构图
+    case 'timeline':
+      return 'timeline' // CONSTANTS.LAYOUT.TIMELINE：根在左，一级子节点沿水平主轴向右排开，二级挂下方
+    case 'fishbone':
+      return 'fishbone' // CONSTANTS.LAYOUT.FISHBONE：根在左，脊线向右，一级子节点上下分叉成鱼刺
     case 'mindmap':
     default:
       return 'logicalStructure' // CONSTANTS.LAYOUT.LOGICAL_STRUCTURE：右向思维导图
