@@ -5,7 +5,7 @@ import { Separator } from './ui/separator'
 /** Hero 签名视觉:「画布 → 文件 → AI」三层叙事。
  *  上层是导图的画布形态(右向布局 SVG),中层是同一张图的 Markdown 源码,
  *  下层是把大纲粘贴进 AI 对话框的输入态——产品核心工作流的直接演示:
- *  画布上整理还没做的点子,Ctrl+Shift+C 复制 Markdown,交给 AI 帮助实现。
+ *  画布上整理还没做的点子,Ctrl+C 复制 Markdown,交给 AI 帮助实现。
  *  画布与文件两层节点内容严格一致(每张导图就是一个 .md 文件)。
  *  入场动画(连线描边、节点浮现)在 app.css;节点填色走主题令牌,暗色自动适配。 */
 
@@ -126,7 +126,7 @@ function AiComposer() {
         <span className="font-mono text-xs text-muted-foreground">AI 对话框</span>
       </div>
       <div className="px-5 py-4">
-        {/* 粘贴进来的大纲:Ctrl+Shift+C 的产物,淡化以示同一份内容 */}
+        {/* 粘贴进来的大纲:Ctrl+C 的产物,淡化以示同一份内容 */}
         <pre className="font-mono text-xs leading-relaxed text-muted-foreground/70">
           {'# 桌面番茄钟'}
           {'\n'}
@@ -167,7 +167,7 @@ export function MindMapFigure() {
       <MindMapSource />
       <LayerLink>
         <Copy className="size-3" aria-hidden="true" />
-        Ctrl+Shift+C 复制
+        Ctrl+C 复制
       </LayerLink>
       <AiComposer />
     </figure>
