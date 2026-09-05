@@ -23,12 +23,14 @@ export function nodeTextOf(mm: MindMapHandle | null, uid: string | null): string
   return typeof n?.data.text === 'string' ? n.data.text : ''
 }
 
-/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名；无返回空数组） */
+/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名；无返回空数组）；
+ *  zen_body 为宿主内部角标（保留名），不进已选行——否则出现无 svg 的占位 chip，
+ *  用户点 × 移除确认后 SET_NODE_ICON 落下无 zen_body 的 data.icon，角标消失而正文仍在 */
 export function nodeIconsOf(mm: MindMapHandle | null, uid: string | null): string[] {
   const node = mm !== null ? findByUid(mm.getData(), uid) : null
   return Array.isArray(node?.data.icon)
     ? node.data.icon
-        .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_'))
+        .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_') && i !== 'zen_body')
         .map((i) => i.slice(4))
     : []
 }

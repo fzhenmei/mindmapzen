@@ -51,6 +51,7 @@ describe('zen ⇄ engine 转换', () => {
     expect(engine.data.body).toBe('论述。')
     expect(engine.data.icon).toEqual(['zen_flag', 'zen_body']) // 用户图标之外尾部追加
     expect(engine.children?.[0]?.data.body).toBe('子论述。')
+    expect(engine.children?.[0]?.data.icon).toEqual(['zen_body']) // 仅 body 也挂角标
     expect(engine.children?.[1]?.data.body).toBeUndefined()
     expect(engine.children?.[1]?.data.icon).toBeUndefined() // 无正文不挂角标
     const back = engineTreeToZen(engine)

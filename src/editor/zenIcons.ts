@@ -98,8 +98,10 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
 
 /** 内部角标图标（2026-09 正文）：宿主保留名 'body'，静态注册进引擎 iconList 供画布渲「有正文」
  *  角标（md 里无对应 ::body 标记——engineTreeToZen 收集侧剥除，见 mdTree.ts）。不进精选集
- *  （图标管理器网格/面板不露出）；collectUncuratedIcons 同口径跳过（保留名不回收，
- *  免得打开期为一棵不存在的 lucide 树白拉 icon-nodes.json chunk）。lucide file-text（ISC，合规） */
+ *  （图标管理器网格/面板不露出）；collectUncuratedIcons 同口径跳过——打开期补注册链的
+ *  known 集合本就含静态在册的 zen_body（跳过与否都不会发起加载、不会拉 icon-nodes.json
+ *  chunk），跳过是语义正确（保留名非用户图标，不进回收/补注册）+ 免一次无效调用。
+ *  lucide file-text（ISC，合规） */
 const INTERNAL_ICONS: Readonly<Record<string, string>> = {
   body: normalizeSvg(fileText),
 }
