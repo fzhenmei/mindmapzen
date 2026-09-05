@@ -673,12 +673,17 @@ describe('左栏分区拖拽', () => {
     expect(wrapper.style.getPropertyValue('--sidebar-width')).toBe('16rem') // 回落官方默认
   })
 
-  test('折叠侧栏后手柄不渲染，展开恢复', async () => {
+  test('折叠侧栏后手柄不渲染，左缘浮签唤回展开恢复', async () => {
     await setup()
+    // 底栏「新建目录」行右侧动作钮收起（2026-09 重定位：原页首 trigger 移除）
     fireEvent.click(screen.getByTestId('dir-panel-toggle'))
     expect(screen.queryByRole('separator', { name: '调整侧栏宽度' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('dir-panel-toggle'))
+    // 折叠态：视口左缘唤回签浮现；再点唤回
+    expect(screen.getByTestId('dir-panel-show')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('dir-panel-show'))
     expect(await screen.findByRole('separator', { name: '调整侧栏宽度' })).toBeInTheDocument()
+    // 展开态：唤回签消失
+    expect(screen.queryByTestId('dir-panel-show')).not.toBeInTheDocument()
   })
 
   test('init 载入已存宽度：启动即覆盖变量（350px）', async () => {
