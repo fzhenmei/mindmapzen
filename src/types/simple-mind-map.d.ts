@@ -26,6 +26,9 @@ declare module 'simple-mind-map' {
     setTheme(name: string): void
     /** 容器尺寸变化后重算画布（引擎 index.js:325）：无自动监听，宿主须在窗口 resize 时调用 */
     resize(): void
+    /** 画布尺寸缓存（引擎 index.js:317 getElRectInfo 写入；0×0 门禁/focus 自愈依赖，见 engine.ts 同名注释） */
+    width: number
+    height: number
     /** 视图变换与复位（引擎 View.js）：x/y/scale 可直接赋值，改后调 transform() 生效 */
     view: EngineView
     /** 画布容器元素（destroy 后为 null） */

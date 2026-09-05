@@ -101,6 +101,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
       setLayout: vi.fn(),
       setTheme: vi.fn(),
       resize: vi.fn(),
+      // 画布尺寸缓存(0×0 门禁/focus 自愈判定基准;正常态非 0 即可)
+      width: 800,
+      height: 600,
       el: null,
       view: { reset: vi.fn(), narrow: vi.fn(), enlarge: vi.fn(), x: 0, y: 0, scale: 1, transform: vi.fn() },
       destroy: vi.fn(),

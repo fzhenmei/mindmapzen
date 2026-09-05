@@ -15,7 +15,7 @@ import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
-import { collectUncuratedIcons, registerIconsInto, toEngineIconList } from './zenIcons'
+import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
 import {
   normalizeEngineOffsets,
   resolveLinkOffsets,
@@ -419,12 +419,14 @@ export default function MindMapCanvas({
     // 打开期图标恢复（2026-09 修复）：非精选图标（如 ::shield-alert）此前只在图标管理器
     // 确认时运行时注册进 iconList，重开导图后此处 iconList 只剩精选 64，引擎对无 svg 的
     // data.icon 渲染空占位——挂载后扫描整树补注册并整树重渲染（与 useIconPicker.apply 的
-    // 注册段同构）。mmRef 同引用守卫防卸载后迟到 reRender
+    // 注册段同构）。mmRef 同引用守卫防卸载后迟到 reRender；reRender 须走 safeReRender
+    // （2026-09 双树错乱修复）：registerIconsInto 异步 resolve 可能恰逢渲染进行中，裸
+    // reRender 会致画布新旧两份完整树并存（详见 zenIcons.ts safeReRender 注释）
     const uncurated = collectUncuratedIcons(tree)
     const iconTarget = (mm as MindMapHandle).opt?.iconList?.[0]
     if (uncurated.length > 0 && iconTarget !== undefined) {
       void registerIconsInto(iconTarget.list, uncurated).then((added) => {
-        if (added > 0 && mmRef.current === (mm as MindMapHandle)) (mm as MindMapHandle).reRender?.()
+        if (added > 0 && mmRef.current === (mm as MindMapHandle)) safeReRender(mm as unknown as ReRenderTarget)
       })
     }
     cbRef.current.onReady(mm)
@@ -456,9 +458,36 @@ export default function MindMapCanvas({
     }
     window.addEventListener('keydown', onKeydown)
 
-    // 引擎无容器尺寸自动监听：窗口最大化/还原时手动重算画布（验收实案：最大化后画布保持原尺寸）
-    const onResize = () => mmRef.current?.resize()
+    // 引擎无容器尺寸自动监听：窗口最大化/还原时手动重算画布（验收实案：最大化后画布保持原尺寸）。
+    // 0×0 门禁（2026-09 最小化恢复错乱修复）：WebView2 在睡眠唤醒/显示器拓扑/DPI 切换等系统事件下，
+    // 可能在窗口不可见期间投递视口 0×0 的 resize——引擎 getElRectInfo（index.js:316-321）会先把 0
+    // 写入 width/height/elRect 再抛错；污染固化后任何渲染（编辑/展开/保存链重绘）都把根节点定位到
+    // (0-w)/2≈0、全树平移出视口，且节点坐标全错致拖拽落点在视口外（错乱+拖不动的完整链路已实验
+    // 复现，见 e2e/canvas.spec.ts「容器瞬时 0×0」用例）。无效尺寸直接跳过，等恢复后有效 resize 自然
+    // 重算；try/catch 兜底引擎其余抛错路径，不炸 window resize 链。
+    const safeResize = () => {
+      const mm = mmRef.current
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!mm || !rect || rect.width <= 0 || rect.height <= 0) return
+      try {
+        mm.resize()
+      } catch {
+        // 0×0 已被门禁前置拦截，此为引擎其余防御性抛错的兜底；静默跳过，待下次有效 resize
+      }
+    }
+    const onResize = () => safeResize()
     window.addEventListener('resize', onResize)
+    // 自愈补偿（同上修复）：恢复可见的第一个可靠信号是 focus（实测 WebView2 最小化/恢复既不发
+    // resize 也不发 visibilitychange，只发 blur/focus）。若引擎尺寸已因污染偏离容器、或恢复时的
+    // resize 事件丢失，此处补一次重算——一次有效 resize 即完全恢复（root 归位居中，实验验证）
+    const onHealCheck = () => {
+      const mm = mmRef.current
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!mm || !rect || rect.width <= 0 || rect.height <= 0) return
+      if (mm.width === rect.width && mm.height === rect.height) return
+      safeResize()
+    }
+    window.addEventListener('focus', onHealCheck)
 
     // 多行粘贴拦截：引擎编辑框（contenteditable，挂在 document.body）收到含换行的文本时
     // 阻止原生单框粘贴，把原始文本上报给宿主（拆子节点由 EditorView/Task 4 执行）；单行放行给引擎原生行为
@@ -475,6 +504,7 @@ export default function MindMapCanvas({
     return () => {
       window.removeEventListener('keydown', onKeydown)
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('focus', onHealCheck)
       window.removeEventListener('paste', onPaste)
       mm.off('node_active', onActive)
       mm.off('data_change', changed)

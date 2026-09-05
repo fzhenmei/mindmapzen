@@ -188,3 +188,31 @@ export async function registerIconsInto(
   }
   return added
 }
+
+/** 渲染安全的 reRender（2026-09 双树错乱修复）：引擎 reRender()（index.js:308-313）会在
+ *  isRendering=true（渲染进行中，doLayout 经 asyncRun 跨多个宏任务，大图窗口数百毫秒）时
+ *  调用则「clearCache 清掉进行中渲染的销毁名单 + clearDraw 后节点又被渲染回调 add 回来」，
+ *  旧树实例无人销毁、DOM 残留，下一轮（reRender 标志仍置位）全量新建——画布出现新旧两份
+ *  完整树（实验复现：53 节点图 ×2=106 个 .smm-node；用户实案 47×2=94，随后窗口最大化把
+ *  新树按新尺寸重排、旧树停留在旧布局，两树错位重叠即「导图错乱/节点重复/无法拖动」，
+ *  重开文档重挂载才恢复）。故 isRendering 时挂 node_tree_render_end 一次性回调延后调用——
+ *  该事件在 onRenderEnd 里 isRendering=false 之后才发出（Render.js:541-550），回调内调用
+ *  恒安全；空闲时直接调用。具名导出供 zenIcons.test 直测。 */
+export function safeReRender(mm: ReRenderTarget): void {
+  if (mm.renderer?.isRendering) {
+    mm.on('node_tree_render_end', function onEnd() {
+      mm.off('node_tree_render_end', onEnd)
+      mm.reRender?.()
+    })
+  } else {
+    mm.reRender?.()
+  }
+}
+
+/** safeReRender 最小依赖面（引擎实例的结构子集，测试替身友好） */
+export interface ReRenderTarget {
+  renderer?: { isRendering?: boolean }
+  reRender?(): void
+  on(event: string, cb: () => void): void
+  off(event: string, cb: () => void): void
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { collectUncuratedIcons, CURATED_ICONS, registerIconsInto } from './zenIcons'
+import { collectUncuratedIcons, CURATED_ICONS, registerIconsInto, safeReRender } from './zenIcons'
 import type { EngineNode } from '../types/engine'
 
 /** 最小引擎树构造：children 递归展开 [data, ...children] 对 */
@@ -60,5 +60,44 @@ describe('精选集健全性（用例前提）', () => {
     expect(CURATED_ICONS['search']).toBeDefined()
     expect(CURATED_ICONS['shield-alert']).toBeUndefined()
     expect(CURATED_ICONS['book-search']).toBeUndefined()
+  })
+})
+
+describe('safeReRender（2026-09 双树错乱修复：渲染进行中的裸 reRender 致新旧两份完整树并存）', () => {
+  /** 最小事件源测试替身：记录订阅，fire 手动派发 */
+  const makeTarget = (isRendering: boolean) => {
+    const subs = new Map<string, Array<() => void>>()
+    const reRender = vi.fn()
+    return {
+      renderer: { isRendering },
+      reRender,
+      on: (ev: string, cb: () => void) => {
+        subs.set(ev, [...(subs.get(ev) ?? []), cb])
+      },
+      off: (ev: string, cb: () => void) => {
+        subs.set(ev, (subs.get(ev) ?? []).filter((f) => f !== cb))
+      },
+      fire: (ev: string) => {
+        ;(subs.get(ev) ?? []).forEach((cb) => cb())
+      },
+    }
+  }
+
+  it('空闲（isRendering=false）直接 reRender，不挂任何事件', () => {
+    const t = makeTarget(false)
+    safeReRender(t)
+    expect(t.reRender).toHaveBeenCalledTimes(1)
+    t.fire('node_tree_render_end')
+    expect(t.reRender).toHaveBeenCalledTimes(1) // 无残留订阅重复触发
+  })
+
+  it('渲染中（isRendering=true）挂 node_tree_render_end 延后调用；一次性退订防重复', () => {
+    const t = makeTarget(true)
+    safeReRender(t)
+    expect(t.reRender).not.toHaveBeenCalled() // 关键:渲染中绝不立即调
+    t.fire('node_tree_render_end')
+    expect(t.reRender).toHaveBeenCalledTimes(1)
+    t.fire('node_tree_render_end') // 二次 end(后续编辑等)不再触发
+    expect(t.reRender).toHaveBeenCalledTimes(1)
   })
 })
