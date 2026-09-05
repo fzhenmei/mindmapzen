@@ -13,6 +13,8 @@ export interface ActiveSelection {
   activeUid: string | null
   /** 选中 uid 的 ref 镜像（逻辑判断走 ref，闭包稳定可读最新值；React 19 RefObject.current 可写） */
   activeUidRef: RefObject<string | null>
+  /** 全量激活 uid 的 ref 镜像（不随单选语义退化；画布贴图逐节点应用等批量消费方用） */
+  activeUidsRef: RefObject<readonly string[]>
   /** 激活节点数（多选浮条显隐依据；0 = 无选中） */
   activeCount: number
   /** 引擎激活节点变化（MindMapCanvas onActiveChange 上报当前激活 uid 列表，空数组 = 无选中） */
@@ -25,11 +27,13 @@ export function useActiveSelection(): ActiveSelection {
   const [activeUid, setActiveUid] = useState<string | null>(null) // 仅供按钮文案/样式
   const [activeCount, setActiveCount] = useState(0)
   const activeUidRef = useRef<string | null>(null)
+  const activeUidsRef = useRef<readonly string[]>([])
 
   const handleActiveChange = (uids: readonly string[]): void => {
     // 恰好单选才直通 uid：多选时单值语义整体让位（浮条隐藏、复制回退整图）
     const uid = uids.length === 1 ? uids[0]! : null
     activeUidRef.current = uid
+    activeUidsRef.current = uids
     setActiveUid(uid)
     setActiveCount(uids.length)
   }
@@ -46,5 +50,5 @@ export function useActiveSelection(): ActiveSelection {
     }
   }
 
-  return { activeUid, activeUidRef, activeCount, handleActiveChange, clearStaleIfMissing }
+  return { activeUid, activeUidRef, activeUidsRef, activeCount, handleActiveChange, clearStaleIfMissing }
 }

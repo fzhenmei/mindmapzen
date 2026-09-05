@@ -20,6 +20,17 @@ test('多选上报：activeUid 退化为 null（单节点语义让位），activ
   expect(result.current.activeCount).toBe(3)
 })
 
+test('全量 uid 镜像：activeUidsRef 保存整批（画布贴图 forEach 用，不随单选语义退化）', () => {
+  const { result } = renderHook(() => useActiveSelection())
+  act(() => result.current.handleActiveChange(['a', 'b', 'c']))
+  expect(result.current.activeUidsRef.current).toEqual(['a', 'b', 'c'])
+  // 单选→多选→清选随批切换
+  act(() => result.current.handleActiveChange(['a']))
+  expect(result.current.activeUidsRef.current).toEqual(['a'])
+  act(() => result.current.handleActiveChange([]))
+  expect(result.current.activeUidsRef.current).toEqual([])
+})
+
 test('单选上报：activeUid 直通该 uid（现有下游行为不变）', () => {
   const { result } = renderHook(() => useActiveSelection())
   act(() => result.current.handleActiveChange(['a']))

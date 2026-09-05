@@ -39,6 +39,10 @@ interface Props {
   /** 引擎激活列表变化（圈选多选镜像：uid 数组，空数组 = 无选中） */
   onActiveChange(uids: string[]): void
   onPaste(rawText: string): void
+  /** 画布态粘贴图片（2026-09 宿主接管 Control+v）：clipboardData 免权限，宿主异步落盘 assets/ */
+  onCanvasImagePaste(clipboardData: DataTransfer): void
+  /** 画布态粘贴文本（smm 节点 JSON 或普通文本）分派 */
+  onCanvasPasteText(text: string): void
   onNodeCopy(): void
 }
 
@@ -58,6 +62,8 @@ export default function EditorCanvasArea({
   onDataChange,
   onActiveChange,
   onPaste,
+  onCanvasImagePaste,
+  onCanvasPasteText,
   onNodeCopy,
 }: Readonly<Props>) {
   if (state === 'error' && errorInfo)
@@ -87,6 +93,8 @@ export default function EditorCanvasArea({
       onDataChange={onDataChange}
       onActiveChange={onActiveChange}
       onEditorPaste={onPaste}
+      onCanvasImagePaste={onCanvasImagePaste}
+      onCanvasPasteText={onCanvasPasteText}
       onNodeCopy={onNodeCopy}
     />
   ) : null

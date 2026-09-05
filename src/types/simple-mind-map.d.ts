@@ -91,3 +91,11 @@ declare module 'simple-mind-map/src/plugins/associativeLine/associativeLineUtils
     y2: number,
   ): [AssociativeLinePoint, AssociativeLinePoint]
 }
+
+// 引擎工具（2026-09 画布粘贴接管）：smm 格式检测——引擎 copy/cut 经 writeText 写入
+// { simpleMindMap: true, data } JSON 字符串，paste 侧识别还原为节点（utils/index.js:1217）；
+// 仅声明本项目消费面（canvasPaste.ts）
+declare module 'simple-mind-map/src/utils/index.js' {
+  /** 检测剪贴板文本是否 smm 节点格式：isSmm 时 data 为还原数据（单对象或数组），否则为原文本 */
+  export function checkSmmFormatData(data: string): { isSmm: boolean; data: unknown }
+}
