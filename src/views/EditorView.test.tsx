@@ -5,6 +5,7 @@ import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
+import type { CopySettings } from '../types/files'
 import type { LinkRegistry } from '../editor/linkRegistry'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
@@ -214,7 +215,7 @@ beforeEach(async () => {
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
-    settings: { copyIncludeNote: false, copyIncludeLinks: true },
+    settings: { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
     // 泄漏的偏好会让后续用例的布局点击命中已激活项而 no-op——统一回默认
@@ -667,8 +668,8 @@ const noteLinkTree = (): EngineNode => ({
   children: [{ data: { text: '见 [[B]]', expand: true, uid: 'child-uid', note: '备注' }, children: [] }],
 })
 
-const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: boolean }): Promise<string> => {
-  fakeTree = noteLinkTree()
+const copyWith = async (settings: CopySettings, tree: EngineNode = noteLinkTree()): Promise<string> => {
+  fakeTree = tree
   useAppStore.setState({ settings })
   const writes: string[] = []
   render(
@@ -693,15 +694,33 @@ const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: 
 }
 
 test('复制后处理：默认设置剥备注、留双链', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n')
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () => {
-  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
+  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
 })
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false })).toBe('# 根\n\n## 见 B\n')
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })).toBe('# 根\n\n## 见 B\n')
+})
+
+// ---- 复制含正文开关（2026-09 正文 Task 7）：树层剥除先于序列化 ----
+// 样例树：child 带正文「既有正文」（data.body 经 engineTreeToZen 收进 ZenNode.body，
+// serialize 输出节点行后的原样块）；正文块无行前缀标记，md 层按行剥不可行——剥在树层
+const bodyTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [{ data: { text: '新分支', expand: true, uid: 'child-uid', body: '既有正文' }, children: [] }],
+})
+
+test('复制后处理：copyIncludeBody=false 时树层剥正文——md 含节点文本、不含正文段', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: false }, bodyTree()))
+    .toBe('# 根\n\n## 新分支\n')
+})
+
+test('复制后处理：copyIncludeBody=true（默认含，给 AI 改稿刚需）时正文段随节点行原样输出', async () => {
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }, bodyTree()))
+    .toBe('# 根\n\n## 新分支\n既有正文\n')
 })
 
 // ---- 连线净化（M5d Task 2）：uid 注册表、显示剥离与序列化注入 ----

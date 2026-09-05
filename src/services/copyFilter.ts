@@ -1,5 +1,7 @@
-// src/services/copyFilter.ts —— 复制行为后处理（M5b Task 4）：纯字符串函数，无 React/引擎依赖。
+// src/services/copyFilter.ts —— 复制行为后处理（M5b Task 4）：纯函数，无 React/引擎依赖。
+// 2026-09 正文 Task 7 起含 tree 层剥除（stripTreeBody）——md 字符串后处理之外的新层。
 import type { CopySettings } from '../types/files'
+import type { ZenNode } from '../types/tree'
 
 /** copyIncludeNote=false：剥掉全部备注引用块行。规范序列化（mdTree.serialize）是唯一产出源，
  *  其中所有 `> ` 行都是节点备注——含列表项缩进形式（深度 ≥7 的嵌套列表引用块缩进进内容列 `  > `）；
@@ -23,4 +25,10 @@ export function applyCopySettings(md: string, settings: CopySettings): string {
   if (!settings.copyIncludeNote) out = stripNoteLines(out)
   if (!settings.copyIncludeLinks) out = stripLinkBrackets(out)
   return out
+}
+
+/** 剥除树内全部正文（2026-09）：tree 层递归删 body，先于 serialize（正文块无行前缀标记，
+ *  md 层按行剥不可行——与备注的 stripNoteLines 本质不同）；纯函数不改入参 */
+export function stripTreeBody(tree: ZenNode): ZenNode {
+  return { ...tree, body: undefined, children: tree.children.map(stripTreeBody) }
 }

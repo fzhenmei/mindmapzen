@@ -82,12 +82,12 @@ describe('settings（M5b Task 4：复制行为）', () => {
     await saveConfig(fs, '/cfg.json', {
       workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto', previewOutline: 'auto',
       favorites: [], librarySort: 'modified',
-      settings: { copyIncludeNote: true, copyIncludeLinks: false },
+      settings: { copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: false },
       recentOpened: [],
       git: DEFAULT_GIT_CONFIG,
       tourDone: false, sidebarWidth: null, outlineWidth: null,
     })
-    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: false })
   })
   test('缺失 settings 字段回退默认（旧配置兼容）', async () => {
     const fs = new MemoryFsAdapter()
@@ -97,7 +97,7 @@ describe('settings（M5b Task 4：复制行为）', () => {
   test('字段类型非法逐字段回退默认（wrong types 不整块丢弃合法字段）', async () => {
     const fs = new MemoryFsAdapter()
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: 'yes', copyIncludeLinks: false } }))
-    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeNote: false, copyIncludeLinks: false })
+    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: 'bogus' }))
     expect((await loadConfig(fs, '/cfg.json')).settings).toEqual(DEFAULT_COPY_SETTINGS)
   })

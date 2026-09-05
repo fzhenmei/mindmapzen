@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { applyCopySettings, stripLinkBrackets, stripNoteLines } from './copyFilter'
+import { applyCopySettings, stripLinkBrackets, stripNoteLines, stripTreeBody } from './copyFilter'
+import type { ZenNode } from '../types/tree'
 
 describe('stripNoteLines（copyIncludeNote=false 剥备注引用块）', () => {
   test('剥标题层备注行（含行尾换行不留空行）', () => {
@@ -39,24 +40,38 @@ describe('stripLinkBrackets（copyIncludeLinks=false 留名去括号）', () => 
   })
 })
 
+describe('stripTreeBody（copyIncludeBody=false 树层剥正文，2026-09）', () => {
+  test('stripTreeBody:递归剥除全部 body,其余字段不动(2026-09 正文)', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。', note: '备注', children: [{ text: 'c', body: '子论述。', children: [] }] }
+    expect(stripTreeBody(tree)).toEqual({ text: 'r', note: '备注', children: [{ text: 'c', children: [] }] })
+  })
+  test('纯函数:入参树不被改动(原 body 原样保留)', () => {
+    const child: ZenNode = { text: 'c', body: '子论述。', children: [] }
+    const tree: ZenNode = { text: 'r', body: '论述。', children: [child] }
+    stripTreeBody(tree)
+    expect(tree.body).toBe('论述。')
+    expect(child.body).toBe('子论述。')
+  })
+})
+
 describe('applyCopySettings（按设置组合）', () => {
   test('默认 {false,true}：剥备注、留双链', () => {
-    expect(applyCopySettings('# 根\n\n## A\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: true }))
+    expect(applyCopySettings('# 根\n\n## A\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }))
       .toBe('# 根\n\n## A\n')
-    expect(applyCopySettings('## 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: true })).toBe('## 见 [[B]]\n')
+    expect(applyCopySettings('## 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe('## 见 [[B]]\n')
   })
   test('copyIncludeNote=true：备注保留', () => {
-    expect(applyCopySettings('## A\n> 备注\n', { copyIncludeNote: true, copyIncludeLinks: true })).toBe('## A\n> 备注\n')
+    expect(applyCopySettings('## A\n> 备注\n', { copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('## A\n> 备注\n')
   })
   test('copyIncludeLinks=false：[[B]] → B', () => {
-    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: false })).toBe('## A 见 B\n')
+    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })).toBe('## A 见 B\n')
   })
   test('两开关全开：原文恒等', () => {
     const md = '# 根\n\n## A 见 [[B]]\n> 备注\n'
-    expect(applyCopySettings(md, { copyIncludeNote: true, copyIncludeLinks: true })).toBe(md)
+    expect(applyCopySettings(md, { copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
   })
   test('两开关全关：备注与括号都剥', () => {
-    expect(applyCopySettings('# 根\n\n## A 见 [[B]]\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: false }))
+    expect(applyCopySettings('# 根\n\n## A 见 [[B]]\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true }))
       .toBe('# 根\n\n## A 见 B\n')
   })
 })

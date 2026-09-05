@@ -10,10 +10,11 @@ test('砚栏复制选项：默认值、切换、重开保持与配置落盘', as
   await page.getByTestId('input-name').fill('复制选项测试')
   await page.getByTestId('btn-confirm').click()
   await expect(page.getByTestId('zen-bar')).toBeVisible()
-  // 展开下拉：默认 复制含备注=off、保留双链=on
+  // 展开下拉：默认 复制含备注=off、保留双链=on、含正文=on（2026-09 正文起第三项）
   await page.getByTestId('btn-copy-options').click()
   await expect(page.getByTestId('copy-note-option')).not.toBeChecked()
   await expect(page.getByTestId('copy-links-option')).toBeChecked()
+  await expect(page.getByTestId('copy-include-body')).toBeChecked()
   // 翻转两项：菜单保持打开，可连续切换
   await page.getByTestId('copy-note-option').click()
   await page.getByTestId('copy-links-option').click()
@@ -30,5 +31,5 @@ test('砚栏复制选项：默认值、切换、重开保持与配置落盘', as
   const cfg = await page.evaluate(() =>
     (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile('/cfg.json'),
   )
-  expect(JSON.parse(cfg).settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+  expect(JSON.parse(cfg).settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
 })

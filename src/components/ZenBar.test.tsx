@@ -3,15 +3,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import ZenBar from './ZenBar'
 import { TooltipProvider } from './ui/tooltip'
 import { useAppStore } from '../store/appStore'
-import { DEFAULT_COPY_SETTINGS } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, type CopySettingKey } from '../types/files'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { LayoutKind } from '../editor/layoutMap'
 
 // 砚栏复制组 split button（2026-09 复制选项自设置面板移入）：主钮照常复制、箭头展开
-// 两勾选项（默认 备注off/双链on）、勾选即回调且菜单保持打开、接线真实 store 后
-// 勾选走 setSetting load-merge-save 持久化（链路测试自 SettingsDialog.test 迁入）。
-// jsdom 驱动沿用 dropdown-menu.test 模式：pointerdown（button 0）展开，role 定位条目。
+// 三勾选项（默认 备注off/双链on/含正文on，2026-09 正文起含「含正文」）、勾选即回调且
+// 菜单保持打开、接线真实 store 后勾选走 setSetting load-merge-save 持久化（链路测试自
+// SettingsDialog.test 迁入）。jsdom 驱动沿用 dropdown-menu.test 模式：pointerdown（button 0）展开，role 定位条目。
 
 const noop = (): void => {}
 // bind 属引擎挂载钩（ZenBar 不触达），桩里补 no-op 只为满足 UndoRedo 形状
@@ -20,7 +20,7 @@ const undoRedoStub: UndoRedo = { canUndo: false, canRedo: false, onUndo: noop, o
 /** 全 props 桩（纯展示组件）：复制组三项与布局组两项由用例覆盖注入，其余状态无关项全 no-op */
 function renderBar(overrides: {
   copySettings?: typeof DEFAULT_COPY_SETTINGS
-  onToggleCopySetting?: (key: 'copyIncludeNote' | 'copyIncludeLinks') => void
+  onToggleCopySetting?: (key: CopySettingKey) => void
   layout?: LayoutKind
   onSwitchLayout?: (kind: LayoutKind) => void
   bodyActive?: boolean
@@ -67,13 +67,14 @@ describe('ZenBar 复制选项下拉', () => {
   })
   afterEach(cleanup)
 
-  test('箭头展开菜单：两项勾选态反映 copySettings 现值（默认 备注off/双链on）', () => {
+  test('箭头展开菜单：三项勾选态反映 copySettings 现值（默认 备注off/双链on/含正文on）', () => {
     renderBar()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     openMenu()
     expect(screen.getByRole('menu')).toBeInTheDocument()
     expect(screen.getByTestId('copy-note-option')).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByTestId('copy-links-option')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('copy-include-body')).toHaveAttribute('aria-checked', 'true')
   })
 
   test('勾选即回调对应 key，菜单保持打开可连续切换（onSelect preventDefault）', () => {
@@ -82,9 +83,11 @@ describe('ZenBar 复制选项下拉', () => {
     openMenu()
     fireEvent.click(screen.getByTestId('copy-note-option'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeNote')
-    // 菜单未关：第二项仍可点（同径再验 copyIncludeLinks）
+    // 菜单未关：后续项仍可点（同径再验 copyIncludeLinks 与 2026-09 正文项 copyIncludeBody）
     fireEvent.click(screen.getByTestId('copy-links-option'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeLinks')
+    fireEvent.click(screen.getByTestId('copy-include-body'))
+    expect(onToggle).toHaveBeenCalledWith('copyIncludeBody')
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
@@ -105,10 +108,10 @@ describe('ZenBar 复制选项下拉', () => {
     fireEvent.click(screen.getByTestId('copy-note-option'))
     fireEvent.click(screen.getByTestId('copy-links-option'))
     await waitFor(() =>
-      expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false }),
+      expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true }),
     )
     const cfg = JSON.parse(await useAppStore.getState().adapter.readTextFile('/cfg.json'))
-    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
     expect(cfg.workspaceDir).toBe('/ws') // 合并保存保留其他字段
     expect(cfg.preferredLayout).toBe('logic')
     expect(cfg.theme).toBe('dark')

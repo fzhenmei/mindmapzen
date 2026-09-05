@@ -53,23 +53,28 @@ export function parsePreviewOutlinePref(v: unknown): PreviewOutlinePref {
   return PREVIEW_OUTLINE_PREFS.has(v as PreviewOutlinePref) ? (v as PreviewOutlinePref) : 'auto'
 }
 
-/** 复制行为设置（M5b Task 4）：copyIncludeNote=复制 md 时包含节点备注引用块；copyIncludeLinks=保留 [[..]] 双链标记 */
+/** 复制行为设置（M5b Task 4）：copyIncludeNote=复制 md 时包含节点备注引用块；copyIncludeLinks=保留 [[..]] 双链标记；
+ *  copyIncludeBody（2026-09 正文）=复制 md 时包含节点正文块 */
 export interface CopySettings {
   copyIncludeNote: boolean
   copyIncludeLinks: boolean
+  /** 复制 md 时包含节点正文（2026-09 写作）；默认含——给 AI 改稿是刚需 */
+  copyIncludeBody: boolean
 }
 
 export type CopySettingKey = keyof CopySettings
 
-export const DEFAULT_COPY_SETTINGS: CopySettings = { copyIncludeNote: false, copyIncludeLinks: true }
+export const DEFAULT_COPY_SETTINGS: CopySettings = { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }
 
-/** 宽容解析配置中的复制设置：非对象/字段类型非法逐字段回退默认（旧配置无 settings 字段按默认兼容） */
+/** 宽容解析配置中的复制设置：非对象/字段类型非法逐字段回退默认（旧配置无 settings 字段按默认兼容；
+ *  2026-09 正文起含 copyIncludeBody——旧配置无该键即补默认 true，「缺键补默认、有键原样」） */
 export function parseSettings(v: unknown): CopySettings {
   if (typeof v !== 'object' || v === null) return DEFAULT_COPY_SETTINGS
   const o = v as Record<string, unknown>
   return {
     copyIncludeNote: typeof o.copyIncludeNote === 'boolean' ? o.copyIncludeNote : DEFAULT_COPY_SETTINGS.copyIncludeNote,
     copyIncludeLinks: typeof o.copyIncludeLinks === 'boolean' ? o.copyIncludeLinks : DEFAULT_COPY_SETTINGS.copyIncludeLinks,
+    copyIncludeBody: typeof o.copyIncludeBody === 'boolean' ? o.copyIncludeBody : DEFAULT_COPY_SETTINGS.copyIncludeBody,
   }
 }
 
