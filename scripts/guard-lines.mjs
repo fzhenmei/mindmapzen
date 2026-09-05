@@ -12,10 +12,12 @@
 // newMapOpen 态 + anyDialog 互斥列 + 砚栏钮 + newMap 槽组装——功能性增长，无腐化）。
 // 2026-09（圈选批量操作批）：440→450（多选浮条 MultiSelectBar 渲染接线 + import，+7；
 // 选中镜像派生在 useActiveSelection，浮条本体在 MultiSelectBar.tsx——功能性增长，无腐化）。
+// 2026-09（复制选项移入砚栏批）：450→460（copySettings 订阅 + 砚栏两 props 接线，+4；
+// split button 本体在 ZenBar.tsx（无护栏）——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 450 },
+  { path: '../src/views/EditorView.tsx', limit: 460 },
   { path: '../src/views/LibraryView.tsx', limit: 520 },
 ]
 

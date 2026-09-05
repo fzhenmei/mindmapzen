@@ -52,6 +52,8 @@ export const IconCopy = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 下拉箭头（2026-09 复制选项下拉）：复制钮旁的展开指示，收窄网格 chevron */
+export const IconChevronDown = ({ size }: IconProps) => base(<path d="M4 6l4 4 4-4" />, size)
 /** 粘贴（剪贴板+内容条）：外框圆角矩形 + 顶部夹片 + 两条内容线 */
 export const IconPaste = ({ size }: IconProps) =>
   base(

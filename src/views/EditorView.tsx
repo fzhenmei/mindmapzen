@@ -60,6 +60,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
+  // 复制选项（2026-09 自设置面板移入砚栏复制钮下拉）：订阅驱动勾选态；doCopy 路径仍 getState 实时取
+  const copySettings = useAppStore((s) => s.settings)
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
@@ -336,6 +338,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onNewClick={() => setNewMapOpen(true)}
         undoRedo={undoRedo}
         onCopyClick={doCopy}
+        copySettings={copySettings}
+        onToggleCopySetting={(key) => void useAppStore.getState().setSetting(key, !copySettings[key])}
         onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
