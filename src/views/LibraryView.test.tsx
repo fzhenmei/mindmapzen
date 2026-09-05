@@ -296,18 +296,17 @@ describe('案头目录（M5a）', () => {
     expect(screen.queryByTestId('dir-node-assets')).not.toBeInTheDocument()
   })
 
-  // 设置入口（M5b Task 4）：页首 btn-settings 打开设置对话框，开关切换写入 store
-  test('页首设置按钮打开设置对话框并可切换复制开关', async () => {
+  // 设置入口（M5b Task 4）：页首 btn-settings 打开设置对话框。复制两开关已于 2026-09
+  // 移入砚栏复制钮下拉（ZenBar.test 覆盖切换链路），此处守卫设置页不再渲染并验证开/关链路
+  test('页首设置按钮打开设置对话框（复制开关已移入砚栏）', async () => {
     const dirFs = new MemoryFsAdapter()
     useAppStore.getState().setAdapter(dirFs)
-    useAppStore.setState({ configPath: '/cfg.json' })
     await useAppStore.getState().setWorkspace('/ws')
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
     fireEvent.click(screen.getByTestId('btn-settings'))
     expect(await screen.findByTestId('settings-dialog')).toBeInTheDocument()
-    expect(screen.getByTestId('copy-note-toggle')).not.toBeChecked()
-    fireEvent.click(screen.getByTestId('copy-note-toggle'))
-    await waitFor(() => expect(useAppStore.getState().settings.copyIncludeNote).toBe(true))
+    expect(screen.queryByTestId('copy-note-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('copy-links-toggle')).not.toBeInTheDocument()
     // 关闭后对话框卸载
     fireEvent.click(screen.getByTestId('settings-close'))
     await waitFor(() => expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument())

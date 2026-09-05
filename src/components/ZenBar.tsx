@@ -7,12 +7,20 @@
 import type { ReactNode } from 'react'
 import type { LayoutKind } from '../editor/layoutMap'
 import type { UndoRedo } from '../hooks/useUndoRedo'
+import type { CopySettingKey, CopySettings } from '../types/files'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
+import {
   IconArrowLeft,
+  IconChevronDown,
   IconCopy,
   IconCrosshair,
   IconFilePlus,
@@ -44,6 +52,10 @@ interface Props {
   undoRedo: UndoRedo
   /** 复制 Markdown（Ctrl+C 的按钮路径） */
   onCopyClick(): void
+  /** 复制选项开关值（2026-09 从设置面板移入）：驱动下拉勾选态（数据与持久化在 store） */
+  copySettings: CopySettings
+  /** 切换复制选项（2026-09）：下拉勾选项的回写路径，key 限定两个复制开关 */
+  onToggleCopySetting(key: CopySettingKey): void
   /** 复制文件路径（2026-09：发给 AI 直接读本文件；按钮紧邻复制 md 钮，
    *  IconRoute 路径图标与 IconCopy 形状区分） */
   onCopyPathClick(): void
@@ -86,6 +98,8 @@ export default function ZenBar({
   onNewClick,
   undoRedo,
   onCopyClick,
+  copySettings,
+  onToggleCopySetting,
   onCopyPathClick,
   scope,
   onSaveClick,
@@ -173,19 +187,55 @@ export default function ZenBar({
         </Button>
       </Tip>
       <Separator orientation="vertical" className="mx-1" />
-      <Tip label={copyLabel}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-copy"
-          data-scope={scope}
-          aria-label={copyLabel}
-          onClick={onCopyClick}
-        >
-          <IconCopy />
-        </Button>
-      </Tip>
+      {/* 复制组 = split button（2026-09 复制选项自设置面板移入）：主钮照常复制（Ctrl+C 同径），
+       *  箭头钮展开两项勾选，勾选即改即存（store setSetting）；onSelect preventDefault 保持
+       *  菜单打开，可连续切换两项（ESC/点外部关闭）。箭头钮不加 Tooltip：菜单自身即说明 */}
+      <DropdownMenu>
+        <div className="flex items-center">
+          <Tip label={copyLabel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-copy"
+              data-scope={scope}
+              aria-label={copyLabel}
+              onClick={onCopyClick}
+            >
+              <IconCopy />
+            </Button>
+          </Tip>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="btn-copy-options"
+              aria-label="复制选项"
+              className="h-9 w-5 px-0"
+            >
+              <IconChevronDown size={10} />
+            </Button>
+          </DropdownMenuTrigger>
+        </div>
+        <DropdownMenuContent align="start">
+          <DropdownMenuCheckboxItem
+            data-testid="copy-note-option"
+            checked={copySettings.copyIncludeNote}
+            onCheckedChange={() => onToggleCopySetting('copyIncludeNote')}
+            onSelect={(e) => e.preventDefault()}
+          >
+            包含备注
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            data-testid="copy-links-option"
+            checked={copySettings.copyIncludeLinks}
+            onCheckedChange={() => onToggleCopySetting('copyIncludeLinks')}
+            onSelect={(e) => e.preventDefault()}
+          >
+            保留双链标记
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Tip label="复制文件路径（发给 AI 直接读取）">
         <Button
           type="button"
