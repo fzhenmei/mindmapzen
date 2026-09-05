@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
 })
 
 describe('appStore', () => {
@@ -136,6 +136,55 @@ describe('dropRecent（打开失败清理）', () => {
     await useAppStore.getState().dropRecent('/ws/无此路径.md')
     expect(useAppStore.getState().recentOpened).toEqual(['/ws/a.md'])
     expect(useAppStore.getState().sessionRecent).toEqual(['/ws/a.md'])
+  })
+})
+
+// 顶部导图胶囊条（2026-09 鼠标流切换）：mapTabs = 会话内 tab 稳定序（内存态不落盘）。
+// 区别于 recentOpened/sessionRecent 的 MRU 置顶（切换即跳动，连点翻图时鼠标记忆失效）：
+// 已在列不重排、新开尾部追加，胶囊位置恒定防误触；init 自 recentOpened 初始化——
+// 重启后胶囊仍在（跨会话保留口径），顺序取上次的 MRU 序
+describe('mapTabs（会话内 tab 稳定序——顶部胶囊条数据源）', () => {
+  test('openMap 尾部追加、重复打开不重排（稳定序，区别于 sessionRecent 置顶）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().openMap('/ws/b.md')
+    expect(useAppStore.getState().mapTabs).toEqual(['/ws/a.md', '/ws/b.md'])
+    await useAppStore.getState().openMap('/ws/a.md') // 重复打开：位置不动
+    expect(useAppStore.getState().mapTabs).toEqual(['/ws/a.md', '/ws/b.md'])
+  })
+  test('createAndOpen 新图记入尾部（新建即打开）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().setWorkspace('/ws')
+    await useAppStore.getState().createAndOpen('新图')
+    expect(useAppStore.getState().mapTabs).toEqual(['/ws/a.md', '/ws/新图.md'])
+  })
+  test('init 自 recentOpened 初始化（跨会话保留）', async () => {
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', recentOpened: ['/ws/b.md', '/ws/a.md'] }))
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().mapTabs).toEqual(['/ws/b.md', '/ws/a.md'])
+  })
+  test('超 5 淘汰最早（头部，2026-09 用户裁定上限 5）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    for (let i = 0; i < 6; i++) await useAppStore.getState().openMap(`/ws/${i}.md`)
+    const tabs = useAppStore.getState().mapTabs
+    expect(tabs).toHaveLength(5)
+    expect(tabs[0]).toBe('/ws/1.md') // 最早打开的让位
+    expect(tabs[4]).toBe('/ws/5.md')
+  })
+  test('dropRecent 一并过滤（打开失败移出胶囊条）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/a.md')
+    await useAppStore.getState().openMap('/ws/b.md')
+    await useAppStore.getState().dropRecent('/ws/b.md')
+    expect(useAppStore.getState().mapTabs).toEqual(['/ws/a.md'])
+  })
+  test('exitWorkspace 清空（换工作区后路径无意义，同 sessionRecent）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().openMap('/ws/已有.md')
+    await useAppStore.getState().exitWorkspace()
+    expect(useAppStore.getState().mapTabs).toEqual([])
   })
 })
 
