@@ -165,13 +165,13 @@ describe('mapTabs（会话内 tab 稳定序——顶部胶囊条数据源）', (
     await useAppStore.getState().init()
     expect(useAppStore.getState().mapTabs).toEqual(['/ws/b.md', '/ws/a.md'])
   })
-  test('超 10 淘汰最早（头部，同 recentOpened 上限）', async () => {
+  test('超 5 淘汰最早（头部，2026-09 用户裁定上限 5）', async () => {
     useAppStore.setState({ configPath: '/cfg.json' })
-    for (let i = 0; i < 11; i++) await useAppStore.getState().openMap(`/ws/${i}.md`)
+    for (let i = 0; i < 6; i++) await useAppStore.getState().openMap(`/ws/${i}.md`)
     const tabs = useAppStore.getState().mapTabs
-    expect(tabs).toHaveLength(10)
+    expect(tabs).toHaveLength(5)
     expect(tabs[0]).toBe('/ws/1.md') // 最早打开的让位
-    expect(tabs[9]).toBe('/ws/10.md')
+    expect(tabs[4]).toBe('/ws/5.md')
   })
   test('dropRecent 一并过滤（打开失败移出胶囊条）', async () => {
     useAppStore.setState({ configPath: '/cfg.json' })

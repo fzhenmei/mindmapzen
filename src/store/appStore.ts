@@ -18,7 +18,9 @@ interface AppState {
   sessionRecent: string[]
   /** 会话内 tab 稳定序（2026-09 顶部导图胶囊条）：内存态不落盘。区别于 recentOpened/
    *  sessionRecent 的 MRU 置顶（切换即跳动，连点翻图时鼠标记忆失效）——已在列不重排、
-   *  新开尾部追加，胶囊位置恒定防误触；init 自 recentOpened 初始化（重启后胶囊仍在） */
+   *  新开尾部追加，胶囊位置恒定防误触；init 自 recentOpened 前 5 初始化（重启后胶囊仍在）。
+   *  上限 5（2026-09 用户裁定：10 个太多），短于 recentOpened 的 10——胶囊条只翻活跃图，
+   *  更多走 Ctrl+P 搜索 */
   mapTabs: string[]
   workspaceDir: string | null
   maps: MapInfo[]
@@ -125,9 +127,9 @@ interface AppState {
   setError: (e: string | null) => void
 }
 
-/** tab 稳定序维护（2026-09 顶部胶囊条）：已在列不动、新开尾部追加，超 10 淘汰最早（同 recentOpened 上限） */
+/** tab 稳定序维护（2026-09 顶部胶囊条）：已在列不动、新开尾部追加，超 5 淘汰最早（上限 5，2026-09 用户裁定） */
 const appendTab = (tabs: string[], mdPath: string): string[] =>
-  tabs.includes(mdPath) ? tabs : [...tabs, mdPath].slice(-10)
+  tabs.includes(mdPath) ? tabs : [...tabs, mdPath].slice(-5)
 
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
@@ -174,8 +176,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     if (cfg.workspaceDir) {
-      // mapTabs 初始 = 持久 MRU 序（2026-09 顶部胶囊条）：重启后胶囊仍在，跨会话保留
-      set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened })
+      // mapTabs 初始 = 持久 MRU 序前 5（2026-09 顶部胶囊条）：重启后胶囊仍在，跨会话保留
+      set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened.slice(0, 5) })
       await get().refreshMaps()
     }
     // v2.4：不再自动回到上次打开的导图——启动恒定落案头（上次内容在「最近打开」一键可达）
