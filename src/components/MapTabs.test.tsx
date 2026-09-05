@@ -62,4 +62,15 @@ describe('MapTabs（顶部导图胶囊条）', () => {
     fireEvent.click(screen.getAllByTestId('map-tab')[0])
     expect(onPick).not.toHaveBeenCalled()
   })
+
+  // 长名防线（2026-09 用户验收）：胶囊 truncate+max-w+min-w-0、容器限宽——nowrap 文本的
+  // min-content=全文本宽，无 min-w-0 则 flex 收缩失效照样溢出；全名经 Tooltip 可达
+  test('长名不破布局：胶囊单宽截断、容器限宽可收缩', () => {
+    renderTabs([cand('/ws/a.md', '这张导图的名字特别长特别长特别长'), cand('/ws/b.md', 'b')], '/ws/a.md')
+    expect(screen.getByTestId('map-tabs').className).toContain('max-w-[calc(100vw-2rem)]')
+    const pill = screen.getAllByTestId('map-tab')[0]
+    expect(pill.className).toContain('truncate')
+    expect(pill.className).toContain('max-w-[10em]')
+    expect(pill.className).toContain('min-w-0')
+  })
 })

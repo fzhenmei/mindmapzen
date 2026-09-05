@@ -23,7 +23,7 @@ export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>
     <nav
       data-testid="map-tabs"
       aria-label="最近打开的导图"
-      className="absolute left-1/2 top-2 z-[5] flex -translate-x-1/2 items-center gap-1 rounded-full bg-card px-1.5 py-1 shadow-md"
+      className="absolute left-1/2 top-2 z-[5] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1 overflow-hidden rounded-full bg-card px-1.5 py-1 shadow-md"
     >
       {tabs.map((c) => (
         <Tooltip key={c.mdPath}>
@@ -34,7 +34,7 @@ export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>
               size="sm"
               data-testid="map-tab"
               aria-current={c.mdPath === currentMdPath ? 'page' : undefined}
-              className="h-7 rounded-full px-3 font-file text-xs aria-current:bg-accent aria-current:text-accent-foreground"
+              className="h-7 min-w-0 max-w-[10em] truncate rounded-full px-3 font-file text-xs aria-current:bg-accent aria-current:text-accent-foreground"
               onClick={() => {
                 if (c.mdPath !== currentMdPath) onPick(c.mdPath)
               }}
