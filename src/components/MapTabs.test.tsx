@@ -73,4 +73,13 @@ describe('MapTabs（顶部导图胶囊条）', () => {
     expect(pill.className).toContain('max-w-[10em]')
     expect(pill.className).toContain('min-w-0')
   })
+
+  // 高亮变体锚点（2026-09 修复回归）：Tailwind 无 aria-current 内置变体，须任意值语法
+  // aria-[current=page]:——写成 aria-current:bg-primary 时不报错但类永不生成、高亮静默失效
+  test('当前图高亮类为任意值变体（aria-current 非内置，简写静默失效）', () => {
+    renderTabs([cand('/ws/a.md', '图A'), cand('/ws/b.md', '图B')], '/ws/a.md')
+    const pill = screen.getAllByTestId('map-tab')[0]
+    expect(pill.className).toContain('aria-[current=page]:bg-primary')
+    expect(pill.className).not.toContain('aria-current:')
+  })
 })

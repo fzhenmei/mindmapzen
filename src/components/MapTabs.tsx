@@ -34,7 +34,7 @@ export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>
               size="sm"
               data-testid="map-tab"
               aria-current={c.mdPath === currentMdPath ? 'page' : undefined}
-              className="h-7 min-w-0 max-w-[10em] truncate rounded-full px-3 font-file text-xs aria-current:bg-primary aria-current:text-primary-foreground"
+              className="h-7 min-w-0 max-w-[10em] truncate rounded-full px-3 font-file text-xs aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground"
               onClick={() => {
                 if (c.mdPath !== currentMdPath) onPick(c.mdPath)
               }}
