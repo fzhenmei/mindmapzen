@@ -1,26 +1,34 @@
 import { describe, expect, test } from 'vitest'
-import { applyCopySettings, stripLinkBrackets, stripNoteLines, stripTreeBody } from './copyFilter'
+import { applyCopySettings, stripLinkBrackets, stripTreeBody, stripTreeNote } from './copyFilter'
+import { serialize } from './mdTree'
 import type { ZenNode } from '../types/tree'
 
-describe('stripNoteLines（copyIncludeNote=false 剥备注引用块）', () => {
-  test('剥标题层备注行（含行尾换行不留空行）', () => {
-    expect(stripNoteLines('# 根\n\n## A\n> 备注\n')).toBe('# 根\n\n## A\n')
+describe('stripTreeNote（copyIncludeNote=false 树层剥备注，终审 C1）', () => {
+  test('递归剥除全部 note，其余字段不动（body/icons 原样保留）', () => {
+    const tree: ZenNode = {
+      text: 'r', body: '论述。', note: '备注', children: [{ text: 'c', note: '子备注', body: '子论述。', children: [] }],
+    }
+    expect(stripTreeNote(tree)).toEqual({
+      text: 'r', body: '论述。', children: [{ text: 'c', body: '子论述。', children: [] }],
+    })
   })
-  test('剥多行备注：逐行全剥', () => {
-    expect(stripNoteLines('## A\n> 第一行\n> 第二行\n')).toBe('## A\n')
+  test('纯函数：入参树不被改动（原 note 原样保留）', () => {
+    const child: ZenNode = { text: 'c', note: '子备注', children: [] }
+    const tree: ZenNode = { text: 'r', note: '备注', children: [child] }
+    stripTreeNote(tree)
+    expect(tree.note).toBe('备注')
+    expect(child.note).toBe('子备注')
   })
-  test('剥列表项缩进形式备注（深度 ≥7 嵌套列表，引用块缩进进内容列）', () => {
-    expect(stripNoteLines('- 项\n  > 列表备注\n  - 子项\n    > 子项备注\n')).toBe('- 项\n  - 子项\n')
+  test('C1 回归：copyIncludeNote=false 时正文代码块内 `> ` 行不丢（剥在树层，md 行级正则已退役）', () => {
+    const tree: ZenNode = { text: 'r', body: '```diff\n> 删除的行\n```', note: '备注', children: [] }
+    // doCopy 同款链：树层剥 note → serialize（旧 stripNoteLines 行级正则会把代码块内 `> ` 行整行剥掉）
+    expect(serialize(stripTreeNote(tree))).toBe('# r\n```diff\n> 删除的行\n```\n')
   })
-  test('剥空内容备注行（备注本身含空行 → 序列化为 `> ` 裸前缀行）', () => {
-    expect(stripNoteLines('## A\n> \n> 有字\n')).toBe('## A\n')
-  })
-  test('文件末尾无换行的备注行也可剥', () => {
-    expect(stripNoteLines('## A\n> 末尾备注')).toBe('## A\n')
-  })
-  test('非备注内容原样保留', () => {
-    const md = '# 根\n\n## A\n- x\n'
-    expect(stripNoteLines(md)).toBe(md)
+  test('C1 回归：copyIncludeNote=false 时正文内引用块不丢（手写 md 场景，树层不误伤）', () => {
+    // I1 落地后编辑器不再产出正文引用块，但手写 md 仍可能有；树层剥除只删 note 字段，
+    // 不按行剥 `> `（旧正则还会在剥除处留双空行）
+    const tree: ZenNode = { text: 'r', body: '论述。\n\n> 引用', note: '备注', children: [] }
+    expect(serialize(stripTreeNote(tree))).toBe('# r\n论述。\n\n> 引用\n')
   })
 })
 
@@ -54,24 +62,12 @@ describe('stripTreeBody（copyIncludeBody=false 树层剥正文，2026-09）', (
   })
 })
 
-describe('applyCopySettings（按设置组合）', () => {
-  test('默认 {false,true}：剥备注、留双链', () => {
-    expect(applyCopySettings('# 根\n\n## A\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }))
-      .toBe('# 根\n\n## A\n')
-    expect(applyCopySettings('## 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe('## 见 [[B]]\n')
-  })
-  test('copyIncludeNote=true：备注保留', () => {
-    expect(applyCopySettings('## A\n> 备注\n', { copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('## A\n> 备注\n')
+describe('applyCopySettings（按设置组合；终审 C1 后仅剩双链剥除——备注剥除已上移树层）', () => {
+  test('copyIncludeLinks=true：原文恒等（备注剥除不再走此处）', () => {
+    const md = '# 根\n\n## A\n> 备注\n'
+    expect(applyCopySettings(md, { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
   })
   test('copyIncludeLinks=false：[[B]] → B', () => {
     expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })).toBe('## A 见 B\n')
-  })
-  test('两开关全开：原文恒等', () => {
-    const md = '# 根\n\n## A 见 [[B]]\n> 备注\n'
-    expect(applyCopySettings(md, { copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
-  })
-  test('两开关全关：备注与括号都剥', () => {
-    expect(applyCopySettings('# 根\n\n## A 见 [[B]]\n> 备注\n', { copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true }))
-      .toBe('# 根\n\n## A 见 B\n')
   })
 })

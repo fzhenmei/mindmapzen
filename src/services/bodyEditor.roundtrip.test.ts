@@ -23,7 +23,12 @@
 //      ② 经 parse.setup 钩子 md.disable(['heading','lheading','list']) 禁 markdown-it 块规则
 //         (仅①时 # x 被渲染成 <h1> 后无 parseDOM 规则认领,标记字符丢失)。
 //      实测输出 '\# x\n\n\- y'(prosemirror-markdown 对行首 #/- 转义),再 parse 无 heading/list 节点。
-// 三、Task 5(BodyEditor 组件封装)依据:
+// 三、终审 I1(2026-09):blockquote 同款双管齐下裁撤——md 文法里引用块恒等于备注,正文支持
+//   引用块则 roundtrip 漂移(引用行保存重开迁进备注)。禁用后 `> x` 以字面留存,但转义形态
+//   与 #/- 不同:prosemirror-markdown 对 > 输出 HTML 实体 `&gt;`(实测,非反斜杠 \>),
+//   parse 端解码回字面文本、不构成 blockquote——二次 roundtrip 幂等(输出再转一轮恒等,
+//   见禁用用例末断言);mdTree.rawBlockText 取源码行,`&gt;` 在树/文件层原样保留零漂移。
+// 四、Task 5(BodyEditor 组件封装)依据:
 //   - 装配:[StarterKit, TableKit, Markdown];content 传 md 字符串即自动 parse;
 //     取值 editor.storage.markdown.getMarkdown(),存库前去掉恰好一个文末换行(表格块才有,
 //     与本测试 mdOfEditor 同一口径);
@@ -35,17 +40,17 @@ import StarterKit from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
 import { Markdown } from 'tiptap-markdown'
 
-/** v1 正文支持的块集合(spec §v1 支持的块);每例须 parse→serialize 后与输入恒等
+/** v1 正文支持的块集合(spec §v1 支持的块;终审 I1 起不含引用——引用=备注,正文不放真引用);
+ *  每例须 parse→serialize 后与输入恒等
  *  (允许的规范化差异:行尾空白;除此之外任何漂移都算 No-Go 证据) */
 const CASES: ReadonlyArray<{ name: string; md: string }> = [
   { name: '中文段落', md: '围绕节点展开的论述。' },
   { name: '多段落', md: '第一段。\n\n第二段。' },
   { name: '粗斜体删除线行内代码', md: '**粗**、*斜*、~~删~~、`code` 混排。' },
   { name: '代码块(含 # 与 - 行)', md: '```js\n# 注释不是标题\n- 不是列表\nconst x = 1\n```' },
-  { name: '引用块', md: '> 引用内容' },
   { name: '表格', md: '| a | b |\n| --- | --- |\n| 1 | 2 |' },
   { name: '链接', md: '[文字](https://example.com)' },
-  { name: '组合', md: '论述段。\n\n```py\nx = 1\n```\n\n> 引用\n\n| a |\n| --- |\n| b |' },
+  { name: '组合', md: '论述段。\n\n```py\nx = 1\n```\n\n| a |\n| --- |\n| b |' },
 ]
 
 // —— 纯转换路径:每次转换建一个不挂载的 Editor(jsdom 内部自建游离 div),
@@ -74,16 +79,18 @@ const nodeTypesOf = (md: string, extensions: Extensions): Set<string> => {
   return types
 }
 
-// —— 禁 heading/list 的装配 ——
-// ① 扩展层:StarterKit.configure({ heading/bulletList/orderedList/listItem: false }) 移除节点与输入规则;
-// ② 解析层:仍需禁 markdown-it 的块规则(heading/lheading/list),否则 `# x` 被 md 渲染成 <h1>
-//    后无 parseDOM 规则认领、标记字符丢失(实测见文件头)。经 tiptap-markdown 的
-//    parse.setup 钩子(md 实例上 disable)在 tokenize 阶段就把 # / - 留在段落文本里。
+// —— 禁 heading/list/blockquote 的装配(与 BodyEditor.tsx 的 BODY_EXTENSIONS 同构,契约锚) ——
+// ① 扩展层:StarterKit.configure({ heading/bulletList/orderedList/listItem/blockquote: false })
+//    移除节点与输入规则;
+// ② 解析层:仍需禁 markdown-it 的块规则(heading/lheading/list/blockquote),否则 `# x` 被 md
+//    渲染成 <h1> 后无 parseDOM 规则认领、标记字符丢失(实测见文件头)。经 tiptap-markdown 的
+//    parse.setup 钩子(md 实例上 disable)在 tokenize 阶段就把 # / - / > 留在段落文本里。
 const noHeadingListStarter = StarterKit.configure({
   heading: false,
   bulletList: false,
   orderedList: false,
   listItem: false,
+  blockquote: false,
 })
 const literalBlocks = Extension.create({
   name: 'literalBlocks',
@@ -92,7 +99,7 @@ const literalBlocks = Extension.create({
       markdown: {
         parse: {
           setup(md: { disable: (rules: string[]) => unknown }) {
-            md.disable(['heading', 'lheading', 'list'])
+            md.disable(['heading', 'lheading', 'list', 'blockquote'])
           },
         },
       },
@@ -100,7 +107,7 @@ const literalBlocks = Extension.create({
   },
 })
 const FULL: Extensions = [StarterKit, TableKit, Markdown]
-const NO_HEADING_LIST: Extensions = [noHeadingListStarter, TableKit, literalBlocks, Markdown]
+const BODY_ASSEMBLY: Extensions = [noHeadingListStarter, TableKit, literalBlocks, Markdown]
 
 describe('编辑器 roundtrip(spec v1 块集合)', () => {
   test('parse→serialize 与输入恒等', async () => {
@@ -110,16 +117,19 @@ describe('编辑器 roundtrip(spec v1 块集合)', () => {
     }
   })
 
-  test('禁用 heading/list 后,# 行与 - 行不再构成结构', async () => {
-    const out = roundtrip('# x\n\n- y', NO_HEADING_LIST)
-    // 实测行为断言(见文件头):# 与 - 以字面文本留存;markdown 序列化不含 HTML 标签,
-    // brief 的 not.toContain('<h1') 以结构级断言替代:输出再 parse 回来不出现
-    // heading/bulletList/orderedList/listItem 节点。
+  test('禁用 heading/list/blockquote 后,#、- 与 > 行不再构成结构', async () => {
+    const out = roundtrip('# x\n\n- y\n\n> 引用内容', BODY_ASSEMBLY)
+    // 实测行为断言(见文件头):#/ - 以反斜杠转义、> 以 HTML 实体 &gt; 留存——parse 端
+    // 均解码回字面文本,不构成结构;brief 的 not.toContain('<h1') 以结构级断言替代:
+    // 输出再 parse 回来不出现 heading/bulletList/orderedList/listItem/blockquote 节点。
     expect(out).toContain('# x')
     expect(out).toContain('- y')
-    const types = nodeTypesOf(out, NO_HEADING_LIST)
-    for (const banned of ['heading', 'bulletList', 'orderedList', 'listItem']) {
+    expect(out).toContain('&gt; 引用内容')
+    const types = nodeTypesOf(out, BODY_ASSEMBLY)
+    for (const banned of ['heading', 'bulletList', 'orderedList', 'listItem', 'blockquote']) {
       expect(types.has(banned), `再 parse 后出现 ${banned} 节点`).toBe(false)
     }
+    // 字面恒等的落点:转义输出再 parse→serialize 一轮恒等(md 层零漂移,见文件头三)
+    expect(roundtrip(out, BODY_ASSEMBLY)).toBe(out)
   })
 })

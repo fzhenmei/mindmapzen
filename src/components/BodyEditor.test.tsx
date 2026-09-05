@@ -130,30 +130,34 @@ describe('BodyEditor', () => {
     expect(md).not.toContain('<')
   })
 
-  test('schema 无 heading/list:md 输入不产生结构节点,# 与 - 以字面留存', () => {
+  test('schema 无 heading/list/blockquote:md 输入不产生结构节点,# 与 - 以字面、> 以实体转义留存', () => {
     const onChange = vi.fn()
-    const { container } = render(<BodyEditor value="# 标题\n\n- 列表项" onChange={onChange} />)
-    // DOM 级:不渲染任何标题/列表结构
-    expect(container.querySelector('h1,h2,h3,h4,h5,h6,ul,ol')).toBeNull()
+    const { container } = render(<BodyEditor value="# 标题\n\n- 列表项\n\n> 引用内容" onChange={onChange} />)
+    // DOM 级:不渲染任何标题/列表/引用结构
+    expect(container.querySelector('h1,h2,h3,h4,h5,h6,ul,ol,blockquote')).toBeNull()
     expect(container.textContent).toContain('# 标题')
     expect(container.textContent).toContain('- 列表项')
+    expect(container.textContent).toContain('> 引用内容') // parse 端已解码回字面文本
     // doc 级:禁用节点类型一个不出现(与 roundtrip 测试 nodeTypesOf 同口径)
     const editor = editorOf(container)
     const types = new Set<string>()
     editor.state.doc.descendants((node) => {
       types.add(node.type.name)
     })
-    for (const banned of ['heading', 'bulletList', 'orderedList', 'listItem']) {
+    for (const banned of ['heading', 'bulletList', 'orderedList', 'listItem', 'blockquote']) {
       expect(types.has(banned), `出现 ${banned} 节点`).toBe(false)
     }
-    // 序列化级:onChange 发出的 md 无行首标题/列表结构形态(转义字面,实测口径见 roundtrip 文件头)
+    // 序列化级:onChange 发出的 md 无行首标题/列表/引用结构形态——#/- 反斜杠转义、
+    // > 为 HTML 实体 &gt;(实测口径见 roundtrip 文件头;终审 I1:引用=备注,正文不放真引用)
     act(() => {
       editor.commands.insertContentAt(endOfLastTextblock(editor), '。')
     })
     const md = onChange.mock.lastCall?.[0] ?? ''
     expect(md).not.toMatch(/^#{1,6} /m)
     expect(md).not.toMatch(/^[-*] /m)
+    expect(md).not.toMatch(/^> /m)
     expect(md.replace(/\\/g, '')).toContain('# 标题')
+    expect(md).toContain('&gt; 引用内容。')
   })
 
   test('readOnly → contenteditable=false,切换可翻转', () => {

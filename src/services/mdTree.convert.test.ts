@@ -74,6 +74,15 @@ describe('zen ⇄ engine 转换', () => {
     expect(engineTreeToZen(engine).tree.body).toBeUndefined()
   })
 
+  test('zen_body 去重：用户手敲 ::body 且有正文时不产生双角标（终审 M1）', async () => {
+    const { zenToEngineTree } = await import('./mdTree')
+    const tree: ZenNode = { text: 'r', icons: ['body'], body: '论述。', children: [] }
+    expect(zenToEngineTree(tree).data.icon).toEqual(['zen_body']) // 已在册即不重复追加
+    // 用户另挂其他图标时：顺序保持用户图标在前，zen_body 不重复
+    const tree2: ZenNode = { text: 'r', icons: ['flag', 'body'], body: '论述。', children: [] }
+    expect(zenToEngineTree(tree2).data.icon).toEqual(['zen_flag', 'zen_body'])
+  })
+
   test('engine→zen：收集 data.note（仅字符串，其余视为无备注）', () => {
     const eng: EngineNode = {
       data: { text: '根' },

@@ -723,6 +723,18 @@ test('复制后处理：copyIncludeBody=true（默认含，给 AI 改稿刚需�
     .toBe('# 根\n\n## 新分支\n既有正文\n')
 })
 
+// 终审 C1：剥备注改树层（stripTreeNote）——旧 md 行级正则会误伤正文代码块内 `> ` 行
+test('复制后处理：copyIncludeNote=false 不误伤正文代码块内 `> ` 行（默认组合即「复制给 AI 改稿」）', async () => {
+  const tree: EngineNode = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      { data: { text: '新分支', expand: true, uid: 'child-uid', body: '```diff\n> 删除的行\n```', note: '备注' }, children: [] },
+    ],
+  }
+  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }, tree))
+    .toBe('# 根\n\n## 新分支\n```diff\n> 删除的行\n```\n')
+})
+
 // ---- 连线净化（M5d Task 2）：uid 注册表、显示剥离与序列化注入 ----
 /** 净化样例树：child 文本含句中标记 [[B]]，b 为目标节点；md 与 fakeTree 同构 */
 const purifyTree = (): EngineNode => ({

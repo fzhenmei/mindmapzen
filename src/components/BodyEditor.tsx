@@ -1,11 +1,13 @@
 // src/components/BodyEditor.tsx —— 节点正文 WYSIWYG 编辑器(2026-09 正文功能 Task 5):
 // Tiptap 3 + tiptap-markdown 封装(Task 1 Go 结论;roundtrip 实测记录见
-// bodyEditor.roundtrip.test.ts 文件头,本组件装配与其 NO_HEADING_LIST 同构,以它为契约锚)。
+// bodyEditor.roundtrip.test.ts 文件头,本组件装配与其 BODY_ASSEMBLY 同构,以它为契约锚)。
 // md 字符串为源:content/setContent 传字符串时 tiptap-markdown 先经 markdown-it parse 成 doc,
 // 取值走 editor.storage.markdown.getMarkdown(),存库前去掉恰好一个文末换行
 // (仅表格块产生,与该测试 mdOfEditor 同口径)。
-// schema 无 heading 无 list(spec §v1:正文无标题、列表即导图子节点):StarterKit 关节点 +
-// literalBlocks 禁 markdown-it 块规则,双管齐下缺一不可(只关扩展时 `# x` 的标记字符会丢)。
+// schema 无 heading/list/blockquote(spec §v1:正文无标题、列表即导图子节点、引用=备注
+// ——终审 I1 与「列表=子节点」同构裁撤:正文支持引用块则 roundtrip 漂移,引用行保存重开
+// 会迁进备注):StarterKit 关节点 + literalBlocks 禁 markdown-it 块规则,双管齐下缺一不可
+// (只关扩展时 `# x` 的标记字符会丢)。
 // onChange 即时回调最新 md,无防抖(防抖/flush 归 Task 6 的 useBodyPanel);
 // value 外部变更(切换节点)走 setContent 整体替换——Tiptap 3 的 setContent 第二参为
 // options 且 emitUpdate 默认 true(v2 默认 false),必须显式传 false 防回环;
@@ -26,16 +28,17 @@ interface Props {
   readOnly?: boolean
 }
 
-// —— 禁 heading/list 装配(扩展层 + 解析层)——
+// —— 禁 heading/list/blockquote 装配(扩展层 + 解析层)——
 const noHeadingListStarter = StarterKit.configure({
   heading: false,
   bulletList: false,
   orderedList: false,
   listItem: false,
+  blockquote: false,
 })
 // 解析层:只关扩展节点时 `# x` 仍被 markdown-it 渲染成 <h1>,无 parseDOM 规则认领、
 // 标记字符丢失;经 tiptap-markdown 的 parse.setup 钩子在 tokenize 阶段禁掉块规则,
-// `#`/`-` 以字面留存(prosemirror-markdown 序列化时对行首转义,再 parse 无结构)。
+// `#`/`-`/`>` 以字面留存(prosemirror-markdown 序列化时对行首转义,再 parse 无结构)。
 const literalBlocks = Extension.create({
   name: 'literalBlocks',
   addStorage() {
@@ -43,7 +46,7 @@ const literalBlocks = Extension.create({
       markdown: {
         parse: {
           setup(md: { disable: (rules: string[]) => unknown }) {
-            md.disable(['heading', 'lheading', 'list'])
+            md.disable(['heading', 'lheading', 'list', 'blockquote'])
           },
         },
       },

@@ -20,10 +20,13 @@
 // 2026-09（正文面板批）：460→480（useBodyPanel 接线 + 砚栏两 props + BodyPanel 渲染 +
 //  让位 resize effect + body-open 挂类 + 保存前冲刷正文草稿（审查 I-2），+20；
 //  面板本体在 BodyPanel.tsx、状态在 useBodyPanel.ts（均无护栏）——功能性增长，无腐化）。
+// 2026-09（正文终审修复批）：480→490（doCopy 剥备注改树层接线 stripTreeNote +1；关闭
+//  守卫 flushPending 冲刷口（终审 I2 关窗丢尾部草稿）+7——doCopy 改写超限升限，
+//  功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 480 },
+  { path: '../src/views/EditorView.tsx', limit: 490 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

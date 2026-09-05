@@ -35,8 +35,10 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
     // 备注候选（brief）：'' 须序列化为无引用块（parse 侧还原为无 note 键），比较前归一化掉
     note: fc.constantFrom('', '备注', '多\n行'),
     // 正文候选（2026-09 写作）：'' = 无正文；候选必须是「合法正文块」（parse 能原样还原的
-    // 顶层非结构块），行首 #/- 等结构标记排除——与 textArb 排除换行同理，属 md 语义边界
-    body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '```js\nconst x = 1\n```'),
+    // 顶层非结构块），行首 #/- 等结构标记排除——与 textArb 排除换行同理，属 md 语义边界。
+    // 表格候选（终审 M5）：本仓 remark 未挂 gfm，表格行按段落文本原样还原恒等——
+    // 钉住该口径，将来若接 gfm 走真 table 节点，rawBlockText 口径变化在此报警
+    body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '```js\nconst x = 1\n```', '| a | b |\n| --- | --- |\n| 1 | 2 |'),
   })
 
 const treeArb = nodeArb(6)
@@ -437,12 +439,23 @@ test('子结构后段落宽容：serialize 重排到子结构前，二次 roundt
   expect(parse(md)).toEqual({ ok: true, tree: once.tree, ignoredBlocks: [] }) // 定点：开-存-开不漂移
 })
 
+test('防御：正文内引用块保存重开归 note（引用=备注，终审 I1 钉死现有语义）', () => {
+  // 手写/历史数据场景：body 内含引用行，serialize 原样写回后 parse 把 `> ` 行判给备注——
+  // 这是文法级语义（引用块恒等于备注），编辑器已裁 blockquote 不再产出该形态，钉死防未来误改
+  const tree: ZenNode = { text: 'r', body: '论述。\n\n> 引用', children: [] }
+  const r = parse(serialize(tree))
+  expect(r).toEqual({ ok: true, tree: { text: 'r', body: '论述。', note: '引用', children: [] }, ignoredBlocks: [] })
+})
+
 test('防御：列表层节点（深度≥7）带 body 时 serialize 抛错，不静默丢内容', () => {
-  const deepLeaf = (body?: string): ZenNode => {
+  /** 指定深度构造叶子（终审 M4：原用例只落在深度 8，补 7 的精确边界——首个列表层） */
+  const leafAtDepth = (depth: number, body?: string): ZenNode => {
     let node: ZenNode = { text: 'leaf', ...(body !== undefined ? { body } : {}), children: [] }
-    for (const t of ['f', 'e', 'd', 'c', 'b', 'a', 'r']) node = { text: t, children: [node] }
+    for (let i = 1; i < depth; i++) node = { text: `n${i}`, children: [node] }
     return node
   }
-  expect(() => serialize(deepLeaf('深层正文'))).toThrow()
-  expect(() => serialize(deepLeaf())).not.toThrow()
+  expect(() => serialize(leafAtDepth(7, '深层正文'))).toThrow() // 精确边界：深度 7 = 首个列表层
+  expect(() => serialize(leafAtDepth(8, '更深层'))).toThrow()
+  expect(() => serialize(leafAtDepth(6, '末级标题正文'))).not.toThrow() // H6 末级标题仍可正文
+  expect(() => serialize(leafAtDepth(7))).not.toThrow()
 })

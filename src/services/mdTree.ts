@@ -315,10 +315,11 @@ export function zenToEngineTree(
     for (const [src, e] of imgMeta) rootImgMap[src] = e.dataUrl
   }
   // 图标组装（M18 + 2026-09 正文角标）：用户 icons 之外，body 非空时尾部追加内部图标
-  // zen_body（画布「有正文」角标）；engineTreeToZen 收集侧剥除，不进 md（保留名）
+  // zen_body（画布「有正文」角标）；engineTreeToZen 收集侧剥除，不进 md（保留名）。
+  // 终审 M1：用户手敲 ::body 时 zen_body 已在册——不重复追加，防画布双角标
   const icons = [
     ...(tree.icons ?? []).map((n) => `zen_${n}`),
-    ...(tree.body ? ['zen_body'] : []),
+    ...(tree.body && !(tree.icons ?? []).includes('body') ? ['zen_body'] : []),
   ]
   return {
     data: {

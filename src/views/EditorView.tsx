@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
 import { applyMultilinePaste } from '../services/multiline'
-import { applyCopySettings, stripTreeBody } from '../services/copyFilter'
+import { applyCopySettings, stripTreeBody, stripTreeNote } from '../services/copyFilter'
 import { absolutizeImagePaths } from '../services/aiImagePaths'
 import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
@@ -171,7 +171,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }
 
   /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
-   *  （如撤销删除）时清选中回退整图。后处理按 settings 剥备注引用块/双链括号；正文关时树层先剥（getState 取实时值）。
+   *  （如撤销删除）时清选中回退整图。备注/正文按 settings 树层剥除（终审 C1，先于序列化——md 层正则
+   *  剥 `> ` 行会误伤正文代码块/引用行）；md 层后处理仅剩双链括号（getState 取实时值）。
    *  尾段图片引用相对→绝对（2026-09，AI 消费者）：须在剥备注之后——头注引用行不能被一并剥掉。
    *  序列化同步无守卫（纯函数）；写剪贴板异步段以 then 双参兜错（Sonar S3776 认知复杂度） */
   const doCopy = (): void => {
@@ -183,6 +184,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     const active = uid ? findSubtreeByUid(full, uid) : null
     const settings = useAppStore.getState().settings
     let zen = engineTreeToZen(active ?? full).tree
+    if (!settings.copyIncludeNote) zen = stripTreeNote(zen)
     if (!settings.copyIncludeBody) zen = stripTreeBody(zen)
     let md = applyCopySettings(serialize(zen, registry.byUid), settings)
     const wsDir = useAppStore.getState().workspaceDir

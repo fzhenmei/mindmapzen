@@ -2,7 +2,8 @@
 // 消费者为 Claude Code 等有文件访问权的 agent：不输出 base64（巨量无效 token），md 内
 // assets/ 相对路径（事实源形态）统一解析为本机绝对路径；Windows 反斜杠归一正斜杠，
 // 含空白以 <...> 包裹（CommonMark 链接目标含空格的合法形态）。无本地图片引用时原文
-// 恒等——不硬塞头注占行。头注为 `> ` 引用行，须在 applyCopySettings（剥备注）之后调用。
+// 恒等——不硬塞头注占行。头注为 `> ` 引用行，须在剥备注（终审 C1 后为树层 stripTreeNote，
+// 先于 serialize）之后调用。
 
 /** 图片标记（与 imageMarkers.ts 提取同口径：src 允许空格、不含 ) 与换行） */
 const IMAGE_RE = /!\[([^\]\n]*)\]\(([^)\n]+)\)/g
