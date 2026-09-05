@@ -1,7 +1,7 @@
 // src/hooks/useCloseGuard.ts —— 关闭守卫（M5a 拆分自 EditorView，零行为变化）：
 // dirty 时拦截窗口关闭弹三态对话框、三态选择与保存防误触。依赖经 opts 注入——保存分支走
 // EditorView 现有 explicitSave 组合函数（忽略门 + 落盘 + 印记）；CloseGuardDialog 渲染留 EditorView。
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { RegisterCloseGuard } from '../types/ports'
 
 export interface CloseGuardOpts {
@@ -9,12 +9,16 @@ export interface CloseGuardOpts {
   registerCloseGuard: RegisterCloseGuard
   /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
   exitApp: () => void
-  /** 脏标记 ref（EditorView 持有：「放弃」路径也读写它） */
-  dirtyRef: MutableRefObject<boolean>
+  /** 脏标记 ref（EditorView 持有：「放弃」路径也读写它；React 19 类型,current 可变） */
+  dirtyRef: RefObject<boolean>
   /** 显式保存统一入口（EditorView 的 explicitSave 组合函数） */
   explicitSave: () => Promise<boolean>
   /** store 脏标记同步清除（useAppStore.clearDirty） */
   clearDirty: () => void
+  /** 关闭请求的防抖草稿冲刷（终审 I2，EditorView 注入 bodyPanel 链）：有未提交草稿先落
+   *  引擎并返回 true——SET_NODE_DATA 的 data_change 置脏经引擎节流异步到达，守卫不能
+   *  依赖冲刷后同步读 dirtyRef，返回 true 即按脏处理走三态 */
+  flushPending?: () => boolean
 }
 
 export interface CloseGuard {
@@ -25,14 +29,17 @@ export interface CloseGuard {
 }
 
 export function useCloseGuard(opts: CloseGuardOpts): CloseGuard {
-  const { registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty } = opts
+  const { registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty, flushPending } = opts
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
 
-  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭
+  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭。
+  // 终审 I2：先冲防抖草稿——干净图上防抖窗内直接关窗（Alt+F4/点 X）时 dirty 未及置
+  // （data_change 节流异步），flushPending 返回 true 即按脏走三态，草稿不随窗口蒸发
   useEffect(() => {
     const unregister = registerCloseGuard((e) => {
-      if (!dirtyRef.current) return
+      const flushed = flushPending?.() ?? false
+      if (!dirtyRef.current && !flushed) return
       e.preventClose()
       setGuarding(true)
     })

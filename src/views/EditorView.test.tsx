@@ -2542,6 +2542,43 @@ test('Ctrl+S 显式保存先冲刷正文防抖草稿（审查 I-2：落盘 md �
   }
 })
 
+test('关闭守卫先冲防抖窗内草稿再走三态（终审 I2：干净图关窗不丢尾部输入）', async () => {
+  const guard = makeGuardStub()
+  const exitApp = vi.fn()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={guard.register}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={exitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle // ready 时刻锁定实例（工厂每次重渲重赋模块级 fakeHandle，同 renderReadySelected 约定）
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // 防抖窗内未提交：SET_NODE_DATA 未发生、dirty 仍 false
+    expect(guard.fireClose()).toBe(true) // 拦截：hasPending 强制三态，不依赖（未及翻转的）dirtyRef
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'],
+    })
+    expect(screen.getByTestId('closeguard-save')).toBeInTheDocument() // 三态对话框弹出（保存/放弃/取消）
+    expect(exitApp).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 // ── 图标管理器 zen_body 回补（2026-09 正文，Task 4 移交修复）：SET_NODE_ICON 整组
 //    覆写，确认数组不含保留名时「有正文」角标会被抹掉；apply 落下前按 data.body 重补 ──
 

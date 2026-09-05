@@ -37,6 +37,9 @@ export interface BodyPanel {
   edit(value: string): void
   /** 立即提交当前草稿（若与引擎值有差异）；无草稿/无节点为无害空操作 */
   flushNow(): void
+  /** 是否有未提交草稿（终审 I2）：关闭守卫在 dirty 判定前先问——SET_NODE_DATA 置脏经
+   *  引擎 data_change 节流异步到达，防抖窗内关窗不能依赖 dirtyRef */
+  hasPending(): boolean
 }
 
 export function useBodyPanel(
@@ -115,6 +118,9 @@ export function useBodyPanel(
     setBodyDraft(null)
   }
 
+  /** 未提交草稿查询（终审 I2）：pendingRef 非空即有——供关闭守卫在 dirty 判定前决断 */
+  const hasPending = (): boolean => pendingRef.current !== null
+
   const toggle = (): void => {
     if (openRef.current) {
       close()
@@ -155,5 +161,5 @@ export function useBodyPanel(
     }
   }, [])
 
-  return { open: bodyDraft !== null, bodyDraft, nodeText, editable, toggle, close, edit, flushNow }
+  return { open: bodyDraft !== null, bodyDraft, nodeText, editable, toggle, close, edit, flushNow, hasPending }
 }
