@@ -96,9 +96,26 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
   Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
 )
 
-/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项） */
+/** 内部角标图标（2026-09 正文）：宿主保留名 'body'，静态注册进引擎 iconList 供画布渲「有正文」
+ *  角标（md 里无对应 ::body 标记——engineTreeToZen 收集侧剥除，见 mdTree.ts）。不进精选集
+ *  （图标管理器网格/面板不露出）；collectUncuratedIcons 同口径跳过（保留名不回收，
+ *  免得打开期为一棵不存在的 lucide 树白拉 icon-nodes.json chunk）。lucide file-text（ISC，合规） */
+const INTERNAL_ICONS: Readonly<Record<string, string>> = {
+  body: normalizeSvg(fileText),
+}
+
+/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）；
+ *  精选集之外并入内部保留名（zen_body 角标静态在册，画布可直接渲染） */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
-  return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
+  return [
+    {
+      type: 'zen',
+      list: [...Object.entries(CURATED_ICONS), ...Object.entries(INTERNAL_ICONS)].map(([name, icon]) => ({
+        name,
+        icon,
+      })),
+    },
+  ]
 }
 
 /** lucide 节点结构（icon-nodes.json：[tag, attrs, children?] 三元组递归） */
@@ -151,7 +168,8 @@ export async function loadIconSvg(name: string): Promise<string | null> {
  *  非精选图标此前只在图标管理器确认时运行时注册（useIconPicker.apply），重开导图后
  *  iconList 只剩精选 64——md 里 ::name 解析出 data.icon 却无 svg，引擎渲染空占位
  *  （getNodeIconListIcon 未命中返回 ''，实案：::shield-alert ::book-search 全不可见）。
- *  精选 / 非 zen_ 前缀（引擎其他图标源）/ 非法形态全忽略。 */
+ *  精选 / 内部保留名（zen_body，iconList 已静态在册）/ 非 zen_ 前缀（引擎其他图标源）/
+ *  非法形态全忽略。 */
 export function collectUncuratedIcons(root: EngineNode): string[] {
   const out: string[] = []
   const walk = (n: EngineNode): void => {
@@ -159,7 +177,7 @@ export function collectUncuratedIcons(root: EngineNode): string[] {
       for (const item of n.data.icon) {
         if (typeof item !== 'string' || !item.startsWith('zen_')) continue
         const name = item.slice(4)
-        if (CURATED_ICONS[name] !== undefined || out.includes(name)) continue
+        if (CURATED_ICONS[name] !== undefined || INTERNAL_ICONS[name] !== undefined || out.includes(name)) continue
         out.push(name)
       }
     }

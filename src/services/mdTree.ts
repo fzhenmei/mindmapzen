@@ -56,8 +56,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
    *  块间空行即 assignBody 的 '\n\n' 合并约定，原样写回逐字恒等；末尾空行与后续结构分隔 */
   function emitBody(node: ZenNode): void {
     if (!node.body) return // 空串视为无正文
-    lines.push(...node.body.split('\n'))
-    lines.push('')
+    lines.push(...node.body.split('\n'), '')
   }
 
   /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
@@ -298,6 +297,7 @@ export interface ImageMetaEntry {
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
  *  note 透传进 data（undefined 不设键——引擎以 truthy 判定备注角标显隐）；
  *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
+ *  body（非空串）透传进 data.body 并尾部追加内部图标 zen_body（2026-09 正文角标）；
  *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
  *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
  *  画布渲 dataURL，免 asset 协议）；meta 缺失的 src 宽容跳过（不设 image，md 标记保留） */
@@ -314,12 +314,19 @@ export function zenToEngineTree(
   if (parentPath === '' && imgMeta !== undefined && imgMeta.size > 0) {
     for (const [src, e] of imgMeta) rootImgMap[src] = e.dataUrl
   }
+  // 图标组装（M18 + 2026-09 正文角标）：用户 icons 之外，body 非空时尾部追加内部图标
+  // zen_body（画布「有正文」角标）；engineTreeToZen 收集侧剥除，不进 md（保留名）
+  const icons = [
+    ...(tree.icons ?? []).map((n) => `zen_${n}`),
+    ...(tree.body ? ['zen_body'] : []),
+  ]
   return {
     data: {
       text: tree.text,
       expand: !collapsed.has(path),
       ...(tree.note !== undefined ? { note: tree.note } : {}),
-      ...(tree.icons !== undefined && tree.icons.length > 0 ? { icon: tree.icons.map((n) => `zen_${n}`) } : {}),
+      ...(tree.body ? { body: tree.body } : {}),
+      ...(icons.length > 0 ? { icon: icons } : {}),
       ...(tree.image !== undefined && imgEntry !== undefined
         ? {
             image: tree.image.src,
@@ -333,7 +340,17 @@ export function zenToEngineTree(
   }
 }
 
+/** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名；zen_body 为宿主内部角标
+ *  （保留名），剥除不还原；非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
+function collectIcons(icon: unknown): string[] {
+  if (!Array.isArray(icon)) return []
+  return icon
+    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_') && n !== 'zen_body')
+    .map((n) => n.slice(4))
+}
+
 /** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）与备注（data.note 仅字符串）；
+ *  data.body（非空字符串）收进 ZenNode.body——zen_body 角标图标同步剥除（保留名，不进 md）；
  *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md） */
 export function engineTreeToZen(
   root: EngineNode,
@@ -343,11 +360,10 @@ export function engineTreeToZen(
   const own = root.data.expand === false ? [path] : []
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const note = typeof root.data.note === 'string' ? root.data.note : undefined
+  const body = typeof root.data.body === 'string' && root.data.body !== '' ? root.data.body : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
-  // 图标收集（M18）：data.icon 仅收 'zen_' 前缀项（引擎其他图标源不受影响），剥前缀还原 kebab 名
-  const icons = Array.isArray(root.data.icon)
-    ? root.data.icon.filter((n): n is string => typeof n === 'string' && n.startsWith('zen_')).map((n) => n.slice(4))
-    : []
+  // 图标收集（M18）：仅收 'zen_' 前缀项；zen_body 为宿主内部角标（保留名），剥除不还原
+  const icons = collectIcons(root.data.icon)
   // 插图收集（M19）：data.image（src 键）+ imageTitle（alt）；imgMap 不回写（引擎根 data 临时物）
   const image =
     typeof root.data.image === 'string' && root.data.image !== ''
@@ -358,6 +374,7 @@ export function engineTreeToZen(
       text: root.data.text,
       ...(note !== undefined ? { note } : {}),
       ...(uid !== undefined ? { uid } : {}),
+      ...(body !== undefined ? { body } : {}),
       ...(icons.length > 0 ? { icons } : {}),
       ...(image !== undefined ? { image } : {}),
       children: subs.map((s) => s.tree),

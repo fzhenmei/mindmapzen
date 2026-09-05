@@ -41,6 +41,38 @@ describe('zen ⇄ engine 转换', () => {
     expect('note' in eng.data).toBe(false) // 根无 note：不设键而非 undefined 值
   })
 
+  test('正文引擎通道：body 透传 data.body，zen_body 图标注入/剥除互逆（2026-09 写作）', async () => {
+    const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+    const tree: ZenNode = {
+      text: '根', body: '论述。', icons: ['flag'],
+      children: [{ text: '子', body: '子论述。', children: [] }, { text: '无正文', children: [] }],
+    }
+    const engine = zenToEngineTree(tree)
+    expect(engine.data.body).toBe('论述。')
+    expect(engine.data.icon).toEqual(['zen_flag', 'zen_body']) // 用户图标之外尾部追加
+    expect(engine.children?.[0]?.data.body).toBe('子论述。')
+    expect(engine.children?.[1]?.data.body).toBeUndefined()
+    expect(engine.children?.[1]?.data.icon).toBeUndefined() // 无正文不挂角标
+    const back = engineTreeToZen(engine)
+    expect(back.tree.body).toBe('论述。')
+    expect(back.tree.icons).toEqual(['flag']) // zen_body 剥除，不进 md
+    expect(back.tree.children[0]?.body).toBe('子论述。')
+    // 端到端：收集后的树 serialize 不含 zen_body 痕迹（'::' 为用户 flag 图标的合法标记，
+    // 整体断言不含 '::' 与同用例 icons 保留 ['flag'] 矛盾，改用精确泄漏形态 '::body'）
+    const { serialize } = await import('./mdTree')
+    expect(serialize(back.tree)).not.toContain('body')
+    expect(serialize(back.tree)).not.toContain('::body')
+  })
+
+  test('正文空串口径：body 为空串时视为无正文（不挂角标、不设 data.body）', async () => {
+    const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+    const tree: ZenNode = { text: 'r', body: '', children: [] }
+    const engine = zenToEngineTree(tree)
+    expect(engine.data.body).toBeUndefined()
+    expect(engine.data.icon).toBeUndefined()
+    expect(engineTreeToZen(engine).tree.body).toBeUndefined()
+  })
+
   test('engine→zen：收集 data.note（仅字符串，其余视为无备注）', () => {
     const eng: EngineNode = {
       data: { text: '根' },
