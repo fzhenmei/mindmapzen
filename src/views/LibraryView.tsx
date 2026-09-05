@@ -1,25 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
-import { deleteMap, joinPath, renameMap, resolveDir } from '../services/workspace'
-import { commitImport } from '../services/importMap'
-import { createDir, deleteDir, dirDeleteSummary, readDirTree, type DirNode } from '../services/desk'
+import { readDirTree, type DirNode } from '../services/desk'
+import { useLibraryDialogs, type PickedImport } from '../hooks/useLibraryDialogs'
 import { useTreeMoves } from '../hooks/useTreeMoves'
 import { useSidebarResize } from '../hooks/useSidebarResize'
-import { parse } from '../services/mdTree'
-import { parseXmind } from '../services/xmindImport'
 import type { WriteClipboard } from '../services/clipboard'
-import NameDialog from '../components/NameDialog'
-import SettingsDialog from '../components/SettingsDialog'
-import HistoryDialog from '../components/HistoryDialog'
+import LibraryDialogs from '../components/LibraryDialogs'
 import WelcomePane from '../components/WelcomePane'
 import { ThemeFab } from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
-import MoveMapDialog from '../components/MoveMapDialog'
-import NewMapDialog from '../components/NewMapDialog'
-import DeleteConfirmDialog from '../components/DeleteConfirmDialog'
-import ImportPreviewDialog, { type ImportPreview } from '../components/ImportPreviewDialog'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
@@ -36,13 +27,10 @@ import {
   SidebarProvider,
 } from '../components/ui/sidebar'
 import type { MapInfo } from '../types/files'
-import type { IgnoredBlock, ZenNode } from '../types/tree'
 
-/** 导入源统一载荷（M21：md 文本 / xmind 字节双流，一个对话框入口按 kind 分流；
- *  可辨识联合——分支内 text/bytes 精确收窄） */
-export type PickedImport =
-  | { name: string; kind: 'md'; text: string }
-  | { name: string; kind: 'xmind'; bytes: Uint8Array }
+// 导入源载荷随对话框集群迁 useLibraryDialogs（2026-09 行数护栏拆分）；
+// 此处 re-export 保 App/e2eHarness 的既有引用稳定
+export type { PickedImport } from '../hooks/useLibraryDialogs'
 
 interface Props {
   pickDirectory: () => Promise<string | null>
@@ -67,18 +55,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     .filter((m): m is MapInfo => m !== null)
     .slice(0, 8)
   const store = useAppStore.getState()
-  const [dialog, setDialog] = useState<'new' | 'rename' | 'delete' | 'deletedir' | 'move' | 'newdir' | 'settings' | 'history' | null>(null)
-  // 重命名/删除/移动对话框当前操作的导图（由所在 tile 的按钮选定，而非 maps[0]）
-  const [target, setTarget] = useState<MapInfo | null>(null)
-  // 删除目录对话框当前操作的目标（2026-09 树右键）：rel 相对工作区，name 末段显示名
-  const [dirTarget, setDirTarget] = useState<{ rel: string; name: string } | null>(null)
-  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   // 案头左树（目录结构在 workspaceDir 变化与目录增删后重读）
   const [tree, setTree] = useState<DirNode[]>([])
-  // 新建目录的父目录（''=工作区根）
-  const [dirParent, setDirParent] = useState('')
-  // 新建导图目标目录（2026-09 树右键「在此新建导图」）：''=工作区根；页首/欢迎页/空态入口一律归零
-  const [newMapDir, setNewMapDir] = useState('')
   // 选中导图（单击 tile/树文件行=选中进详情，双击=进纸面）
   const [selectedMap, setSelectedMap] = useState<string | null>(null)
   // 进案头未选任何（true）：左树无激活行；点目录/文件后置 false（主区两态化后 idle 仅剩树激活行显示职责）
@@ -102,12 +80,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   // 顶部条取色令牌（v2.5）：案头视口顶部是 sidebar 色场，挂载即声明（TitleBar 换底色）
   useEffect(() => useAppStore.setState({ titlebarBg: '--sidebar' }), [])
 
-  const closeDialog = () => {
-    setDialog(null)
-    setTarget(null)
-    setDirTarget(null)
-  }
-
   /** 选中态失效清理（M5d 审查修复）：重命名/删除/移动/切换工作区后，选中图 mdPath 失联则清空
    *  （否则预览指向已不存在的文件、卡片高亮悬空）。须在 maps 已刷新后调用 */
   const pruneSelectedMap = () => {
@@ -128,61 +100,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     }
   }
 
-  /** 导入（.md / .xmind）：复制入库（内容按规范序列化另存，不移动原文件）；
-   *  有未映射内容先预览确认（md 解析忽略块 / xmind 游离主题等摘要，同一通道） */
-  const startImport = async () => {
-    if (!workspaceDir) return
-    try {
-      const picked = await pickImportFile()
-      if (picked === null) return
-      // 统一产出 { tree, blocks }：md 走 parse；xmind 走 ZIP 解析（M21）
-      let tree: ZenNode
-      let blocks: IgnoredBlock[]
-      if (picked.kind === 'md') {
-        const r = parse(picked.text)
-        if (!r.ok) {
-          store.setError('导入失败：' + r.error)
-          return
-        }
-        tree = r.tree
-        blocks = r.ignoredBlocks
-      } else {
-        const r = parseXmind(picked.bytes)
-        tree = r.tree
-        blocks = r.warnings
-      }
-      if (blocks.length > 0) {
-        setImportPreview({ name: picked.name, tree, blocks })
-        return
-      }
-      const info = await commitImport(store.adapter, workspaceDir, picked.name, tree, store.preferredLayout)
-      await store.openMap(info.mdPath)
-    } catch (e) {
-      store.setError('导入失败：' + String(e))
-    }
-  }
-
-  const confirmImport = async () => {
-    const pending = importPreview
-    if (pending === null || !workspaceDir) return
-    setImportPreview(null)
-    try {
-      const info = await commitImport(store.adapter, workspaceDir, pending.name, pending.tree, store.preferredLayout)
-      await store.openMap(info.mdPath)
-    } catch (e) {
-      store.setError('导入失败：' + String(e))
-    }
-  }
-
-  /** 新建目录（desk.createDir 递归，'/' 分隔逐段校验）成功后重读左树。
-   *  M16 抛错语义：错误抛给 NameDialog 框内显示，成功路径才关框 */
-  const confirmCreateDir = async (name: string) => {
-    if (!workspaceDir) return
-    await createDir(store.adapter, workspaceDir, dirParent === '' ? name : `${dirParent}/${name}`)
-    setTree(await readDirTree(store.adapter, workspaceDir))
-    setDialog(null)
-  }
-
   /** 树移动收口（2026-09 拖拽 + 对话框流共用 useTreeMoves）：刷新 = maps 重扫 + 左树
    *  重读 + 预览 prune；同目录/守卫拒绝等语义见 hook 与 desk 服务注释 */
   const { moveFile, moveDir } = useTreeMoves(async () => {
@@ -190,12 +107,25 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     await reloadTree()
     pruneSelectedMap()
   })
-  const moveTarget = (toRel: string) => {
-    const t = target
-    if (t === null) return
-    closeDialog()
-    void moveFile(t.name, t.relDir, toRel)
-  }
+
+  // 对话框集群（2026-09 行数护栏拆分）：状态机与业务确认在 useLibraryDialogs，渲染在
+  // LibraryDialogs；视图仅注入联动依赖（选中清理/左树重读/工作区选择/树移动/目录删除回落）
+  const dlg = useLibraryDialogs({
+    pickImportFile,
+    chooseWorkspace,
+    reloadTree,
+    pruneSelectedMap,
+    onDirRemoved: (rel) => {
+      // 选中目录在被删子树内（含本身）→ 回根视图；文件选中已由 prune 清
+      const cur = useAppStore.getState().selectedDir
+      if (cur === rel || cur.startsWith(rel + '/')) {
+        store.setSelectedDir('')
+        setSelectedMap(null)
+        setIdle(true)
+      }
+    },
+    moveFile,
+  })
 
   // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）。
   //  排序（2026-09 收藏与排序）：modified 沿用 listMaps 序（新→旧，零成本原序）；name 与
@@ -219,11 +149,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       setSelectedMap(p)
       setIdle(false)
     }
-  }
-  /** 打开新建导图对话框（rel = 目标目录；三个常驻入口传 ''，树右键传所在目录） */
-  const openNewMap = (rel: string) => {
-    setNewMapDir(rel)
-    setDialog('new')
   }
   const openFile = (f: TreeFile) => {
     const p = mdPathOf(f)
@@ -255,7 +180,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         >
           <AppLogo size={48} />
           <p className="text-sm">空白的纸。新建一张导图，让想法落成 .md。</p>
-          <Button size="sm" data-testid="library-empty-new" onClick={() => openNewMap('')}>
+          <Button size="sm" data-testid="library-empty-new" onClick={() => dlg.openNewMap('')}>
             新建导图
           </Button>
         </div>
@@ -266,8 +191,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     return (
       <WelcomePane
         recent={recent}
-        onNew={() => openNewMap('')}
-        onImport={() => void startImport()}
+        onNew={() => dlg.openNewMap('')}
+        onImport={() => void dlg.startImport()}
         onOpen={(m) => void store.openMap(m.mdPath)}
       />
     )
@@ -321,21 +246,11 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             onFileAction={(a, f) => {
               // 右键菜单操作：TreeFile 按 name+relDir 反查 MapInfo（对话框流与详情页首同源）
               const m = maps.find((x) => x.name === f.name && x.relDir === f.relDir)
-              if (m !== undefined) {
-                setTarget(m)
-                setDialog(a)
-              }
+              if (m !== undefined) dlg.openMapAction(a, m)
             }}
-            onCreateMapIn={openNewMap}
-            onCreateDirIn={(rel) => {
-              setDirParent(rel)
-              setDialog('newdir')
-            }}
-            onDeleteDir={(rel) => {
-              const segs = rel.split('/')
-              setDirTarget({ rel, name: segs.at(-1) ?? rel })
-              setDialog('deletedir')
-            }}
+            onCreateMapIn={dlg.openNewMap}
+            onCreateDirIn={dlg.openNewDir}
+            onDeleteDir={dlg.openDeleteDir}
             onMoveFile={(f, toRel) => { void moveFile(f.name, f.relDir, toRel) }}
             onMoveDir={(fromRel, toRel) => { void moveDir(fromRel, toRel) }}
           />
@@ -350,10 +265,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                     data-testid="dir-create"
                     tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
                     className="w-auto min-w-0 flex-1"
-                    onClick={() => {
-                      setDirParent(selectedDir)
-                      setDialog('newdir')
-                    }}
+                    onClick={() => dlg.openNewDir(selectedDir)}
                   >
                     <IconPlus />
                     <span>新建目录</span>
@@ -364,7 +276,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                     aria-label="设置"
                     title="设置"
                     className={SIDEBAR_ICON_BTN}
-                    onClick={() => setDialog('settings')}
+                    onClick={() => dlg.openDialog('settings')}
                   >
                     <IconSettings />
                   </button>
@@ -405,8 +317,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                   }}
                   onAction={(a, m) => {
                     // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
-                    setTarget(m)
-                    setDialog(a)
+                    dlg.openMapAction(a, m)
                   }}
                   onCopyPath={(p) => void writeClipboard(p)}
                   onOpen={(m) => void store.openMap(m.mdPath)}
@@ -414,8 +325,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧） */}
-              {iconBtn('新建导图', 'btn-new', IconPlus, () => openNewMap(''))}
-              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
+              {iconBtn('新建导图', 'btn-new', IconPlus, () => dlg.openNewMap(''))}
+              {iconBtn('导入 .md', 'btn-import', IconImport, () => void dlg.startImport())}
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
@@ -429,134 +340,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         </SidebarInset>
       </SidebarProvider>
 
-      {/* 新建导图（M16 换 NewMapDialog）：名称 + 模板选择；四个入口（页首 btn-new/
-          空态 library-empty-new/欢迎页 desk-idle-new/树目录行右键 ctx-btn-new-map）
-          共用本对话框——右键入口带目标目录（标题示目录、落盘建在彼处） */}
-      {dialog === 'new' && (
-        <NewMapDialog
-          inDirLabel={newMapDir === '' ? undefined : newMapDir}
-          onCancel={() => setDialog(null)}
-          onConfirm={async (name, templateContent) => {
-            await store.createAndOpen(name, templateContent, newMapDir)
-            setDialog(null)
-          }}
-        />
-      )}
-      {/* 设置对话框（M5b Task 4 + M5d 更换工作区 + v0.7.0 退出工作区）：与其他对话框共用 dialog 互斥状态；
-          更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」）；退出工作区清 store 落
-          workspaceDir:null 回开屏页（无工作区分支渲染 WelcomeScreen） */}
-      {dialog === 'settings' && (
-        <SettingsDialog
-          onOpenHistory={() => setDialog('history')}
-          onClose={() => setDialog(null)}
-          onChangeWorkspace={() => {
-            setDialog(null)
-            void chooseWorkspace()
-          }}
-          onExitWorkspace={() => {
-            setDialog(null)
-            void store.exitWorkspace()
-          }}
-        />
-      )}
-      {/* 版本历史/回滚（M22）：从设置页打开（Radix modal 互斥，settings 先关再开本框） */}
-      {dialog === 'history' && <HistoryDialog onClose={() => setDialog(null)} />}
-      {dialog === 'rename' && target && (
-        <NameDialog
-          title="重命名导图"
-          initial={target.name}
-          confirmText="重命名"
-          onCancel={closeDialog}
-          onConfirm={async (name) => {
-            // M16 抛错语义：renameMap 失败抛给对话框框内显示，成功才关框
-            await renameMap(store.adapter, workspaceDir!, target.relDir, target.name, name)
-            // 收藏跟随换址（2026-09）：改名即换 mdPath，先 relocate 再刷新（星标不随改名丢失）
-            await store.relocateFavorite(target.mdPath, joinPath(resolveDir(workspaceDir!, target.relDir), name.trim() + '.md'))
-            await store.refreshMaps()
-            pruneSelectedMap()
-            closeDialog()
-          }}
-        />
-      )}
-      {dialog === 'newdir' && (
-        <NameDialog
-          title={dirParent === '' ? '新建目录' : `在「${dirParent}」新建目录`}
-          confirmText="创建"
-          onCancel={() => setDialog(null)}
-          onConfirm={(name) => void confirmCreateDir(name)}
-        />
-      )}
-      {/* 删除目录（2026-09 树右键）：整目录进回收站——内含导图数实时取自 maps（确认框
-          报数，用户知情）；删除后选中目录若在被删子树内则回根视图 */}
-      {dialog === 'deletedir' && dirTarget && (
-        <DeleteConfirmDialog
-          title={`删除目录「${dirTarget.name}」？`}
-          body={dirDeleteSummary(maps, tree, dirTarget.rel)}
-          onCancel={closeDialog}
-          onConfirm={() => {
-            const rel = dirTarget.rel
-            closeDialog()
-            void (async () => {
-              try {
-                await deleteDir(store.adapter, workspaceDir!, rel)
-                await store.refreshMaps()
-                setTree(await readDirTree(store.adapter, workspaceDir!))
-                pruneSelectedMap()
-                // 选中目录在被删子树内（含本身）→ 回根视图；文件选中已由 prune 清
-                const cur = useAppStore.getState().selectedDir
-                if (cur === rel || cur.startsWith(rel + '/')) {
-                  store.setSelectedDir('')
-                  setSelectedMap(null)
-                  setIdle(true)
-                }
-                store.setError(null)
-              } catch (e) {
-                store.setError('删除目录失败：' + (e instanceof Error ? e.message : String(e)))
-              }
-            })()
-          }}
-        />
-      )}
-      {/* 对话框互斥约定（ui Dialog）：本视图至多同时一个对话框——dialog（新建/重命名/删除/移动/新建目录）
-          与 importPreview 互不并存：Radix Dialog 为 modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥 */}
-      {dialog === 'delete' && target && (
-        <DeleteConfirmDialog
-          title={`删除「${target.name}」？`}
-          body="将移入回收站（.md 与 .zen.json 一起删除）。"
-          onCancel={closeDialog}
-          onConfirm={async () => {
-            closeDialog()
-            try {
-              await deleteMap(store.adapter, workspaceDir!, target.relDir, target.name)
-              await store.refreshMaps()
-              pruneSelectedMap()
-            } catch (e) {
-              store.setError('删除失败：' + String(e))
-            }
-          }}
-        />
-      )}
-      {dialog === 'move' && target && (
-        <MoveMapDialog
-          mapName={target.name}
-          tree={tree}
-          fromRel={target.relDir}
-          onCancel={() => {
-            // 取消也重读左树：对话框内联新建的目录已真实落盘，不能只留在对话框暂存列表
-            // （Esc 经 ui Dialog onOpenChange(false) 同走 onCancel，语义一致）
-            closeDialog()
-            void reloadTree()
-          }}
-          onMove={(toRel) => void moveTarget(toRel)}
-        />
-      )}
-      {importPreview && (
-        <ImportPreviewDialog
-          preview={importPreview}
-          onCancel={() => setImportPreview(null)}
-          onConfirm={() => void confirmImport()}
-        />
-      )}
+      {/* 对话框集群（2026-09 行数护栏拆分）：状态机与业务确认在 useLibraryDialogs，
+          渲染在 LibraryDialogs——九框互斥约定与注释见该容器 */}
+      <LibraryDialogs api={dlg} maps={maps} tree={tree} />
     </div>
   )
 }
