@@ -26,6 +26,7 @@ import {
   IconCopy,
   IconCrosshair,
   IconFilePlus,
+  IconFileText,
   IconFrame,
   IconImage,
   IconLayoutBoth,
@@ -71,6 +72,11 @@ interface Props {
   onNoteClick(): void
   /** btn-note 可用信号：有激活节点才可编辑备注 */
   noteEnabled: boolean
+  /** 正文面板开关（2026-09 写作）：右侧常驻面板开/收（面板状态与防抖写回在 useBodyPanel；
+   *  无选中也可开——面板出空态文案，选中后联动载入） */
+  onBodyClick(): void
+  /** btn-body 激活信号：面板开着时点亮（data-active 通道） */
+  bodyActive: boolean
   /** 导出/复制为图片（M5b）：打开三入口对话框（对话框状态在 EditorView 的 useExportFlow） */
   onExportClick(): void
   onZoomOut(): void
@@ -116,6 +122,8 @@ export default function ZenBar({
   onSaveClick,
   onNoteClick,
   noteEnabled,
+  onBodyClick,
+  bodyActive,
   onExportClick,
   onZoomOut,
   onZoomIn,
@@ -284,6 +292,23 @@ export default function ZenBar({
           disabled={!noteEnabled}
         >
           <IconNote />
+        </Button>
+      </Tip>
+      {/* 正文面板开关（2026-09 写作）：常态按钮（非 DropdownMenu 触发器），激活态走
+       *  data-active 通道（同 btn-layout-more 的点亮语言；不依赖 data-state） */}
+      <Tip label="撰写选中节点的正文">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-body"
+          data-active={bodyActive ? '' : undefined}
+          aria-label="撰写选中节点的正文"
+          aria-pressed={bodyActive}
+          onClick={onBodyClick}
+          className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+        >
+          <IconFileText />
         </Button>
       </Tip>
       <Tip label="导出或复制为图片">

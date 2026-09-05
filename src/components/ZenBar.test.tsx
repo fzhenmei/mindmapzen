@@ -23,6 +23,8 @@ function renderBar(overrides: {
   onToggleCopySetting?: (key: 'copyIncludeNote' | 'copyIncludeLinks') => void
   layout?: LayoutKind
   onSwitchLayout?: (kind: LayoutKind) => void
+  bodyActive?: boolean
+  onBodyClick?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
@@ -39,6 +41,8 @@ function renderBar(overrides: {
         onSaveClick={noop}
         onNoteClick={noop}
         noteEnabled={false}
+        onBodyClick={overrides.onBodyClick ?? noop}
+        bodyActive={overrides.bodyActive ?? false}
         onExportClick={noop}
         onZoomOut={noop}
         onZoomIn={noop}
@@ -147,5 +151,26 @@ describe('ZenBar 更多布局下拉', () => {
     const more = screen.getByTestId('btn-layout-more')
     expect(more).not.toHaveAttribute('data-active')
     expect(more).toHaveAttribute('aria-label', '更多布局')
+  })
+})
+
+// ---- 正文面板开关钮（2026-09 写作）：常态按钮非触发器，激活态走 data-active 通道 ----
+
+describe('ZenBar 正文面板开关', () => {
+  afterEach(cleanup)
+
+  test('点击回调 onBodyClick；面板开时点亮（data-active + aria-pressed），关时常态', () => {
+    const onBody = vi.fn()
+    renderBar({ onBodyClick: onBody, bodyActive: false })
+    const btn = screen.getByTestId('btn-body')
+    expect(btn).not.toHaveAttribute('data-active')
+    expect(btn).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(btn)
+    expect(onBody).toHaveBeenCalledTimes(1)
+    cleanup()
+    renderBar({ bodyActive: true })
+    const lit = screen.getByTestId('btn-body')
+    expect(lit).toHaveAttribute('data-active', '')
+    expect(lit).toHaveAttribute('aria-pressed', 'true')
   })
 })

@@ -10,9 +10,40 @@ import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
 // fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）；
-// getData 备注预填用（M5b）：child 带「既有备注」，root 无（undefined）
-const fakeRootNode = { uid: 'root-uid', getData: () => undefined }
-const fakeChildNode = { uid: 'child-uid', getData: (k: string) => (k === 'note' ? '既有备注' : undefined) }
+// getData 备注预填用（M5b）：child 带「既有备注」，root 无（undefined）。
+// layerIndex（2026-09 正文 Task 6，Step 0 实测字段）：引擎节点深度 root=0 起
+// （MindMapNode.js:52；mdTree 深度 = layerIndex+1）；fakeDeepNode 层级 6 = 深度 7（列表层）
+const fakeRootNode = { uid: 'root-uid', layerIndex: 0, getData: () => undefined }
+const fakeChildNode = {
+  uid: 'child-uid',
+  layerIndex: 1,
+  getData: (k: string) =>
+    k === 'note' ? '既有备注' : k === 'body' ? '既有正文' : k === 'icon' ? ['zen_flag'] : undefined,
+}
+// 深层列表节点（layerIndex 6 = mdTree 深度 7）：正文面板深层门禁的空态样本
+const fakeDeepNode = { uid: 'deep-uid', layerIndex: 6, getData: () => undefined }
+
+// 正文编辑器极简替身（2026-09 正文，Task 6）：BodyEditor 真实行为（受控/防回环/裁块）
+// 由其自身测试覆盖（Task 5），此处只驱动 EditorView 接线——渲染 value + fire 钮戳 onChange，
+// readOnly 镜像到 data-readonly 供只读断言（与既有 vi.mock MindMapCanvas 替身模式一致）
+vi.mock('../components/BodyEditor', () => ({
+  default: ({
+    value,
+    onChange,
+    readOnly,
+  }: {
+    value: string
+    onChange: (md: string) => void
+    readOnly?: boolean
+  }) => (
+    <div data-testid="body-editor" data-readonly={readOnly ? '1' : undefined}>
+      <button type="button" data-testid="body-editor-fire" onClick={() => onChange(`${value}！`)}>
+        fire
+      </button>
+      <span data-testid="body-editor-value">{value}</span>
+    </div>
+  ),
+}))
 // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）。
 // 模块级可变：写盘窗口用例改写它模拟「落了新编辑」（getData 每次取当前值，跨重渲染可见）
 const defaultFakeTree = (): EngineNode => ({
@@ -118,7 +149,13 @@ vi.mock('../editor/MindMapCanvas', async () => {
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
         findNodeByUid: (uid: string) =>
-          uid === 'root-uid' ? fakeRootNode : uid === 'child-uid' ? fakeChildNode : null,
+          uid === 'root-uid'
+            ? fakeRootNode
+            : uid === 'child-uid'
+              ? fakeChildNode
+              : uid === 'deep-uid'
+                ? fakeDeepNode
+                : null,
         textEdit: { hideEditTextBox: vi.fn() },
         // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
         reRenderNodeCheckChange: vi.fn(),
@@ -2312,4 +2349,151 @@ describe('画布内新建导图', () => {
     await waitFor(() => expect(useAppStore.getState().error).toContain('已存在同名导图'))
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
   })
+})
+
+// ── 正文面板（2026-09 写作，Task 6）：btn-body 开关、选中联动载入、防抖写回、
+//    切节点 flush、深层列表空态；BodyEditor 为极简替身（见文件头 vi.mock）──
+
+/** 渲染并就绪后选中 child-uid：ready 在前、active 在后——useNodeActions 的锚点 effect
+ *  须在 mmRef 就位后由 activeUid 变化触发（NodeActions 浮条才渲染，图标用例依赖）。
+ *  返回 ready 时刻锁定的实例：假画布工厂每次重渲重赋模块级 fakeHandle，而 mmRef 只在
+ *  ready 时接收一次——须在 emitReady 后立即捕获（同 renderWithSelection 的同源约定） */
+const renderReadySelected = async (): Promise<MindMapHandle> => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  return handle
+}
+
+test('btn-body：开面板载入选中节点 body；编辑防抖后 SET_NODE_DATA 写 body＋zen_body 角标并补重渲', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  expect(screen.getByTestId('body-panel')).toBeVisible()
+  expect(screen.getByTestId('btn-body')).toHaveAttribute('data-active', '') // 激活态走 data-active 通道
+  expect(screen.getByTestId('body-editor-value').textContent).toBe('既有正文') // 预填节点实例 getData('body')
+  expect(screen.getByTestId('body-wordcount')).toHaveTextContent('4') // 中文字符口径（去空白码点数）
+  // BodyEditor onChange → 500ms 防抖内不写；快进后提交（body 与角标图标同一命令 = 单条撤销记录；
+  // zen_body 是「有正文」角标在引擎 data.icon 的载体，reRenderNodeCheckChange 使其即时增删）
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // onChange('既有正文！')
+    expect(handle.execCommand).not.toHaveBeenCalled()
+    expect(screen.getByTestId('body-wordcount')).toHaveTextContent('5')
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'], // 用户图标保留 + 角标补齐
+    })
+    expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
+    // 关面板即 flush 已由上面提交清空（pending 无）→ 仅关闭，面板卸载
+    fireEvent.click(screen.getByTestId('body-close'))
+    expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('切换节点先 flush 旧草稿；深层列表节点（layerIndex≥6）面板空态不可编辑', async () => {
+  // 数据树补 deep-uid 节点（面板标题经 nodeTextOf 按 uid 查数据树；深层门禁读实例 layerIndex）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      { data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] },
+      { data: { text: '深层', expand: true, uid: 'deep-uid' }, children: [] },
+    ],
+  }
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // 草稿在防抖窗内未提交
+    // 切到 root：先对 child 提交（防丢字），再载入 root（无 body → 空值）
+    act(() => {
+      ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('root-uid')
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      icon: ['zen_flag', 'zen_body'],
+    })
+    expect(screen.getByTestId('body-editor-value').textContent).toBe('')
+    // 深层节点（layerIndex 6 = mdTree 深度 7 列表层，spec v1 深度限制）：空态提示 + 只读
+    act(() => {
+      ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('deep-uid')
+    })
+    expect(screen.getByText('深层列表节点暂不支持正文')).toBeInTheDocument()
+    expect(screen.getByTestId('body-editor')).toHaveAttribute('data-readonly', '1')
+    expect(handle.execCommand).toHaveBeenCalledTimes(1) // 深层载入不产生新命令
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('btn-body：无选中开面板显示空态文案；面板非对话框（画布与砚栏不受互斥影响）', async () => {
+  const handle = await renderReadySelected()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
+  })
+  fireEvent.click(screen.getByTestId('btn-body'))
+  expect(screen.getByText('在画布选中节点后在此撰写正文')).toBeInTheDocument()
+  expect(screen.getByTestId('body-editor')).toHaveAttribute('data-readonly', '1')
+  expect(screen.getByTestId('zen-bar')).toBeInTheDocument() // 面板不进 anyDialog，画布照常
+  expect(handle.execCommand).not.toHaveBeenCalled()
+})
+
+// ── 图标管理器 zen_body 回补（2026-09 正文，Task 4 移交修复）：SET_NODE_ICON 整组
+//    覆写，确认数组不含保留名时「有正文」角标会被抹掉；apply 落下前按 data.body 重补 ──
+
+/** 给 fakeChildNode 临时挂几何（NodeActions 浮条锚点需要）并返回还原函数 */
+const withGeometry = (): (() => void) => {
+  const geo = { left: 10, top: 20, width: 60, height: 24 }
+  Object.assign(fakeChildNode, geo)
+  return () => {
+    for (const k of Object.keys(geo)) delete (fakeChildNode as Record<string, unknown>)[k]
+  }
+}
+
+test('图标管理器：有正文节点确认落下时数组重补 zen_body（角标不丢）', async () => {
+  fakeTree.children![0]!.data.body = '既有正文'
+  const restore = withGeometry()
+  try {
+    const handle = await renderReadySelected()
+    fireEvent.click(screen.getByTestId('node-action-icon'))
+    expect(screen.getByTestId('icon-dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('icon-item-flag')) // 精选网格点选一项
+    fireEvent.click(screen.getByTestId('icon-save'))
+    // 生产链路：execCommandIcon → node.setIcon → SET_NODE_ICON；断言落下的数组含 zen_body
+    expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_flag', 'zen_body'])
+  } finally {
+    restore()
+  }
+})
+
+test('图标管理器：无正文节点确认落下不含 zen_body（不凭空补角标）', async () => {
+  const restore = withGeometry()
+  try {
+    const handle = await renderReadySelected()
+    fireEvent.click(screen.getByTestId('node-action-icon'))
+    fireEvent.click(screen.getByTestId('icon-item-flag'))
+    fireEvent.click(screen.getByTestId('icon-save'))
+    expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_flag'])
+  } finally {
+    restore()
+  }
 })

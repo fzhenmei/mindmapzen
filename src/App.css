@@ -54,7 +54,36 @@ html, body { overflow: hidden; }
    --background，缝本身不显眼，可感知的是功能语义：节点漫游到边距窗口边框 5px 止、缝内
    拖拽不触发画布平移。引擎以容器 rect 布局/resize（MindMapCanvas safeResize），缩进后
    自动适配，零 JS 配合。加载模式不变（根居中、100% 缩放） */
-.canvas-host { position: absolute; inset: 0 5px 5px 5px; overflow: hidden; }
+.canvas-host { position: absolute; inset: 0 5px 5px 5px; overflow: hidden; transition: right var(--duration-1); }
+/* 正文面板（2026-09 写作）：右侧常驻浮层，top 5 与画布留缝对齐、bottom 64 让出砚栏
+ * （bottom-3 + h-10 = 52px，余 12px 空隙）。全不透明 card 底（浮层必不透明——透明底
+ * 与画布文字混叠不可辨，砚栏/印记同款语言）；M5b 迁移后 App.css 仅存的组件级皮肤块
+ * （定位与让位属布局骨架，不适合内联 utility） */
+.body-panel { position: absolute; top: 5px; right: 5px; bottom: 64px; width: 420px; z-index: 30;
+  display: flex; flex-direction: column; border-radius: var(--radius); background: var(--card);
+  border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+/* 面板让位：420 宽 + 12px 间距（特定性 0,2,0 压过 .canvas-host 的 inset 右缘），
+   过渡 0.15s（.canvas-host 上的 transition）；引擎由宿主 resize() 读新容器宽 */
+.editor.body-open .canvas-host { right: 432px; }
+/* 编辑器主体：占满面板余高、自滚动（新滚动容器，全局 6px 胶囊细滚动条零改动自动生效） */
+.body-editor { flex: 1; min-height: 0; overflow: auto; padding: var(--space-2) var(--space-3); }
+/* Tiptap 排版（Task 6 接管，brief 原文按 Milkdown 撰写、Task 5 实际选型 Tiptap——
+   类名按实测 .body-editor .ProseMirror；令牌化双主题） */
+.body-editor .ProseMirror { outline: none; font-size: var(--font-size-sm); line-height: 1.7; }
+.body-editor .ProseMirror p { margin: 0.4em 0; }
+.body-editor .ProseMirror > p:first-child, .body-editor .ProseMirror > :last-child { margin-top: 0; margin-bottom: 0; }
+.body-editor .ProseMirror h1, .body-editor .ProseMirror h2, .body-editor .ProseMirror h3,
+.body-editor .ProseMirror h4, .body-editor .ProseMirror h5, .body-editor .ProseMirror h6 { font-size: inherit; }
+.body-editor .ProseMirror pre { background: var(--muted); border-radius: 6px; padding: var(--space-2) var(--space-3);
+  margin: 0.5em 0; font-family: var(--font-mono); font-size: var(--font-size-xs); white-space: pre-wrap; }
+.body-editor .ProseMirror code { font-family: var(--font-mono); font-size: var(--font-size-xs);
+  background: var(--muted); border-radius: 4px; padding: 1px 4px; }
+.body-editor .ProseMirror pre code { background: none; padding: 0; }
+.body-editor .ProseMirror blockquote { border-left: 3px solid var(--border); margin: 0.5em 0;
+  padding-left: var(--space-3); color: var(--muted-foreground); }
+.body-editor .ProseMirror table { border-collapse: collapse; margin: 0.5em 0; }
+.body-editor .ProseMirror th, .body-editor .ProseMirror td { border: 1px solid var(--border); padding: 4px 8px; }
+.body-editor .ProseMirror th { background: var(--muted); font-weight: 600; }
 /* 纸面命令栏/浮动操作条/题签（M12b Task 4 底部停泊换肤）：皮肤全转 Tailwind utility
  * （ZenBar/NodeActions/EditorCaption 内联），App.css 不再有对应规则；zen-bar/editor-caption/
  * caption-name/theme-fab 类名保留为视觉冒烟钩子。布局分段控件（fieldset）随命令栏转 utility。 */
@@ -94,6 +123,7 @@ html, body { overflow: hidden; }
    （案头 .library * 的 transform:none 只为压掉卡片 hover 位移） */
 @media (prefers-reduced-motion: reduce) {
   .library, .library * { transition: none; animation: none; transform: none; }
-  .zen-bar, .zen-bar *, .node-actions, .node-actions *, .editor-caption, .theme-fab, .theme-fab * { transition: none; animation: none; }
+  .zen-bar, .zen-bar *, .node-actions, .node-actions *, .editor-caption, .theme-fab, .theme-fab *,
+  .canvas-host { transition: none; animation: none; }
   .save-stamp, .copy-stamp { transition: none; animation: none; }
 }

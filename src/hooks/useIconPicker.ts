@@ -80,7 +80,15 @@ export function useIconPicker(
           if (!known.has(e.name)) list[0].list.push(e)
         }
       }
-      mm.execCommandIcon?.(uid, names.map((n) => `zen_${n}`))
+      // SET_NODE_ICON 是整组覆写（2026-09 正文，Task 4 移交修复）：已选行不含保留名
+      // zen_body（nodeIconsOf 滤除），照原样落下会把「有正文」角标一并抹掉（正文仍在、
+      // 角标消失）。落下前按节点 data.body 重补：有正文确保数组含 zen_body，无正文不补
+      const icons = names.map((n) => `zen_${n}`)
+      const nodeBody = findByUid(mm.getData(), uid)?.data.body
+      if (typeof nodeBody === 'string' && nodeBody !== '' && !icons.includes('zen_body')) {
+        icons.push('zen_body')
+      }
+      mm.execCommandIcon?.(uid, icons)
       onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
     },
     [mmRef, onDataChanged],

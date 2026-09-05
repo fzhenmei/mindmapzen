@@ -18,6 +18,7 @@ import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useNoteEdit } from '../hooks/useNoteEdit'
+import { useBodyPanel } from '../hooks/useBodyPanel'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
@@ -33,6 +34,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
 import EditorDialogs from '../components/EditorDialogs'
+import BodyPanel from '../components/BodyPanel'
 import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import MapTabs from '../components/MapTabs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
@@ -116,6 +118,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
   const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
+  // 正文面板（2026-09 写作）：开闭/选中联动/防抖写回在 hook，面板本体在 BodyPanel.tsx（均无护栏）
+  const bodyPanel = useBodyPanel(mmRef, selection.activeUidRef, selection.activeUid)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
   // 插图编辑（M19 + 粘贴截图）：选图/粘贴复制入 assets/ + imgMap 运行时注入 + SET_NODE_IMAGE
@@ -281,8 +285,16 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 对话框组（含快速切换浮层）始终挂载——打开失败时 Ctrl+P / Ctrl+Tab / 返回案头照常可达
   const docReady = state === 'ready'
 
+  // 面板开闭 → 画布让位后引擎按新宽重排（.body-open 收窄 canvas-host 右缘，CSS 见 App.css）。
+  // 让位是 CSS 过渡（0.15s）：过渡中 resize 会读到中间宽、树排进面板底下（联调实案），
+  // 故延迟到过渡完成再调；resize 不触发重渲、无渲染竞态（区别于 reRender，见竞态记忆）
+  useEffect(() => {
+    const t = setTimeout(() => mmRef.current?.resize(), 170)
+    return () => clearTimeout(t)
+  }, [bodyPanel.open])
+
   return (
-    <div className="editor"><TooltipProvider>
+    <div className={`editor${bodyPanel.open ? ' body-open' : ''}`}><TooltipProvider>
       <div className="canvas-host">
         <EditorCanvasArea
           state={state}
@@ -349,6 +361,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSaveClick={() => void explicitSave()}
         onNoteClick={noteEdit.openNoteDialog}
         noteEnabled={selection.activeUid !== null}
+        onBodyClick={bodyPanel.toggle}
+        bodyActive={bodyPanel.open}
         onExportClick={exportFlow.openExport}
         onZoomOut={() => mmRef.current?.view.narrow()}
         onZoomIn={() => mmRef.current?.view.enlarge()}
@@ -358,6 +372,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSwitchLayout={switchLayout}
       />
       )}
+      {/* 正文面板（2026-09 写作）：右侧常驻浮层，与画布并存（不进 anyDialog 互斥总线）；
+          bodyDraft !== null 即开，open 态经 .editor.body-open 驱动画布让位（CSS 见 App.css） */}
+      {docReady && bodyPanel.bodyDraft !== null && <BodyPanel {...bodyPanel} />}
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}

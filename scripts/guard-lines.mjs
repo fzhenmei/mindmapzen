@@ -17,10 +17,13 @@
 // 2026-09（收藏与排序批）：520→550（收藏行派生/排序适用 + 树四 props 接线 + 重命名
 //  relocate + 详情星标钮两 props——收藏组与排序钮本体在 DirectoryTree.tsx（无护栏），
 //  relocate 在 appStore/useTreeMoves——功能性增长，无腐化）。
+// 2026-09（正文面板批）：460→480（useBodyPanel 接线 + 砚栏两 props + BodyPanel 渲染 +
+//  让位 resize effect + body-open 挂类，+15；面板本体在 BodyPanel.tsx、状态在
+//  useBodyPanel.ts（均无护栏）——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 460 },
+  { path: '../src/views/EditorView.tsx', limit: 480 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

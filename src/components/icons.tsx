@@ -300,6 +300,18 @@ export const IconOutline = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 节点正文（2026-09 正文面板）：文档轮廓 + 三行正文线，24→16 缩放（÷1.5）自
+ *  lucide file-text——与画布 zen_body 角标同源图形（zenIcons.ts 的 lucide-static
+ *  file-text），按钮与角标同形互认 */
+export const IconFileText = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M10 1.5H4A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V4.5z" />
+      <path d="M9.5 1.5v2.5a1 1 0 0 0 1 1H13" />
+      <path d="M6.7 6H5.3M10.7 8.7H5.3M10.7 11.3H5.3" />
+    </>,
+    size,
+  )
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */
