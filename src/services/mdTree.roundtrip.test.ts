@@ -34,6 +34,9 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
         : fc.array(nodeArb(maxDepth - 1), { maxLength: 3 }),
     // 备注候选（brief）：'' 须序列化为无引用块（parse 侧还原为无 note 键），比较前归一化掉
     note: fc.constantFrom('', '备注', '多\n行'),
+    // 正文候选（2026-09 写作）：'' = 无正文；候选必须是「合法正文块」（parse 能原样还原的
+    // 顶层非结构块），行首 #/- 等结构标记排除——与 textArb 排除换行同理，属 md 语义边界
+    body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '```js\nconst x = 1\n```'),
   })
 
 const treeArb = nodeArb(6)
@@ -45,13 +48,21 @@ const stripEmptyNote = (t: ZenNode): ZenNode => ({
   children: t.children.map(stripEmptyNote),
 })
 
+/** '' 与 undefined 同为「无正文」：属性断言前归一化（含 note 归一，与 stripEmptyNote 同理） */
+const stripEmptyBody = (t: ZenNode): ZenNode => ({
+  ...t,
+  note: t.note === '' ? undefined : t.note,
+  body: t.body === '' ? undefined : t.body,
+  children: t.children.map(stripEmptyBody),
+})
+
 // 500 例 fuzz 用例在单文件独跑时远低于 5s，但全量并行满载下 CPU 争用会膨胀越线，
 // 故统一放宽到 30s（只放宽等待上限，用例数与断言语义零改动）
 test('parse(serialize(tree)) 结构恒等（500 例，深度≤6 时全走标题）', () => {
   fc.assert(
     fc.property(treeArb, (tree) => {
       const r = parse(serialize(tree))
-      expect(r).toEqual({ ok: true, tree: stripEmptyNote(tree), ignoredBlocks: [] })
+      expect(r).toEqual({ ok: true, tree: stripEmptyBody(tree), ignoredBlocks: [] })
     }),
     { numRuns: 500 },
   )
@@ -395,4 +406,43 @@ test('插图 meta 缺失：节点不设 image（宽容跳过，md 标记仍在�
   const engine = zenToEngineTree(r.tree) // 不传 imgMeta
   expect(engine.data.image).toBeUndefined()
   expect(engine.data.imgMap).toBeUndefined()
+})
+
+// —— 2026-09 正文：serialize 固定顺序回写（节点行 → 正文 → 备注 → 子结构）+ roundtrip 契约 ——
+test('正文 roundtrip：body+备注+子结构混合，serialize 顺序恒等', () => {
+  const tree: ZenNode = {
+    text: '根', body: '根的论述。', note: '根的备注',
+    children: [{ text: '子', body: '```js\n# 不是标题\n```', children: [] }],
+  }
+  const md = serialize(tree)
+  // 顺序钉死：节点行 → 正文 → 备注 → 子结构（空行分隔）
+  expect(md).toBe('# 根\n根的论述。\n\n> 根的备注\n\n## 子\n```js\n# 不是标题\n```\n')
+  const r = parse(md)
+  expect(r).toEqual({ ok: true, tree: stripEmptyBody(tree), ignoredBlocks: [] })
+})
+
+test('正文含代码块：#/- 行不误解析为结构（roundtrip 恒等）', () => {
+  const tree: ZenNode = { text: 'r', body: '```js\n# h\n- l\n```', children: [{ text: 'c', children: [] }] }
+  const r = parse(serialize(tree))
+  expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
+})
+
+test('子结构后段落宽容：serialize 重排到子结构前，二次 roundtrip 恒等', () => {
+  // 手写形态：段落出现在子列表之后；parse 收进 body，serialize 固定顺序写回，再 parse 恒等
+  const hand = ['# r', '', '- 项', '', '列表后的段落。', ''].join('\n')
+  const once = parse(hand)
+  if (!once.ok) return
+  expect(once.tree.body).toBe('列表后的段落。')
+  const md = serialize(once.tree)
+  expect(parse(md)).toEqual({ ok: true, tree: once.tree, ignoredBlocks: [] }) // 定点：开-存-开不漂移
+})
+
+test('防御：列表层节点（深度≥7）带 body 时 serialize 抛错，不静默丢内容', () => {
+  const deepLeaf = (body?: string): ZenNode => {
+    let node: ZenNode = { text: 'leaf', ...(body !== undefined ? { body } : {}), children: [] }
+    for (const t of ['f', 'e', 'd', 'c', 'b', 'a', 'r']) node = { text: t, children: [node] }
+    return node
+  }
+  expect(() => serialize(deepLeaf('深层正文'))).toThrow()
+  expect(() => serialize(deepLeaf())).not.toThrow()
 })

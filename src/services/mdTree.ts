@@ -20,12 +20,23 @@ function assertNoNewline(node: ZenNode): void {
   for (const child of node.children) assertNoNewline(child)
 }
 
-/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；节点备注 → 节点行后引用块。
+/** 列表层节点（深度≥7）不支持正文（spec v1 深度限制）：宁可抛错拦截，不静默丢内容
+ *  （正常 UI 路径由 useBodyPanel 的 layer 门禁拦截，此处防其他写入路径） */
+function assertNoBodyInList(node: ZenNode, depth: number): void {
+  if (depth >= 7 && node.body !== undefined) {
+    throw new Error(`深层列表节点暂不支持正文：${node.text.slice(0, 20)}…`)
+  }
+  for (const child of node.children) assertNoBodyInList(child, depth + 1)
+}
+
+/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；节点备注 → 节点行后引用块；
+ *  节点正文（2026-09 写作）→ 节点行后、备注前的原样块（列表层不支持，入口抛错拦截）。
  *  linksByUid（M5d Task 2 序列化注入）：连线净化会话注册表（源 uid → 目标名列表）——
  *  节点按 uid 命中后句尾追加 ` [[名]]`（多目标依次）；文本已含的目标不重复注入
  *  （会话内手写标记原样保留，规范化发生在下一次打开剥离后） */
 export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readonly string[]>): string {
   assertNoNewline(tree)
+  assertNoBodyInList(tree, 1)
   const lines: string[] = []
 
   /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
@@ -41,6 +52,14 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
     return injectImageMarker(injectIconMarkers(text, node.icons ?? []), node.image ?? null)
   }
 
+  /** 正文输出为原样块，紧跟节点行、先于备注与子结构（与 parse「归属最近标题」互逆）；
+   *  块间空行即 assignBody 的 '\n\n' 合并约定，原样写回逐字恒等；末尾空行与后续结构分隔 */
+  function emitBody(node: ZenNode): void {
+    if (!node.body) return // 空串视为无正文
+    lines.push(...node.body.split('\n'))
+    lines.push('')
+  }
+
   /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
    *  列表项的引用块须缩进进该项内容列：列首 `>` 会终结整个列表块（子项会升格为同级，roundtrip 断裂） */
   function emitNote(node: ZenNode, indent: string): void {
@@ -52,6 +71,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
     const text = textOf(node)
     if (lines.length > 0) lines.push('')
     lines.push('#'.repeat(depth) + (text === '' ? '' : ' ' + text))
+    emitBody(node)
     emitNote(node, '')
     emitChildren(node.children, depth)
   }
@@ -74,6 +94,8 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   }
 
   emitHeading(tree, 1)
+  // 出口统一规范化：剥掉累积的尾部空行（正文尾随的分隔空行），保证产出恒以单个换行结尾
+  while (lines.length > 0 && lines.at(-1) === '') lines.pop()
   return lines.join('\n') + '\n'
 }
 
