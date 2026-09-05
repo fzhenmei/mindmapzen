@@ -23,7 +23,7 @@ import ImportPreviewDialog, { type ImportPreview } from '../components/ImportPre
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
-import { HideSidebarAction, ShowSidebarTab } from '../components/SidebarToggles'
+import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
 import {
@@ -342,20 +342,34 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  data-testid="dir-create"
-                  tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
-                  onClick={() => {
-                    setDirParent(selectedDir)
-                    setDialog('newdir')
-                  }}
-                >
-                  <IconPlus />
-                  <span>新建目录</span>
-                </SidebarMenuButton>
-                {/* 收起本面板（2026-09 重定位）：官方 SidebarMenuAction 槽位居于行右侧，
-                    钮在面板内、所指即自身；唤回入口见 ShowSidebarTab（折叠态左缘浮签） */}
-                <HideSidebarAction />
+                {/* 底栏弹性行（2026-09）：新建目录占满余宽，右端成对图标钮 = 设置 +
+                    收起面板（设置自页首移入，居隐藏钮左侧）；两钮同款侧栏令牌样式
+                    （SIDEBAR_ICON_BTN），收起钮见 SidebarToggles */}
+                <div className="flex items-center gap-1">
+                  <SidebarMenuButton
+                    data-testid="dir-create"
+                    tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
+                    className="w-auto min-w-0 flex-1"
+                    onClick={() => {
+                      setDirParent(selectedDir)
+                      setDialog('newdir')
+                    }}
+                  >
+                    <IconPlus />
+                    <span>新建目录</span>
+                  </SidebarMenuButton>
+                  <button
+                    type="button"
+                    data-testid="btn-settings"
+                    aria-label="设置"
+                    title="设置"
+                    className={SIDEBAR_ICON_BTN}
+                    onClick={() => setDialog('settings')}
+                  >
+                    <IconSettings />
+                  </button>
+                  <HideSidebarAction />
+                </div>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
@@ -398,9 +412,10 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                   onOpen={(m) => void store.openMap(m.mdPath)}
                 />
               )}
-              {iconBtn('设置', 'btn-settings', IconSettings, () => setDialog('settings'))}
-              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
+              {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
+                  设置已移入侧栏底栏（居隐藏面板钮左侧） */}
               {iconBtn('新建导图', 'btn-new', IconPlus, () => openNewMap(''))}
+              {iconBtn('导入 .md', 'btn-import', IconImport, () => void startImport())}
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}

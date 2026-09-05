@@ -1,29 +1,37 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { SidebarMenuAction, useSidebar } from './ui/sidebar'
+import { useSidebar } from './ui/sidebar'
+
+/** 侧栏底栏图标钮共用样式（2026-09）：设置/隐藏成对居于「新建目录」行右侧，侧栏令牌
+ *  ghost（官方 SidebarMenuAction 同款交互色），size-8 与行高对齐 */
+export const SIDEBAR_ICON_BTN =
+  'flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring'
 
 /** 侧栏收放钮对（2026-09 案头重定位）：原页首 SidebarTrigger 悬在主区页首，位置与
  *  左面板脱节、功能费解。现改为随状态换位：
- *  - 面板可见 → HideSidebarAction 收进侧栏底栏「新建目录」行右侧（官方
- *    SidebarMenuAction 槽位），钮在面板内、所指即自身；
+ *  - 面板可见 → HideSidebarAction 收进侧栏底栏「新建目录」行右端（设置钮右侧），
+ *    钮在面板内、所指即自身；
  *  - 面板隐藏 → ShowSidebarTab 在视口左缘纵向居中浮一枚与 SidebarInset 同材质的
  *    小签，面板滑出后留在边缘作唤回入口。
  *  两者均消费 useSidebar 的 toggleSidebar（Ctrl+B 快捷键与移动 Sheet 语义由 Provider
  *  统一承担），故须渲染在 SidebarProvider 内。offcanvas 折叠侧栏滑出屏外但不卸载
  *  ——两钮会同帧并存于 DOM，testid 不同（dir-panel-toggle / dir-panel-show）避免撞查询 */
 
-/** 面板可见态：底栏菜单行右侧动作钮（size-8 撑满行高，PanelLeftClose 示意「收起本面板」） */
+/** 面板可见态：底栏行内动作钮（PanelLeftClose 示意「收起本面板」）。
+ *  行内流式按钮（非官方绝对定位 SidebarMenuAction 槽）——底栏是「新建目录 + 设置 +
+ *  收起」弹性行，两枚图标钮成对右置，槽位式的 pr-8 预留只适配单钮 */
 export function HideSidebarAction() {
   const { toggleSidebar } = useSidebar()
   return (
-    <SidebarMenuAction
+    <button
+      type="button"
       data-testid="dir-panel-toggle"
       aria-label="隐藏目录面板"
       title="隐藏目录面板（Ctrl+B）"
       onClick={toggleSidebar}
-      className="top-0! right-0 size-8"
+      className={SIDEBAR_ICON_BTN}
     >
-      <PanelLeftClose />
-    </SidebarMenuAction>
+      <PanelLeftClose className="size-4" />
+    </button>
   )
 }
 
