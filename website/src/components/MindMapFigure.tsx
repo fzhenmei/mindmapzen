@@ -1,4 +1,4 @@
-import { ArrowUp, Copy, FileText, Sparkles } from 'lucide-react'
+import { ArrowLeftRight, ArrowUp, Copy, FileText, Sparkles } from 'lucide-react'
 import type * as React from 'react'
 import { Separator } from './ui/separator'
 
@@ -163,7 +163,10 @@ export function MindMapFigure() {
       <div className="rounded-xl border bg-background px-5 pt-5 pb-2 shadow-sm">
         <MindMapCanvas />
       </div>
-      <LayerLink>同一张图</LayerLink>
+      <LayerLink>
+        <ArrowLeftRight className="size-3" aria-hidden="true" />
+        双向同步
+      </LayerLink>
       <MindMapSource />
       <LayerLink>
         <Copy className="size-3" aria-hidden="true" />
