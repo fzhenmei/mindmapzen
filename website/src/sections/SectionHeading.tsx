@@ -5,9 +5,9 @@ export function SectionHeading({
   title,
   description,
 }: {
-  eyebrow: string
-  title: string
-  description?: string
+  readonly eyebrow: string
+  readonly title: string
+  readonly description?: string
 }) {
   return (
     <div className="mx-auto max-w-2xl text-center">

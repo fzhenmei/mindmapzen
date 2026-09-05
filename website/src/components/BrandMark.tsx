@@ -2,7 +2,10 @@ import { cn } from '../lib/utils'
 
 /** 朱砂方印节点记号——同应用图标(src-tauri/icons):朱砂圆角方底,
  *  中心实心圆向三个方向伸出连线,末端空心环。官网唯一允许朱砂大面积出现的地方。 */
-export function BrandMark({ size = 24, className }: { size?: number; className?: string }) {
+export function BrandMark({
+  size = 24,
+  className,
+}: Readonly<{ size?: number; className?: string }>) {
   return (
     <svg
       width={size}
