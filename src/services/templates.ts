@@ -2,7 +2,7 @@
 import type { FsAdapter } from '../types/files'
 import { i18n } from '../i18n'
 import { sortLocale } from '../i18n/resolve'
-import { BUILTIN_TEMPLATES } from '../templates/registry'
+import { builtinTemplates } from '../templates/registry'
 import { joinPath } from './workspace'
 
 /** 模板条目：key 为选择器值（builtin:<id> / user:<relPath>） */
@@ -22,7 +22,7 @@ export const TEMPLATES_DIR = 'templates'
 /** 模板清单 = 内置注册表 + 工作区 templates/ 下的 .md（递归；按名称序排在内置后）。
  *  无工作区或目录不存在 → 仅内置。读取失败的单个模板跳过（不阻断清单） */
 export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promise<TemplateInfo[]> {
-  const builtin: TemplateInfo[] = BUILTIN_TEMPLATES.map((t) => ({
+  const builtin: TemplateInfo[] = builtinTemplates().map((t) => ({
     key: `builtin:${t.id}`,
     name: t.name,
     desc: t.desc,
