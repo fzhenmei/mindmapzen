@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { readDirTree, type DirNode } from '../services/desk'
+import { sortLocale } from '../i18n/resolve'
 import { useLibraryDialogs, type PickedImport } from '../hooks/useLibraryDialogs'
 import { useTreeMoves } from '../hooks/useTreeMoves'
 import { useSidebarResize } from '../hooks/useSidebarResize'
@@ -47,6 +49,7 @@ interface Props {
  *  详情页首动作钮。交互语义：树目录行单击=选中目录（主区欢迎页），树文件行
  *  单击=选中进详情，双击=进纸面 */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
+  const { t, i18n } = useTranslation()
   const { workspaceDir, maps, error, selectedDir, favorites, librarySort } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
   // 最近打开清单 → 导图信息（已删/移出工作区的宽容剔除，最多 8 条）
@@ -96,7 +99,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         pruneSelectedMap()
       }
     } catch (e) {
-      store.setError('设置工作区失败：' + String(e))
+      store.setError(t('errors.setWorkspaceFailed', { reason: String(e) }))
     }
   }
 
@@ -129,8 +132,10 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
 
   // 树/预览的文件清单与选中态（M5d）：文件行按 name+relDir 寻址（md 路径由 maps 反查）。
   //  排序（2026-09 收藏与排序）：modified 沿用 listMaps 序（新→旧，零成本原序）；name 与
-  //  目录行同 localeCompare 口径（zh-Hans-CN 拼音序），目录内文件行与收藏组行统一适用
-  const byName = (a: TreeFile, b: TreeFile): number => a.name.localeCompare(b.name, 'zh-Hans-CN')
+  //  目录行同 localeCompare 口径（中文拼音序/英文字母序，随界面语言），目录内文件行与
+  //  收藏组行统一适用
+  const byName = (a: TreeFile, b: TreeFile): number =>
+    a.name.localeCompare(b.name, sortLocale(i18n.language === 'en' ? 'en' : 'zh-CN'))
   const files: TreeFile[] = maps.map((m) => ({ name: m.name, relDir: m.relDir }))
   // 收藏行清单（2026-09 收藏置顶）：自 maps 过滤派生——失联项（文件被删/换工作区）自动
   //  剔除，切回工作区即恢复；modified 序天然继承 maps（新→旧）
@@ -179,9 +184,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           data-testid="library-empty"
         >
           <AppLogo size={48} />
-          <p className="text-sm">空白的纸。新建一张导图，让想法落成 .md。</p>
+          <p className="text-sm">{t('library.library.emptyHint')}</p>
           <Button size="sm" data-testid="library-empty-new" onClick={() => dlg.openNewMap('')}>
-            新建导图
+            {t('library.library.newMap')}
           </Button>
         </div>
       )
@@ -263,18 +268,18 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                 <div className="flex items-center gap-1">
                   <SidebarMenuButton
                     data-testid="dir-create"
-                    tooltip={selectedDir === '' ? '在工作区根下新建目录' : `在「${selectedDir}」下新建目录`}
+                    tooltip={selectedDir === '' ? t('library.library.newDirTooltip') : t('library.library.newDirTooltipIn', { dir: selectedDir })}
                     className="w-auto min-w-0 flex-1"
                     onClick={() => dlg.openNewDir(selectedDir)}
                   >
                     <IconPlus />
-                    <span>新建目录</span>
+                    <span>{t('library.library.newDir')}</span>
                   </SidebarMenuButton>
                   <button
                     type="button"
                     data-testid="btn-settings"
-                    aria-label="设置"
-                    title="设置"
+                    aria-label={t('library.library.settings')}
+                    title={t('library.library.settings')}
                     className={SIDEBAR_ICON_BTN}
                     onClick={() => dlg.openDialog('settings')}
                   >
@@ -325,8 +330,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧） */}
-              {iconBtn('新建导图', 'btn-new', IconPlus, () => dlg.openNewMap(''))}
-              {iconBtn('导入 .md', 'btn-import', IconImport, () => void dlg.startImport())}
+              {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(''))}
+              {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}

@@ -1,4 +1,5 @@
 import type { FsAdapter, LayoutKind, MapInfo, Sidecar } from '../types/files'
+import { i18n } from '../i18n'
 import { parse, serialize } from './mdTree'
 import { writeSidecar } from './sidecar'
 
@@ -67,10 +68,10 @@ export async function createMap(
   relDir: string = '',
 ): Promise<MapInfo> {
   const trimmed = name.trim()
-  if (trimmed === '') throw new Error('名称不能为空')
-  if (INVALID.test(trimmed)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
+  if (trimmed === '') throw new Error(i18n.t('errors.nameEmpty'))
+  if (INVALID.test(trimmed)) throw new Error(i18n.t('errors.nameInvalidChars'))
   const mdPath = relToDir(wsDir, relDir, trimmed + '.md')
-  if (await fs.exists(mdPath)) throw new Error(`已存在同名导图：${trimmed}`)
+  if (await fs.exists(mdPath)) throw new Error(i18n.t('errors.mapNameExists', { name: trimmed }))
   let content = `# ${trimmed}\n`
   if (templateContent !== undefined) {
     const r = parse(templateContent)
@@ -91,16 +92,16 @@ export async function renameMap(
   newName: string,
 ): Promise<void> {
   const trimmed = newName.trim()
-  if (trimmed === '' || INVALID.test(trimmed)) throw new Error(String.raw`新名称非法（为空或包含 \ / : * ? " < > |）`)
+  if (trimmed === '' || INVALID.test(trimmed)) throw new Error(i18n.t('errors.renameInvalid'))
   // 改成原名视作无操作，避免误报「已存在同名导图」
   if (trimmed === oldName) return
   const dir = resolveDir(wsDir, relDir)
   const oldMdPath = joinPath(dir, oldName + '.md')
   const newMdPath = joinPath(dir, trimmed + '.md')
-  // 源缺失时给出中文错误，避免适配器底层英文异常外泄
-  if (!(await fs.exists(oldMdPath))) throw new Error(`源导图不存在：${oldName}`)
+  // 源缺失时给本地化错误，避免适配器底层英文异常外泄
+  if (!(await fs.exists(oldMdPath))) throw new Error(i18n.t('errors.sourceMapMissing', { name: oldName }))
   // 撞名预检：rename 是替换语义，直接改名会静默覆盖既有导图（且绕过回收站）
-  if (await fs.exists(newMdPath)) throw new Error(`已存在同名导图：${trimmed}`)
+  if (await fs.exists(newMdPath)) throw new Error(i18n.t('errors.mapNameExists', { name: trimmed }))
   await fs.rename(oldMdPath, newMdPath)
   const oldSidecar = joinPath(dir, oldName + '.zen.json')
   if (await fs.exists(oldSidecar)) {

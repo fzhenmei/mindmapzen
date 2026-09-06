@@ -1,5 +1,7 @@
 // src/services/desk.ts —— 案头目录服务（M5a）：目录树读取、递归建目录、导图移动
 import type { FsAdapter, MapInfo } from '../types/files'
+import { i18n } from '../i18n'
+import { sortLocale } from '../i18n/resolve'
 import { ASSETS_DIR } from './imageAssets'
 import { INVALID, joinPath, normalizeRel, resolveDir, statTail } from './workspace'
 
@@ -7,7 +9,8 @@ import { INVALID, joinPath, normalizeRel, resolveDir, statTail } from './workspa
 export interface DirNode { name: string; path: string; children: DirNode[] }
 
 /** 递归读取工作区纯目录树：只含目录、空目录也保留（案头左树用）。
- *  每层按名称排序（中文走 zh-Hans-CN 拼音 collation）——与文件系统遍历序解耦，目录树渲染顺序确定 */
+ *  每层按名称排序（中文拼音序/英文字母序，随界面语言）——与文件系统遍历序解耦，
+ *  目录树渲染顺序确定 */
 export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode[]> {
   const walk = async (dir: string, rel: string): Promise<DirNode[]> => {
     const nodes: DirNode[] = []
@@ -23,17 +26,17 @@ export async function readDirTree(fs: FsAdapter, wsDir: string): Promise<DirNode
       const path = rel === '' ? e.name : `${rel}/${e.name}`
       nodes.push({ name: e.name, path, children: await walk(joinPath(dir, e.name), path) })
     }
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+    nodes.sort((a, b) => a.name.localeCompare(b.name, sortLocale(i18n.language === 'en' ? 'en' : 'zh-CN')))
     return nodes
   }
   return walk(wsDir, '')
 }
 
-/** 递归建目录：'/' 为合法分隔符，逐段沿用 workspace INVALID 规则校验，非法段中文报错 */
+/** 递归建目录：'/' 为合法分隔符，逐段沿用 workspace INVALID 规则校验，非法段本地化报错 */
 export async function createDir(fs: FsAdapter, wsDir: string, relPath: string): Promise<void> {
   const segments = relPath.split('/').map((s) => s.trim()).filter((s) => s !== '')
   for (const seg of segments) {
-    if (INVALID.test(seg)) throw new Error(String.raw`名称不能包含 \ / : * ? " < > |`)
+    if (INVALID.test(seg)) throw new Error(i18n.t('errors.nameInvalidChars'))
   }
   if (segments.length > 0) await fs.mkdir(joinPath(wsDir, segments.join('/')))
 }
@@ -43,7 +46,7 @@ export async function createDir(fs: FsAdapter, wsDir: string, relPath: string): 
  *  「退出工作区」流，不入本通道 */
 export async function deleteDir(fs: FsAdapter, wsDir: string, rel: string): Promise<void> {
   const relNorm = normalizeRel(rel)
-  if (relNorm === '') throw new Error('不能删除工作区根目录')
+  if (relNorm === '') throw new Error(i18n.t('errors.cannotDeleteRoot'))
   await fs.remove(joinPath(wsDir, relNorm))
 }
 
@@ -57,7 +60,7 @@ export function isUnderDir(path: string, ancestor: string): boolean {
 }
 
 /** 移动目录（2026-09 树拖拽）：整子树 fs.rename 一步迁移（后代导图与子目录随走，上层
- *  refreshMaps + readDirTree 重建即可）。守卫链（同 reject-and-report 语义，中文报错走
+ *  refreshMaps + readDirTree 重建即可）。守卫链（同 reject-and-report 语义，本地化报错走
  *  setError 提示）：根不可移；同目录早返回；目标是自身子孙拒绝；目标下同名目录拒绝
  *  （2026-09 拖拽策略裁决：不静默改名不合并，用户先改名再拖） */
 export async function moveDir(
@@ -68,12 +71,12 @@ export async function moveDir(
 ): Promise<void> {
   const fromRelNorm = normalizeRel(fromRel)
   const toRelNorm = normalizeRel(toRel)
-  if (fromRelNorm === '') throw new Error('不能移动工作区根目录')
+  if (fromRelNorm === '') throw new Error(i18n.t('errors.cannotMoveRoot'))
   if (fromRelNorm === toRelNorm) return
-  if (isUnderDir(toRelNorm, fromRelNorm)) throw new Error('不能移动到自身或其子目录内')
+  if (isUnderDir(toRelNorm, fromRelNorm)) throw new Error(i18n.t('errors.cannotMoveIntoSelf'))
   const toDir = resolveDir(wsDir, toRelNorm)
   const name = fromRelNorm.split('/').at(-1) ?? fromRelNorm
-  if (await fs.exists(joinPath(toDir, name))) throw new Error('目标目录下已存在同名目录')
+  if (await fs.exists(joinPath(toDir, name))) throw new Error(i18n.t('errors.targetDirNameExists'))
   await fs.rename(joinPath(wsDir, fromRelNorm), joinPath(toDir, name))
 }
 
@@ -103,9 +106,9 @@ export function dirDeleteSummary(
   rel: string,
 ): string {
   const count = countMapsInDir(maps, rel)
-  if (count > 0) return `该目录下 ${count} 张导图将随目录一并移入回收站。`
-  if (dirHasSubDirs(tree, rel)) return '该目录下没有导图，但含子目录，将随目录一并移入回收站。'
-  return '该目录为空，将直接移入回收站。'
+  if (count > 0) return i18n.t('library.dialogs.deleteDir.summaryMaps', { count })
+  if (dirHasSubDirs(tree, rel)) return i18n.t('library.dialogs.deleteDir.summarySubdirs')
+  return i18n.t('library.dialogs.deleteDir.summaryEmpty')
 }
 
 /** 移动导图（.md + .zen.json 两文件同移）到目标目录；源 sidecar 缺失则只移 .md。

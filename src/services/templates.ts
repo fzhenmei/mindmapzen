@@ -1,5 +1,7 @@
 // src/services/templates.ts —— 模板清单服务（M16）：内置注册表 + 工作区 templates/ 目录扫描
 import type { FsAdapter } from '../types/files'
+import { i18n } from '../i18n'
+import { sortLocale } from '../i18n/resolve'
 import { BUILTIN_TEMPLATES } from '../templates/registry'
 import { joinPath } from './workspace'
 
@@ -37,7 +39,7 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
         return {
           key: `user:${relPath === '' ? '' : relPath + '/'}${fileName.replace(/\.md$/, '')}`,
           name: fileName.replace(/\.md$/, ''),
-          desc: relPath === '' ? '工作区模板' : `工作区模板 · ${relPath}`,
+          desc: relPath === '' ? i18n.t('library.templates.workspace') : i18n.t('library.templates.workspaceIn', { dir: relPath }),
           source: 'user',
           content,
         }
@@ -46,7 +48,7 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
       }
     }),
   )
-  const clean = user.filter((t): t is TemplateInfo => t !== null).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  const clean = user.filter((t): t is TemplateInfo => t !== null).sort((a, b) => a.name.localeCompare(b.name, sortLocale(i18n.language === 'en' ? 'en' : 'zh-CN')))
   return [...builtin, ...clean]
 }
 

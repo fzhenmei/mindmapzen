@@ -1,5 +1,6 @@
 import { ChevronRight, Search } from 'lucide-react'
 import { useRef, useState, type DragEvent, type JSX } from 'react'
+import { useTranslation } from 'react-i18next'
 import { filterTree, isUnderDir, type DirNode } from '../services/desk'
 import type { LibrarySort } from '../types/files'
 import type { MapAction } from './DetailActions'
@@ -121,6 +122,7 @@ export default function DirectoryTree({
   sort,
   onSortChange,
 }: Readonly<Props>) {
+  const { t } = useTranslation()
   // 侧栏搜索（v2.5）：占位原 SidebarHeader（logo 上移 TitleBar 后空出的位）。
   //  过滤在 desk.filterTree（纯函数）；搜索态强制全树展开（defaultOpen 非受控只在
   //  首挂生效，折叠中的目录里有命中文件时靠受控 open 展开），清空即复原
@@ -184,22 +186,22 @@ export default function DirectoryTree({
   /** 文件行右键菜单（对话框流在 LibraryView；条目 ctx-* testid 与详情页首同名钮区分）。
    *  2026-09 收藏：「打开」下增收藏切换（按行级收藏态换文案） */
   const fileMenu = (f: TreeFile) => (
-    <ContextMenuContent data-testid={`ctx-menu-file-${f.name}`} aria-label={`「${f.name}」操作`}>
+    <ContextMenuContent data-testid={`ctx-menu-file-${f.name}`} aria-label={t('library.dirTree.fileMenuLabel', { name: f.name })}>
       <ContextMenuItem data-testid="ctx-btn-open" onClick={() => onOpenFile(f)}>
-        <IconOpen />打开
+        <IconOpen />{t('common.open')}
       </ContextMenuItem>
       <ContextMenuItem data-testid="ctx-btn-favorite" onClick={() => onToggleFavorite(f)}>
-        <IconStar />{favSet.has(fileKey(f)) ? '取消收藏' : '收藏'}
+        <IconStar />{favSet.has(fileKey(f)) ? t('library.unfavorite') : t('library.favorite')}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem data-testid="ctx-btn-move" onClick={() => onFileAction('move', f)}>
-        <IconFolder />移动到目录
+        <IconFolder />{t('library.moveToDir')}
       </ContextMenuItem>
       <ContextMenuItem data-testid="ctx-btn-rename" onClick={() => onFileAction('rename', f)}>
-        <IconPencil />重命名
+        <IconPencil />{t('common.rename')}
       </ContextMenuItem>
       <ContextMenuItem data-testid="ctx-btn-delete" variant="destructive" onClick={() => onFileAction('delete', f)}>
-        <IconTrash />删除
+        <IconTrash />{t('common.delete')}
       </ContextMenuItem>
     </ContextMenuContent>
   )
@@ -207,18 +209,18 @@ export default function DirectoryTree({
   /** 目录行右键菜单（rel = 目标目录）：新建导图于此 / 新建子目录 /（可删时）删除目录。
    *  树根（deletable=false）不提供删除——工作区本体走设置页「退出工作区」流 */
   const dirMenu = (rel: string, deletable: boolean) => (
-    <ContextMenuContent aria-label="目录操作">
+    <ContextMenuContent aria-label={t('library.dirTree.dirMenuLabel')}>
       <ContextMenuItem data-testid="ctx-btn-new-map" onClick={() => onCreateMapIn(rel)}>
-        <IconPlus />在此新建导图
+        <IconPlus />{t('library.dirTree.newMapHere')}
       </ContextMenuItem>
       <ContextMenuItem data-testid="ctx-btn-new-dir" onClick={() => onCreateDirIn(rel)}>
-        <IconFolder />新建子目录
+        <IconFolder />{t('library.dirTree.newSubdir')}
       </ContextMenuItem>
       {deletable && (
         <>
           <ContextMenuSeparator />
           <ContextMenuItem data-testid="ctx-btn-delete-dir" variant="destructive" onClick={() => onDeleteDir(rel)}>
-            <IconTrash />删除目录
+            <IconTrash />{t('library.dirTree.deleteDir')}
           </ContextMenuItem>
         </>
       )}
@@ -271,8 +273,8 @@ export default function DirectoryTree({
                 type="button"
                 data-testid={`fav-btn-${f.name}`}
                 aria-pressed={fav}
-                aria-label={fav ? '取消收藏' : '收藏'}
-                title={fav ? '取消收藏' : '收藏'}
+                aria-label={fav ? t('library.unfavorite') : t('library.favorite')}
+                title={fav ? t('library.unfavorite') : t('library.favorite')}
                 draggable={false}
                 onDragStart={(e) => {
                   e.preventDefault()
@@ -356,7 +358,7 @@ export default function DirectoryTree({
                 <CollapsibleTrigger asChild>
                   <button
                     type="button"
-                    aria-label={`折叠「${n.name}」`}
+                    aria-label={t('library.dirTree.collapseDir', { name: n.name })}
                     className={`${chevronSlot} rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
                   >
                     <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -408,8 +410,8 @@ export default function DirectoryTree({
             <Search className="pointer-events-none absolute top-1/2 left-[calc(0.5rem+0.4375rem)] size-3.5 -translate-y-1/2 text-sidebar-foreground/50" />
             <Input
               data-testid="dir-search"
-              aria-label="搜索工作区文件"
-              placeholder="搜索工作区文件…"
+              aria-label={t('library.dirTree.searchLabel')}
+              placeholder={t('library.dirTree.searchPlaceholder')}
               value={query}
               className="h-8 pl-7 text-xs"
               onChange={(e) => setQuery(e.target.value)}
@@ -425,8 +427,8 @@ export default function DirectoryTree({
                 variant="outline"
                 size="icon"
                 data-testid="dir-sort"
-                aria-label="排序"
-                title="排序"
+                aria-label={t('library.dirTree.sort')}
+                title={t('library.dirTree.sort')}
                 className="size-8 shrink-0"
               >
                 <IconSort />
@@ -435,10 +437,10 @@ export default function DirectoryTree({
             <DropdownMenuContent align="end">
               <DropdownMenuRadioGroup value={sort} onValueChange={(v) => onSortChange(v as LibrarySort)}>
                 <DropdownMenuRadioItem data-testid="sort-modified" value="modified">
-                  修改时间（新→旧）
+                  {t('library.dirTree.sortModified')}
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem data-testid="sort-name" value="name">
-                  名称（A→Z）
+                  {t('library.dirTree.sortName')}
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
@@ -459,8 +461,8 @@ export default function DirectoryTree({
                 留白——盒间距 12px 时视觉空隙实为 27px；类须落在本组件（经 cn/tw-merge
                 顶掉基类 h-8），落 asChild 子按钮会被 Slot 简单拼接、CSS 序让 h-8 反杀 */}
             <SidebarGroupLabel asChild className="h-6">
-              <CollapsibleTrigger data-testid="fav-toggle" aria-label="收起或展开收藏">
-                收藏
+              <CollapsibleTrigger data-testid="fav-toggle" aria-label={t('library.dirTree.favoritesToggle')}>
+                {t('library.dirTree.favorites')}
                 <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/favcollapsible:rotate-90" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -473,7 +475,7 @@ export default function DirectoryTree({
         </SidebarGroup>
       )}
       <SidebarGroup className="px-2 py-1">
-        <SidebarGroupLabel className="h-6">目录</SidebarGroupLabel>
+        <SidebarGroupLabel className="h-6">{t('library.dirTree.directories')}</SidebarGroupLabel>
         <SidebarMenu>
           {/* 树根 = 工作区：本身即最外层 Collapsible（点行首箭头收起全树），行面选中根视图；
                   右键同目录菜单但无删除（工作区本体不删，rel=''=根）。拖拽只作落点不可拖
@@ -492,7 +494,7 @@ export default function DirectoryTree({
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
-                        aria-label="折叠全部"
+                        aria-label={t('library.dirTree.collapseAll')}
                         className={`${chevronSlot} rounded-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground`}
                       >
                         <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -520,7 +522,7 @@ export default function DirectoryTree({
                 <SidebarMenuSub>
                   {searching && filtered.tree.length === 0 && filtered.files.length === 0 ? (
                     <p data-testid="dir-search-empty" className="px-2 py-1 text-xs text-muted-foreground">
-                      没有匹配的文件
+                      {t('library.dirTree.searchEmpty')}
                     </p>
                   ) : (
                     <>

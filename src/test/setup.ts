@@ -44,6 +44,13 @@ if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'unde
   ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub
 }
 
-// i18n:测试环境固定中文(存量断言口径;英文行为由 i18n 相关新测试自行 changeLanguage 覆盖)
-import { initI18n } from '../i18n'
+// i18n:测试环境固定中文(存量断言口径;英文行为由 i18n 相关新测试自行 changeLanguage 覆盖)。
+// 每测前重钉中文——appStore.init 等真实链路会按 jsdom 系统语言(en-US)把进程级单例切到
+// en 并向后泄漏,打穿后续用例的中文断言(服务层报错已词典化);测内自行切换不受影响
+import { beforeEach } from 'vitest'
+import { i18n, initI18n } from '../i18n'
 initI18n('zh-CN')
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN')
+  document.documentElement.lang = 'zh-CN'
+})
