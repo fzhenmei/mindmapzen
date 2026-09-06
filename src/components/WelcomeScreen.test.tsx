@@ -1,9 +1,11 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import WelcomeScreen from './WelcomeScreen'
 
-// 首次开屏页（M5d / M14 spec §4 官方 authentication 模式）：全屏 grid 居中 + Card w-96 解剖
+// 首次开屏页（M5d / M14 spec §4 官方 authentication 模式）：全屏 grid 居中 + Card w-96 解剖。
+// 2026-09 UI 评审 P2-1：原双入口（创建工作区/选择已有文件夹）同一动作（都走 pickDirectory），
+// 措辞差异制造无谓选择（Krug「别让我思考」），合并为单主钮「选择工作区文件夹」
 describe('开屏页（M14 官方认证卡）', () => {
-  test('官方卡解剖：Card w-96 + 居中卡头（印标/标题/副句）+ 两入口落位', () => {
+  test('官方卡解剖：Card w-96 + 居中卡头（印标/标题/副句）+ 单主钮落位', () => {
     render(<WelcomeScreen onCreateWorkspace={() => {}} />)
 
     // 外层 = 全屏 grid 居中壳（官方 authentication 布局）
@@ -24,23 +26,20 @@ describe('开屏页（M14 官方认证卡）', () => {
     expect(title).toHaveClass('text-2xl', 'font-semibold', 'tracking-tight')
     expect(card.querySelector('[data-slot="card-description"]')).toHaveTextContent('想法落成 .md')
 
-    // 主钮 = CardContent 内 size=lg 通栏；次钮 = CardFooter 内 ghost
+    // 单主钮 = CardContent 内 size=lg 通栏「选择工作区文件夹」；无次钮（CardFooter 不渲染）
     const create = screen.getByTestId('btn-welcome-create')
     expect(create.closest('[data-slot="card-content"]')).not.toBeNull()
-    expect(create).toHaveTextContent('创建工作区')
+    expect(create).toHaveTextContent('选择工作区文件夹')
     expect(create).toHaveAttribute('data-size', 'lg')
     expect(create.className).toContain('w-full')
-    const pick = screen.getByTestId('btn-welcome-pick')
-    expect(pick.closest('[data-slot="card-footer"]')).not.toBeNull()
-    expect(pick).toHaveTextContent('选择已有文件夹')
-    expect(pick).toHaveAttribute('data-variant', 'ghost')
+    expect(screen.queryByTestId('btn-welcome-pick')).not.toBeInTheDocument()
+    expect(card.querySelector('[data-slot="card-footer"]')).toBeNull()
   })
 
-  test('两入口同一语义：均触发 onCreateWorkspace（pickDirectory 流）', () => {
+  test('唯一入口触发 onCreateWorkspace（pickDirectory 流）', () => {
     const onCreateWorkspace = vi.fn()
     render(<WelcomeScreen onCreateWorkspace={onCreateWorkspace} />)
     fireEvent.click(screen.getByTestId('btn-welcome-create'))
-    fireEvent.click(screen.getByTestId('btn-welcome-pick'))
-    expect(onCreateWorkspace).toHaveBeenCalledTimes(2)
+    expect(onCreateWorkspace).toHaveBeenCalledTimes(1)
   })
 })
