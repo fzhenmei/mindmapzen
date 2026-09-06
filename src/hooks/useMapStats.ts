@@ -6,8 +6,9 @@
 import { useState } from 'react'
 import type { EngineNode } from '../types/engine'
 
-/** 递归数节点（含根） */
-function countTree(node: EngineNode): number {
+/** 递归数节点（含根）。导出供 EditorView 复用（空图引导以初始树计数判定，
+ *  stats.nodeCount 初值 0 且待首次 data_change，大图打开窗口期会误判空图） */
+export function countTree(node: EngineNode): number {
   return 1 + (node.children ?? []).reduce((n, c) => n + countTree(c), 0)
 }
 

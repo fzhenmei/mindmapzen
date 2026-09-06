@@ -24,6 +24,7 @@ import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useQuickSwitch } from '../hooks/useQuickSwitch'
 import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
+import CanvasHint from '../components/CanvasHint'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
@@ -302,8 +303,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return () => clearTimeout(t)
   }, [bodyPanel.open])
 
-  // @container：编辑器内容宽 = 停泊栏避让的查询容器（2026-09 UI 评审 P1，窄窗题签/
-  // 主题钮 @max-[1150px] 上移一层的基准；编辑器恒满屏无侧栏，容器宽即视口宽）
+  // @container：停泊栏避让的查询容器（UI评审P1，题签/主题钮 @max-[1150px] 上移基准）
   return (
     <div className={`editor @container${bodyPanel.open ? ' body-open' : ''}`}><TooltipProvider>
       <div className="canvas-host">
@@ -337,6 +337,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* 顶部导图胶囊条（2026-09 鼠标流切换）：最近打开常驻平铺，点选走安全链；仅一张时
           组件内不渲染。悬浮顶部居中（悬浮停泊同 ZenBar——canvas-host 恒满屏，引擎零配合） */}
       <MapTabs tabs={quick.mapTabCandidates} currentMdPath={mdPath} onPick={(p) => void quick.switchTo(p)} />
+      {/* 空图引导（2026-09 UI 评审 P2-2）：仅根节点时的建节点快捷键提示，条件与动机见组件注释 */}
+      {docReady && <CanvasHint tree={engineTree} nodeCount={stats.nodeCount} />}
       {/* 选中节点浮动条（验收轮）：正文笔 + 连线箭头等，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
       {nodePos && !anyDialog && (
         <NodeActions
