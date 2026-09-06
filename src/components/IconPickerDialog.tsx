@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -28,6 +29,7 @@ const uncuratedSvgCache = new Map<string, string>()
  *  点选 toggle 高亮，保存即 SET_NODE_ICON。md 句尾 ::name 标记是事实源，
  *  手写标记同样合法（宽容，与连线手写一致） */
 export default function IconPickerDialog({ nodeText, current, onCancel, onConfirm }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [picked, setPicked] = useState<string[]>([...current])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GridIcon[]>([])
@@ -118,8 +120,8 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent data-testid="icon-dialog" aria-label="节点图标" className="sm:max-w-2xl">
-        <DialogTitle>节点图标</DialogTitle>
+      <DialogContent data-testid="icon-dialog" aria-label={t('editor.iconPicker.title')} className="sm:max-w-2xl">
+        <DialogTitle>{t('editor.iconPicker.title')}</DialogTitle>
         <p className="truncate text-xs text-muted-foreground" title={nodeText}>
           {nodeText}
         </p>
@@ -137,8 +139,8 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
                   key={name}
                   type="button"
                   data-testid={`icon-chip-${name}`}
-                  title={`移除 ${name}`}
-                  aria-label={`移除 ${name}`}
+                  title={t('editor.iconPicker.removeIcon', { name })}
+                  aria-label={t('editor.iconPicker.removeIcon', { name })}
                   onClick={() => toggle(name)}
                   className="flex items-center gap-0.5 rounded-md bg-secondary px-1 py-0.5 hover:bg-accent [&_svg]:size-4"
                 >
@@ -157,7 +159,7 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
           data-testid="icon-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索 lucide 全集（名字或语义标签，如 flag / 时间）"
+          placeholder={t('editor.iconPicker.searchPlaceholder')}
         />
         <ScrollArea type="hover" className="h-72 rounded-md">
           {/* pr-3：给 Radix 覆盖式滚动条留位——否则最右列图标的选中环被滚动条遮挡（验收实案） */}
@@ -187,10 +189,10 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         </ScrollArea>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="icon-cancel" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button size="sm" data-testid="icon-save" onClick={() => onConfirm(picked, extras)}>
-            保存
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

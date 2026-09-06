@@ -15,4 +15,14 @@ export default {
   copyPathFailed: '复制路径失败：{{reason}}',
   copyMdFailed: '复制失败：{{reason}}',
   createMapFailed: '新建导图失败：{{reason}}',
+  // Task 8 编辑器/案头 hooks 报错(打开链/保存链/导出/树移动/案头对话框,调用期 i18n.t)
+  readMapFailed: '无法读取文件（可能已被移动或删除）：{{reason}}',
+  saveFailed: '保存失败：{{reason}}',
+  saveLayoutFailed: '保存布局失败：{{reason}}',
+  exportFailed: '导出失败：{{reason}}',
+  copyImageFailed: '复制图片失败：{{reason}}',
+  moveFailed: '移动失败：{{reason}}',
+  importFailed: '导入失败：{{reason}}',
+  deleteFailed: '删除失败：{{reason}}',
+  deleteDirFailed: '删除目录失败：{{reason}}',
 }

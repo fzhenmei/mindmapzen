@@ -2,6 +2,7 @@
 // 串行保存链、5s 防抖自动保存、布局 sidecar 即时落盘。依赖经 opts 注入（脏标记 ref 归 EditorView 持有，
 // 守卫「放弃」路径也读写它）；所有管线状态走 refs，闭包取首渲染值即可（同 dirtyRef 模式）。
 import { useRef, type RefObject } from 'react'
+import { i18n } from '../i18n'
 import { engineTreeToZen, serialize } from '../services/mdTree'
 import { writeSidecar } from '../services/sidecar'
 import { collectLinkAdjust, type LinkAdjust } from '../services/linkAdjust'
@@ -117,7 +118,7 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试
       dirtyRef.current = true
       onDirtyChange(true)
-      onError('保存失败：' + String(e))
+      onError(i18n.t('errors.saveFailed', { reason: String(e) }))
       return false
     }
   }
@@ -178,7 +179,7 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       const { collapsed } = engineTreeToZen(snapshot)
       await writeSidecar(adapter, mdPath, buildSidecar(collapsed, collectLinkAdjust(snapshot)))
     } catch (e) {
-      onError('保存布局失败：' + String(e))
+      onError(i18n.t('errors.saveLayoutFailed', { reason: String(e) }))
     }
   }
 

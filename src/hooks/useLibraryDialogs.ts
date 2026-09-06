@@ -4,6 +4,7 @@
 // 左树重读/工作区选择）经 deps 注入——本 hook 不持有树与选中态（同 useTreeMoves 约定）。
 import { useState } from 'react'
 import { useAppStore } from '../store/appStore'
+import { i18n } from '../i18n'
 import { deleteMap, renameMap, joinPath, resolveDir } from '../services/workspace'
 import { commitImport } from '../services/importMap'
 import { createDir, deleteDir } from '../services/desk'
@@ -113,7 +114,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
       if (picked.kind === 'md') {
         const r = parse(picked.text)
         if (!r.ok) {
-          setError('导入失败：' + r.error)
+          setError(i18n.t('errors.importFailed', { reason: r.error }))
           return
         }
         tree = r.tree
@@ -130,7 +131,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
       const info = await commitImport(adapter, workspaceDir, picked.name, tree, preferredLayout)
       await openMap(info.mdPath)
     } catch (e) {
-      useAppStore.getState().setError('导入失败：' + String(e))
+      useAppStore.getState().setError(i18n.t('errors.importFailed', { reason: String(e) }))
     }
   }
 
@@ -143,7 +144,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
       const info = await commitImport(adapter, workspaceDir, pending.name, pending.tree, preferredLayout)
       await openMap(info.mdPath)
     } catch (e) {
-      setError('导入失败：' + String(e))
+      setError(i18n.t('errors.importFailed', { reason: String(e) }))
     }
   }
 
@@ -185,7 +186,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
       await store.refreshMaps()
       deps.pruneSelectedMap()
     } catch (e) {
-      store.setError('删除失败：' + String(e))
+      store.setError(i18n.t('errors.deleteFailed', { reason: String(e) }))
     }
   }
 
@@ -201,7 +202,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
         deps.onDirRemoved(rel)
         store.setError(null)
       } catch (e) {
-        store.setError('删除目录失败：' + (e instanceof Error ? e.message : String(e)))
+        store.setError(i18n.t('errors.deleteDirFailed', { reason: e instanceof Error ? e.message : String(e) }))
       }
     })()
   }

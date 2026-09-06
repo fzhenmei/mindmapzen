@@ -15,5 +15,14 @@ const errors: Dict['errors'] = {
   copyPathFailed: 'Failed to copy path: {{reason}}',
   copyMdFailed: 'Copy failed: {{reason}}',
   createMapFailed: 'Failed to create map: {{reason}}',
+  readMapFailed: 'Cannot read the file (it may have been moved or deleted): {{reason}}',
+  saveFailed: 'Failed to save: {{reason}}',
+  saveLayoutFailed: 'Failed to save layout: {{reason}}',
+  exportFailed: 'Failed to export: {{reason}}',
+  copyImageFailed: 'Failed to copy image: {{reason}}',
+  moveFailed: 'Failed to move: {{reason}}',
+  importFailed: 'Failed to import: {{reason}}',
+  deleteFailed: 'Failed to delete: {{reason}}',
+  deleteDirFailed: 'Failed to delete folder: {{reason}}',
 }
 export default errors

@@ -3,6 +3,7 @@
 // 不必记快捷键即可写正文/拉连线。M14 Task 5 钮体换 ui Button(ghost,icon) + ui Tooltip
 // （官方默认内距），z-index 8 低于命令栏 10/横幅 9；容器仍是节点语境的锚定浮条。
 // 2026-09-06 备注合并：备注笔退役，首钮改指正文面板（与砚栏 btn-body 同一 toggle 流）。
+import { useTranslation } from 'react-i18next'
 import type { NodeActionPos } from '../hooks/useNodeActions'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick, onImageClick }: Readonly<Props>) {
+  const { t } = useTranslation()
   return (
     <div
       data-testid="node-actions"
@@ -35,13 +37,13 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
             variant="ghost"
             size="icon"
             data-testid="node-action-body"
-            aria-label="编写选中节点的正文"
+            aria-label={t('editor.nodeActions.body')}
             onClick={onBodyClick}
           >
             <IconFileText />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>编写选中节点的正文</TooltipContent>
+        <TooltipContent>{t('editor.nodeActions.body')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -50,13 +52,13 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
             variant="ghost"
             size="icon"
             data-testid="node-action-icon"
-            aria-label="节点图标"
+            aria-label={t('editor.nodeActions.icon')}
             onClick={onIconClick}
           >
             <IconSmile />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>节点图标</TooltipContent>
+        <TooltipContent>{t('editor.nodeActions.icon')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -65,13 +67,13 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
             variant="ghost"
             size="icon"
             data-testid="node-action-image"
-            aria-label="节点插图"
+            aria-label={t('editor.nodeActions.image')}
             onClick={onImageClick}
           >
             <IconImage />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>节点插图</TooltipContent>
+        <TooltipContent>{t('editor.nodeActions.image')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -80,13 +82,13 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
             variant="ghost"
             size="icon"
             data-testid="node-action-link"
-            aria-label="创建连线：点此钮后再点目标节点"
+            aria-label={t('editor.nodeActions.link')}
             onClick={onLinkClick}
           >
             <IconLink />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>创建连线：点此钮后再点目标节点</TooltipContent>
+        <TooltipContent>{t('editor.nodeActions.link')}</TooltipContent>
       </Tooltip>
     </div>
   )

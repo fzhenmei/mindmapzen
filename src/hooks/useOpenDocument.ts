@@ -4,6 +4,7 @@
 // cancelled 守卫防切换文档（父组件 key 重挂载）后的迟到写入。
 // 文档内容由父组件 key 重挂载切换——本 hook 仅挂载时执行一次（exhaustive-deps 豁免同旧内联 effect）。
 import { useEffect } from 'react'
+import { i18n } from '../i18n'
 import { parse, zenToEngineTree } from '../services/mdTree'
 import { buildImageMeta } from '../services/imageAssets'
 import { readSidecar } from '../services/sidecar'
@@ -79,7 +80,7 @@ export function useOpenDocument(deps: OpenDocumentDeps): void {
         // 坏条目彻底无用；错误面板只占画布内容区（壳层保留），不再锁死编辑器
         if (cancelled) return
         void useAppStore.getState().dropRecent(mdPath)
-        deps.onFail('read', `无法读取文件（可能已被移动或删除）：${e instanceof Error ? e.message : String(e)}`, '')
+        deps.onFail('read', i18n.t('errors.readMapFailed', { reason: e instanceof Error ? e.message : String(e) }), '')
       }
     })()
     return () => {

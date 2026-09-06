@@ -4,6 +4,7 @@
 // 样式令牌化（var(--card)/--foreground/--radius），双主题自动；文本段 textContent
 // 转义、图源段走 renderMermaid（strict 转义 SVG）——无注入面。
 
+import { i18n } from '../i18n'
 import { renderMermaid, splitNoteSegments, type NoteSegment } from '../services/mermaidRender'
 
 /** 悬停窗正文速览限额（spec：约 300 字）；mermaid 段不计数、始终保留 */
@@ -104,7 +105,7 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       const more = document.createElement('div')
       more.className = 'zen-note-tip-more'
       more.style.cssText = 'margin-top:6px;color:var(--muted-foreground);font-size:11px;'
-      more.textContent = '打开面板查看全文'
+      more.textContent = i18n.t('editor.noteTooltip.more')
       el.appendChild(more)
     }
   }

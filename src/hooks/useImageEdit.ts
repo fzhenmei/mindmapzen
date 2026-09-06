@@ -8,6 +8,7 @@
 // applyBytes（防撞名落盘+应用+预览刷新）。移除：SET_NODE_IMAGE 空。
 // 保存链经无载荷 onDataChanged（md 行尾 ![alt](src) 是唯一事实源）
 import { useCallback, useRef, useState } from 'react'
+import { i18n } from '../i18n'
 import type { MindMapHandle } from '../types/engine'
 import type { NodeImage } from '../services/imageMarkers'
 import { mimeOf, parseImageSize } from '../services/imageMeta'
@@ -184,7 +185,7 @@ export function useImageEdit(
     async (image: PickedImage | null): Promise<string | null> => {
       if (wsDir === null) return null
       if (image === null) {
-        setPasteError('剪贴板中没有图片')
+        setPasteError(i18n.t('editor.imageDialog.pasteNoImage'))
         return null
       }
       setPasteError(null)
@@ -198,7 +199,7 @@ export function useImageEdit(
     try {
       return await pasteAndApply(await readClipboardImage())
     } catch (e) {
-      setPasteError('读取剪贴板失败：' + String(e))
+      setPasteError(i18n.t('editor.imageDialog.pasteReadFailed', { reason: String(e) }))
       return null
     }
   }, [wsDir, readClipboardImage, pasteAndApply])

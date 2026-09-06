@@ -2,6 +2,7 @@
 // 优雅恢复改版）：读文件失败（被删/移动/权限）与解析失败（内容坏）分型给文案与操作。
 // 面板只占画布内容区（壳层保留：对话框照常挂载），任何失败都留逃生门——
 // 返回案头 / 打开其他导图；「以纯文本打开修复」仅解析失败提供（文件还在才有得修）
+import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { IconArrowLeft, IconPencil, IconSwitch } from './icons'
 import { toNativePath } from '../services/nativePath'
@@ -24,12 +25,13 @@ interface Props {
 }
 
 export default function EditorErrorPanel({ kind, error, raw, onRawEdit, onBack, onSwitch, mdPath }: Readonly<Props>) {
+  const { t } = useTranslation()
   return (
     <div className="editor-error">
-      <h2>{kind === 'read' ? '无法打开此文件' : '无法打开此导图'}</h2>
+      <h2>{kind === 'read' ? t('editor.errorPanel.readTitle') : t('editor.errorPanel.parseTitle')}</h2>
       {kind === 'read' ? (
         <>
-          <p className="error-detail">文件可能已被移动、删除或没有访问权限</p>
+          <p className="error-detail">{t('editor.errorPanel.readDetail')}</p>
           {/* 路径出口归一（同「复制文件路径」修复）：给人看的分隔符按平台转原生形态 */}
           <p className="error-path text-muted-foreground break-all text-xs">{toNativePath(mdPath)}</p>
         </>
@@ -42,16 +44,16 @@ export default function EditorErrorPanel({ kind, error, raw, onRawEdit, onBack, 
       <div className="error-actions flex gap-2">
         <Button type="button" data-testid="btn-error-back" onClick={onBack}>
           <IconArrowLeft />
-          返回案头
+          {t('editor.zenbar.backToDesk')}
         </Button>
         <Button type="button" variant="outline" data-testid="btn-error-switch" onClick={onSwitch}>
           <IconSwitch />
-          打开其他导图
+          {t('editor.errorPanel.openOther')}
         </Button>
         {kind === 'parse' && (
           <Button type="button" variant="outline" data-testid="btn-raw-edit" onClick={() => onRawEdit(mdPath)}>
             <IconPencil />
-            以纯文本打开修复
+            {t('editor.errorPanel.rawEdit')}
           </Button>
         )}
       </div>
