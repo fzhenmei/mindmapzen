@@ -662,7 +662,8 @@ test('复制带图节点：图片相对路径转绝对 + 头部说明行（头�
 })
 
 // ---- 复制后处理（M5b Task 4：settings 两开关）----
-// 样例树：child 带 note「备注」与文本双链 [[B]]（备注/双链均由 data 携带，engineTreeToZen 还原）
+// 样例树：child 带 note「备注」与文本双链 [[B]]（双链由 data 携带经 engineTreeToZen 还原；
+// data.note 为宿主镜像(2026-09-06 备注合并)，engineTreeToZen 忽略不收——备注行不再进复制产物）
 const noteLinkTree = (): EngineNode => ({
   data: { text: '根', expand: true, uid: 'root-uid' },
   children: [{ data: { text: '见 [[B]]', expand: true, uid: 'child-uid', note: '备注' }, children: [] }],
@@ -697,8 +698,10 @@ test('复制后处理：默认设置剥备注、留双链', async () => {
   expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
-test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () => {
-  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
+test('复制后处理：copyIncludeNote=true 也不再产出 > 备注行（data.note 为镜像被忽略）', async () => {
+  // 2026-09-06 备注合并:ZenNode.note 退役,engineTreeToZen 只收 data.body;
+  // copyIncludeNote 设置键与 stripTreeNote 整链退役归 Task 5,此前两值产出一致
+  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {

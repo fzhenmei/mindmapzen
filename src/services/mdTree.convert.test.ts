@@ -35,10 +35,13 @@ describe('zen ⇄ engine 转换', () => {
     expect(engineTreeToZen({ data: { text: 'r', uid: 42 }, children: [] }).tree).toEqual(n('r'))
   })
 
-  test('zen→engine：note 透传进 data（undefined 不设键）', () => {
-    const eng = zenToEngineTree(n('根', [{ text: 'A', note: '备注', children: [] }]))
-    expect(eng.children![0].data.note).toBe('备注')
-    expect('note' in eng.data).toBe(false) // 根无 note：不设键而非 undefined 值
+  test('正文镜像 note(2026-09-06 合并)：zenToEngineTree 对有 body 节点同值产出 data.note', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。', children: [{ text: 'c', body: '引用\n> 行', children: [] }, { text: '无', children: [] }] }
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.body).toBe('论述。')
+    expect(eng.data.note).toBe('论述。') // 镜像:引擎角标/悬停由它驱动
+    expect(eng.children![0]?.data.note).toBe('引用\n> 行')
+    expect('note' in (eng.children![1]!.data)).toBe(false) // 无 body 不设键
   })
 
   test('正文引擎通道：body 透传 data.body，zen_body 图标注入/剥除互逆（2026-09 写作）', async () => {
@@ -83,18 +86,17 @@ describe('zen ⇄ engine 转换', () => {
     expect(zenToEngineTree(tree2).data.icon).toEqual(['zen_flag', 'zen_body'])
   })
 
-  test('engine→zen：收集 data.note（仅字符串，其余视为无备注）', () => {
-    const eng: EngineNode = {
-      data: { text: '根' },
-      children: [
-        { data: { text: 'A', note: '备注' }, children: [] },
-        { data: { text: 'B', note: 42 }, children: [] },
-        { data: { text: 'C', note: undefined }, children: [] },
-      ],
-    }
-    const r = engineTreeToZen(eng)
-    expect(r.tree.children[0].note).toBe('备注')
-    expect('note' in r.tree.children[1]).toBe(false)
-    expect('note' in r.tree.children[2]).toBe(false)
+  test('engineTreeToZen 忽略镜像 data.note,只收 data.body', () => {
+    const eng: EngineNode = { data: { text: 'r', body: '正文', note: '正文' }, children: [] }
+    const back = engineTreeToZen(eng)
+    expect(back.tree.body).toBe('正文')
+    expect('note' in back.tree).toBe(false)
+    // 纯镜像无 body(不应出现的形态)也不误收
+    const lone: EngineNode = { data: { text: 'x', note: '孤儿' }, children: [] }
+    expect('note' in engineTreeToZen(lone).tree).toBe(false)
+    expect(engineTreeToZen(lone).tree.body).toBeUndefined()
+    // data.note 非字符串(引擎他源写入)同样忽略
+    const weird: EngineNode = { data: { text: 'y', note: 42 }, children: [] }
+    expect('note' in engineTreeToZen(weird).tree).toBe(false)
   })
 })

@@ -29,8 +29,9 @@ function assertNoBodyInList(node: ZenNode, depth: number): void {
   for (const child of node.children) assertNoBodyInList(child, depth + 1)
 }
 
-/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；节点备注 → 节点行后引用块；
- *  节点正文（2026-09 写作）→ 节点行后、备注前的原样块（列表层不支持，入口抛错拦截）。
+/** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；
+ *  节点正文（2026-09 写作;2026-09-06 备注合并后唯一附属文本）→ 节点行后的原样块
+ *  （引用块/代码块等一律原样含前缀；列表层不支持正文，入口抛错拦截）。
  *  linksByUid（M5d Task 2 序列化注入）：连线净化会话注册表（源 uid → 目标名列表）——
  *  节点按 uid 命中后句尾追加 ` [[名]]`（多目标依次）；文本已含的目标不重复注入
  *  （会话内手写标记原样保留，规范化发生在下一次打开剥离后） */
@@ -52,26 +53,20 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
     return injectImageMarker(injectIconMarkers(text, node.icons ?? []), node.image ?? null)
   }
 
-  /** 正文输出为原样块，紧跟节点行、先于备注与子结构（与 parse「归属最近标题」互逆）；
+  /** 正文输出为原样块，紧跟节点行、先于子结构（与 parse「归属最近标题」互逆）；
    *  块间空行即 assignBody 的 '\n\n' 合并约定，原样写回逐字恒等；末尾空行与后续结构分隔 */
   function emitBody(node: ZenNode): void {
     if (!node.body) return // 空串视为无正文
     lines.push(...node.body.split('\n'), '')
   }
 
-  /** 备注输出为逐行 `> ` 前缀的引用块，紧跟节点行、先于其子节点。
-   *  列表项的引用块须缩进进该项内容列：列首 `>` 会终结整个列表块（子项会升格为同级，roundtrip 断裂） */
-  function emitNote(node: ZenNode, indent: string): void {
-    if (!node.note) return // 空串视为无备注
-    for (const line of node.note.split('\n')) lines.push(indent + '> ' + line)
-  }
-
   function emitHeading(node: ZenNode, depth: number): void {
     const text = textOf(node)
-    if (lines.length > 0) lines.push('')
+    // 标题前补单个空行与上文分隔;上文是 emitBody 时其尾空行已充当分隔(2026-09-06
+    // 备注合并后正文块直接衔接子结构),不重复补行防双空行
+    if (lines.length > 0 && lines.at(-1) !== '') lines.push('')
     lines.push('#'.repeat(depth) + (text === '' ? '' : ' ' + text))
     emitBody(node)
-    emitNote(node, '')
     emitChildren(node.children, depth)
   }
 
@@ -87,7 +82,6 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   function emitList(children: ZenNode[], level: number): void {
     children.forEach((c) => {
       lines.push('  '.repeat(level) + '- ' + escapeItemText(textOf(c)))
-      emitNote(c, '  '.repeat(level + 1))
       if (c.children.length > 0) emitList(c.children, level + 1)
     })
   }
@@ -151,7 +145,9 @@ function makeNode(raw: string): ZenNode {
   return node
 }
 
-/** 引用块备注文本：按源码行剥掉行首 `>` 标记（保留原文换行/空行/嵌套 `>`，与序列化侧 `> `+行 逐字互逆） */
+/** 引用块文本剥前缀：按源码行剥掉行首 `>` 标记（保留原文换行/空行/嵌套 `>`）。
+ *  备注合并(2026-09-06)后仅列表项内引用块走此通道——列表项 v1 无正文,
+ *  剥前缀归父标题 body(宽容不丢);顶层引用块走 rawBlockText 原样归 body */
 function blockquoteText(md: string, block: MNode): string {
   const lines = md.split('\n')
   const start = (block.position?.start.line ?? 1) - 1
@@ -163,13 +159,8 @@ function blockquoteText(md: string, block: MNode): string {
   return out.join('\n')
 }
 
-/** 归属备注：同节点后接多个引用块时以空行合并（宽容，不静默丢内容） */
-function assignNote(node: ZenNode, note: string): void {
-  node.note = node.note ? node.note + '\n' + note : note
-}
-
 /** 块级源码原文(2026-09 正文):按 position 行区间整段取(保留内部空行/缩进,
- *  与序列化原样写回逐字互逆;不剥任何前缀——正文块是顶层块,无前缀) */
+ *  与序列化原样写回逐字互逆;不剥任何前缀——正文块是顶层块,引用块原样含 > 前缀) */
 function rawBlockText(md: string, block: MNode): string {
   const lines = md.split('\n')
   const start = (block.position?.start.line ?? 1) - 1
@@ -185,17 +176,19 @@ function assignBody(node: ZenNode, body: string): void {
 }
 
 /** 列表块挂到最近标题下（嵌套列表递进一层），列表项首段落即其文本不计入 ignored，
- *  项内引用块收为该项备注，其余非列表内容收进 ignored */
+ *  项内引用块（2026-09-06 合并）剥前缀归最近标题级节点 body（列表项 v1 无正文，宽容不丢），
+ *  其余非列表内容收进 ignored */
 function visitList(md: string, list: MNode, parentNode: ZenNode, state: OutlineState): void {
   for (const item of list.children ?? []) {
     if (item.type !== 'listItem') continue
     const para = item.children?.find((c) => c.type === 'paragraph')
     const node = makeNode(listItemText(md, item))
     parentNode.children.push(node)
-    state.lastNode = node
     for (const sub of item.children ?? []) {
       if (sub.type === 'list') visitList(md, sub, node, state)
-      else if (sub.type === 'blockquote') assignNote(node, blockquoteText(md, sub))
+      // 项内引用块(2026-09-06 合并):列表项无正文,剥 > 前缀归最近标题级节点 body(宽容不丢)
+      else if (sub.type === 'blockquote' && state.lastHeading !== null)
+        assignBody(state.lastHeading, blockquoteText(md, sub))
       else if (sub !== para)
         state.ignored.push({ type: sub.type, excerpt: nodeText(sub).slice(0, 50) })
     }
@@ -221,10 +214,9 @@ interface OutlineState {
   root: ZenNode | null
   stack: { depth: number; node: ZenNode }[]
   ignored: IgnoredBlock[]
-  /** 最近产出的节点（标题或列表项）：无缩进的顶层引用块归属它 */
-  lastNode: ZenNode | null
-  /** 最近标题级节点(2026-09 正文):非结构块的归属目标;仅 visitHeading 更新,
-   *  列表项不更新(列表项 v1 无正文,spec 深度限制) */
+  /** 最近标题级节点(2026-09 正文;2026-09-06 备注合并后引用块同归此):非结构块的
+   *  归属目标;仅 visitHeading 更新,列表项不更新(列表项 v1 无正文,spec 深度限制)。
+   *  旧 lastNode(引用块备注归属)已随 note 退役删除 */
   lastHeading: ZenNode | null
 }
 
@@ -233,27 +225,26 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
   const d = block.depth ?? 1
   if (state.root !== null) {
     attachHeading(md, block, d, state.stack)
-    state.lastNode = state.stack.at(-1)?.node ?? null
     state.lastHeading = state.stack.at(-1)?.node ?? null
     return null
   }
   if (d !== 1) return NO_ROOT_ERROR
   state.root = makeNode(headingText(md, block))
   state.stack.push({ depth: 1, node: state.root })
-  state.lastNode = state.root
   state.lastHeading = state.root
   return null
 }
 
-/** 处理单个顶层块：标题/列表归树，引用块归属最近节点（无归属收进 ignored），
- *  其余非结构块（段落/代码/表格等）归属最近标题级节点为正文（无归属收进 ignored）。返回错误信息（null 表示正常） */
+/** 处理单个顶层块：标题/列表归树，引用块与其余非结构块（段落/代码/表格等）归属最近标题级节点为正文
+ *  （无归属收进 ignored）。返回错误信息（null 表示正常） */
 function visitBlock(md: string, block: MNode, state: OutlineState): string | null {
   if (block.type === 'heading') return visitHeading(md, block, state)
   if (block.type === 'blockquote') {
-    const target = state.lastNode
+    // 备注合并(2026-09-06):引用块归正文,原样(含 > 前缀)收进最近标题级节点的 body
+    const target = state.lastHeading
     if (target === null)
       state.ignored.push({ type: 'blockquote', excerpt: nodeText(block).slice(0, 50) })
-    else assignNote(target, blockquoteText(md, block))
+    else assignBody(target, rawBlockText(md, block))
     return null
   }
   if (block.type !== 'list') {
@@ -279,7 +270,7 @@ export function parse(md: string): ParseResult {
   } catch (e) {
     return { ok: false, error: `Markdown 解析失败：${String(e)}` }
   }
-  const state: OutlineState = { root: null, stack: [], ignored: [], lastNode: null, lastHeading: null }
+  const state: OutlineState = { root: null, stack: [], ignored: [], lastHeading: null }
   for (const block of ast.children ?? []) {
     const err = visitBlock(md, block, state)
     if (err !== null) return { ok: false, error: err }
@@ -295,9 +286,9 @@ export interface ImageMetaEntry {
 }
 
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
- *  note 透传进 data（undefined 不设键——引擎以 truthy 判定备注角标显隐）；
+ *  body（非空串）透传进 data.body 并同值镜像 data.note（2026-09-06 备注合并：
+ *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源）并尾部追加内部图标 zen_body（正文角标）；
  *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
- *  body（非空串）透传进 data.body 并尾部追加内部图标 zen_body（2026-09 正文角标）；
  *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
  *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
  *  画布渲 dataURL，免 asset 协议）；meta 缺失的 src 宽容跳过（不设 image，md 标记保留） */
@@ -325,8 +316,8 @@ export function zenToEngineTree(
     data: {
       text: tree.text,
       expand: !collapsed.has(path),
-      ...(tree.note !== undefined ? { note: tree.note } : {}),
-      ...(tree.body ? { body: tree.body } : {}),
+      // 镜像 note(2026-09-06 合并):复用引擎「有 note→挂角标+悬停」通道,body 是事实源
+      ...(tree.body ? { body: tree.body, note: tree.body } : {}),
       ...(icons.length > 0 ? { icon: icons } : {}),
       ...(tree.image !== undefined && imgEntry !== undefined
         ? {
@@ -350,8 +341,9 @@ function collectIcons(icon: unknown): string[] {
     .map((n) => n.slice(4))
 }
 
-/** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）与备注（data.note 仅字符串）；
+/** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）；
  *  data.body（非空字符串）收进 ZenNode.body——zen_body 角标图标同步剥除（保留名，不进 md）；
+ *  data.note 为宿主镜像（2026-09-06 合并），不收集——事实源是 data.body；
  *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md） */
 export function engineTreeToZen(
   root: EngineNode,
@@ -360,7 +352,6 @@ export function engineTreeToZen(
   const path = parentPath === '' ? '/' + root.data.text : parentPath + '/' + root.data.text
   const own = root.data.expand === false ? [path] : []
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
-  const note = typeof root.data.note === 'string' ? root.data.note : undefined
   const body = typeof root.data.body === 'string' && root.data.body !== '' ? root.data.body : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
   // 图标收集（M18）：仅收 'zen_' 前缀项；zen_body 为宿主内部角标（保留名），剥除不还原
@@ -373,7 +364,6 @@ export function engineTreeToZen(
   return {
     tree: {
       text: root.data.text,
-      ...(note !== undefined ? { note } : {}),
       ...(uid !== undefined ? { uid } : {}),
       ...(body !== undefined ? { body } : {}),
       ...(icons.length > 0 ? { icons } : {}),

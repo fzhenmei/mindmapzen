@@ -30,49 +30,19 @@ describe('serialize', () => {
     expect(serialize(tree)).toBe(serialize(tree))
   })
 
-  test('节点备注输出引用块（标题行后逐行 > 前缀，先于子节点）', () => {
-    const tree: ZenNode = { text: '根', children: [{ text: 'A', note: '第一行\n第二行', children: [] }] }
-    expect(serialize(tree)).toBe('# 根\n\n## A\n> 第一行\n> 第二行\n')
+  test('正文原样输出（引用块保持 > 前缀，节点行后、先于子节点）', () => {
+    const tree: ZenNode = { text: '根', children: [{ text: 'A', body: '第一段。\n\n> 引用行', children: [] }] }
+    expect(serialize(tree)).toBe('# 根\n\n## A\n第一段。\n\n> 引用行\n')
   })
 
-  test('无备注不产出引用块；空字符串视为无备注', () => {
-    expect(serialize({ text: '根', note: '', children: [] })).toBe('# 根\n')
+  test('无正文不产出正文块；空字符串视为无正文', () => {
+    expect(serialize({ text: '根', body: '', children: [] })).toBe('# 根\n')
   })
 
-  test('列表项备注输出缩进引用块（归入该项内容，避免截断其嵌套列表）', () => {
-    const tree: ZenNode = {
-      text: '根',
-      children: [
-        {
-          text: 'a',
-          children: [
-            {
-              text: 'b',
-              children: [
-                {
-                  text: 'c',
-                  children: [
-                    {
-                      text: 'd',
-                      children: [
-                        {
-                          text: 'e',
-                          children: [
-                            { text: 'item', note: '项\n注', children: [{ text: 'sub', children: [] }] },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    }
-    expect(serialize(tree)).toContain('- item\n  > 项\n  > 注\n  - sub\n')
-  })
+  // 旧「列表项备注输出缩进引用块」用例已删(2026-09-06 合并):列表项(深度≥7)无正文,
+  // serialize 不再产出项内引用块;项内引用块的 parse 归属与定点恒等
+  // 见 mdTree.parse.test.ts「列表项内引用块」与 mdTree.roundtrip.test.ts「深层列表项内引用块」
+  // 深层节点带 body 的防御由 roundtrip 测试「列表层节点(深度≥7)带 body 时 serialize 抛错」钉住
 
   test('节点文本含 \\n 或 \\r 时抛中文错误拒绝序列化（拒绝静默产出损坏 md）', () => {
     expect(() => serialize(n('根', [n('第一行\n第二行')]))).toThrow(

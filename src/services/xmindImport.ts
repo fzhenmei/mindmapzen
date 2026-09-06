@@ -6,8 +6,7 @@
 // 不进树的成分子（游离主题/连线/标签/标记/概要等）计入 warnings 摘要——复用导入
 // 预览的 ignored 通道口径（宽容不静默丢内容，落盘前用户可见）。
 import { unzipSync } from 'fflate'
-import type { ZenNode } from '../types/tree'
-import type { IgnoredBlock } from '../types/tree'
+import type { IgnoredBlock, ZenNode } from '../types/tree'
 
 export interface XmindParseResult {
   tree: ZenNode
@@ -45,8 +44,9 @@ interface JsonTopic {
 
 function fromJsonTopic(t: JsonTopic, warnings: IgnoredBlock[], path: string): ZenNode {
   const node: ZenNode = { text: t.title ?? '(无标题)', children: [] }
+  // XMind 备注归正文(2026-09-06 备注合并):ZenNode.note 已退役,body 是唯一附属文本
   if (typeof t.notes?.plain?.content === 'string' && t.notes.plain.content !== '') {
-    node.note = t.notes.plain.content
+    node.body = t.notes.plain.content
   }
   // XMind 层级不设限；md 深度 ≥7 自动转嵌套列表（serialize 既有能力）
   for (const c of t.children?.attached ?? []) {
@@ -82,9 +82,10 @@ interface JsonSheet {
 
 function fromXmlTopic(el: Element, warnings: IgnoredBlock[], path: string): ZenNode {
   const node: ZenNode = { text: el.getAttribute('title') ?? '(无标题)', children: [] }
+  // XMind 备注归正文(2026-09-06 备注合并):ZenNode.note 已退役,body 是唯一附属文本
   const notes = el.querySelector(':scope > notes > plain')
   const noteText = notes?.textContent?.trim()
-  if (noteText !== undefined && noteText !== '') node.note = noteText
+  if (noteText !== undefined && noteText !== '') node.body = noteText
   // 旧版子题：children/topics[@type='attached'] 下的 topic；detached 计入摘要
   for (const topics of Array.from(el.querySelectorAll(':scope > children > topics'))) {
     const type = topics.getAttribute('type') ?? 'attached'

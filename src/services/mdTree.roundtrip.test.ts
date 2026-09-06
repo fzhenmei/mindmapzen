@@ -32,28 +32,21 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
       maxDepth <= 1
         ? fc.constant<ZenNode[]>([])
         : fc.array(nodeArb(maxDepth - 1), { maxLength: 3 }),
-    // 备注候选（brief）：'' 须序列化为无引用块（parse 侧还原为无 note 键），比较前归一化掉
-    note: fc.constantFrom('', '备注', '多\n行'),
+    // 备注候选已删(2026-09-06 合并):ZenNode.note 退役,引用块是 body 的合法候选值(见 body 行)
     // 正文候选（2026-09 写作）：'' = 无正文；候选必须是「合法正文块」（parse 能原样还原的
     // 顶层非结构块），行首 #/- 等结构标记排除——与 textArb 排除换行同理，属 md 语义边界。
+    // 引用块候选(2026-09-06 合并):顶层引用块原样(含 > 前缀)归 body,恒等往返——
+    // 钉住「note 字段不存在仍恒等」,防止备注语义借尸还魂
     // 表格候选（终审 M5）：本仓 remark 未挂 gfm，表格行按段落文本原样还原恒等——
     // 钉住该口径，将来若接 gfm 走真 table 节点，rawBlockText 口径变化在此报警
-    body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '```js\nconst x = 1\n```', '| a | b |\n| --- | --- |\n| 1 | 2 |'),
+    body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '> 引用', '论述。\n\n> 引用块', '```js\nconst x = 1\n```', '| a | b |\n| --- | --- |\n| 1 | 2 |'),
   })
 
 const treeArb = nodeArb(6)
 
-/** '' 与 undefined 同为「无备注」：属性断言前归一化（toEqual 视缺键与 undefined 等价） */
-const stripEmptyNote = (t: ZenNode): ZenNode => ({
-  ...t,
-  note: t.note === '' ? undefined : t.note,
-  children: t.children.map(stripEmptyNote),
-})
-
-/** '' 与 undefined 同为「无正文」：属性断言前归一化（含 note 归一，与 stripEmptyNote 同理） */
+/** '' 与 undefined 同为「无正文」：属性断言前归一化（note 已退役,树层只剩 body 归一） */
 const stripEmptyBody = (t: ZenNode): ZenNode => ({
   ...t,
-  note: t.note === '' ? undefined : t.note,
   body: t.body === '' ? undefined : t.body,
   children: t.children.map(stripEmptyBody),
 })
@@ -70,60 +63,31 @@ test('parse(serialize(tree)) 结构恒等（500 例，深度≤6 时全走标题
   )
 }, 30_000)
 
-test('备注含空字符串的树 roundtrip：空串序列化为无引用块（parse 无 note 键）', () => {
+test('正文含空字符串的树 roundtrip：空串序列化为无正文块（parse 无 body 键）', () => {
   const tree: ZenNode = {
     text: '根',
-    note: '',
-    children: [{ text: 'A', note: '备注', children: [{ text: 'A1', note: '多\n行', children: [] }] }],
+    body: '',
+    children: [{ text: 'A', body: '论述。', children: [{ text: 'A1', body: '> 引用', children: [] }] }],
   }
   expect(parse(serialize(tree))).toEqual({
     ok: true,
-    tree: stripEmptyNote(tree),
+    tree: stripEmptyBody(tree),
     ignoredBlocks: [],
   })
 })
 
-test('列表层备注 roundtrip：项与子项并存时引用块缩进归入该项，结构恒等', () => {
-  // 列表层（深度≥7）：item 带备注且带子项——未缩进的引用块会截断列表（子项变同级），
-  // 序列化必须把引用块缩进进该项内容（见 serialize 实现注释）
-  const deep: ZenNode = {
-    text: 'r',
-    children: [
-      {
-        text: 'a',
-        children: [
-          {
-            text: 'b',
-            children: [
-              {
-                text: 'c',
-                children: [
-                  {
-                    text: 'd',
-                    children: [
-                      {
-                        text: 'e',
-                        children: [
-                          {
-                            text: 'item',
-                            note: '项\n注',
-                            children: [{ text: 'sub', note: '子项备注', children: [] }],
-                          },
-                          { text: 'tail', children: [] },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  }
-  const r = parse(serialize(deep))
-  expect(r).toEqual({ ok: true, tree: deep, ignoredBlocks: [] })
+test('深层列表项内引用块：归父标题 body，serialize 重排后开-存-开定点恒等', () => {
+  // 旧「列表层备注 roundtrip」的改写(2026-09-06 合并):列表项(深度≥7)无正文,
+  // 项内引用块剥 > 前缀归最近标题节点 body(宽容不丢);serialize 固定顺序重排到
+  // 子结构前,二次 parse 恒等——缩进进项内容列的引用块曾会截断列表,此形态由 parse 侧钉住
+  const hand = ['# r', '', '## a', '', '- 项', '', '  > 项内引用', '', '  - 子项', ''].join('\n')
+  const once = parse(hand)
+  if (!once.ok) return
+  expect(once.tree.children[0]?.body).toBe('项内引用')
+  expect(once.tree.children[0]?.children[0]?.text).toBe('项')
+  expect(once.tree.children[0]?.children[0]?.children[0]?.text).toBe('子项')
+  const md = serialize(once.tree)
+  expect(parse(md)).toEqual({ ok: true, tree: once.tree, ignoredBlocks: [] }) // 定点:开-存-开不漂移
 })
 
 test('深层树（含列表层）roundtrip：手工构造深度 8', () => {
@@ -262,7 +226,6 @@ const linkedNodeArb = (maxDepth: number): fc.Arbitrary<LinkedNode> =>
       maxDepth <= 1
         ? fc.constant<LinkedNode[]>([])
         : fc.array(linkedNodeArb(maxDepth - 1), { maxLength: 3 }),
-    note: fc.constantFrom('', '备注'),
   })
 const linkedTreeArb = linkedNodeArb(6)
 
@@ -277,12 +240,11 @@ const registryOf = (root: LinkedNode): Map<string, string[]> => {
   return reg
 }
 
-/** 净化（打开语义，stripTreeTexts 的树版）：文本剥离标记，uid 保留（注入查表键），'' 备注归一为无 */
+/** 净化（打开语义，stripTreeTexts 的树版）：文本剥离标记，uid 保留（注入查表键） */
 const purify = (n: LinkedNode): ZenNode => ({
   text: stripMarkers(n.text),
   children: n.children.map(purify),
   ...(n.uid !== undefined ? { uid: n.uid } : {}),
-  ...(n.note === '' ? {} : { note: n.note }),
 })
 
 /** 收集树内全部节点文本 */
@@ -330,21 +292,21 @@ test('标记属性③定点：parse(serialize(tree, links)) 再 serialize 同 li
   )
 }, 30_000)
 
-// —— M17 备注即宿主：note 含 ```mermaid 围栏（多行备注）的定点 roundtrip ——
-// md 事实源零改动的前提证明：序列化逐行 `> ` 前缀 ↔ 解析逐行剥标记，围栏原样保留
-test('note 含 mermaid 围栏：serialize→parse 逐字还原（备注即宿主 M17）', () => {
-  const tree: ZenNode = {
-    text: '流程节点',
-    note: '先看这段说明\n```mermaid\ngraph LR\n  A --> B\n  B --> C\n```',
-    children: [],
-  }
-  const md = serialize(tree)
-  expect(md).toContain('> 先看这段说明')
-  expect(md).toContain('> ```mermaid')
-  expect(md).toContain('> graph LR')
-  const r = parse(md)
-  expect(r.ok).toBe(true)
-  if (r.ok) expect(r.tree.note).toBe(tree.note)
+// —— M17 备注即宿主 → 正文即宿主(2026-09-06 合并)：body 含 ```mermaid 围栏的定点 roundtrip ——
+// md 事实源零改动的前提证明：正文块原样写回/收回，围栏不剥前缀不转义；一次 parse 后段落与
+// 围栏两块按 '\n\n' 归一连接,再 serialize 即定点恒等
+test('正文含 mermaid 围栏：parse 原样收进 body，开-存-开定点（mermaid 即宿主 M17 迁移）', () => {
+  const hand = ['# 流程节点', '', '先看这段说明', '', '```mermaid', 'graph LR', '  A --> B', '  B --> C', '```', ''].join('\n')
+  const once = parse(hand)
+  expect(once.ok).toBe(true)
+  if (!once.ok) return
+  expect(once.tree.body).toBe('先看这段说明\n\n```mermaid\ngraph LR\n  A --> B\n  B --> C\n```')
+  const md = serialize(once.tree)
+  expect(md).toContain('```mermaid')
+  expect(md).toContain('graph LR')
+  const twice = parse(md)
+  expect(twice.ok).toBe(true)
+  if (twice.ok) expect(twice.tree.body).toBe(once.tree.body)
 })
 
 // —— M18 图标：句尾 ::name 标记的 parse⇄serialize 定点 roundtrip ——
@@ -410,15 +372,16 @@ test('插图 meta 缺失：节点不设 image（宽容跳过，md 标记仍在�
   expect(engine.data.imgMap).toBeUndefined()
 })
 
-// —— 2026-09 正文：serialize 固定顺序回写（节点行 → 正文 → 备注 → 子结构）+ roundtrip 契约 ——
-test('正文 roundtrip：body+备注+子结构混合，serialize 顺序恒等', () => {
+// —— 2026-09 正文：serialize 固定顺序回写（节点行 → 正文 → 子结构）+ roundtrip 契约 ——
+// 备注合并(2026-09-06)后引用块是正文的合法块类型,顺序钉死不再有独立备注层
+test('正文 roundtrip：body(含引用块)+子结构混合，serialize 顺序恒等', () => {
   const tree: ZenNode = {
-    text: '根', body: '根的论述。', note: '根的备注',
+    text: '根', body: '根的论述。\n\n> 根的引用块',
     children: [{ text: '子', body: '```js\n# 不是标题\n```', children: [] }],
   }
   const md = serialize(tree)
-  // 顺序钉死：节点行 → 正文 → 备注 → 子结构（空行分隔）
-  expect(md).toBe('# 根\n根的论述。\n\n> 根的备注\n\n## 子\n```js\n# 不是标题\n```\n')
+  // 顺序钉死：节点行 → 正文块(原样,含 > 前缀) → 子结构（空行分隔）
+  expect(md).toBe('# 根\n根的论述。\n\n> 根的引用块\n\n## 子\n```js\n# 不是标题\n```\n')
   const r = parse(md)
   expect(r).toEqual({ ok: true, tree: stripEmptyBody(tree), ignoredBlocks: [] })
 })
@@ -439,12 +402,12 @@ test('子结构后段落宽容：serialize 重排到子结构前，二次 roundt
   expect(parse(md)).toEqual({ ok: true, tree: once.tree, ignoredBlocks: [] }) // 定点：开-存-开不漂移
 })
 
-test('防御：正文内引用块保存重开归 note（引用=备注，终审 I1 钉死现有语义）', () => {
-  // 手写/历史数据场景：body 内含引用行，serialize 原样写回后 parse 把 `> ` 行判给备注——
-  // 这是文法级语义（引用块恒等于备注），编辑器已裁 blockquote 不再产出该形态，钉死防未来误改
+test('防御：正文内引用行 roundtrip 恒等（I1 引用块归属冲突随 note 退役自然消解）', () => {
+  // 旧用例(2026-09-06 前)断言 `> ` 行被判给备注;合并后引用块是正文的合法块类型,
+  // serialize 原样写回、parse 原样收回,不再拆走——钉死防备注语义回流
   const tree: ZenNode = { text: 'r', body: '论述。\n\n> 引用', children: [] }
   const r = parse(serialize(tree))
-  expect(r).toEqual({ ok: true, tree: { text: 'r', body: '论述。', note: '引用', children: [] }, ignoredBlocks: [] })
+  expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
 })
 
 test('防御：列表层节点（深度≥7）带 body 时 serialize 抛错，不静默丢内容', () => {
