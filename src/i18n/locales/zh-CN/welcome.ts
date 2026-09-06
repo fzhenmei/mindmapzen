@@ -10,4 +10,8 @@ export default {
   recentTitle: '最近的',
   emptyHint: '还没有打开过的导图，从上面新建一张吧',
   footer: '踏上取经路比到达灵山更重要',
+  // Task 16 兜底:品牌头问候后缀与「开始」双按钮(「导入」无语义等值键,不复用 library)
+  greetingSuffix: '—— 想法落成 .md',
+  newMap: '新建导图',
+  importMap: '导入',
 }

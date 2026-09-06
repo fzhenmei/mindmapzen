@@ -12,5 +12,8 @@ const welcome: Dict['welcome'] = {
   recentTitle: 'Recent',
   emptyHint: 'No maps opened yet — create one above to get started.',
   footer: 'Setting out on the pilgrimage matters more than arriving at Vulture Peak.',
+  greetingSuffix: '— Turn ideas into .md',
+  newMap: 'New map',
+  importMap: 'Import',
 }
 export default welcome

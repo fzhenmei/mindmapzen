@@ -19,6 +19,8 @@ export default {
     copyIncludeLinks: '保留双链标记',
     copyIncludeBody: '含正文',
     copyPathTip: '复制文件路径（发给 AI 直接读取）',
+    // 复制 md 给 AI 的图片头注(aiImagePaths 服务,内容型标记随界面语言)
+    aiImageHeader: '> 图片为本地绝对路径，请用工具读取',
     save: '保存（Ctrl+S）',
     bodyPanel: '撰写选中节点的正文',
     exportImage: '导出或复制为图片',
@@ -92,6 +94,8 @@ export default {
     pick: '选择图片',
     pasteNoImage: '剪贴板中没有图片',
     pasteReadFailed: '读取剪贴板失败：{{reason}}',
+    // Task 16 兜底:插图文件选择器过滤器名(App.tsx pickImageFile 端口)
+    fileFilter: '图片',
   },
   export: {
     title: '导出或复制图片',

@@ -4,6 +4,7 @@
 // 含空白以 <...> 包裹（CommonMark 链接目标含空格的合法形态）。无本地图片引用时原文
 // 恒等——不硬塞头注占行。头注为 `> ` 引用行，须在剥正文（树层 stripTreeBody，先于
 // serialize）之后调用——doCopy 链中本函数居尾段（applyCopySettings 之后），头注不被误剥。
+import { i18n } from '../i18n'
 
 /** 图片标记（与 imageMarkers.ts 提取同口径：src 允许空格、不含 ) 与换行） */
 const IMAGE_RE = /!\[([^\]\n]*)\]\(([^)\n]+)\)/g
@@ -24,10 +25,8 @@ function toSlashAbs(src: string, wsDir: string): string {
 /** 引用目标形态：含空白 → <...> 包裹（路径字符集不含 <>，Windows 文件名非法字符） */
 const linkTarget = (abs: string): string => (/\s/.test(abs) ? `<${abs}>` : abs)
 
-/** 头部说明行（发给 AI 的自述），仅在产出本地绝对路径引用时前置 */
-export const AI_IMAGE_HEADER = '> 图片为本地绝对路径，请用工具读取'
-
-/** 图片引用相对→绝对 + 头部说明（AI 消费者）；无本地图片引用时原文恒等 */
+/** 图片引用相对→绝对 + 头部说明（AI 消费者；头注词典 editor.zenbar.aiImageHeader，
+ *  内容型标记随界面语言）；无本地图片引用时原文恒等 */
 export function absolutizeImagePaths(md: string, wsDir: string): string {
   let hits = 0
   const out = md.replace(IMAGE_RE, (m, alt: string, src: string) => {
@@ -35,5 +34,5 @@ export function absolutizeImagePaths(md: string, wsDir: string): string {
     hits += 1
     return `![${alt}](${linkTarget(toSlashAbs(src, wsDir))})`
   })
-  return hits > 0 ? `${AI_IMAGE_HEADER}\n\n${out}` : out
+  return hits > 0 ? `${i18n.t('editor.zenbar.aiImageHeader')}\n\n${out}` : out
 }

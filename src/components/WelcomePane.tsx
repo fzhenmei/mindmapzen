@@ -13,19 +13,22 @@ interface Props {
   onOpen(m: MapInfo): void
 }
 
+/** 时段问候键（本地钟；Sonar S3358：早返回展平，不嵌套三元） */
+function greetingKey(h: number): 'welcome.greetingNight' | 'welcome.greetingMorning' | 'welcome.greetingAfternoon' | 'welcome.greetingEvening' {
+  if (h < 5) return 'welcome.greetingNight'
+  if (h < 12) return 'welcome.greetingMorning'
+  if (h < 18) return 'welcome.greetingAfternoon'
+  return 'welcome.greetingEvening'
+}
+
 /** 时段问候（本地钟，词典取词） */
 function greeting(): string {
-  const h = new Date().getHours()
-  const key =
-    h < 5 ? 'welcome.greetingNight'
-    : h < 12 ? 'welcome.greetingMorning'
-    : h < 18 ? 'welcome.greetingAfternoon'
-    : 'welcome.greetingEvening'
-  return i18n.t(key)
+  return i18n.t(greetingKey(new Date().getHours()))
 }
 
 /** 人性化时间（Intl 格式化）：今天 HH:mm / 昨天 HH:mm / M月d日（同年）/ YYYY年M月d日；
- *  英文对应 Today 14:30 / Yesterday 09:00 / January 5 / January 5, 2026 */
+ *  英文对应 Today 2:30 PM / Yesterday 9:00 AM（en locale 默认 12 小时制，zh 为 24 小时制
+ *  ——hour12 未显式指定，随 locale 各取默认）/ January 5 / January 5, 2026 */
 function friendlyTime(ms: number, locale: string): string {
   const d = new Date(ms)
   const now = new Date()
@@ -60,18 +63,20 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
       <header className="flex flex-col items-center gap-2 text-center">
         <AppLogo size={56} />
         <h1 className="text-2xl font-semibold tracking-tight">Mind Map Zen</h1>
-        <p className="text-sm text-muted-foreground">{greeting()} —— 想法落成 .md</p>
+        <p className="text-sm text-muted-foreground">
+          {greeting()} {t('welcome.greetingSuffix')}
+        </p>
       </header>
 
       {/* 开始：居中并排双按钮，等宽对称（窄屏竖排通栏） */}
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
         <Button type="button" variant="outline" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
           <IconPlus />
-          <span>新建导图</span>
+          <span>{t('welcome.newMap')}</span>
         </Button>
         <Button type="button" variant="outline" className="sm:w-32" onClick={onImport}>
           <IconImport />
-          <span>导入</span>
+          <span>{t('welcome.importMap')}</span>
         </Button>
       </div>
 

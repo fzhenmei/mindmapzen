@@ -9,5 +9,8 @@ const common: Dict['common'] = {
   rename: 'Rename',
   open: 'Open',
   save: 'Save',
+  booting: 'Starting…',
+  resizeTitle: 'Drag to resize; double-click to reset',
+  migrationMarker: 'Migrated from: {{from}}\nDate: {{time}}',
 }
 export default common

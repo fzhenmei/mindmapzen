@@ -54,9 +54,16 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
 
   const doRestore = async (hash: string) => {
     setError(null)
-    const err = await restoreVersion(hash)
-    if (err !== null) {
-      setError(err)
+    // Ruling 6：restoreVersion 经 gitRun 端口可 reject（如 git 超时）——不捕则错误
+    // 文案丢失且成 unhandled rejection，须落错误行（词典化兜底包住已本地化的抛错消息）
+    try {
+      const err = await restoreVersion(hash)
+      if (err !== null) {
+        setError(err)
+        return
+      }
+    } catch (e) {
+      setError(t('errors.git.rollback.restoreFail', { detail: e instanceof Error ? e.message : String(e) }))
       return
     }
     setConfirming(null)

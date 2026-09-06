@@ -29,7 +29,7 @@ export default function ImportPreviewDialog({ preview, onCancel, onConfirm }: Re
         <ul className="list-disc pl-5 text-xs text-muted-foreground">
           {preview.blocks.map((b) => (
             <li key={`${b.type}:${b.excerpt}`}>
-              {describeIgnoredType(b.type)}：{b.excerpt}
+              {t('library.dialogs.importPreview.item', { type: describeIgnoredType(b.type), excerpt: b.excerpt })}
             </li>
           ))}
         </ul>

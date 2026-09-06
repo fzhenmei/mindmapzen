@@ -5,6 +5,9 @@ export default {
   favorite: '收藏',
   unfavorite: '取消收藏',
   moveToDir: '移动到目录',
+  // Task 16 兜底:案头左栏拖拽手柄 aria-label 与导入文件选择器过滤器名(App.tsx 端口)
+  resizeSidebar: '调整侧栏宽度',
+  importFileFilter: '导图文件',
   dirTree: {
     searchLabel: '搜索工作区文件',
     searchPlaceholder: '搜索工作区文件…',
@@ -66,6 +69,8 @@ export default {
     importPreview: {
       title: '导入「{{name}}」',
       body: '{{count}} 个内容块未映射，这些内容不会出现在导图中：',
+      // 摘要行插值(zh 全角冒号/en 半角冒号+空格随词典)
+      item: '{{type}}：{{excerpt}}',
       confirm: '导入',
     },
   },

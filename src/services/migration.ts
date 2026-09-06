@@ -1,3 +1,4 @@
+import { i18n } from '../i18n'
 import type { FsAdapter } from '../types/files'
 
 /** 迁移留档标记文件名：写在新配置同目录，证明一次性 com.tauri.dev → com.mindmapzen.app 配置迁移已发生 */
@@ -18,9 +19,10 @@ export async function migrateOldConfig(
   const parent = newConfigPath.replace(/[\\/][^\\/]*$/, '')
   await adapter.ensureDir(parent)
   await adapter.writeTextFileAtomic(newConfigPath, await adapter.readTextFile(oldConfigPath))
+  // 留档内容词典化(common.migrationMarker,随迁移时刻的界面语言;迁移先于配置加载,取系统语言预热值)
   await adapter.writeTextFileAtomic(
     markerPath,
-    `迁移自: ${oldConfigPath}\n时间: ${new Date().toISOString()}\n`,
+    `${i18n.t('common.migrationMarker', { from: oldConfigPath, time: new Date().toISOString() })}\n`,
   )
   return true
 }

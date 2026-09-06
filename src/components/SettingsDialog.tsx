@@ -54,6 +54,9 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const gitStatus = useAppStore((s) => s.gitStatus)
   const [remoteUrl, setRemoteUrl] = useState(gitConfig.remoteUrl ?? '')
   const [token, setToken] = useState(gitConfig.token ?? '')
+  // Ruling 6：手动备份经 gitRun 端口可 reject（如 git 超时）——不捕则无任何显示；
+  // 捕后以 settings.git.backupFailed 包住已本地化的抛错消息（与 fatal 分支同键同位）
+  const [backupError, setBackupError] = useState<string | null>(null)
   const { t } = useTranslation()
   const languagePref = useAppStore((s) => s.languagePref)
   const setLanguagePref = useAppStore((s) => s.setLanguagePref)
@@ -108,11 +111,26 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                         {t('settings.git.history')}
                       </Button>
                     )}
-                    <Button variant="secondary" size="sm" data-testid="git-backup-now" onClick={() => void backupNow()}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      data-testid="git-backup-now"
+                      onClick={() => {
+                        setBackupError(null)
+                        void backupNow().catch((e) =>
+                          setBackupError(t('settings.git.backupFailed', { reason: e instanceof Error ? e.message : String(e) })),
+                        )
+                      }}
+                    >
                       {t('settings.git.backupNow')}
                     </Button>
                   </span>
                 </div>
+                {backupError !== null && (
+                  <p data-testid="git-backup-error" role="alert" className="text-xs text-destructive">
+                    {backupError}
+                  </p>
+                )}
               </>
             )}
           </div>

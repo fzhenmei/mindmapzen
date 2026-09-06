@@ -36,6 +36,10 @@ export default {
   xmindNoRootTopic: 'content.json 缺少 rootTopic',
   xmindXmlParseFail: 'content.xml 解析失败',
   xmindXmlNoRoot: 'content.xml 缺少根主题',
+  // Task 16 兜底:xmind 导入 warnings 摘要值(类型名走 ignoredType 映射,此处仅节点兜底名与计数文案)
+  xmindUntitled: '(无标题)',
+  xmindDetached: '{{path}} 下 {{count}} 个',
+  xmindMultiSheet: '仅导入第 1 张，共 {{count}} 张',
   canvas2dUnavailable: '无法创建 2D 画布上下文',
   pngEncodeFail: 'PNG 编码失败',
   engineNoExportPlugin: '引擎未注册 Export 插件',

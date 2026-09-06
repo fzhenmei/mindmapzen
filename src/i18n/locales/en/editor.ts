@@ -22,6 +22,7 @@ const editor: Dict['editor'] = {
     copyIncludeLinks: 'Keep wikilink markers',
     copyIncludeBody: 'Include body text',
     copyPathTip: 'Copy file path (for AI to read directly)',
+    aiImageHeader: '> Images are local absolute paths; read them with your tools',
     save: 'Save (Ctrl+S)',
     bodyPanel: 'Write body text for the selected node',
     exportImage: 'Export or copy as image',
@@ -95,6 +96,7 @@ const editor: Dict['editor'] = {
     pick: 'Choose image',
     pasteNoImage: 'No image in the clipboard',
     pasteReadFailed: 'Failed to read clipboard: {{reason}}',
+    fileFilter: 'Images',
   },
   export: {
     title: 'Export or copy image',

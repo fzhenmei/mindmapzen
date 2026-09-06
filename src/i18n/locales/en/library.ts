@@ -7,6 +7,8 @@ const library: Dict['library'] = {
   favorite: 'Favorite',
   unfavorite: 'Unfavorite',
   moveToDir: 'Move to folder',
+  resizeSidebar: 'Resize sidebar',
+  importFileFilter: 'Map files',
   dirTree: {
     searchLabel: 'Search workspace files',
     searchPlaceholder: 'Search workspace files…',
@@ -76,6 +78,7 @@ const library: Dict['library'] = {
     importPreview: {
       title: 'Import “{{name}}”',
       body: '{{count}} content blocks were not mapped and will not appear in the map:',
+      item: '{{type}}: {{excerpt}}',
       confirm: 'Import',
     },
   },

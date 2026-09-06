@@ -49,7 +49,8 @@ const pickImportFile = async (): Promise<PickedImport | null> => {
   }
   const picked = await open({
     multiple: false,
-    filters: [{ name: '导图文件', extensions: ['md', 'xmind'] }],
+    // 过滤器名用户可见(OS 对话框),词典随界面语言(调用期求值)
+    filters: [{ name: i18n.t('library.importFileFilter'), extensions: ['md', 'xmind'] }],
   })
   if (typeof picked !== 'string') return null
   const fileName = picked.split(/[\\/]/).pop()!
@@ -72,7 +73,7 @@ const pickImageFile = async (): Promise<{ name: string; bytes: Uint8Array } | nu
   }
   const picked = await open({
     multiple: false,
-    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    filters: [{ name: i18n.t('editor.imageDialog.fileFilter'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
   })
   if (typeof picked !== 'string') return null
   const name = picked.split(/[\\/]/).pop()!
@@ -304,7 +305,7 @@ export default function App() {
       <div className="grid h-full place-items-center bg-background" data-testid="boot-screen">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <AppLogo size={48} />
-          <p className="text-sm">正在启动…</p>
+          <p className="text-sm">{i18n.t('common.booting')}</p>
         </div>
       </div>,
     )

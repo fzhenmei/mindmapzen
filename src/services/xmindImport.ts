@@ -44,7 +44,7 @@ interface JsonTopic {
 }
 
 function fromJsonTopic(t: JsonTopic, warnings: IgnoredBlock[], path: string): ZenNode {
-  const node: ZenNode = { text: t.title ?? '(无标题)', children: [] }
+  const node: ZenNode = { text: t.title ?? i18n.t('errors.xmindUntitled'), children: [] }
   // XMind 备注归正文(2026-09-06 备注合并):ZenNode.note 已退役,body 是唯一附属文本
   if (typeof t.notes?.plain?.content === 'string' && t.notes.plain.content !== '') {
     node.body = t.notes.plain.content
@@ -55,7 +55,10 @@ function fromJsonTopic(t: JsonTopic, warnings: IgnoredBlock[], path: string): Ze
   }
   // 未映射：游离主题（detached 非树结构语义）/标签/标记——计数入摘要
   if ((t.children?.detached ?? []).length > 0) {
-    warnings.push({ type: '游离主题', excerpt: `${path}/${node.text} 下 ${(t.children?.detached ?? []).length} 个` })
+    warnings.push({
+      type: '游离主题',
+      excerpt: i18n.t('errors.xmindDetached', { path: `${path}/${node.text}`, count: (t.children?.detached ?? []).length }),
+    })
   }
   if ((t.labels ?? []).length > 0) {
     warnings.push({ type: '标签', excerpt: `${node.text}` })
@@ -71,7 +74,7 @@ function parseContentJson(raw: string): XmindParseResult {
   const first = Array.isArray(sheets) ? sheets[0] : undefined
   if (first?.rootTopic === undefined) throw new Error(i18n.t('errors.xmindNoRootTopic'))
   const warnings: IgnoredBlock[] = []
-  if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: `仅导入第 1 张，共 ${sheets.length} 张` })
+  if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: i18n.t('errors.xmindMultiSheet', { count: sheets.length }) })
   return { tree: fromJsonTopic(first.rootTopic, warnings, ''), warnings }
 }
 
@@ -82,7 +85,7 @@ interface JsonSheet {
 // —— 旧版 content.xml ——
 
 function fromXmlTopic(el: Element, warnings: IgnoredBlock[], path: string): ZenNode {
-  const node: ZenNode = { text: el.getAttribute('title') ?? '(无标题)', children: [] }
+  const node: ZenNode = { text: el.getAttribute('title') ?? i18n.t('errors.xmindUntitled'), children: [] }
   // XMind 备注归正文(2026-09-06 备注合并):ZenNode.note 已退役,body 是唯一附属文本
   const notes = el.querySelector(':scope > notes > plain')
   const bodyText = notes?.textContent?.trim()
@@ -112,6 +115,6 @@ function parseContentXml(raw: string): XmindParseResult {
   if (root === null) throw new Error(i18n.t('errors.xmindXmlNoRoot'))
   const warnings: IgnoredBlock[] = []
   const sheets = doc.querySelectorAll('xmap-content > sheet, sheet')
-  if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: `仅导入第 1 张，共 ${sheets.length} 张` })
+  if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: i18n.t('errors.xmindMultiSheet', { count: sheets.length }) })
   return { tree: fromXmlTopic(root, warnings, ''), warnings }
 }
