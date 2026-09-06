@@ -1,11 +1,6 @@
 import { BrandMark } from '../components/BrandMark'
 import { Button } from '../components/ui/button'
-
-const NAV = [
-  { href: '#why', label: '为什么' },
-  { href: '#onefile', label: '一图一文件' },
-  { href: '#features', label: '功能' },
-]
+import { L } from '../content'
 
 export function TopBar() {
   return (
@@ -15,8 +10,8 @@ export function TopBar() {
           <BrandMark size={24} />
           <span className="font-mono text-sm font-medium">mind-map-zen</span>
         </a>
-        <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="页面导航">
-          {NAV.map((item) => (
+        <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label={L.navAria}>
+          {L.nav.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -27,7 +22,7 @@ export function TopBar() {
           ))}
         </nav>
         <Button size="sm" asChild className="ml-auto md:ml-2">
-          <a href="#download">下载</a>
+          <a href="#download">{L.download}</a>
         </Button>
       </div>
     </header>

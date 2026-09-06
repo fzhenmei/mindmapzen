@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { BrandMark } from '../components/BrandMark'
+import { L } from '../content'
 import { fadeUp } from '../lib/motion'
 
 export function Footer() {
@@ -15,11 +16,9 @@ export function Footer() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <BrandMark size={16} />
           <span className="font-mono text-xs">mind-map-zen</span>
-          <span>© 2026</span>
+          <span>{L.footer.copyright}</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          导图引擎 simple-mind-map(MIT)· 字体 Noto Sans SC、JetBrains Mono(OFL)
-        </p>
+        <p className="text-xs text-muted-foreground">{L.footer.credits}</p>
       </div>
     </motion.footer>
   )
