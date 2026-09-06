@@ -114,6 +114,8 @@ export default {
     banner: '{{count}} 个内容块未映射（保存时将丢弃）',
     collapse: '收起',
     details: '查看详情',
+    // 摘要行插值(zh 全角冒号/en 半角冒号+空格随词典,importPreview.item 先例)
+    item: '{{type}}：{{excerpt}}',
   },
   noteTooltip: {
     more: '打开面板查看全文',

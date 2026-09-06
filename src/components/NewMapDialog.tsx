@@ -49,7 +49,7 @@ export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readon
       setError(t('errors.nameEmpty'))
       return
     }
-    const tpl = templates.find((t) => t.key === picked)
+    const tpl = templates.find((tpl) => tpl.key === picked)
     // 空白模板走 createMap 缺省路径（与旧行为同一落盘内容）
     const content = tpl !== undefined && tpl.key !== 'builtin:blank' ? tpl.content : undefined
     try {
@@ -82,10 +82,10 @@ export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readon
             <SelectValue placeholder={t('library.dialogs.newMap.templateSelect')} />
           </SelectTrigger>
           <SelectContent>
-            {templates.map((t) => (
-              <SelectItem key={t.key} value={t.key}>
-                {t.name}
-                {t.desc !== '' && <span className="ml-2 text-xs text-muted-foreground">{t.desc}</span>}
+            {templates.map((tpl) => (
+              <SelectItem key={tpl.key} value={tpl.key}>
+                {tpl.name}
+                {tpl.desc !== '' && <span className="ml-2 text-xs text-muted-foreground">{tpl.desc}</span>}
               </SelectItem>
             ))}
           </SelectContent>

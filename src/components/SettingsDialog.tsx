@@ -30,7 +30,8 @@ function gitStatusLine(s: { lastCommit: string | null; aheadCount: number | null
 }
 
 /** 备份结果摘要（2026-09 i18n：store 只存 BackupOutcome 原始数据，人话在此拼——
- *  提交/推送/致命错误四分支；fatal 与 push 错误串为服务层原文，Task 10 迁移） */
+ *  提交/推送/致命错误四分支；fatal 已词典化（插值进 backupFailed 模板）；
+ *  push 错误串为 git 原文回报，属最终设计，不再迁词典） */
 function backupLine(r: BackupOutcome): string {
   if (r.fatal !== null) return i18n.t('settings.git.backupFailed', { reason: r.fatal })
   if (!r.committed) return i18n.t('settings.git.noChange')

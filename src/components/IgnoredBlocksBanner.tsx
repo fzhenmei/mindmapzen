@@ -19,7 +19,7 @@ export default function IgnoredBlocksBanner({ blocks }: Readonly<{ blocks: Ignor
         <ul data-testid="ignored-list">
           {blocks.map((b) => (
             <li key={b.type + b.excerpt}>
-              {describeIgnoredType(b.type)}：{b.excerpt}
+              {t('editor.ignored.item', { type: describeIgnoredType(b.type), excerpt: b.excerpt })}
             </li>
           ))}
         </ul>

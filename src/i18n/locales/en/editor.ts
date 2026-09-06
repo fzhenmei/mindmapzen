@@ -115,6 +115,7 @@ const editor: Dict['editor'] = {
     banner: '{{count}} content blocks are unmapped (they will be discarded on save)',
     collapse: 'Collapse',
     details: 'Details',
+    item: '{{type}}: {{excerpt}}',
   },
   noteTooltip: {
     more: 'Open the panel to read the full text',
