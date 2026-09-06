@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type GitConfig } from './gitBackup'
+import { i18n } from '../i18n'
 import type { GitRun } from '../types/ports'
 
 /** 记录型桩：按命令模式回放预设应答（args.join(' ') 前缀匹配） */
@@ -88,6 +89,34 @@ describe('checkAndBackup（M20 免命令自动备份）', () => {
     ])
     const r = await checkAndBackup('/ws', CFG(), run)
     expect(r.fatal).toContain('git init 失败')
+  })
+
+  // i18n（Task 12）：提交消息/reason 跟随界面语言——切 en 验证英文产出；
+  // setup.ts 每测前会重钉 zh-CN，finally 切回兜底（防本测中途失败向后泄漏）
+  test('提交消息与 reason 跟随界面语言（英文）', async () => {
+    await i18n.changeLanguage('en')
+    try {
+      // 两行变更 → commit 被调用：commit args[2]（calls 拼接形态）匹配英文消息模板
+      const chg = makeRun([
+        { match: 'rev-parse', ok: true },
+        { match: 'status --porcelain', ok: true, out: 'M a.md\n?? b.md\n' },
+        { match: 'add', ok: true },
+        { match: 'commit', ok: true },
+      ])
+      const rc = await checkAndBackup('/ws', CFG(), chg.run)
+      expect(rc.committed).toBe(true)
+      expect(rc.message).toMatch(/^Auto backup · .+ · 2 files changed$/)
+      expect(chg.calls.some((c) => /^commit -m Auto backup · .+ · 2 files changed$/.test(c))).toBe(true)
+      // 无变更路径 → reason 英文
+      const none = makeRun([
+        { match: 'rev-parse', ok: true },
+        { match: 'status --porcelain', ok: true, out: '' },
+      ])
+      const rn = await checkAndBackup('/ws', CFG(), none.run)
+      expect(rn.push).toEqual({ kind: 'skipped', reason: 'No changes' })
+    } finally {
+      await i18n.changeLanguage('zh-CN')
+    }
   })
 })
 

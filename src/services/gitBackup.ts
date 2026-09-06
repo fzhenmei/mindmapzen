@@ -5,6 +5,7 @@
 // 配了 remoteUrl 则确保 remote 指向并 push（失败不阻断，状态回报）。
 import type { GitRun } from '../types/ports'
 import type { GitConfig } from '../types/files'
+import { i18n } from '../i18n'
 
 /** 版本管理配置 = types/files.GitConfig（AppConfig.git，宽容解析见 config.ts） */
 export type { GitConfig } from '../types/files'
@@ -38,25 +39,25 @@ export async function checkAndBackup(
   const probe = await run(wsDir, ['rev-parse', '--git-dir'])
   if (!probe.ok) {
     const init = await run(wsDir, ['init'])
-    if (!init.ok) return { committed: false, push: { kind: 'skipped', reason: '未初始化' }, fatal: `git init 失败：${init.err.split('\n')[0]}` }
+    if (!init.ok) return { committed: false, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.noInit') }, fatal: i18n.t('errors.git.fatal.init', { detail: init.err.split('\n')[0] }) }
   }
   // 变更探测（porcelain 每行一个变更）
   const status = await run(wsDir, ['status', '--porcelain'])
-  if (!status.ok) return { committed: false, push: { kind: 'skipped', reason: '状态不可读' }, fatal: `git status 失败：${status.err.split('\n')[0]}` }
+  if (!status.ok) return { committed: false, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.statusUnreadable') }, fatal: i18n.t('errors.git.fatal.status', { detail: status.err.split('\n')[0] }) }
   const changed = status.out.split('\n').filter((l) => l.trim() !== '').length
-  if (changed === 0) return { committed: false, push: { kind: 'skipped', reason: '无变更' }, fatal: null }
+  if (changed === 0) return { committed: false, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.noChange') }, fatal: null }
 
-  const stamp = new Date().toLocaleString('zh-CN')
-  const message = `自动备份 · ${stamp} · ${changed} 文件变更`
+  const stamp = new Date().toLocaleString(i18n.language)
+  const message = i18n.t('errors.git.commitMessage', { stamp, count: changed })
   await run(wsDir, ['add', '-A'])
   const commit = await run(wsDir, ['commit', '-m', message])
   if (!commit.ok) {
-    return { committed: false, push: { kind: 'skipped', reason: '提交失败' }, fatal: `git commit 失败：${commit.err.split('\n')[0]}` }
+    return { committed: false, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.commitFail') }, fatal: i18n.t('errors.git.fatal.commit', { detail: commit.err.split('\n')[0] }) }
   }
 
   // 远程推送（可选）：确保 zen-origin 指向配置 URL，再推送当前分支
   if (cfg.remoteUrl === null || cfg.remoteUrl === '') {
-    return { committed: true, message, push: { kind: 'skipped', reason: '未配置远程' }, fatal: null }
+    return { committed: true, message, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.noRemote') }, fatal: null }
   }
   const url = remoteWithToken(cfg.remoteUrl, cfg.token)
   const current = await run(wsDir, ['remote', 'get-url', REMOTE_NAME])
@@ -186,7 +187,7 @@ export async function restoreToVersion(
   if (!checkout.ok) return `恢复失败：${checkout.err.split('\n')[0] ?? ''}`
   // 变更落为新提交（无变更时 commit 失败=无差异，视为成功）
   await run(wsDir, ['add', '-A'])
-  const stamp = new Date().toLocaleString('zh-CN')
+  const stamp = new Date().toLocaleString(i18n.language)
   const commit = await run(wsDir, ['commit', '-m', `回滚到 ${hash} · ${stamp}`])
   if (!commit.ok && !/nothing to commit|无|no changes/i.test(commit.out + commit.err)) {
     return `提交回滚失败：${commit.err.split('\n')[0] ?? ''}`

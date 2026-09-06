@@ -57,4 +57,10 @@ export default {
     '多画布': '多画布',
     other: '其他',
   },
+  // Task 12 git 备份消息与服务层状态文案(checkAndBackup 调用期 i18n.t)
+  git: {
+    commitMessage: '自动备份 · {{stamp}} · {{count}} 文件变更',
+    reason: { noInit: '未初始化', statusUnreadable: '状态不可读', noChange: '无变更', commitFail: '提交失败', noRemote: '未配置远程' },
+    fatal: { init: 'git init 失败：{{detail}}', status: 'git status 失败：{{detail}}', commit: 'git commit 失败：{{detail}}' },
+  },
 }

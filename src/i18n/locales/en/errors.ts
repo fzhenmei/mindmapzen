@@ -54,5 +54,10 @@ const errors: Dict['errors'] = {
     '多画布': 'Multiple sheets',
     other: 'Other',
   },
+  git: {
+    commitMessage: 'Auto backup · {{stamp}} · {{count}} files changed',
+    reason: { noInit: 'Not initialized', statusUnreadable: 'Status unreadable', noChange: 'No changes', commitFail: 'Commit failed', noRemote: 'No remote configured' },
+    fatal: { init: 'git init failed: {{detail}}', status: 'git status failed: {{detail}}', commit: 'git commit failed: {{detail}}' },
+  },
 }
 export default errors
