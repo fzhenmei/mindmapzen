@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { EngineNode } from '../types/engine'
 import { countTree } from '../hooks/useMapStats'
 
@@ -14,13 +15,14 @@ interface Props {
  *  （nodeCount 初值 0 的窗口期不误显）；nodeCount 令加出第 2 个节点即隐去（删回单节点
  *  复现，教学再触发可接受）。pointer-events-none 不挡画布交互 */
 export default function CanvasHint({ tree, nodeCount }: Readonly<Props>) {
+  const { t } = useTranslation()
   if (tree === null || countTree(tree) > 1 || nodeCount > 1) return null
   return (
     <p
       data-testid="canvas-hint"
       className="pointer-events-none absolute top-4 left-4 z-[5] text-xs text-muted-foreground"
     >
-      选中节点后：Tab 加子节点 / Enter 加同级节点
+      {t('editor.canvas.emptyHint')}
     </p>
   )
 }

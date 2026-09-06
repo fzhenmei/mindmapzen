@@ -2,6 +2,7 @@
 // error=打开失败错误面板（只占画布内容区，壳层其余照常挂载——Ctrl+P / Ctrl+Tab /
 // 返回案头可达）；loading=加载指示；ready=引擎画布。纯装配：状态与回调全经 props。
 import type { RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 import MindMapCanvas from '../editor/MindMapCanvas'
 import EditorErrorPanel from '../components/EditorErrorPanel'
 import { layoutToEngine } from '../editor/layoutMap'
@@ -66,6 +67,7 @@ export default function EditorCanvasArea({
   onCanvasPasteText,
   onNodeCopy,
 }: Readonly<Props>) {
+  const { t } = useTranslation()
   if (state === 'error' && errorInfo)
     return (
       <EditorErrorPanel
@@ -78,7 +80,7 @@ export default function EditorCanvasArea({
         onSwitch={onSwitch}
       />
     )
-  if (state === 'loading') return <div className="editor-loading">正在打开…</div>
+  if (state === 'loading') return <div className="editor-loading">{t('editor.canvas.loading')}</div>
   return engineTree ? (
     <MindMapCanvas
       key={mdPath}

@@ -12,5 +12,8 @@ const errors: Dict['errors'] = {
   cannotMoveIntoSelf: 'Cannot move a folder into itself or one of its subfolders',
   targetDirNameExists: 'A folder with the same name already exists in the destination',
   setWorkspaceFailed: 'Failed to set workspace: {{reason}}',
+  copyPathFailed: 'Failed to copy path: {{reason}}',
+  copyMdFailed: 'Copy failed: {{reason}}',
+  createMapFailed: 'Failed to create map: {{reason}}',
 }
 export default errors

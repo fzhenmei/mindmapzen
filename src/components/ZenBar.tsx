@@ -6,6 +6,7 @@
 // M14 Task 5：内件全 ui——Button(ghost,icon) + ui Tooltip（官方默认内距 py-1.5 px-3）+
 // ui Separator + 布局组 ui ToggleGroup；外壳仅存停泊定位（M14 spec §4 唯一手搓例外）。
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { LayoutKind } from '../editor/layoutMap'
 import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { CopySettingKey, CopySettings } from '../types/files'
@@ -96,11 +97,18 @@ function Tip({ label, children }: Readonly<{ label: string; children: ReactNode 
   )
 }
 
+/** 常用三布局钮（ToggleGroup 项）：kind + 图标元组——语义名渲染期经 t() 取（layouts 子域） */
+const BAR_LAYOUTS = [
+  ['mindmap', <IconLayoutRight key="r" />],
+  ['logic', <IconLayoutBoth key="b" />],
+  ['org', <IconLayoutDown key="d" />],
+] as const
+
 /** 收起的非常用布局（2026-09 时间轴/鱼骨图）：不占常驻钮位，收进「更多」单选下拉；
  *  当前激活时触发钮点亮并换显该布局图标 + 语义名（aria-label），不点开也知当前布局 */
 const MORE_LAYOUTS = [
-  ['timeline', '时间轴', <IconLayoutTimeline key="t" />],
-  ['fishbone', '鱼骨图', <IconLayoutFishbone key="f" />],
+  ['timeline', <IconLayoutTimeline key="t" />],
+  ['fishbone', <IconLayoutFishbone key="f" />],
 ] as const
 
 /** 纸面命令栏：返回/回退/重做/复制/保存/正文面板/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
@@ -126,75 +134,82 @@ export default function ZenBar({
   layout,
   onSwitchLayout,
 }: Readonly<Props>) {
-  const copyLabel =
-    scope === 'branch'
-      ? '复制选中分支为 Markdown（Ctrl+C）'
-      : '复制整图为 Markdown（Ctrl+C）'
+  const { t } = useTranslation()
+  const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
+  // 布局语义名（键集与 LayoutKind 一一对应）：常用钮/更多下拉/触发钮 aria 三处共用
+  const layoutNames: Record<LayoutKind, string> = {
+    mindmap: t('editor.zenbar.layouts.mindmap'),
+    logic: t('editor.zenbar.layouts.logic'),
+    org: t('editor.zenbar.layouts.org'),
+    timeline: t('editor.zenbar.layouts.timeline'),
+    fishbone: t('editor.zenbar.layouts.fishbone'),
+  }
   // 更多布局触发钮的激活态：当前布局是收起项时点亮（Toggle pressed → data-state=on，同组点亮语言）
   const moreActive = MORE_LAYOUTS.find(([kind]) => kind === layout) ?? null
+  const moreLabel = moreActive ? layoutNames[moreActive[0]] : t('editor.zenbar.moreLayouts')
   return (
     // zen-bar 类名保留为视觉冒烟钩子（skin 已全转 utility，App.css 无对应规则）
     <header
       data-testid="zen-bar"
       className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-lg bg-card px-2.5 shadow-lg"
     >
-      <Tip label="返回案头">
+      <Tip label={t('editor.zenbar.backToDesk')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-back"
-          aria-label="返回案头"
+          aria-label={t('editor.zenbar.backToDesk')}
           onClick={onBack}
         >
           <IconArrowLeft />
         </Button>
       </Tip>
-      <Tip label="切换导图（Ctrl+P）">
+      <Tip label={t('editor.zenbar.switchMap')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-switch"
-          aria-label="切换导图（Ctrl+P）"
+          aria-label={t('editor.zenbar.switchMap')}
           onClick={onSwitchClick}
         >
           <IconSwitch />
         </Button>
       </Tip>
-      <Tip label="新建导图">
+      <Tip label={t('editor.zenbar.newMap')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-new"
-          aria-label="新建导图"
+          aria-label={t('editor.zenbar.newMap')}
           onClick={onNewClick}
         >
           <IconFilePlus />
         </Button>
       </Tip>
       <Separator orientation="vertical" className="mx-1" />
-      <Tip label="回退（Ctrl+Z）">
+      <Tip label={t('editor.zenbar.undo')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-undo"
-          aria-label="回退（Ctrl+Z）"
+          aria-label={t('editor.zenbar.undo')}
           onClick={undoRedo.onUndo}
           disabled={!undoRedo.canUndo}
         >
           <IconUndo />
         </Button>
       </Tip>
-      <Tip label="重做（Ctrl+Y）">
+      <Tip label={t('editor.zenbar.redo')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-redo"
-          aria-label="重做（Ctrl+Y）"
+          aria-label={t('editor.zenbar.redo')}
           onClick={undoRedo.onRedo}
           disabled={!undoRedo.canRedo}
         >
@@ -226,7 +241,7 @@ export default function ZenBar({
               type="button"
               variant="ghost"
               data-testid="btn-copy-options"
-              aria-label="复制选项"
+              aria-label={t('editor.zenbar.copyOptions')}
               className="h-9 w-5 px-0"
             >
               <IconChevronDown size={10} />
@@ -240,7 +255,7 @@ export default function ZenBar({
             onCheckedChange={() => onToggleCopySetting('copyIncludeLinks')}
             onSelect={(e) => e.preventDefault()}
           >
-            保留双链标记
+            {t('editor.zenbar.copyIncludeLinks')}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             data-testid="copy-include-body"
@@ -248,29 +263,29 @@ export default function ZenBar({
             onCheckedChange={() => onToggleCopySetting('copyIncludeBody')}
             onSelect={(e) => e.preventDefault()}
           >
-            含正文
+            {t('editor.zenbar.copyIncludeBody')}
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Tip label="复制文件路径（发给 AI 直接读取）">
+      <Tip label={t('editor.zenbar.copyPathTip')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-copy-path"
-          aria-label="复制文件路径（发给 AI 直接读取）"
+          aria-label={t('editor.zenbar.copyPathTip')}
           onClick={onCopyPathClick}
         >
           <IconRoute />
         </Button>
       </Tip>
-      <Tip label="保存（Ctrl+S）">
+      <Tip label={t('editor.zenbar.save')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-save"
-          aria-label="保存（Ctrl+S）"
+          aria-label={t('editor.zenbar.save')}
           onClick={onSaveClick}
         >
           <IconSave />
@@ -278,14 +293,14 @@ export default function ZenBar({
       </Tip>
       {/* 正文面板开关（2026-09 写作）：常态按钮（非 DropdownMenu 触发器），激活态走
        *  data-active 通道（同 btn-layout-more 的点亮语言；不依赖 data-state） */}
-      <Tip label="撰写选中节点的正文">
+      <Tip label={t('editor.zenbar.bodyPanel')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-body"
           data-active={bodyActive ? '' : undefined}
-          aria-label="撰写选中节点的正文"
+          aria-label={t('editor.zenbar.bodyPanel')}
           aria-pressed={bodyActive}
           onClick={onBodyClick}
           className="data-[active]:bg-accent data-[active]:text-accent-foreground"
@@ -293,62 +308,62 @@ export default function ZenBar({
           <IconFileText />
         </Button>
       </Tip>
-      <Tip label="导出或复制为图片">
+      <Tip label={t('editor.zenbar.exportImage')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-export"
-          aria-label="导出或复制为图片"
+          aria-label={t('editor.zenbar.exportImage')}
           onClick={onExportClick}
         >
           <IconImage />
         </Button>
       </Tip>
       <Separator orientation="vertical" className="mx-1" />
-      <Tip label="缩小（Ctrl+滚轮）">
+      <Tip label={t('editor.zenbar.zoomOut')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-zoom-out"
-          aria-label="缩小（Ctrl+滚轮）"
+          aria-label={t('editor.zenbar.zoomOut')}
           onClick={onZoomOut}
         >
           <IconMinus />
         </Button>
       </Tip>
-      <Tip label="放大（Ctrl+滚轮）">
+      <Tip label={t('editor.zenbar.zoomIn')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-zoom-in"
-          aria-label="放大（Ctrl+滚轮）"
+          aria-label={t('editor.zenbar.zoomIn')}
           onClick={onZoomIn}
         >
           <IconPlus />
         </Button>
       </Tip>
-      <Tip label="根居中：保持缩放回根">
+      <Tip label={t('editor.zenbar.centerRoot')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-center-root"
-          aria-label="根居中：保持缩放回根"
+          aria-label={t('editor.zenbar.centerRoot')}
           onClick={onCenterRoot}
         >
           <IconCrosshair />
         </Button>
       </Tip>
-      <Tip label="适配整图">
+      <Tip label={t('editor.zenbar.fitView')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-fit"
-          aria-label="适配整图"
+          aria-label={t('editor.zenbar.fitView')}
           onClick={onFit}
         >
           <IconFrame />
@@ -367,16 +382,16 @@ export default function ZenBar({
         onValueChange={(v) => {
           if (v) onSwitchLayout(v as LayoutKind)
         }}
-        aria-label="布局切换"
+        aria-label={t('editor.zenbar.layoutToggle')}
       >
-        {(
-          [
-            ['mindmap', '思维导图（右向）', <IconLayoutRight key="r" />],
-            ['logic', '逻辑图（左右）', <IconLayoutBoth key="b" />],
-            ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
-          ] as const
-        ).map(([kind, label, icon]) => (
-          <ToggleGroupItem key={kind} value={kind} data-testid={`layout-${kind}`} aria-label={label} title={label}>
+        {BAR_LAYOUTS.map(([kind, icon]) => (
+          <ToggleGroupItem
+            key={kind}
+            value={kind}
+            data-testid={`layout-${kind}`}
+            aria-label={layoutNames[kind]}
+            title={layoutNames[kind]}
+          >
             {icon}
           </ToggleGroupItem>
         ))}
@@ -393,11 +408,11 @@ export default function ZenBar({
             size="icon"
             data-testid="btn-layout-more"
             data-active={moreActive !== null ? '' : undefined}
-            aria-label={moreActive ? moreActive[1] : '更多布局'}
-            title={moreActive ? moreActive[1] : '更多布局'}
+            aria-label={moreLabel}
+            title={moreLabel}
             className="data-[active]:bg-accent data-[active]:text-accent-foreground"
           >
-            {moreActive ? moreActive[2] : <IconChevronDown />}
+            {moreActive ? moreActive[1] : <IconChevronDown />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
@@ -405,9 +420,9 @@ export default function ZenBar({
             value={layout}
             onValueChange={(v) => onSwitchLayout(v as LayoutKind)}
           >
-            {MORE_LAYOUTS.map(([kind, label]) => (
+            {MORE_LAYOUTS.map(([kind]) => (
               <DropdownMenuRadioItem key={kind} value={kind} data-testid={`layout-${kind}`}>
-                {label}
+                {layoutNames[kind]}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
