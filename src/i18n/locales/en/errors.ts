@@ -2,6 +2,7 @@ import type { Dict } from '../../en'
 
 const errors: Dict['errors'] = {
   gitNotEnabled: 'Version control is not enabled',
+  gitTimeout: 'git command timed out (30s)',
   nameEmpty: 'Name cannot be empty',
   nameInvalidChars: String.raw`Name cannot contain \ / : * ? " < > |`,
   mapNameExists: 'A map with this name already exists: {{name}}',

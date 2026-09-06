@@ -5,6 +5,7 @@ import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
 import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
+import { describeBackendError } from './services/backendError'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -162,7 +163,12 @@ const gitRun: GitRun = E2E
     })
   : async (cwd, args) => {
       const { invoke } = await import('@tauri-apps/api/core')
-      return invoke<{ ok: boolean; out: string; err: string }>('git_exec', { cwd, args })
+      try {
+        return await invoke<{ ok: boolean; out: string; err: string }>('git_exec', { cwd, args })
+      } catch (e) {
+        // Rust 稳定码本地化(GIT_TIMEOUT 用户可感;未知原文透传,见 backendError.ts)
+        throw describeBackendError(String(e))
+      }
     }
 
 /** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；

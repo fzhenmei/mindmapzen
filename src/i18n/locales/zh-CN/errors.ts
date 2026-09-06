@@ -1,6 +1,7 @@
 // 错误域:store/服务层用户可见报错(appStore 用键 + Task 6 案头服务层补全)
 export default {
   gitNotEnabled: '未启用版本管理',
+  gitTimeout: 'git 命令超时（30 秒）',
   nameEmpty: '名称不能为空',
   nameInvalidChars: String.raw`名称不能包含 \ / : * ? " < > |`,
   mapNameExists: '已存在同名导图：{{name}}',
