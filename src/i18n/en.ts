@@ -2,8 +2,9 @@
 import type { Dict } from './zh-CN'
 import common from './locales/en/common'
 import settings from './locales/en/settings'
+import errors from './locales/en/errors'
 
-const en: Dict = { common, settings }
+const en: Dict = { common, settings, errors }
 export default en
 /** 契约类型再出口:en 侧子模块(locales/en/*)统一从此处取 Dict,免深层路径耦合 */
 export type { Dict }

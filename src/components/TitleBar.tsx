@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { Window } from '@tauri-apps/api/window'
 import { useAppStore } from '../store/appStore'
 import AppLogo from './AppLogo'
@@ -15,6 +16,7 @@ import { IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons'
  *  logo/品名/空白区各自带属性（子元素拦截 target 的地方不可拖，属预期） */
 export default function TitleBar() {
   const titlebarBg = useAppStore((s) => s.titlebarBg)
+  const { t } = useTranslation()
   const [maximized, setMaximized] = useState(false)
 
   // 最大化态同步（切图标 max/restore）：挂载读一次 + onResized 跟随
@@ -70,7 +72,7 @@ export default function TitleBar() {
         type="button"
         className={btn}
         data-testid="btn-win-min"
-        aria-label="最小化"
+        aria-label={t('settings.titleBar.minimize')}
         onClick={winAction((w) => w.minimize())}
       >
         <IconWinMin />
@@ -79,7 +81,7 @@ export default function TitleBar() {
         type="button"
         className={btn}
         data-testid="btn-win-max"
-        aria-label={maximized ? '还原' : '最大化'}
+        aria-label={maximized ? t('settings.titleBar.restore') : t('settings.titleBar.maximize')}
         onClick={winAction((w) => w.toggleMaximize())}
       >
         {maximized ? <IconWinRestore /> : <IconWinMax />}
@@ -88,7 +90,7 @@ export default function TitleBar() {
         type="button"
         className="flex h-8 w-[46px] items-center justify-center text-foreground/70 hover:bg-[#C42B1C] hover:text-white focus-visible:outline-2 focus-visible:outline-ring"
         data-testid="btn-win-close"
-        aria-label="关闭"
+        aria-label={t('common.close')}
         onClick={winAction((w) => w.close())}
       >
         <IconWinClose />

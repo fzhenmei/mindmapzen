@@ -1,4 +1,4 @@
-// 设置域:设置面板 + 历史/冲突/快速切换/关闭守卫等对话框(后续任务并入)
+// 设置域:设置面板 + 历史/冲突/快速切换/关闭守卫等对话框 + 壳件(标题栏/侧栏开关/胶囊条/主题钮)
 export default {
   title: '设置',
   language: { label: '语言', auto: '跟随系统', zh: '简体中文', en: 'English' },
@@ -11,6 +11,56 @@ export default {
     ahead: ' · 未推送 {{count}}',
     history: '历史',
     backupNow: '立即备份',
+    // 备份摘要（BackupOutcome 由渲染层拼装，store 只存原始结果）
+    backupFailed: '备份失败：{{reason}}',
+    noChange: '无变更',
+    committed: '已提交',
+    committedAndPushed: '已提交并推送',
+    committedPushFailed: '已提交（推送失败：{{reason}}）',
+  },
+  history: {
+    title: '版本历史',
+    hint: '最近 50 次提交；恢复以新提交落盘，可再次回滚',
+    confirm: '确认恢复',
+    preview: '预览',
+    restore: '恢复',
+    diffLoading: '差异加载中…',
+    diffUnavailable: '差异不可得',
+    diffNone: '与当前版本无差异',
+    diffFiles: '恢复后 {{count}} 个文件变更（',
+    diffLegend: ' 行；红=消失，绿=回来）',
+    diffMore: '…还有 {{count}} 行变更，已折叠',
+  },
+  conflict: {
+    title: '「{{name}}」已在其他窗口或程序中被修改',
+    body: '磁盘上的文件与打开时的版本不一致，继续保存会覆盖对方的修改。请选择保留哪个版本：',
+    keepDisk: '以磁盘版为准',
+    overwriteDisk: '覆盖磁盘版',
+  },
+  quickSwitch: {
+    title: '切换导图',
+    placeholder: '输入图名或目录，回车切换…',
+    empty: '没有匹配的导图',
+    rootDir: '（工作区根目录）',
+  },
+  closeGuard: {
+    title: '「{{name}}」有未保存的修改',
+    discard: '放弃修改',
+    saveClose: '保存并关闭',
+  },
+  titleBar: { minimize: '最小化', maximize: '最大化', restore: '还原' },
+  sidebar: {
+    hide: '隐藏目录面板',
+    hideHint: '隐藏目录面板（Ctrl+B）',
+    show: '显示目录面板',
+    showHint: '显示目录面板（Ctrl+B）',
+  },
+  mapTabs: { navLabel: '最近打开的导图' },
+  theme: {
+    auto: '主题：跟随系统',
+    light: '主题：晨松（亮）',
+    dark: '主题：夜航（暗）',
+    clickHint: '（点击切换）',
   },
   tourReplay: '功能引导',
   tourReplayBtn: '重新观看',

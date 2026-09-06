@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 
@@ -9,20 +10,21 @@ interface Props {
 /** 关闭守卫三态对话框（M12b Task 5 切 ui/dialog）：Esc/✕/遮罩点击与「取消」按钮同义 → onChoice('cancel')；
  *  「放弃修改」为破坏性出口走朱砂（brand），「保存并关闭」为主操作走青松（primary） */
 export default function CloseGuardDialog({ mapName, onChoice }: Readonly<Props>) {
-  const title = `「${mapName}」有未保存的修改`
+  const { t } = useTranslation()
+  const title = t('settings.closeGuard.title', { name: mapName })
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onChoice('cancel') }}>
       <DialogContent data-testid="closeguard-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="closeguard-cancel" onClick={() => onChoice('cancel')}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button variant="destructive" size="sm" data-testid="closeguard-discard" onClick={() => onChoice('discard')}>
-            放弃修改
+            {t('settings.closeGuard.discard')}
           </Button>
           <Button size="sm" data-testid="closeguard-save" onClick={() => onChoice('save')}>
-            保存并关闭
+            {t('settings.closeGuard.saveClose')}
           </Button>
         </DialogFooter>
       </DialogContent>

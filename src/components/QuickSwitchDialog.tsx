@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 
@@ -35,6 +36,7 @@ const TOP_N = 10
  *  纯展示组件——候选与切换链在 EditorView 装配。布局 VS Code Quick Open 手法：
  *  屏幕上部窄高浮层（覆写 dialog 默认居中），无 ✕ 钮；Esc 由 radix 统一收口 onClose */
 export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleActive, onActiveChange }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const cycling = cycleActive !== undefined
@@ -73,11 +75,11 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
         showCloseButton={false}
         className="top-[18%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-[560px]"
       >
-        <DialogTitle className="sr-only">切换导图</DialogTitle>
+        <DialogTitle className="sr-only">{t('settings.quickSwitch.title')}</DialogTitle>
         {!cycling && (
           <Input
             data-testid="switch-input"
-            placeholder="输入图名或目录，回车切换…"
+            placeholder={t('settings.quickSwitch.placeholder')}
             value={query}
             autoFocus
             className="h-11 rounded-none border-0 border-b bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -90,7 +92,7 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
         )}
         {visible.length === 0 ? (
           <div data-testid="switch-empty" className="p-6 text-center text-sm text-muted-foreground">
-            没有匹配的导图
+            {t('settings.quickSwitch.empty')}
           </div>
         ) : (
           <div data-testid="switch-list" className="max-h-80 overflow-y-auto p-1" role="listbox">
@@ -112,7 +114,7 @@ export default function QuickSwitchDialog({ candidates, onPick, onClose, cycleAc
               >
                 <span className="truncate font-file text-sm">{c.name}</span>
                 <span className="truncate font-file text-[11px] text-muted-foreground">
-                  {c.dir === '' ? '（工作区根目录）' : c.dir}
+                  {c.dir === '' ? t('settings.quickSwitch.rootDir') : c.dir}
                 </span>
               </button>
             ))}

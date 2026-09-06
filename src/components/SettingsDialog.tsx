@@ -5,6 +5,7 @@ import { i18n } from '../i18n'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import type { BackupOutcome } from '../services/gitBackup'
 
 interface SettingsDialogProps {
   onClose(): void
@@ -26,6 +27,16 @@ function gitStatusLine(s: { lastCommit: string | null; aheadCount: number | null
   if (s.lastCommit === null) return i18n.t('settings.git.noCommit')
   const ahead = s.aheadCount ? i18n.t('settings.git.ahead', { count: s.aheadCount }) : ''
   return i18n.t('settings.git.lastCommit', { commit: s.lastCommit }) + ahead
+}
+
+/** 备份结果摘要（2026-09 i18n：store 只存 BackupOutcome 原始数据，人话在此拼——
+ *  提交/推送/致命错误四分支；fatal 与 push 错误串为服务层原文，Task 10 迁移） */
+function backupLine(r: BackupOutcome): string {
+  if (r.fatal !== null) return i18n.t('settings.git.backupFailed', { reason: r.fatal })
+  if (!r.committed) return i18n.t('settings.git.noChange')
+  if (r.push.kind === 'ok') return i18n.t('settings.git.committedAndPushed')
+  if (r.push.kind === 'error') return i18n.t('settings.git.committedPushFailed', { reason: r.push.message })
+  return i18n.t('settings.git.committed')
 }
 
 /** 设置对话框：版本管理（git 自动备份）开关与状态、功能引导、工作区管理。
@@ -89,7 +100,7 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-muted-foreground" data-testid="git-status" title={gitStatus.lastCommit ?? undefined}>
                     {gitStatusLine(gitStatus)}
-                    {lastBackup !== null ? ` · ${lastBackup}` : ''}
+                    {lastBackup !== null ? ` · ${backupLine(lastBackup)}` : ''}
                   </span>
                   <span className="flex shrink-0 gap-1">
                     {onOpenHistory && (

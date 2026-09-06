@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 
@@ -11,23 +12,22 @@ interface Props {
  *  「以磁盘版为准」放弃当前未保存修改并重载磁盘版（放弃内存编辑走 secondary）；
  *  「覆盖磁盘版」以当前修改覆盖磁盘文件（丢对方已落盘变更，破坏性出口走朱砂 destructive） */
 export default function ConflictDialog({ mapName, onChoice }: Readonly<Props>) {
-  const title = `「${mapName}」已在其他窗口或程序中被修改`
+  const { t } = useTranslation()
+  const title = t('settings.conflict.title', { name: mapName })
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onChoice('cancel') }}>
       <DialogContent data-testid="conflict-dialog" aria-label={title}>
         <DialogTitle>{title}</DialogTitle>
-        <p className="text-sm text-muted-foreground">
-          磁盘上的文件与打开时的版本不一致，继续保存会覆盖对方的修改。请选择保留哪个版本：
-        </p>
+        <p className="text-sm text-muted-foreground">{t('settings.conflict.body')}</p>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="conflict-cancel" onClick={() => onChoice('cancel')}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button size="sm" data-testid="conflict-reload" onClick={() => onChoice('reload')}>
-            以磁盘版为准
+            {t('settings.conflict.keepDisk')}
           </Button>
           <Button variant="destructive" size="sm" data-testid="conflict-overwrite" onClick={() => onChoice('overwrite')}>
-            覆盖磁盘版
+            {t('settings.conflict.overwriteDisk')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,9 +4,9 @@ import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
-import { changeUiLanguage } from '../i18n'
+import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
-import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
+import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
 import type { GitRun } from '../types/ports'
 
 interface AppState {
@@ -66,8 +66,9 @@ interface AppState {
   gitConfig: GitConfig
   /** git 命令端口（M20）：App 装配注入（生产 Tauri git_exec / E2E harness 桩）；null 时备份为 no-op */
   gitRun: GitRun | null
-  /** 最近备份结果摘要（状态显示）；null = 从未执行 */
-  lastBackup: string | null
+  /** 最近备份结果原始数据（2026-09 i18n：只存 BackupOutcome 枚举与原始串，人话摘要由
+   *  渲染层 SettingsDialog 拼——语言切换即时反映，store 不落拼好文案）；null = 从未执行 */
+  lastBackup: BackupOutcome | null
   /** 仓库状态（设置页显示） */
   gitStatus: GitStatusInfo
   /** 版本历史（M22 回滚 UI）：最近提交列表；空 = 无仓库/未加载 */
@@ -121,7 +122,8 @@ interface AppState {
   /** 拉取版本历史（M22 历史对话框打开时） */
   fetchGitHistory: () => Promise<void>
   /** 恢复到指定版本（M22）：工作区文件回到该提交（新提交落盘），刷新案头清单与状态。
-   *  返回 null=成功，否则中文错误（对话框显示） */
+   *  返回 null=成功，否则错误文案（未启用守卫经 errors 域本地化；服务层错误原样透传，
+   *  Task 10 迁移） */
   restoreVersion: (hash: string) => Promise<string | null>
   /** 恢复预览（M23 盲盒问题）：该版本相对当前的文件级差异（现取现返不进全局态）；
    *  null = 差异不可得（未启用/命令失败），files 空 = 无差异 */
@@ -359,20 +361,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   backupNow: async () => {
     const { gitRun, gitConfig, workspaceDir } = get()
     if (gitRun === null || !gitConfig.enabled || workspaceDir === null) return
-    const r = await checkAndBackup(workspaceDir, gitConfig, gitRun)
-    // 状态摘要：提交消息 / 跳过原因 / 致命错误（中文）
-    let summary: string
-    if (r.fatal !== null) summary = `备份失败：${r.fatal}`
-    else if (!r.committed) summary = `无变更`
-    else {
-      // 已提交：推送结果三分支（成功并推送 / 失败附原因 / 未配置推送）
-      let push: string
-      if (r.push.kind === 'ok') push = '并推送'
-      else if (r.push.kind === 'error') push = `（推送失败：${r.push.message}）`
-      else push = ''
-      summary = `已提交${push}`
-    }
-    set({ lastBackup: summary })
+    // 只落 BackupOutcome 原始数据（摘要拼装移渲染层 SettingsDialog，见 lastBackup 注）
+    set({ lastBackup: await checkAndBackup(workspaceDir, gitConfig, gitRun) })
     await get().refreshGitStatus()
   },
 
@@ -390,7 +380,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   restoreVersion: async (hash) => {
     const { gitRun, workspaceDir } = get()
-    if (gitRun === null || workspaceDir === null) return '未启用版本管理'
+    // 守卫文案经 errors 域（事件时求值语言恒新；服务层错误 Task 10 迁移）
+    if (gitRun === null || workspaceDir === null) return i18n.t('errors.gitNotEnabled')
     const err = await restoreToVersion(workspaceDir, hash, gitRun)
     if (err !== null) return err
     await get().refreshMaps()
