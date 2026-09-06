@@ -302,8 +302,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return () => clearTimeout(t)
   }, [bodyPanel.open])
 
+  // @container：编辑器内容宽 = 停泊栏避让的查询容器（2026-09 UI 评审 P1，窄窗题签/
+  // 主题钮 @max-[1150px] 上移一层的基准；编辑器恒满屏无侧栏，容器宽即视口宽）
   return (
-    <div className={`editor${bodyPanel.open ? ' body-open' : ''}`}><TooltipProvider>
+    <div className={`editor @container${bodyPanel.open ? ' body-open' : ''}`}><TooltipProvider>
       <div className="canvas-host">
         <EditorCanvasArea
           state={state}

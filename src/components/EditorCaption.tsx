@@ -30,12 +30,15 @@ function savedTimeLabel(ms: number | null): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hm}`
 }
 
-/** 左下等宽题签 + 朱砂脏印 + 统计行；右下主题钮容器（testid/类名钩子不变，皮肤转 utility） */
+/** 左下等宽题签 + 朱砂脏印 + 统计行；右下主题钮容器（testid/类名钩子不变，皮肤转 utility）。
+ *  窄窗避让（2026-09 UI 评审 P1）：ZenBar 固定 ~778px 居中，窗口 <1150px 时题签（本组件）
+ *  与主题钮（ThemeFab）上移一行（bottom-16）与之分层；长名经 max-w（calc(50%-27rem)，
+ *  0 下限防负值）截断，宽窗下也不越进命令栏。容器 = .editor 的 @container（EditorView） */
 export default function EditorCaption({ name, dirty, nodeCount, savedAt }: Readonly<Props>) {
   return (
     <>
-      <div className="editor-caption pointer-events-none absolute bottom-3 left-4 z-[5] flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="caption-name max-w-[40vw] truncate font-mono">{name}</span>
+      <div className="editor-caption pointer-events-none absolute bottom-3 left-4 z-[5] flex max-w-[max(0px,calc(50%-27rem))] items-center gap-2 text-sm text-muted-foreground @max-[1150px]:bottom-16">
+        <span className="caption-name min-w-0 max-w-[40vw] truncate font-mono">{name}</span>
         {dirty && (
           /* aria-live：朱砂点出现/消失时向读屏播报（色点本身无文本，aria-label 提供语义） */
           <span role="status" aria-live="polite">
@@ -47,12 +50,12 @@ export default function EditorCaption({ name, dirty, nodeCount, savedAt }: Reado
             />
           </span>
         )}
-        {/* 统计行（2026-09）：节点数 + 最后保存时间，muted 小字不抢题签 */}
-        <span data-testid="caption-stats" className="whitespace-nowrap font-mono text-xs">
+        {/* 统计行（2026-09）：节点数 + 最后保存时间，muted 小字不抢题签（shrink-0 长名截断不让位） */}
+        <span data-testid="caption-stats" className="shrink-0 whitespace-nowrap font-mono text-xs">
           {nodeCount} 节点 · {savedTimeLabel(savedAt)}
         </span>
       </div>
-      <ThemeFab />
+      <ThemeFab className="@max-[1150px]:bottom-16" />
     </>
   )
 }
