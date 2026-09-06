@@ -1,17 +1,9 @@
 import { Button } from './ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from './ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import AppLogo from './AppLogo'
 
 interface Props {
-  /** 创建工作区入口（主按钮）与「选择已有文件夹」（次链接）语义同一：
-   *  都弹目录选择框——「创建工作区」即「选一个文件夹作为工作区」（现 pickDirectory 流） */
+  /** 唯一入口：弹目录选择框——选中文件夹即定为工作区（pickDirectory 流） */
   onCreateWorkspace(): void
 }
 
@@ -19,7 +11,10 @@ interface Props {
  *  官方 authentication 的 muted 底 + 自上而下轻渐变（from-background to-muted，
  *  起点同底色无缝），白卡 + 官方 shadow-sm 浮于其上——分区靠色场不靠线条；
  *  Card w-96 解剖（居中卡头：印标/CardTitle/CardDescription，主钮 size=lg 通栏在
- *  CardContent，次钮 ghost 在 CardFooter）；命令栏在此态隐藏（由 LibraryView 控制） */
+ *  CardContent）；命令栏在此态隐藏（由 LibraryView 控制）。
+ *  2026-09 UI 评审 P2-1：原双入口（创建工作区/选择已有文件夹）措辞不同但同一动作
+ *  （都弹目录选择框），制造「创建会新建文件夹」的错误预期与无谓选择——合并为
+ *  单主钮「选择工作区文件夹」，所见即所选 */
 export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
   return (
     <div
@@ -40,19 +35,9 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
             data-testid="btn-welcome-create"
             onClick={onCreateWorkspace}
           >
-            创建工作区
+            选择工作区文件夹
           </Button>
         </CardContent>
-        <CardFooter className="justify-center">
-          <Button
-            type="button"
-            variant="ghost"
-            data-testid="btn-welcome-pick"
-            onClick={onCreateWorkspace}
-          >
-            选择已有文件夹
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )

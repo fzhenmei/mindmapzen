@@ -3,6 +3,7 @@ import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { IconTheme } from './icons'
 import { nextVisibleTheme } from '../services/theme'
+import { cn } from '../lib/utils'
 import type { ThemePref } from '../types/files'
 
 const LABEL: Record<ThemePref, string> = { auto: '主题：跟随系统', light: '主题：晨松（亮）', dark: '主题：夜航（暗）' }
@@ -38,10 +39,13 @@ export default function ThemeToggle() {
 
 /** 右下角主题钮定位容器（2026-09 三态统一）：开屏/案头/纸面同款挂法，锚点为最近
  *  relative 祖先（开屏 .library / 案头 SidebarInset / 纸面 .editor）；theme-fab
- *  类名保留为视觉冒烟钩子。抽出前三处各写一份相同 div（EditorCaption 原创） */
-export function ThemeFab() {
+ *  类名保留为视觉冒烟钩子。抽出前三处各写一份相同 div（EditorCaption 原创）。
+ *  className 透传（2026-09 UI 评审 P1）：纸面态由 EditorCaption 传窄容器上移变体
+ *  （@max-[1150px]:bottom-16，容器为 .editor 的 @container）——窄窗命令栏固定
+ *  ~778px 居中，角标同线必被 z-10 遮住；开屏/案头无命令栏不传、维持原位 */
+export function ThemeFab({ className }: Readonly<{ className?: string }>) {
   return (
-    <div className="theme-fab absolute bottom-3 right-4 z-[5]">
+    <div className={cn('theme-fab absolute bottom-3 right-4 z-[5]', className)}>
       <ThemeToggle />
     </div>
   )

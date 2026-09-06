@@ -22,7 +22,6 @@ test('无工作区时渲染开屏页，创建工作区后进入案头', async ()
   render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
   expect(screen.getByTestId('welcome-screen')).toBeInTheDocument()
   expect(screen.getByTestId('btn-welcome-create')).toBeInTheDocument()
-  expect(screen.getByTestId('btn-welcome-pick')).toBeInTheDocument()
   // 页首栏隐藏：设置入口不渲染；主题钮 2026-09 起开屏态常驻右下角 fab（开屏/案头/纸面三态统一）
   expect(screen.queryByTestId('btn-settings')).not.toBeInTheDocument()
   expect(screen.getByTestId('btn-theme')).toBeInTheDocument()
@@ -31,13 +30,6 @@ test('无工作区时渲染开屏页，创建工作区后进入案头', async ()
   // M15：有工作区后进案头 idle 空态（未选任何），开屏页不再渲染
   expect(await screen.findByTestId('desk-idle')).toBeInTheDocument()
   expect(screen.queryByTestId('welcome-screen')).not.toBeInTheDocument()
-})
-
-test('开屏次入口「选择已有文件夹」同走工作区选择流', async () => {
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
-  fireEvent.click(screen.getByTestId('btn-welcome-pick'))
-  await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws'))
-  expect(await screen.findByTestId('desk-idle')).toBeInTheDocument()
 })
 
 // M5d 缓期项清偿：设置页「更换工作区」——pickDirectory 选新文件夹后案头切换、对话框关闭

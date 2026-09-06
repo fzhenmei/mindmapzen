@@ -80,3 +80,20 @@ test('编辑框内方向键：移动光标而非跳节点', async ({ page }) => 
   await expect(editor).toBeHidden()
   await expect(page.getByText('根主题印').first()).toBeVisible()
 })
+
+// 空图引导（2026-09 UI 评审 P2-2）：仅根节点时画布左上角轻提示建节点快捷键（Tab 子 /
+// Enter 同级）——在需要处教学，不依赖漫游引导（一次性）；加出第二个节点即消失。
+// desk=1 预置「根图」恰为单节点图
+test('空图引导：仅根节点显示建节点提示，加节点后消失', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+  await page.getByTestId('file-node-根图').dblclick()
+  await expect(page.getByTestId('canvas-hint')).toBeVisible()
+
+  // 同款录入链路：点根选中 → Tab 建子 → 等编辑框 → 点空白提交 → 节点数 2 → 提示消失
+  await page.getByText('根图').first().click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('div.smm-node-edit-wrap')).toBeVisible()
+  await page.getByRole('application').click({ position: { x: 15, y: 15 } })
+  await expect(page.getByTestId('canvas-hint')).toBeHidden()
+})

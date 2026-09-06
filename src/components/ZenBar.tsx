@@ -358,7 +358,9 @@ export default function ZenBar({
       {/* 布局组 = ui ToggleGroup（single）：激活项 data-state=on 官方点亮态；点已激活项为 no-op。
        *  项不加 ui Tooltip：TooltipTrigger(asChild) 会把自身 data-state(open/closed) 混入 item props，
        *  遮蔽 Radix Toggle 的 on/off 信号（官方 sidebar 以 data-active 规避同款冲突，Toggle 无此通道）；
-       *  语义名由 item 自身 aria-label 承担（官方 ToggleGroup 文档同款 a11y 模式） */}
+       *  语义名由 item 自身 aria-label 承担（官方 ToggleGroup 文档同款 a11y 模式）。
+       *  2026-09 UI 评审 P3-2：补原生 title 悬停提示——不经过 Tooltip 组件、无 data-state
+       *  冲突，鼠标用户可辨识三个布局图标的语义（与全栏 14 钮的悬停体验对齐） */}
       <ToggleGroup
         type="single"
         value={layout}
@@ -374,7 +376,7 @@ export default function ZenBar({
             ['org', '组织结构图（向下）', <IconLayoutDown key="d" />],
           ] as const
         ).map(([kind, label, icon]) => (
-          <ToggleGroupItem key={kind} value={kind} data-testid={`layout-${kind}`} aria-label={label}>
+          <ToggleGroupItem key={kind} value={kind} data-testid={`layout-${kind}`} aria-label={label} title={label}>
             {icon}
           </ToggleGroupItem>
         ))}
@@ -392,6 +394,7 @@ export default function ZenBar({
             data-testid="btn-layout-more"
             data-active={moreActive !== null ? '' : undefined}
             aria-label={moreActive ? moreActive[1] : '更多布局'}
+            title={moreActive ? moreActive[1] : '更多布局'}
             className="data-[active]:bg-accent data-[active]:text-accent-foreground"
           >
             {moreActive ? moreActive[2] : <IconChevronDown />}
