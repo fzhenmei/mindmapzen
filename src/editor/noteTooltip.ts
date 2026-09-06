@@ -4,7 +4,23 @@
 // 样式令牌化（var(--card)/--foreground/--radius），双主题自动；文本段 textContent
 // 转义、图源段走 renderMermaid（strict 转义 SVG）——无注入面。
 
-import { renderMermaid, splitNoteSegments } from '../services/mermaidRender'
+import { renderMermaid, splitNoteSegments, type NoteSegment } from '../services/mermaidRender'
+
+/** 悬停窗正文速览限额（spec：约 300 字）；mermaid 段不计数、始终保留 */
+const TIP_TEXT_LIMIT = 300
+export function truncateForTip(segs: NoteSegment[]): { segs: NoteSegment[]; truncated: boolean } {
+  let used = 0
+  let truncated = false
+  const out: NoteSegment[] = []
+  for (const s of segs) {
+    if (s.kind === 'mermaid') { out.push(s); continue }
+    if (truncated) continue // 超限后的文本段丢弃
+    if (used + s.content.length <= TIP_TEXT_LIMIT) { out.push(s); used += s.content.length; continue }
+    truncated = true
+    out.push({ kind: 'text', content: s.content.slice(0, TIP_TEXT_LIMIT - used) })
+  }
+  return { segs: out, truncated }
+}
 
 export interface NoteTooltip {
   /** 引擎 customNoteContentShow.show 契约：note 文本 + 视口坐标（fixed 定位） */
@@ -71,7 +87,8 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
 
   const renderInto = async (note: string, seq: number): Promise<void> => {
     el.textContent = ''
-    for (const seg of splitNoteSegments(note)) {
+    const tip = truncateForTip(splitNoteSegments(note))
+    for (const seg of tip.segs) {
       if (seg.kind === 'text') {
         const p = document.createElement('div')
         p.style.whiteSpace = 'pre-wrap'
@@ -82,6 +99,13 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       const host = makeMermaidHost()
       el.appendChild(host)
       await renderMermaidInto(host, seg.content, seq)
+    }
+    if (tip.truncated) {
+      const more = document.createElement('div')
+      more.className = 'zen-note-tip-more'
+      more.style.cssText = 'margin-top:6px;color:var(--muted-foreground);font-size:11px;'
+      more.textContent = '打开面板查看全文'
+      el.appendChild(more)
     }
   }
 
