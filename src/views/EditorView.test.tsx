@@ -135,7 +135,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
               : uid === 'deep-uid'
                 ? fakeDeepNode
                 : null,
-        textEdit: { hideEditTextBox: vi.fn() },
+        textEdit: { show: vi.fn(), hideEditTextBox: vi.fn() },
         // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
         reRenderNodeCheckChange: vi.fn(),
         // 复制选中节点（对调后 Control+Shift+c 路径，EditorView 不经此，桩满足 EngineRenderer）

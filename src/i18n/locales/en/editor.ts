@@ -61,6 +61,13 @@ const editor: Dict['editor'] = {
     image: 'Node image',
     link: 'Create link: click, then click the target node',
   },
+  nodeMenu: {
+    label: 'Node actions menu',
+    insertChild: 'Add child node',
+    insertSibling: 'Add sibling node',
+    editText: 'Edit text',
+    delete: 'Delete node',
+  },
   multiSelect: {
     count: '{{count}} nodes selected',
     deleteSelected: 'Delete the {{count}} selected nodes',
