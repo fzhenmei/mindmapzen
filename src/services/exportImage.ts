@@ -2,6 +2,7 @@
 // 引擎核验（docs/notes/engine-api.md「M5b 核验 (a)」）：doExport.png()/svg() 返回
 // base64 data URL 字符串而非 Blob（png 链路 canvas.toDataURL 直出、svg 链路 readBlob
 // 误名实为 readAsDataURL），故转换函数是 dataUrlToBytes 而非 blobToBytes。
+import { i18n } from '../i18n'
 import type { EngineExport, MindMapHandle } from '../types/engine'
 
 /** 二进制写盘口（FsAdapter.writeBytes 的函数面；测试注入内存捕获） */
@@ -17,9 +18,9 @@ export function dataUrlToBytes(dataUrl: string): Uint8Array {
   return bytes
 }
 
-/** 取导出插件实例：未注册（usePlugin(Export) 缺失）即抛中文错误——不静默产出空文件/空剪贴板 */
+/** 取导出插件实例：未注册（usePlugin(Export) 缺失）即抛词典化错误——不静默产出空文件/空剪贴板 */
 function requireExport(mm: MindMapHandle): EngineExport {
-  if (!mm.doExport) throw new Error('引擎未注册 Export 插件')
+  if (!mm.doExport) throw new Error(i18n.t('errors.engineNoExportPlugin'))
   return mm.doExport
 }
 

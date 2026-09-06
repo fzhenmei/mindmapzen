@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
 import { applyMultilinePaste } from '../services/multiline'
@@ -59,6 +60,7 @@ interface Props {
 }
 
 export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
+  const { t } = useTranslation()
   const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
@@ -165,7 +167,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const copyPath = (): void => {
     void writeClipboard(toNativePath(mdPath)).then(
       () => flashStamp('copied'),
-      (e) => setError('复制路径失败：' + String(e)),
+      (e) => setError(t('errors.copyPathFailed', { reason: String(e) })),
     )
   }
 
@@ -189,7 +191,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     if (wsDir !== null) md = absolutizeImagePaths(md, wsDir)
     void writeClipboard(md).then(
       () => flashCopy('copied-md'),
-      (e) => setError('复制失败：' + String(e)),
+      (e) => setError(t('errors.copyMdFailed', { reason: String(e) })),
     )
   }
 
@@ -451,7 +453,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
                   setNewMapOpen(false)
                   void quick
                     .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent))
-                    .catch((e) => setError('新建导图失败：' + (e instanceof Error ? e.message : String(e))))
+                    .catch((e) => setError(t('errors.createMapFailed', { reason: e instanceof Error ? e.message : String(e) })))
                 },
               }
             : null

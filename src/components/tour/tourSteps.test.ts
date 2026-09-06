@@ -1,7 +1,10 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { useAppStore } from '../../store/appStore'
 import { MemoryFsAdapter } from '../../services/fs/MemoryFsAdapter'
-import { TOUR_STEPS, openSampleMap } from './tourSteps'
+import { buildTourSteps, openSampleMap } from './tourSteps'
+
+// 步骤表已工厂化:测试 setup 已以 zh-CN 预热 i18n,模块级调用一次即得中文步骤表(与旧常量等价,断言不变)
+const TOUR_STEPS = buildTourSteps()
 
 beforeEach(async () => {
   const fs = new MemoryFsAdapter()

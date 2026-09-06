@@ -5,6 +5,7 @@
 //  收藏跟随（2026-09 收藏置顶）：两流在移动成功后 relocate（moveFile 单址换 / moveDir
 //  前缀重写），保住「永远置顶」——改名/移动不丢星标
 import { useAppStore } from '../store/appStore'
+import { i18n } from '../i18n'
 import { isUnderDir, moveDir as moveDirOnFs, moveMap } from '../services/desk'
 import { joinPath, resolveDir } from '../services/workspace'
 
@@ -26,7 +27,7 @@ export function useTreeMoves(refresh: () => Promise<void>): TreeMoves {
       await refresh()
       setError(null)
     } catch (e) {
-      setError('移动失败：' + (e instanceof Error ? e.message : String(e)))
+      setError(i18n.t('errors.moveFailed', { reason: e instanceof Error ? e.message : String(e) }))
     }
   }
   const moveDir = async (fromRel: string, toRel: string) => {
@@ -46,7 +47,7 @@ export function useTreeMoves(refresh: () => Promise<void>): TreeMoves {
       await refresh()
       setError(null)
     } catch (e) {
-      setError('移动失败：' + (e instanceof Error ? e.message : String(e)))
+      setError(i18n.t('errors.moveFailed', { reason: e instanceof Error ? e.message : String(e) }))
     }
   }
   return { moveFile, moveDir }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -16,12 +17,13 @@ interface Props {
 /** 命名对话框（M12b 切 ui/dialog + ui/input → M16 内联错误）：Esc/✕/遮罩点击 → onCancel；
  *  空名本地拦截（不发起确认），服务层错误框内 destructive 小字提示，对话框保持打开 */
 export default function NameDialog({ title, initial = '', confirmText, onConfirm, onCancel }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const submit = async () => {
     setError(null)
     if (value.trim() === '') {
-      setError('名称不能为空')
+      setError(t('errors.nameEmpty'))
       return
     }
     try {
@@ -50,7 +52,7 @@ export default function NameDialog({ title, initial = '', confirmText, onConfirm
         )}
         <DialogFooter>
           <Button variant="secondary" size="sm" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button size="sm" data-testid="btn-confirm" onClick={() => void submit()}>
             {confirmText}

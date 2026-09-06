@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import SettingsDialog from './SettingsDialog'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -74,5 +74,20 @@ describe('SettingsDialog', () => {
     fireEvent.click(screen.getByTestId('tour-replay'))
     expect(useAppStore.getState().tourActive).toBe(true)
     expect(onClose).toHaveBeenCalled()
+  })
+
+  // i18n（Task 4）：语言三态选择器——切 English 即时生效（无需重启），html lang 同步。
+  // userEvent 不可用（项目未装 @testing-library/user-event），沿用本文件 fireEvent 惯例；
+  // setLanguagePref 为异步（i18next changeLanguage + load-merge-save），act 排空微任务后再断言
+  test('语言选择器:切 English 即时生效(无需重启),标题与版本管理行变英文', async () => {
+    render(<SettingsDialog onClose={() => {}} />)
+    // 默认中文
+    expect(screen.getByText('设置')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('lang-en'))
+    await act(async () => {}) // 排空 i18next changeLanguage 与 load-merge-save 微任务后重渲完成
+    expect(screen.getByText('Settings')).toBeInTheDocument()
+    expect(screen.getByText('Version control (auto-commit to workspace git repo)')).toBeInTheDocument()
+    // html lang 同步
+    expect(document.documentElement.lang).toBe('en')
   })
 })

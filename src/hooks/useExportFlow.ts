@@ -3,6 +3,7 @@
 //（取消即静默放弃），复制图直接走 writeImage；成功复用印记（导出=「已存」/复制图=「已复制」），
 // 失败经 setError 出中文横幅。
 import { useState, type RefObject } from 'react'
+import { i18n } from '../i18n'
 import { copyPngToClipboard, exportPngToFile, exportSvgToFile } from '../services/exportImage'
 import type { MindMapHandle } from '../types/engine'
 import type { ExportPorts } from '../types/ports'
@@ -49,7 +50,7 @@ export function useExportFlow(
       else await exportSvgToFile(mm, savePath, adapter.writeBytes.bind(adapter))
       onSuccess('saved')
     } catch (e) {
-      onError('导出失败：' + String(e))
+      onError(i18n.t('errors.exportFailed', { reason: String(e) }))
     }
   }
 
@@ -60,7 +61,7 @@ export function useExportFlow(
       await copyPngToClipboard(mm, ports.writeImage)
       onSuccess('copied')
     } catch (e) {
-      onError('复制图片失败：' + String(e))
+      onError(i18n.t('errors.copyImageFailed', { reason: String(e) }))
     }
   }
 

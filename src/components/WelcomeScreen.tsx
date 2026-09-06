@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import AppLogo from './AppLogo'
@@ -16,6 +17,7 @@ interface Props {
  *  （都弹目录选择框），制造「创建会新建文件夹」的错误预期与无谓选择——合并为
  *  单主钮「选择工作区文件夹」，所见即所选 */
 export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
+  const { t } = useTranslation()
   return (
     <div
       className="grid min-h-screen flex-1 place-items-center bg-linear-to-b from-background to-muted"
@@ -25,7 +27,7 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
         <CardHeader className="text-center">
           <AppLogo size={48} className="mx-auto" />
           <CardTitle className="text-2xl font-semibold tracking-tight">Mind Map Zen</CardTitle>
-          <CardDescription>想法落成 .md</CardDescription>
+          <CardDescription>{t('library.welcomeScreen.tagline')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button
@@ -35,7 +37,7 @@ export default function WelcomeScreen({ onCreateWorkspace }: Readonly<Props>) {
             data-testid="btn-welcome-create"
             onClick={onCreateWorkspace}
           >
-            选择工作区文件夹
+            {t('library.welcomeScreen.chooseWorkspace')}
           </Button>
         </CardContent>
       </Card>

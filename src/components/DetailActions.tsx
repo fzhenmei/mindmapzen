@@ -1,6 +1,8 @@
 import { Fragment } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { MapInfo } from '../types/files'
 import { formatFileSize } from '../services/fileSize'
+import { i18n } from '../i18n'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 import { iconBtn } from './ui/icon-button'
@@ -44,10 +46,11 @@ interface Props {
 /** 详情态页首标题（容器合并：原卡头 CardTitle 上移，truncate 截断加 …） */
 export const detailTitle = (m: Readonly<MapInfo>): string => `${m.name}.md`
 
-/** 标题 tooltip 的元信息行（容器合并：原卡脚下沉信息并入悬停）——大小 · 创建 · 修改 */
-const dt = (ms: number) => new Date(ms).toLocaleString('zh-CN')
+/** 标题 tooltip 的元信息行（容器合并：原卡脚下沉信息并入悬停）——大小 · 创建 · 修改。
+ *  日期 locale 随界面语言（i18n.language 调用时取值，无模块顶层求值问题） */
+const dt = (ms: number) => new Date(ms).toLocaleString(i18n.language)
 export const detailMeta = (m: Readonly<MapInfo>): string =>
-  `${formatFileSize(m.size)} · 创建 ${dt(m.createdAt)} · 修改 ${dt(m.modifiedAt)}`
+  i18n.t('library.fileDetail.meta', { size: formatFileSize(m.size), created: dt(m.createdAt), modified: dt(m.modifiedAt) })
 
 /** 案头详情动作组（容器合并改版）：自 FileDetail 卡头上移至主容器页首，置于常驻钮
  *  左侧。三组沿卡头节奏（[返回] | [移动/重命名/删除] | [复制路径/打开]，组间竖线）；
@@ -55,15 +58,16 @@ export const detailMeta = (m: Readonly<MapInfo>): string =>
  *  （icon + 文字，浮层平铺）。宽窄由页首 @container 容器查询纯 CSS 分流（680px 阈值，
  *  零 JS 测量）。条目 testid 加 more- 前缀（与宽组同名钮区分，E2E 严格模式不撞名） */
 export default function DetailActions({ info, favorite, onToggleFavorite, onBack, onAction, onCopyPath, onOpen }: Readonly<Props>) {
+  const { t } = useTranslation()
   const groups = [
-    [{ testid: 'btn-detail-back', label: '关闭预览', Icon: IconArrowLeft, run: onBack }],
+    [{ testid: 'btn-detail-back', label: t('library.fileDetail.closePreview'), Icon: IconArrowLeft, run: onBack }],
     // 星标切换（2026-09 收藏置顶）：选中预览时顺手点星；文案随收藏态切换
-    [{ testid: 'btn-detail-favorite', label: favorite ? '取消收藏' : '收藏', Icon: IconStar, run: onToggleFavorite }],
+    [{ testid: 'btn-detail-favorite', label: favorite ? t('library.unfavorite') : t('library.favorite'), Icon: IconStar, run: onToggleFavorite }],
     (
       [
-        ['btn-move', '移动到目录', IconFolder, 'move'],
-        ['btn-rename', '重命名', IconPencil, 'rename'],
-        ['btn-delete', '删除', IconTrash, 'delete'],
+        ['btn-move', t('library.moveToDir'), IconFolder, 'move'],
+        ['btn-rename', t('common.rename'), IconPencil, 'rename'],
+        ['btn-delete', t('common.delete'), IconTrash, 'delete'],
       ] as const
     ).map(([testid, label, Icon, a]) => ({
       testid,
@@ -74,11 +78,11 @@ export default function DetailActions({ info, favorite, onToggleFavorite, onBack
     [
       {
         testid: 'btn-copy-path',
-        label: '复制文件路径',
+        label: t('library.fileDetail.copyPath'),
         Icon: IconCopy,
         run: () => onCopyPath(info.mdPath),
       },
-      { testid: 'btn-detail-open', label: '打开导图', Icon: IconOpen, run: () => onOpen(info) },
+      { testid: 'btn-detail-open', label: t('library.fileDetail.openMap'), Icon: IconOpen, run: () => onOpen(info) },
     ],
   ]
   return (
@@ -102,7 +106,7 @@ export default function DetailActions({ info, favorite, onToggleFavorite, onBack
             variant="ghost"
             size="sm"
             data-testid="btn-detail-more"
-            aria-label="更多操作"
+            aria-label={t('library.fileDetail.moreActions')}
             className="@[680px]:hidden"
           >
             <IconMore />

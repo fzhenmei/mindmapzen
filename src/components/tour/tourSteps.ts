@@ -2,6 +2,7 @@
 // 锚点全用现有 data-testid（主视图零改动）；target null = 居中卡（无锚点步）。
 // before 内经 getState() 延迟取 store（模块级不 import 具体方法，避免与 TourOverlay→store 的链路耦合）
 import { useAppStore } from '../../store/appStore'
+import { i18n } from '../../i18n'
 
 export interface TourStep {
   view: 'library' | 'editor'
@@ -13,79 +14,85 @@ export interface TourStep {
   before?: () => Promise<void>
 }
 
-/** 打开漫游示例导图（spec §4.2）：不存在则创建，已存在（重看场景）则直接打开——幂等 */
+/** 打开漫游示例导图（spec §4.2）：不存在则创建，已存在（重看场景）则直接打开——幂等。
+ *  示例图名随语言取名：跨语言重看会各留一份示例图（接受，重看幂等只在同语言内成立） */
 export async function openSampleMap(): Promise<void> {
+  const name = i18n.t('tour.sampleMapName')
   const store = useAppStore.getState()
   try {
-    await store.createAndOpen('漫游示例')
+    await store.createAndOpen(name)
   } catch {
-    // 「已存在同名导图」：重看场景，直接打开既有示例图
+    // 「已存在同名导图」：同语言重看场景，直接打开既有示例图（跨语言时是另一份名字，不走此分支）
     const { workspaceDir } = useAppStore.getState()
     if (workspaceDir === null) return
-    await useAppStore.getState().openMap(`${workspaceDir}/漫游示例.md`)
+    await useAppStore.getState().openMap(`${workspaceDir}/${name}.md`)
   }
 }
 
-export const TOUR_STEPS: TourStep[] = [
-  {
-    view: 'library',
-    target: null,
-    title: '欢迎来到 Mind Map Zen',
-    body: '这是一款本地优先的思维导图工具，约 1 分钟带你逛完核心功能。随时可点「跳过」，之后能在设置里重新观看。',
-  },
-  {
-    view: 'library',
-    target: 'btn-new',
-    title: '新建导图',
-    body: '输入名称、挑选模板即可建图。双击案头里的导图随时进入编辑。',
-  },
-  {
-    view: 'library',
-    target: 'btn-import',
-    title: '导入已有内容',
-    body: '支持导入 Markdown 大纲与 XMind 文件，直接变成导图。',
-  },
-  {
-    view: 'library',
-    target: 'dir-panel',
-    title: '目录组织',
-    body: '左侧目录树管理工作区里的文件夹与导图——单击文件即可预览，双击直接进入编辑。',
-  },
-  {
-    view: 'library',
-    target: null,
-    title: '进入编辑器',
-    body: '接下来带你看看编辑器。我们将自动打开一张「漫游示例」导图作为演示对象，引导结束后它会留在工作区，可以随意练手。',
-  },
-  {
-    view: 'editor',
-    target: 'zen-bar',
-    title: '命令栏',
-    body: '底部命令栏集中了常用操作：返回案头、切换导图、复制 Markdown、保存等，鼠标悬停可看快捷键。',
-    before: openSampleMap,
-  },
-  {
-    view: 'editor',
-    target: 'layout-mindmap',
-    title: '布局切换',
-    body: '常用布局一键直达：思维导图、逻辑图、组织结构图；时间轴、鱼骨图收在「更多」里。',
-  },
-  {
-    view: 'editor',
-    target: 'btn-body',
-    title: '节点正文',
-    body: '选中节点后在右侧面板撰写正文，支持手写 Markdown 语法，随导图文件一起保存。',
-  },
-  {
-    view: 'editor',
-    target: 'btn-export',
-    title: '导出图片',
-    body: '一键把导图导出为 PNG/SVG，或直接复制到剪贴板。',
-  },
-  {
-    view: 'editor',
-    target: null,
-    title: '开始你的第一张导图',
-    body: '「漫游示例」已留在工作区，可以拿它练手。现在就去新建一张属于自己的导图吧！',
-  },
-]
+/** 漫游引导步骤表（工厂：title/body 在调用期从词典取值，语言切换后重看即新语言；
+ *  view/target/before 不涉语言，仍为静态结构） */
+export function buildTourSteps(): TourStep[] {
+  return [
+    {
+      view: 'library',
+      target: null,
+      title: i18n.t('tour.steps.welcome.title'),
+      body: i18n.t('tour.steps.welcome.body'),
+    },
+    {
+      view: 'library',
+      target: 'btn-new',
+      title: i18n.t('tour.steps.newMap.title'),
+      body: i18n.t('tour.steps.newMap.body'),
+    },
+    {
+      view: 'library',
+      target: 'btn-import',
+      title: i18n.t('tour.steps.import.title'),
+      body: i18n.t('tour.steps.import.body'),
+    },
+    {
+      view: 'library',
+      target: 'dir-panel',
+      title: i18n.t('tour.steps.dirs.title'),
+      body: i18n.t('tour.steps.dirs.body'),
+    },
+    {
+      view: 'library',
+      target: null,
+      title: i18n.t('tour.steps.toEditor.title'),
+      body: i18n.t('tour.steps.toEditor.body'),
+    },
+    {
+      view: 'editor',
+      target: 'zen-bar',
+      title: i18n.t('tour.steps.zenbar.title'),
+      body: i18n.t('tour.steps.zenbar.body'),
+      before: openSampleMap,
+    },
+    {
+      view: 'editor',
+      target: 'layout-mindmap',
+      title: i18n.t('tour.steps.layout.title'),
+      body: i18n.t('tour.steps.layout.body'),
+    },
+    {
+      view: 'editor',
+      target: 'btn-body',
+      title: i18n.t('tour.steps.body.title'),
+      body: i18n.t('tour.steps.body.body'),
+    },
+    {
+      view: 'editor',
+      target: 'btn-export',
+      title: i18n.t('tour.steps.export.title'),
+      body: i18n.t('tour.steps.export.body'),
+    },
+    {
+      view: 'editor',
+      target: null,
+      title: i18n.t('tour.steps.finish.title'),
+      body: i18n.t('tour.steps.finish.body'),
+    },
+  ]
+}

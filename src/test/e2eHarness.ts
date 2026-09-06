@@ -25,7 +25,9 @@ function harnessPngBytes(): Uint8Array {
  *  点 btn-welcome-create 后经 pickDirectory 桩（固定返回 /ws）走真实 setWorkspace 链路。
  *  引导预设：默认预写 /cfg.json tourDone:true（须先于 setWorkspace，load-merge-save 保留），
  *  仅 ?tour=1 时写 false——tour.spec 显式要求看引导；?tourdone=1 与默认等效（语义自述）。
- *  不预写 false 的原因同 ?desk=1：引导遮罩全屏拦截交互，既有 ?e2e=1 用例会被挡住 */
+ *  不预写 false 的原因同 ?desk=1：引导遮罩全屏拦截交互，既有 ?e2e=1 用例会被挡住
+ *  ?lang=<pref> 预置 cfg.language（2026-09 i18n）：language-switch.spec「重启保持」用——
+ *  harness 每次页面加载重建内存 FS，重启语义同 ?tourdone 以预置模拟 */
 export async function installE2eHarness(): Promise<void> {
   const fs = new MemoryFsAdapter()
   useAppStore.getState().setAdapter(fs)
@@ -91,7 +93,13 @@ export async function installE2eHarness(): Promise<void> {
   // ?tourdone=1（tour.spec「完成后重启」用例）与默认等效，仅作 spec 内语义自述。
   // 预写须先于 setWorkspace：它是 load-merge-save，会保留 tourDone
   const tourDone = !new URLSearchParams(window.location.search).has('tour')
-  await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, tourDone }))
+  // ?lang=<pref> 预置界面语言：模拟上一会话已落盘 language 的重启（language-switch.spec），
+  // 语义同上 ?tourdone——真 reload 会重建内存 FS 丢配置，无法验证「重启保持」
+  const lang = new URLSearchParams(window.location.search).get('lang')
+  await fs.writeTextFileAtomic(
+    '/cfg.json',
+    JSON.stringify({ workspaceDir: null, tourDone, ...(lang ? { language: lang } : {}) }),
+  )
   if (!new URLSearchParams(window.location.search).has('nows')) {
     await useAppStore.getState().setWorkspace('/ws')
   }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import { listTemplates, TEMPLATES_DIR } from './templates'
-import { BUILTIN_TEMPLATES } from '../templates/registry'
+import { builtinTemplates } from '../templates/registry'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
@@ -11,7 +11,7 @@ beforeEach(() => {
 describe('listTemplates', () => {
   test('无工作区 → 仅内置清单', async () => {
     const list = await listTemplates(fs, null)
-    expect(list.map((t) => t.key)).toEqual(BUILTIN_TEMPLATES.map((t) => `builtin:${t.id}`))
+    expect(list.map((t) => t.key)).toEqual(builtinTemplates().map((t) => `builtin:${t.id}`))
     expect(list[0]?.name).toBe('空白导图')
   })
 

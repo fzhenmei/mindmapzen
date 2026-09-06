@@ -28,9 +28,9 @@ fn set_titlebar_colors(
     fn to_colorref(hex: &str) -> Result<u32, String> {
         let h = hex.trim_start_matches('#');
         if h.len() != 6 {
-            return Err(format!("非法颜色值：{hex}"));
+            return Err(format!("INVALID_COLOR: {hex}"));
         }
-        let v = u32::from_str_radix(h, 16).map_err(|e| format!("非法颜色值 {hex}：{e}"))?;
+        let v = u32::from_str_radix(h, 16).map_err(|e| format!("INVALID_COLOR: {hex}: {e}"))?;
         let (r, g, b) = ((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
         Ok((b << 16) | (g << 8) | r)
     }
@@ -41,7 +41,7 @@ fn set_titlebar_colors(
             let hr = DwmSetWindowAttribute(hwnd, attr as u32, val, size);
             if hr != 0 {
                 Err(format!(
-                    "DwmSetWindowAttribute(attr={attr}) 失败：0x{hr:08X}"
+                    "DWM_SET_ATTR_FAILED: attr={attr} hr=0x{hr:08X}"
                 ))
             } else {
                 Ok(())
@@ -102,7 +102,7 @@ async fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
     }
     let out = tokio::time::timeout(Duration::from_secs(30), cmd.output())
         .await
-        .map_err(|_| "git 命令超时（30 秒）".to_string())?
+        .map_err(|_| "GIT_TIMEOUT".to_string())?
         .map_err(|e| e.to_string())?;
     Ok(GitResult {
         ok: out.status.success(),

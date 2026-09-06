@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -25,6 +26,7 @@ interface Props {
  *  testid 沿用 NameDialog 契约（input-name/btn-confirm）——既有 E2E 新建流零适配
  *  （默认空白模板，直接输名称回车 = v1.5.0 行为）。模板清单挂载时拉取一次 */
 export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [templates, setTemplates] = useState<readonly TemplateInfo[]>([])
   const [picked, setPicked] = useState<string>('builtin:blank')
@@ -44,10 +46,10 @@ export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readon
   const confirm = async () => {
     setError(null)
     if (name.trim() === '') {
-      setError('名称不能为空')
+      setError(t('errors.nameEmpty'))
       return
     }
-    const tpl = templates.find((t) => t.key === picked)
+    const tpl = templates.find((tpl) => tpl.key === picked)
     // 空白模板走 createMap 缺省路径（与旧行为同一落盘内容）
     const content = tpl !== undefined && tpl.key !== 'builtin:blank' ? tpl.content : undefined
     try {
@@ -59,8 +61,8 @@ export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readon
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent aria-label="新建导图">
-        <DialogTitle>{inDirLabel === undefined ? '新建导图' : `在「${inDirLabel}」新建导图`}</DialogTitle>
+      <DialogContent aria-label={inDirLabel === undefined ? t('library.dialogs.newMap.title') : t('library.dialogs.newMap.titleIn', { dir: inDirLabel })}>
+        <DialogTitle>{inDirLabel === undefined ? t('library.dialogs.newMap.title') : t('library.dialogs.newMap.titleIn', { dir: inDirLabel })}</DialogTitle>
         <Input
           data-testid="input-name"
           value={name}
@@ -76,24 +78,24 @@ export default function NewMapDialog({ onCancel, onConfirm, inDirLabel }: Readon
           </p>
         )}
         <Select value={picked} onValueChange={setPicked}>
-          <SelectTrigger data-testid="template-select" aria-label="选择模板" className="w-full">
-            <SelectValue placeholder="选择模板" />
+          <SelectTrigger data-testid="template-select" aria-label={t('library.dialogs.newMap.templateSelect')} className="w-full">
+            <SelectValue placeholder={t('library.dialogs.newMap.templateSelect')} />
           </SelectTrigger>
           <SelectContent>
-            {templates.map((t) => (
-              <SelectItem key={t.key} value={t.key}>
-                {t.name}
-                {t.desc !== '' && <span className="ml-2 text-xs text-muted-foreground">{t.desc}</span>}
+            {templates.map((tpl) => (
+              <SelectItem key={tpl.key} value={tpl.key}>
+                {tpl.name}
+                {tpl.desc !== '' && <span className="ml-2 text-xs text-muted-foreground">{tpl.desc}</span>}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <DialogFooter>
           <Button variant="secondary" size="sm" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button size="sm" data-testid="btn-confirm" onClick={() => void confirm()}>
-            创建
+            {t('library.dialogs.newMap.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

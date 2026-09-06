@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
 })
 
 describe('appStore', () => {
@@ -217,6 +217,23 @@ describe('theme（M4 禅意视觉）', () => {
     await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'light' }))
     await useAppStore.getState().init()
     expect(useAppStore.getState().themePref).toBe('light')
+  })
+})
+
+describe('language（2026-09 i18n 界面语言）', () => {
+  test('setLanguagePref:切 en 即时生效并落盘,切回 auto 归系统', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().init()
+    await useAppStore.getState().setLanguagePref('en')
+    expect(useAppStore.getState().languagePref).toBe('en')
+    expect(useAppStore.getState().resolvedLanguage).toBe('en')
+    expect(document.documentElement.lang).toBe('en')
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.language).toBe('en')
+    await useAppStore.getState().setLanguagePref('auto')
+    expect(useAppStore.getState().languagePref).toBe('auto')
+    // jsdom navigator.language 默认 en-US → auto 归系统解析为 en
+    expect(useAppStore.getState().resolvedLanguage).toBe('en')
   })
 })
 

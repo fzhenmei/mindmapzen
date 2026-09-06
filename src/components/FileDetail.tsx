@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { buildImageMetaFromSrcs } from '../services/imageAssets'
 import { toNativePath } from '../services/nativePath'
@@ -33,6 +34,7 @@ const DEFAULT_OUTLINE_PX = 224
  *  testid 挂预览容器（兼容既有 E2E/vitest）。bg-muted 下陷底铺满主区，贴
  *  SidebarInset 圆角边（inset 骨架 overflow-hidden 承接裁切） */
 export default function FileDetail({ info }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
   // 插图解析表（M19）：md 行级收集 ![alt](src) → 字节转 dataURL（预览渲染用；
   // webview 解析不了工作区相对路径）。失败宽容空表（img 原样渲染为占位）
@@ -98,8 +100,8 @@ export default function FileDetail({ info }: Readonly<Props>) {
   const placeholder =
     state.kind === 'error' ? (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
-        <p className="text-base font-medium text-foreground">无法预览此文件</p>
-        <p>文件可能已被移动、删除或没有访问权限</p>
+        <p className="text-base font-medium text-foreground">{t('library.fileDetail.previewFailedTitle')}</p>
+        <p>{t('library.fileDetail.previewFailedBody')}</p>
         <p className="break-all text-xs">{toNativePath(info.mdPath)}</p>
       </div>
     ) : (
@@ -146,14 +148,14 @@ export default function FileDetail({ info }: Readonly<Props>) {
                   variant="ghost"
                   size="sm"
                   data-testid="btn-outline-toggle"
-                  aria-label={outlineVisible ? '隐藏大纲' : '显示大纲'}
+                  aria-label={outlineVisible ? t('library.fileDetail.hideOutline') : t('library.fileDetail.showOutline')}
                   className="bg-background shadow-xs"
                   onClick={() => void setOutlinePref(outlineVisible ? 'off' : 'on')}
                 >
                   <IconOutline />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{outlineVisible ? '隐藏大纲' : '显示大纲'}</TooltipContent>
+              <TooltipContent>{outlineVisible ? t('library.fileDetail.hideOutline') : t('library.fileDetail.showOutline')}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

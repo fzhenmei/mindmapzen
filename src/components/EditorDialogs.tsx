@@ -6,6 +6,7 @@
 // SaveStamp 不入容器——它是浮层非对话框。M12b Task 5 切 ui/dialog + ui/button。
 // 2026-09-06 备注合并：NoteDialog 与 note 槽退役（正文唯一入口为右侧正文面板）。
 import type { ComponentProps } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { IgnoredBlock } from '../types/tree'
 import type { ExportActions } from '../hooks/useExportFlow'
 import CloseGuardDialog from './CloseGuardDialog'
@@ -57,7 +58,8 @@ export default function EditorDialogs({
   newMap,
   conflict,
 }: Readonly<EditorDialogsProps>) {
-  const ignoredTitle = `保存将丢弃 ${ignored.length} 个未映射的内容块`
+  const { t } = useTranslation()
+  const ignoredTitle = t('editor.dialogs.ignoredTitle', { count: ignored.length })
   return (
     <>
       {guarding && <CloseGuardDialog mapName={mapName} onChoice={onGuardChoice} />}
@@ -67,10 +69,10 @@ export default function EditorDialogs({
             <DialogTitle>{ignoredTitle}</DialogTitle>
             <DialogFooter>
               <Button variant="secondary" size="sm" data-testid="ignored-confirm-cancel" onClick={onIgnoredCancel}>
-                取消
+                {t('common.cancel')}
               </Button>
               <Button size="sm" data-testid="ignored-confirm-save" onClick={onIgnoredConfirm}>
-                继续保存
+                {t('editor.dialogs.ignoreConfirm')}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -1,4 +1,5 @@
 import { type PointerEvent as ReactPointerEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../lib/utils'
 
 interface Props {
@@ -24,6 +25,7 @@ interface Props {
  *  拖拽中 html 挂 data-split-resizing——App.css 全局禁过渡（侧栏自带 200ms width
  *  过渡会拖坏跟手感）、锁文本选择、统一 col-resize 光标。双击 = 恢复默认宽 */
 export default function SplitResizer({ side, width, min, max, label, onResize, onCommit, onReset, className }: Readonly<Props>) {
+  const { t } = useTranslation()
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     const pid = e.pointerId
@@ -57,7 +59,7 @@ export default function SplitResizer({ side, width, min, max, label, onResize, o
     <hr
       aria-orientation="vertical"
       aria-label={label}
-      title="拖拽调整宽度，双击恢复默认"
+      title={t('common.resizeTitle')}
       className={cn(
         'split-resizer absolute inset-y-0 z-20 h-auto w-2 cursor-col-resize touch-none border-0',
         'split-resizer absolute inset-y-0 z-20 w-2 cursor-col-resize touch-none',

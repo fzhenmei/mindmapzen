@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:en": "tsc && vite build --mode en",
+    "build:all": "npm run build && npm run build:en",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -1,9 +1,11 @@
 import { useEffect, type ReactNode } from 'react'
 import { useAppStore } from './store/appStore'
+import { i18n } from './i18n'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
 import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
+import { describeBackendError } from './services/backendError'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -47,7 +49,8 @@ const pickImportFile = async (): Promise<PickedImport | null> => {
   }
   const picked = await open({
     multiple: false,
-    filters: [{ name: '导图文件', extensions: ['md', 'xmind'] }],
+    // 过滤器名用户可见(OS 对话框),词典随界面语言(调用期求值)
+    filters: [{ name: i18n.t('library.importFileFilter'), extensions: ['md', 'xmind'] }],
   })
   if (typeof picked !== 'string') return null
   const fileName = picked.split(/[\\/]/).pop()!
@@ -70,7 +73,7 @@ const pickImageFile = async (): Promise<{ name: string; bytes: Uint8Array } | nu
   }
   const picked = await open({
     multiple: false,
-    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    filters: [{ name: i18n.t('editor.imageDialog.fileFilter'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
   })
   if (typeof picked !== 'string') return null
   const name = picked.split(/[\\/]/).pop()!
@@ -133,7 +136,7 @@ const exitApp = (): void => {
       const { getCurrentWindow } = await import('@tauri-apps/api/window')
       await getCurrentWindow().destroy()
     } catch (e) {
-      useAppStore.getState().setError('退出失败：' + String(e))
+      useAppStore.getState().setError(i18n.t('errors.exitFail', { detail: String(e) }))
     }
   })()
 }
@@ -161,7 +164,12 @@ const gitRun: GitRun = E2E
     })
   : async (cwd, args) => {
       const { invoke } = await import('@tauri-apps/api/core')
-      return invoke<{ ok: boolean; out: string; err: string }>('git_exec', { cwd, args })
+      try {
+        return await invoke<{ ok: boolean; out: string; err: string }>('git_exec', { cwd, args })
+      } catch (e) {
+        // Rust 稳定码本地化(GIT_TIMEOUT 用户可感;未知原文透传,见 backendError.ts)
+        throw describeBackendError(String(e))
+      }
     }
 
 /** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；
@@ -221,7 +229,7 @@ export default function App() {
       } catch (e) {
         // 初始化失败也离开启动屏（错误经 banner 呈现），不能永远卡在 loading
         useAppStore.setState({ booted: true })
-        useAppStore.getState().setError('初始化失败：' + String(e))
+        useAppStore.getState().setError(i18n.t('errors.initFail', { detail: String(e) }))
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅启动时执行
@@ -297,7 +305,7 @@ export default function App() {
       <div className="grid h-full place-items-center bg-background" data-testid="boot-screen">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <AppLogo size={48} />
-          <p className="text-sm">正在启动…</p>
+          <p className="text-sm">{i18n.t('common.booting')}</p>
         </div>
       </div>,
     )

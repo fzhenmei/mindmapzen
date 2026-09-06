@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createDir, type DirNode } from '../services/desk'
 import { useAppStore } from '../store/appStore'
 import { cn } from '../lib/utils'
@@ -28,6 +29,7 @@ const TREE_ROW_ACTIVE = 'bg-secondary text-primary'
  *  根目录目标为 `dir-node-root`；新建目录 `move-newdir-input`/`move-newdir-add`——建在工作区根下，
  *  建成即自动选中（随后 move-confirm 可直接移入，外层会 reloadTree 纳入正式树） */
 export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onCancel }: Readonly<Props>) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string | null>(null)
   // 对话框内联建出的目录（建在工作区根下），暂存为可选项；移动后外层 reloadTree 由 props.tree 接管
   const [extraDirs, setExtraDirs] = useState<DirNode[]>([])
@@ -58,7 +60,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
           className={cn(TREE_ROW, selected === n.path && TREE_ROW_ACTIVE)}
           style={{ paddingLeft: 8 + depth * 14 }}
           disabled={n.path === fromRel}
-          title={n.path === fromRel ? '已在当前目录' : n.path}
+          title={n.path === fromRel ? t('library.dialogs.move.alreadyHere') : n.path}
           onClick={() => setSelected(n.path)}
         >
           {n.name}
@@ -67,7 +69,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
       </div>
     ))
 
-  const title = `移动「${mapName}」`
+  const title = t('library.dialogs.move.title', { name: mapName })
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
       <DialogContent data-testid="move-dialog" aria-label={title}>
@@ -78,10 +80,10 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
             data-testid="dir-node-root"
             className={cn(TREE_ROW, selected === '' && TREE_ROW_ACTIVE)}
             disabled={fromRel === ''}
-            title={fromRel === '' ? '已在当前目录' : '移动到工作区根'}
+            title={fromRel === '' ? t('library.dialogs.move.alreadyHere') : t('library.dialogs.move.moveToRoot')}
             onClick={() => setSelected('')}
           >
-            根目录
+            {t('library.dialogs.move.root')}
           </button>
           {renderNodes([...tree, ...extraDirs], 0)}
         </div>
@@ -90,20 +92,20 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
             data-testid="move-newdir-input"
             className="min-w-0 flex-1"
             value={newDirName}
-            placeholder="新目录名"
+            placeholder={t('library.dialogs.move.newDirPlaceholder')}
             onChange={(e) => setNewDirName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void addNewDir()
             }}
           />
           <Button variant="secondary" size="sm" data-testid="move-newdir-add" onClick={() => void addNewDir()}>
-            新建
+            {t('library.dialogs.move.newDirAdd')}
           </Button>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="move-cancel" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button
             size="sm"
@@ -111,7 +113,7 @@ export default function MoveMapDialog({ mapName, tree, fromRel = '', onMove, onC
             disabled={selected === null || selected === fromRel}
             onClick={() => onMove(selected!)}
           >
-            移动
+            {t('library.dialogs.move.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -24,6 +24,16 @@ export function parseThemePref(v: unknown): ThemePref {
   return THEME_PREFS.has(v as ThemePref) ? (v as ThemePref) : 'auto'
 }
 
+/** 界面语言三态偏好(2026-09 i18n):auto = 跟随系统(zh* 归简体,其余回退英文) */
+export type LanguagePref = 'auto' | 'zh-CN' | 'en'
+
+const LANGUAGE_PREFS = new Set<LanguagePref>(['auto', 'zh-CN', 'en'])
+
+/** 宽容解析配置中的语言偏好:非法/缺失回退 auto(旧配置无 language 字段按 auto 兼容) */
+export function parseLanguagePref(v: unknown): LanguagePref {
+  return LANGUAGE_PREFS.has(v as LanguagePref) ? (v as LanguagePref) : 'auto'
+}
+
 /** 预览大纲三态偏好（2026-09 大纲面板）：auto = 跟随预览主区宽（≥900px 默认显示，实时联动）；
  *  显式 on/off 覆盖响应式默认（用户手动开关后记住） */
 export type PreviewOutlinePref = 'auto' | 'on' | 'off'
@@ -86,6 +96,8 @@ export interface AppConfig {
   preferredLayout: LayoutKind | null
   /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
   theme: ThemePref
+  /** 界面语言三态偏好(2026-09 i18n):auto = 跟随系统(zh* 归简体,其余回退英文) */
+  language: LanguagePref
   /** 预览大纲三态偏好（auto = 跟随预览主区宽；显式 on/off 记住用户手动开关） */
   previewOutline: PreviewOutlinePref
   /** 收藏清单（2026-09 收藏置顶）：mdPath 寻址，渲染时失联项宽容剔除（文件被删/换
@@ -148,6 +160,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   recentOpened: [],
   preferredLayout: null,
   theme: 'auto',
+  language: 'auto',
   previewOutline: 'auto',
   favorites: [],
   librarySort: 'modified',

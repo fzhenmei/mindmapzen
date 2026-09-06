@@ -1,4 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useSidebar } from './ui/sidebar'
 
 /** 侧栏底栏图标钮共用样式（2026-09）：设置/隐藏成对居于「新建目录」行右侧，侧栏令牌
@@ -21,12 +22,13 @@ export const SIDEBAR_ICON_BTN =
  *  收起」弹性行，两枚图标钮成对右置，槽位式的 pr-8 预留只适配单钮 */
 export function HideSidebarAction() {
   const { toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
   return (
     <button
       type="button"
       data-testid="dir-panel-toggle"
-      aria-label="隐藏目录面板"
-      title="隐藏目录面板（Ctrl+B）"
+      aria-label={t('settings.sidebar.hide')}
+      title={t('settings.sidebar.hideHint')}
       onClick={toggleSidebar}
       className={SIDEBAR_ICON_BTN}
     >
@@ -39,13 +41,14 @@ export function HideSidebarAction() {
  *  top/bottom + my-auto + h-12 实现纵向居中；祖先无 transform，fixed 即视口参照） */
 export function ShowSidebarTab() {
   const { state, isMobile, toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
   if (state !== 'collapsed' || isMobile) return null
   return (
     <button
       type="button"
       data-testid="dir-panel-show"
-      aria-label="显示目录面板"
-      title="显示目录面板（Ctrl+B）"
+      aria-label={t('settings.sidebar.show')}
+      title={t('settings.sidebar.showHint')}
       onClick={toggleSidebar}
       className="fixed top-8 bottom-0 left-0 z-30 my-auto flex h-12 w-6 items-center justify-center rounded-r-lg border border-l-0 border-sidebar-border bg-background shadow-md outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring"
     >

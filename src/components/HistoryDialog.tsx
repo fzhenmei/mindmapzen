@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
+import { i18n } from '../i18n'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { ScrollArea } from './ui/scroll-area'
@@ -7,6 +9,25 @@ import type { DiffFile } from '../services/gitBackup'
 
 interface Props {
   onClose(): void
+}
+
+/** %ci 原始日期（2026-09-06 14:23:45 +0800）→ 本地化显示：ISO 化后经 Intl 按
+ *  i18n.language 格式化（调用时求值，语言切换随渲染即时反映）；非常规格式原样兜底 */
+const fmtDate = (raw: string): string => {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/.exec(raw)
+  if (m === null) return raw
+  const d = new Date(`${m[1]}T${m[2]}${m[3]}:${m[4]}`)
+  return Number.isNaN(d.getTime())
+    ? raw
+    : new Intl.DateTimeFormat(i18n.language, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(d)
 }
 
 /** 版本历史对话框（M22 回滚 UI）：git 仓库最近 50 条提交列表 + 行内确认恢复。
@@ -18,6 +39,8 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
   const restoreVersion = useAppStore((s) => s.restoreVersion)
   const fetchGitHistory = useAppStore((s) => s.fetchGitHistory)
   const diffPreview = useAppStore((s) => s.diffPreview)
+  const { t } = useTranslation()
+  const title = t('settings.history.title')
   // 行内二次确认态：待确认恢复的 hash；null = 无
   const [confirming, setConfirming] = useState<string | null>(null)
   // 预览展开态（当前展开的 hash）与差异缓存（null=不可得；恢复后 HEAD 变化须失效）
@@ -31,9 +54,16 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
 
   const doRestore = async (hash: string) => {
     setError(null)
-    const err = await restoreVersion(hash)
-    if (err !== null) {
-      setError(err)
+    // Ruling 6：restoreVersion 经 gitRun 端口可 reject（如 git 超时）——不捕则错误
+    // 文案丢失且成 unhandled rejection，须落错误行（词典化兜底包住已本地化的抛错消息）
+    try {
+      const err = await restoreVersion(hash)
+      if (err !== null) {
+        setError(err)
+        return
+      }
+    } catch (e) {
+      setError(t('errors.git.rollback.restoreFail', { detail: e instanceof Error ? e.message : String(e) }))
       return
     }
     setConfirming(null)
@@ -56,9 +86,9 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent data-testid="history-dialog" aria-label="版本历史" className="sm:max-w-xl">
-        <DialogTitle>版本历史</DialogTitle>
-        <p className="text-xs text-muted-foreground">最近 50 次提交；恢复以新提交落盘，可再次回滚</p>
+      <DialogContent data-testid="history-dialog" aria-label={title} className="sm:max-w-xl">
+        <DialogTitle>{title}</DialogTitle>
+        <p className="text-xs text-muted-foreground">{t('settings.history.hint')}</p>
         {error !== null && (
           <p data-testid="history-error" role="alert" className="text-sm text-destructive">
             {error}
@@ -73,7 +103,7 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
         >
           {list.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground" data-testid="history-empty">
-              尚无提交
+              {t('settings.git.noCommit')}
             </p>
           ) : (
             <ul data-testid="history-list" className="flex flex-col">
@@ -85,8 +115,8 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
                 >
                   <span className="flex items-center gap-3">
                     <span className="font-file text-xs text-muted-foreground">{h.hash}</span>
-                    <span className="font-file text-xs text-muted-foreground" title={h.date}>
-                      {h.date.replace(/ \+\d+$/, '')}
+                    <span className="font-file text-xs text-muted-foreground" title={fmtDate(h.date)}>
+                      {fmtDate(h.date)}
                     </span>
                     <span className="min-w-0 flex-1 truncate" title={h.message}>
                       {h.message}
@@ -99,10 +129,10 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
                           data-testid={`history-confirm-${h.hash}`}
                           onClick={() => void doRestore(h.hash)}
                         >
-                          确认恢复
+                          {t('settings.history.confirm')}
                         </Button>
                         <Button variant="secondary" size="sm" onClick={() => setConfirming(null)}>
-                          取消
+                          {t('common.cancel')}
                         </Button>
                       </span>
                     ) : (
@@ -114,7 +144,7 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
                           data-testid={`history-preview-${h.hash}`}
                           onClick={() => void togglePreview(h.hash)}
                         >
-                          预览
+                          {t('settings.history.preview')}
                         </Button>
                         <Button
                           variant="secondary"
@@ -123,7 +153,7 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
                           data-testid={`history-restore-${h.hash}`}
                           onClick={() => setConfirming(h.hash)}
                         >
-                          恢复
+                          {t('settings.history.restore')}
                         </Button>
                       </>
                     )}
@@ -138,7 +168,7 @@ export default function HistoryDialog({ onClose }: Readonly<Props>) {
         </ScrollArea>
         <DialogFooter>
           <Button variant="secondary" size="sm" data-testid="history-close" onClick={onClose}>
-            关闭
+            {t('settings.close')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -172,17 +202,18 @@ function DiffBody({
 }: Readonly<{
   stat: { files: DiffFile[]; ins: number; del: number } | null | undefined
 }>) {
-  if (stat === undefined) return <p className="text-muted-foreground">差异加载中…</p>
-  if (stat === null) return <p className="text-muted-foreground">差异不可得</p>
-  if (stat.files.length === 0) return <p className="text-muted-foreground">与当前版本无差异</p>
+  const { t } = useTranslation()
+  if (stat === undefined) return <p className="text-muted-foreground">{t('settings.history.diffLoading')}</p>
+  if (stat === null) return <p className="text-muted-foreground">{t('settings.history.diffUnavailable')}</p>
+  if (stat.files.length === 0) return <p className="text-muted-foreground">{t('settings.history.diffNone')}</p>
   return (
     <>
       <p className="text-muted-foreground">
-        恢复后 {stat.files.length} 个文件变更（
+        {t('settings.history.diffFiles', { count: stat.files.length })}
         <span className="text-green-600 dark:text-green-400">+{stat.ins}</span>
         {' / '}
         <span className="text-red-600 dark:text-red-400">-{stat.del}</span>
-        {' 行；红=消失，绿=回来）'}
+        {t('settings.history.diffLegend')}
       </p>
       <div className="mt-1 flex flex-col gap-2">
         {stat.files.map((f) => (
@@ -216,7 +247,7 @@ function DiffBody({
                   )
                 })}
                 {f.lines.length > MAX_LINES_SHOWN && (
-                  <li className="text-muted-foreground">…还有 {f.lines.length - MAX_LINES_SHOWN} 行变更，已折叠</li>
+                  <li className="text-muted-foreground">{t('settings.history.diffMore', { count: f.lines.length - MAX_LINES_SHOWN })}</li>
                 )}
               </ul>
             )}

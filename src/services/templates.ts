@@ -1,6 +1,8 @@
 // src/services/templates.ts —— 模板清单服务（M16）：内置注册表 + 工作区 templates/ 目录扫描
 import type { FsAdapter } from '../types/files'
-import { BUILTIN_TEMPLATES } from '../templates/registry'
+import { i18n } from '../i18n'
+import { sortLocale } from '../i18n/resolve'
+import { builtinTemplates } from '../templates/registry'
 import { joinPath } from './workspace'
 
 /** 模板条目：key 为选择器值（builtin:<id> / user:<relPath>） */
@@ -20,7 +22,7 @@ export const TEMPLATES_DIR = 'templates'
 /** 模板清单 = 内置注册表 + 工作区 templates/ 下的 .md（递归；按名称序排在内置后）。
  *  无工作区或目录不存在 → 仅内置。读取失败的单个模板跳过（不阻断清单） */
 export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promise<TemplateInfo[]> {
-  const builtin: TemplateInfo[] = BUILTIN_TEMPLATES.map((t) => ({
+  const builtin: TemplateInfo[] = builtinTemplates().map((t) => ({
     key: `builtin:${t.id}`,
     name: t.name,
     desc: t.desc,
@@ -37,7 +39,7 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
         return {
           key: `user:${relPath === '' ? '' : relPath + '/'}${fileName.replace(/\.md$/, '')}`,
           name: fileName.replace(/\.md$/, ''),
-          desc: relPath === '' ? '工作区模板' : `工作区模板 · ${relPath}`,
+          desc: relPath === '' ? i18n.t('library.templates.workspace') : i18n.t('library.templates.workspaceIn', { dir: relPath }),
           source: 'user',
           content,
         }
@@ -46,7 +48,7 @@ export async function listTemplates(fs: FsAdapter, wsDir: string | null): Promis
       }
     }),
   )
-  const clean = user.filter((t): t is TemplateInfo => t !== null).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
+  const clean = user.filter((t): t is TemplateInfo => t !== null).sort((a, b) => a.name.localeCompare(b.name, sortLocale(i18n.language === 'en' ? 'en' : 'zh-CN')))
   return [...builtin, ...clean]
 }
 

@@ -3,6 +3,7 @@
 // 原样迁入。状态与业务确认在 useLibraryDialogs（api），本容器纯展示——开态即 api.dialog。
 // 对话框互斥约定（ui Dialog）：dialog 与 importPreview 互不并存——Radix Dialog 为
 // modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥。
+import { useTranslation } from 'react-i18next'
 import type { LibraryDialogsApi } from '../hooks/useLibraryDialogs'
 import type { DirNode } from '../services/desk'
 import type { MapInfo } from '../types/files'
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
+  const { t } = useTranslation()
   const { dialog, target, dirTarget, importPreview, newMapDir, dirParent } = api
   return (
     <>
@@ -52,17 +54,17 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
       {dialog === 'history' && <HistoryDialog onClose={api.closeDialog} />}
       {dialog === 'rename' && target && (
         <NameDialog
-          title="重命名导图"
+          title={t('library.dialogs.rename.title')}
           initial={target.name}
-          confirmText="重命名"
+          confirmText={t('common.rename')}
           onCancel={api.closeDialog}
           onConfirm={api.confirmRename}
         />
       )}
       {dialog === 'newdir' && (
         <NameDialog
-          title={dirParent === '' ? '新建目录' : `在「${dirParent}」新建目录`}
-          confirmText="创建"
+          title={dirParent === '' ? t('library.dialogs.newDir.title') : t('library.dialogs.newDir.titleIn', { dir: dirParent })}
+          confirmText={t('library.dialogs.newDir.confirm')}
           onCancel={api.closeDialog}
           onConfirm={(name) => void api.confirmCreateDir(name)}
         />
@@ -71,7 +73,7 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
           报数）；删除后选中目录若在被删子树内则回根视图（api.confirmDeleteDir 收口） */}
       {dialog === 'deletedir' && dirTarget && (
         <DeleteConfirmDialog
-          title={`删除目录「${dirTarget.name}」？`}
+          title={t('library.dialogs.deleteDir.title', { name: dirTarget.name })}
           body={dirDeleteSummary(maps, tree, dirTarget.rel)}
           onCancel={api.closeDialog}
           onConfirm={() => api.confirmDeleteDir(dirTarget.rel)}
@@ -79,8 +81,8 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
       )}
       {dialog === 'delete' && target && (
         <DeleteConfirmDialog
-          title={`删除「${target.name}」？`}
-          body="将移入回收站（.md 与 .zen.json 一起删除）。"
+          title={t('library.dialogs.deleteMap.title', { name: target.name })}
+          body={t('library.dialogs.deleteMap.body')}
           onCancel={api.closeDialog}
           onConfirm={() => void api.confirmDelete()}
         />

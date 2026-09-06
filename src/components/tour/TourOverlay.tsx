@@ -2,8 +2,9 @@
 // 气泡卡；步进编排（before 钩子/越末步 finish）在此，store 只持状态（见 spec 实现细化）。
 // z-40：高于视图与砚栏（z-10），低于 Dialog（z-50）——从设置页重看时先关对话框再显形
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../store/appStore'
-import { TOUR_STEPS } from './tourSteps'
+import { buildTourSteps } from './tourSteps'
 import { Button } from '../ui/button'
 
 /** 气泡定位（spec §5）：优先目标下方，视口不够放上方；水平钳制视口内。返回 fixed 坐标 */
@@ -18,9 +19,12 @@ function popoverPos(rect: DOMRect): { top: number; left: number } {
 
 export default function TourOverlay() {
   const { tourActive, tourStep, route } = useAppStore()
+  const { t } = useTranslation()
   const [rect, setRect] = useState<DOMRect | null>(null)
 
-  const step = TOUR_STEPS[tourStep] ?? TOUR_STEPS[0]
+  // 步骤表每次渲染重建(工厂):useTranslation 订阅语言变化,切换后本渲染即取新词典
+  const steps = buildTourSteps()
+  const step = steps[tourStep] ?? steps[0]
   const viewMatch = step.view === route
 
   // 锚点定位 + resize 重算（spec §5）：view/步号变化或窗口变化时重测。
@@ -80,7 +84,7 @@ export default function TourOverlay() {
    *  锚点不存在，该步自然走 rect=null 的居中卡降级，跳过/上一步按钮仍可用，不断链 */
   const goNext = async () => {
     const cur = useAppStore.getState().tourStep
-    const next = TOUR_STEPS[cur + 1]
+    const next = steps[cur + 1]
     if (next === undefined) {
       await useAppStore.getState().finishTour()
       return
@@ -95,14 +99,14 @@ export default function TourOverlay() {
   const goBack = async () => {
     const cur = useAppStore.getState().tourStep
     if (cur <= 0) return
-    if (TOUR_STEPS[cur - 1].view !== TOUR_STEPS[cur].view) {
+    if (steps[cur - 1].view !== steps[cur].view) {
       await useAppStore.getState().backToLibrary().catch(() => {})
     }
     useAppStore.getState().setTourStep(cur - 1)
   }
 
   if (!tourActive) return null
-  const last = tourStep >= TOUR_STEPS.length - 1
+  const last = tourStep >= steps.length - 1
   const pos = rect !== null ? popoverPos(rect) : null
   return (
     <div data-testid="tour-overlay" className="fixed inset-0 z-40">
@@ -129,18 +133,18 @@ export default function TourOverlay() {
         <p className="mt-1.5 text-sm text-muted-foreground">{step.body}</p>
         <div className="mt-3 flex items-center gap-2">
           <span data-testid="tour-step-indicator" className="mr-auto text-xs text-muted-foreground">
-            {tourStep + 1} / {TOUR_STEPS.length}
+            {tourStep + 1} / {steps.length}
           </span>
           <Button variant="ghost" size="sm" data-testid="tour-skip" onClick={() => void useAppStore.getState().finishTour()}>
-            跳过
+            {t('tour.overlay.skip')}
           </Button>
           {tourStep > 0 && (
             <Button variant="secondary" size="sm" data-testid="tour-prev" onClick={() => void goBack()}>
-              上一步
+              {t('tour.overlay.prev')}
             </Button>
           )}
           <Button size="sm" data-testid="tour-next" onClick={() => void goNext()}>
-            {last ? '完成' : '下一步'}
+            {last ? t('tour.overlay.done') : t('tour.overlay.next')}
           </Button>
         </div>
       </div>

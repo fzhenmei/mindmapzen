@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import SplitResizer from '../components/SplitResizer'
 import { useSidebar } from '../components/ui/sidebar'
@@ -14,6 +15,7 @@ function SidebarResizeHandle({ width, onResize, onCommit, onReset }: Readonly<{
   onReset: () => void
 }>) {
   const { state, isMobile } = useSidebar()
+  const { t } = useTranslation()
   if (state === 'collapsed' || isMobile) return null
   // 上限取 min(520px, 45vw)：窄窗下侧栏不吞没主区
   const max = Math.min(520, Math.round(window.innerWidth * 0.45))
@@ -23,7 +25,7 @@ function SidebarResizeHandle({ width, onResize, onCommit, onReset }: Readonly<{
       width={width}
       min={200}
       max={max}
-      label="调整侧栏宽度"
+      label={t('library.resizeSidebar')}
       onResize={onResize}
       onCommit={onCommit}
       onReset={onReset}
