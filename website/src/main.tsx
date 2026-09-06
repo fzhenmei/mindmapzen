@@ -8,8 +8,8 @@ import '@fontsource-variable/jetbrains-mono'
 import './styles/theme.css'
 import './app.css'
 
-// 语言随构建模式选定(vite build --mode en 出英文版):
-// 运行时同步 html 头(标题/描述/lang),index.html 内置的是中文兜底
+// 语言随构建模式选定(vite build --mode en 出英文版)。
+// html 头已在构建期按 mode 注入(index.html 占位符);此处运行时同步为冗余兜底,值一致。
 document.title = L.html.title
 document
   .querySelector('meta[name="description"]')
