@@ -1,5 +1,6 @@
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
+import { i18n } from '../i18n'
 import { extractTargets, injectMarkers } from './linkMarkers'
 import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
 import { extractImageMarker, injectImageMarker, stripImageMarker } from './imageMarkers'
@@ -15,7 +16,7 @@ function escapeItemText(text: string): string {
 /** 节点文本含换行时序列化必然产出结构损坏的 md（静默丢内容），宁可当场报错拦截 */
 function assertNoNewline(node: ZenNode): void {
   if (node.text.includes('\n') || node.text.includes('\r')) {
-    throw new Error(`节点文本包含换行，暂不支持多行文本：${node.text.slice(0, 20)}…`)
+    throw new Error(i18n.t('errors.mdNodeNewline', { text: node.text.slice(0, 20) }))
   }
   for (const child of node.children) assertNoNewline(child)
 }
@@ -24,7 +25,7 @@ function assertNoNewline(node: ZenNode): void {
  *  （正常 UI 路径由 useBodyPanel 的 layer 门禁拦截，此处防其他写入路径） */
 function assertNoBodyInList(node: ZenNode, depth: number): void {
   if (depth >= 7 && node.body !== undefined) {
-    throw new Error(`深层列表节点暂不支持正文：${node.text.slice(0, 20)}…`)
+    throw new Error(i18n.t('errors.mdBodyInListLayer', { text: node.text.slice(0, 20) }))
   }
   for (const child of node.children) assertNoBodyInList(child, depth + 1)
 }
@@ -208,8 +209,6 @@ function attachHeading(
   stack.push({ depth, node })
 }
 
-const NO_ROOT_ERROR = '未找到根标题（缺少一级标题 H1）'
-
 interface OutlineState {
   root: ZenNode | null
   stack: { depth: number; node: ZenNode }[]
@@ -228,7 +227,7 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
     state.lastHeading = state.stack.at(-1)?.node ?? null
     return null
   }
-  if (d !== 1) return NO_ROOT_ERROR
+  if (d !== 1) return i18n.t('errors.mdNoRoot')
   state.root = makeNode(headingText(md, block))
   state.stack.push({ depth: 1, node: state.root })
   state.lastHeading = state.root
@@ -262,14 +261,14 @@ export function parse(md: string): ParseResult {
   try {
     ast = unified().use(remarkParse).parse(md) as unknown as MNode
   } catch (e) {
-    return { ok: false, error: `Markdown 解析失败：${String(e)}` }
+    return { ok: false, error: i18n.t('errors.mdParseFail', { reason: String(e) }) }
   }
   const state: OutlineState = { root: null, stack: [], ignored: [], lastHeading: null }
   for (const block of ast.children ?? []) {
     const err = visitBlock(md, block, state)
     if (err !== null) return { ok: false, error: err }
   }
-  if (state.root === null) return { ok: false, error: NO_ROOT_ERROR }
+  if (state.root === null) return { ok: false, error: i18n.t('errors.mdNoRoot') }
   return { ok: true, tree: state.root, ignoredBlocks: state.ignored }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { useAppStore } from './store/appStore'
+import { i18n } from './i18n'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
@@ -133,7 +134,7 @@ const exitApp = (): void => {
       const { getCurrentWindow } = await import('@tauri-apps/api/window')
       await getCurrentWindow().destroy()
     } catch (e) {
-      useAppStore.getState().setError('退出失败：' + String(e))
+      useAppStore.getState().setError(i18n.t('errors.exitFail', { detail: String(e) }))
     }
   })()
 }
@@ -221,7 +222,7 @@ export default function App() {
       } catch (e) {
         // 初始化失败也离开启动屏（错误经 banner 呈现），不能永远卡在 loading
         useAppStore.setState({ booted: true })
-        useAppStore.getState().setError('初始化失败：' + String(e))
+        useAppStore.getState().setError(i18n.t('errors.initFail', { detail: String(e) }))
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅启动时执行

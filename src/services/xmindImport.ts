@@ -6,6 +6,7 @@
 // 不进树的成分子（游离主题/连线/标签/标记/概要等）计入 warnings 摘要——复用导入
 // 预览的 ignored 通道口径（宽容不静默丢内容，落盘前用户可见）。
 import { unzipSync } from 'fflate'
+import { i18n } from '../i18n'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
 
 export interface XmindParseResult {
@@ -20,7 +21,7 @@ export function parseXmind(bytes: Uint8Array): XmindParseResult {
   try {
     entries = unzipSync(bytes)
   } catch {
-    throw new Error('不是有效的 .xmind 文件（无法解压）')
+    throw new Error(i18n.t('errors.xmindBadZip'))
   }
   const decoder = new TextDecoder()
   if (entries['content.json'] !== undefined) {
@@ -29,7 +30,7 @@ export function parseXmind(bytes: Uint8Array): XmindParseResult {
   if (entries['content.xml'] !== undefined) {
     return parseContentXml(decoder.decode(entries['content.xml']))
   }
-  throw new Error('不是有效的 .xmind 文件（缺少 content.json/content.xml）')
+  throw new Error(i18n.t('errors.xmindMissingContent'))
 }
 
 // —— 新版 content.json ——
@@ -68,7 +69,7 @@ function fromJsonTopic(t: JsonTopic, warnings: IgnoredBlock[], path: string): Ze
 function parseContentJson(raw: string): XmindParseResult {
   const sheets = JSON.parse(raw) as JsonSheet[]
   const first = Array.isArray(sheets) ? sheets[0] : undefined
-  if (first?.rootTopic === undefined) throw new Error('content.json 缺少 rootTopic')
+  if (first?.rootTopic === undefined) throw new Error(i18n.t('errors.xmindNoRootTopic'))
   const warnings: IgnoredBlock[] = []
   if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: `仅导入第 1 张，共 ${sheets.length} 张` })
   return { tree: fromJsonTopic(first.rootTopic, warnings, ''), warnings }
@@ -106,9 +107,9 @@ function fromXmlTopic(el: Element, warnings: IgnoredBlock[], path: string): ZenN
 function parseContentXml(raw: string): XmindParseResult {
   const doc = new DOMParser().parseFromString(raw, 'text/xml')
   const err = doc.querySelector('parsererror')
-  if (err !== null) throw new Error('content.xml 解析失败')
+  if (err !== null) throw new Error(i18n.t('errors.xmindXmlParseFail'))
   const root = doc.querySelector('xmap-content > sheet > topic') ?? doc.querySelector('sheet > topic')
-  if (root === null) throw new Error('content.xml 缺少根主题')
+  if (root === null) throw new Error(i18n.t('errors.xmindXmlNoRoot'))
   const warnings: IgnoredBlock[] = []
   const sheets = doc.querySelectorAll('xmap-content > sheet, sheet')
   if (sheets.length > 1) warnings.push({ type: '多画布', excerpt: `仅导入第 1 张，共 ${sheets.length} 张` })
