@@ -1,9 +1,8 @@
 // src/hooks/useBodyPanel.ts —— 正文面板状态（2026-09 写作）：开闭、选中联动载入、
 // 防抖写回（500ms）与三处 flush（切节点/关面板/窗口失焦）。命令链同 useNoteEdit：
-// SET_NODE_DATA 写 data.body（空串置 undefined 清除）+ reRenderNodeCheckChange 补重渲
-// （裸命令不重渲染，M5b 核验 13）。「有正文」角标的引擎载体是 data.icon 里的保留名
-// zen_body（Task 4：zenToEngineTree 打开期尾部追加、engineTreeToZen 收集侧剥除），
-// 打开会话内没有再挂通道——故提交时同一命令同步补/删 zen_body（单条撤销记录，角标即时）。
+// SET_NODE_DATA 写 data.body 并同值成对写镜像 data.note（2026-09-06 备注合并：引擎
+// 「有 note→挂角标+悬停」原生通道由 note 驱动，body 是事实源；空串两者同置 undefined
+// 清除，角标随镜像消失）+ reRenderNodeCheckChange 补重渲（裸命令不重渲染，M5b 核验 13）。
 // 深度门禁（Step 0 实测）：引擎节点深度字段为 layerIndex（MindMapNode.js:52，root=0 起），
 // mdTree 深度 = layerIndex+1，≥7 进列表层——故 layerIndex≥6 面板空态不可编辑
 // （spec v1 深度限制；serialize 侧 assertNoBodyInList 抛错兜底防其他写入路径）。
@@ -60,8 +59,8 @@ export function useBodyPanel(
   const openRef = useRef(false)
   openRef.current = bodyDraft !== null // 渲染期同步（同 EditorView 的 anyDialogRef 模式）
 
-  /** 立即提交：与引擎 data.body 比对，有变才写（同值幂等跳过）；body 与 zen_body 角标
-   *  同一条 SET_NODE_DATA 落下（用户图标保留），reRenderNodeCheckChange 使角标即时增删 */
+  /** 立即提交：与引擎 data.body 比对，有变才写（同值幂等跳过）；body 与镜像 note 同一条
+   *  SET_NODE_DATA 成对落下（单条撤销记录），reRenderNodeCheckChange 使角标即时增删 */
   const flushNow = (): void => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current)
@@ -77,11 +76,8 @@ export function useBodyPanel(
     const current = typeof cur === 'string' ? cur : undefined
     const next = pending === '' ? undefined : pending
     if (current === next) return
-    // zen_body 同步：有正文确保在册（自愈打开期遗漏），无正文剥除；用户图标与其他引擎图标源原样保留
-    const rawIcon = node.getData?.('icon')
-    const icons = (Array.isArray(rawIcon) ? rawIcon.filter((i) => i !== 'zen_body') : []) as string[]
-    if (next !== undefined) icons.push('zen_body')
-    mm.execCommand('SET_NODE_DATA', node, { body: next, icon: icons })
+    // 成对写(2026-09-06 合并):note 是 body 的镜像,引擎角标/悬停由它驱动——清空时同为 undefined
+    mm.execCommand('SET_NODE_DATA', node, { body: next, note: next })
     mm.renderer?.reRenderNodeCheckChange(node)
   }
 

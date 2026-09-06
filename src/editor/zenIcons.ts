@@ -96,28 +96,11 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
   Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
 )
 
-/** 内部角标图标（2026-09 正文）：宿主保留名 'body'，静态注册进引擎 iconList 供画布渲「有正文」
- *  角标（md 里无对应 ::body 标记——engineTreeToZen 收集侧剥除，见 mdTree.ts）。不进精选集
- *  （图标管理器网格/面板不露出）；collectUncuratedIcons 同口径跳过——打开期补注册链的
- *  known 集合本就含静态在册的 zen_body（跳过与否都不会发起加载、不会拉 icon-nodes.json
- *  chunk），跳过是语义正确（保留名非用户图标，不进回收/补注册）+ 免一次无效调用。
- *  lucide file-text（ISC，合规） */
-const INTERNAL_ICONS: Readonly<Record<string, string>> = {
-  body: normalizeSvg(fileText),
-}
-
-/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）；
- *  精选集之外并入内部保留名（zen_body 角标静态在册，画布可直接渲染） */
+/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。
+ *  2026-09-06 备注合并：zen_body 内部保留名退役，iconList 恢复纯精选集（「有正文」
+ *  角标由镜像 data.note 驱动引擎原生通道，不再借道 iconList 静态注册） */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
-  return [
-    {
-      type: 'zen',
-      list: [...Object.entries(CURATED_ICONS), ...Object.entries(INTERNAL_ICONS)].map(([name, icon]) => ({
-        name,
-        icon,
-      })),
-    },
-  ]
+  return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
 }
 
 /** lucide 节点结构（icon-nodes.json：[tag, attrs, children?] 三元组递归） */
@@ -170,8 +153,7 @@ export async function loadIconSvg(name: string): Promise<string | null> {
  *  非精选图标此前只在图标管理器确认时运行时注册（useIconPicker.apply），重开导图后
  *  iconList 只剩精选 64——md 里 ::name 解析出 data.icon 却无 svg，引擎渲染空占位
  *  （getNodeIconListIcon 未命中返回 ''，实案：::shield-alert ::book-search 全不可见）。
- *  精选 / 内部保留名（zen_body，iconList 已静态在册）/ 非 zen_ 前缀（引擎其他图标源）/
- *  非法形态全忽略。 */
+ *  精选 / 非 zen_ 前缀（引擎其他图标源）/ 非法形态全忽略。 */
 export function collectUncuratedIcons(root: EngineNode): string[] {
   const out: string[] = []
   const walk = (n: EngineNode): void => {
@@ -179,7 +161,7 @@ export function collectUncuratedIcons(root: EngineNode): string[] {
       for (const item of n.data.icon) {
         if (typeof item !== 'string' || !item.startsWith('zen_')) continue
         const name = item.slice(4)
-        if (CURATED_ICONS[name] !== undefined || INTERNAL_ICONS[name] !== undefined || out.includes(name)) continue
+        if (CURATED_ICONS[name] !== undefined || out.includes(name)) continue
         out.push(name)
       }
     }

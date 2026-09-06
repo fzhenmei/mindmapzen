@@ -19,16 +19,6 @@ describe('collectUncuratedIcons（打开期图标恢复，2026-09 修复：重�
     expect(collectUncuratedIcons(root)).toEqual(['shield-alert', 'book-search', 'priority'])
   })
 
-  // 内部保留名 body（2026-09 正文角标，Task 4 遗留 M-3）：静态在册不回收——
-  // 若被收集，打开期会为它发起 lucide 全集加载（白拉 icon-nodes.json chunk 且名字不存在被丢弃）
-  it('内部保留名 body 不进收集（静态在册，不走补注册）', () => {
-    const root = tree(
-      { text: '根', icon: ['zen_body', 'zen_flag'] },
-      tree({ text: '子', icon: ['zen_body', 'zen_shield-alert'] } as EngineNode['data']),
-    )
-    expect(collectUncuratedIcons(root)).toEqual(['shield-alert']) // zen_body 被跳过
-  })
-
   it('无图标 / 空树恒空数组', () => {
     expect(collectUncuratedIcons(tree({ text: 'a' }))).toEqual([])
     expect(collectUncuratedIcons(tree({ text: 'a' }, tree({ text: 'b' })))).toEqual([])
@@ -72,14 +62,13 @@ describe('精选集健全性（用例前提）', () => {
     expect(CURATED_ICONS['book-search']).toBeUndefined()
   })
 
-  it('内部保留名 body 不在精选集，但恰一次进引擎 iconList（角标静态在册）', () => {
+  it('body 不在精选集也不进引擎 iconList（2026-09-06 退役：无内部保留名，iconList 即精选集）', () => {
     expect(CURATED_ICONS['body']).toBeUndefined() // 图标管理器网格不露出
     const list = toEngineIconList()
     expect(list).toHaveLength(1)
     expect(list[0]!.type).toBe('zen')
-    const bodies = list[0]!.list.filter((i) => i.name === 'body')
-    expect(bodies).toHaveLength(1) // 恰一次：精选与内部表重名会渲染重复角标
-    expect(bodies[0]!.icon).toMatch(/^<svg/) // 已剥许可头，走引擎 SVG 分支
+    expect(list[0]!.list.some((i) => i.name === 'body')).toBe(false) // zen_body 退役,无静态在册
+    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length) // 仅精选,不再并入内部表
   })
 })
 

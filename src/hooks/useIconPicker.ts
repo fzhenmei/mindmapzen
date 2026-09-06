@@ -23,14 +23,13 @@ export function nodeTextOf(mm: MindMapHandle | null, uid: string | null): string
   return typeof n?.data.text === 'string' ? n.data.text : ''
 }
 
-/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名；无返回空数组）；
- *  zen_body 为宿主内部角标（保留名），不进已选行——否则出现无 svg 的占位 chip，
- *  用户点 × 移除确认后 SET_NODE_ICON 落下无 zen_body 的 data.icon，角标消失而正文仍在 */
+/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名，纯用户图标——2026-09-06
+ *  备注合并后无内部保留名；无返回空数组） */
 export function nodeIconsOf(mm: MindMapHandle | null, uid: string | null): string[] {
   const node = mm !== null ? findByUid(mm.getData(), uid) : null
   return Array.isArray(node?.data.icon)
     ? node.data.icon
-        .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_') && i !== 'zen_body')
+        .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_'))
         .map((i) => i.slice(4))
     : []
 }
@@ -80,14 +79,9 @@ export function useIconPicker(
           if (!known.has(e.name)) list[0].list.push(e)
         }
       }
-      // SET_NODE_ICON 是整组覆写（2026-09 正文，Task 4 移交修复）：已选行不含保留名
-      // zen_body（nodeIconsOf 滤除），照原样落下会把「有正文」角标一并抹掉（正文仍在、
-      // 角标消失）。落下前按节点 data.body 重补：有正文确保数组含 zen_body，无正文不补
+      // SET_NODE_ICON 是整组覆写：落下数组即用户所选（纯用户图标，2026-09-06 备注合并后
+      // 无内部保留名掺入，「有正文」角标由镜像 data.note 承担，不受图标覆写影响）
       const icons = names.map((n) => `zen_${n}`)
-      const nodeBody = findByUid(mm.getData(), uid)?.data.body
-      if (typeof nodeBody === 'string' && nodeBody !== '' && !icons.includes('zen_body')) {
-        icons.push('zen_body')
-      }
       mm.execCommandIcon?.(uid, icons)
       onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
     },

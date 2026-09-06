@@ -235,21 +235,15 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
   return null
 }
 
-/** 处理单个顶层块：标题/列表归树，引用块与其余非结构块（段落/代码/表格等）归属最近标题级节点为正文
- *  （无归属收进 ignored）。返回错误信息（null 表示正常） */
+/** 处理单个顶层块：标题/列表归树，其余非结构块（引用块/段落/代码/表格等——2026-09-06
+ *  备注合并后引用块与它们同构，不再单列分支）原样归属最近标题级节点为正文（无归属收进
+ *  ignored）。返回错误信息（null 表示正常） */
 function visitBlock(md: string, block: MNode, state: OutlineState): string | null {
   if (block.type === 'heading') return visitHeading(md, block, state)
-  if (block.type === 'blockquote') {
-    // 备注合并(2026-09-06):引用块归正文,原样(含 > 前缀)收进最近标题级节点的 body
-    const target = state.lastHeading
-    if (target === null)
-      state.ignored.push({ type: 'blockquote', excerpt: nodeText(block).slice(0, 50) })
-    else assignBody(target, rawBlockText(md, block))
-    return null
-  }
   if (block.type !== 'list') {
-    // 正文(2026-09 写作):非结构块(段落/代码/表格等)归属最近标题级节点;
-    // 根 H1 之前无归属,仍收进 ignored(spec 兼容性:段落从静默忽略变为正文可见)
+    // 正文(2026-09 写作;2026-09-06 备注合并:引用块同归):非结构块原样(引用块含 >
+    // 前缀)收进最近标题级节点的 body;根 H1 之前无归属,仍收进 ignored
+    // (spec 兼容性:段落从静默忽略变为正文可见)
     const target = state.lastHeading
     if (target === null) state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
     else assignBody(target, rawBlockText(md, block))
@@ -287,7 +281,8 @@ export interface ImageMetaEntry {
 
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
  *  body（非空串）透传进 data.body 并同值镜像 data.note（2026-09-06 备注合并：
- *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源）并尾部追加内部图标 zen_body（正文角标）；
+ *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源；zen_body 图标通道已退役，
+ *  data.icon 恢复纯用户图标，无内部保留名）；
  *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
  *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
  *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
@@ -305,13 +300,9 @@ export function zenToEngineTree(
   if (parentPath === '' && imgMeta !== undefined && imgMeta.size > 0) {
     for (const [src, e] of imgMeta) rootImgMap[src] = e.dataUrl
   }
-  // 图标组装（M18 + 2026-09 正文角标）：用户 icons 之外，body 非空时尾部追加内部图标
-  // zen_body（画布「有正文」角标）；engineTreeToZen 收集侧剥除，不进 md（保留名）。
-  // 终审 M1：用户手敲 ::body 时 zen_body 已在册——不重复追加，防画布双角标
-  const icons = [
-    ...(tree.icons ?? []).map((n) => `zen_${n}`),
-    ...(tree.body && !(tree.icons ?? []).includes('body') ? ['zen_body'] : []),
-  ]
+  // 图标组装（M18）：用户 icons 直 map（'zen_'+name）。2026-09-06 备注合并后无内部
+  // 保留名——「有正文」角标/悬停由镜像 data.note 驱动引擎原生通道，不再借道 data.icon
+  const icons = (tree.icons ?? []).map((n) => `zen_${n}`)
   return {
     data: {
       text: tree.text,
@@ -332,18 +323,18 @@ export function zenToEngineTree(
   }
 }
 
-/** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名；zen_body 为宿主内部角标
- *  （保留名），剥除不还原；非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
+/** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名（纯用户图标，2026-09-06
+ *  备注合并后无内部保留名，全收不剥）；非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
 function collectIcons(icon: unknown): string[] {
   if (!Array.isArray(icon)) return []
   return icon
-    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_') && n !== 'zen_body')
+    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_'))
     .map((n) => n.slice(4))
 }
 
 /** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）；
- *  data.body（非空字符串）收进 ZenNode.body——zen_body 角标图标同步剥除（保留名，不进 md）；
- *  data.note 为宿主镜像（2026-09-06 合并），不收集——事实源是 data.body；
+ *  data.body（非空字符串）收进 ZenNode.body；data.note 为宿主镜像（2026-09-06 合并），
+ *  不收集——事实源是 data.body；
  *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md） */
 export function engineTreeToZen(
   root: EngineNode,
@@ -354,7 +345,7 @@ export function engineTreeToZen(
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const body = typeof root.data.body === 'string' && root.data.body !== '' ? root.data.body : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
-  // 图标收集（M18）：仅收 'zen_' 前缀项；zen_body 为宿主内部角标（保留名），剥除不还原
+  // 图标收集（M18）：仅收 'zen_' 前缀项（纯用户图标，无内部保留名）
   const icons = collectIcons(root.data.icon)
   // 插图收集（M19）：data.image（src 键）+ imageTitle（alt）；imgMap 不回写（引擎根 data 临时物）
   const image =

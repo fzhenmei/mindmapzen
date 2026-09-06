@@ -44,28 +44,14 @@ describe('zen ⇄ engine 转换', () => {
     expect('note' in (eng.children![1]!.data)).toBe(false) // 无 body 不设键
   })
 
-  test('正文引擎通道：body 透传 data.body，zen_body 图标注入/剥除互逆（2026-09 写作）', async () => {
-    const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
-    const tree: ZenNode = {
-      text: '根', body: '论述。', icons: ['flag'],
-      children: [{ text: '子', body: '子论述。', children: [] }, { text: '无正文', children: [] }],
-    }
-    const engine = zenToEngineTree(tree)
-    expect(engine.data.body).toBe('论述。')
-    expect(engine.data.icon).toEqual(['zen_flag', 'zen_body']) // 用户图标之外尾部追加
-    expect(engine.children?.[0]?.data.body).toBe('子论述。')
-    expect(engine.children?.[0]?.data.icon).toEqual(['zen_body']) // 仅 body 也挂角标
-    expect(engine.children?.[1]?.data.body).toBeUndefined()
-    expect(engine.children?.[1]?.data.icon).toBeUndefined() // 无正文不挂角标
-    const back = engineTreeToZen(engine)
-    expect(back.tree.body).toBe('论述。')
-    expect(back.tree.icons).toEqual(['flag']) // zen_body 剥除，不进 md
-    expect(back.tree.children[0]?.body).toBe('子论述。')
-    // 端到端：收集后的树 serialize 不含 zen_body 痕迹（'::' 为用户 flag 图标的合法标记，
-    // 整体断言不含 '::' 与同用例 icons 保留 ['flag'] 矛盾，改用精确泄漏形态 '::body'）
-    const { serialize } = await import('./mdTree')
-    expect(serialize(back.tree)).not.toContain('body')
-    expect(serialize(back.tree)).not.toContain('::body')
+  test('zen_body 退役(2026-09-06 合并):有正文节点 data.icon 为纯用户图标,角标走镜像 note', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。', icons: ['flag'], children: [{ text: 'c', body: '子论述。', children: [] }] }
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.icon).toEqual(['zen_flag']) // 不再追加 zen_body
+    expect(eng.children![0]?.data.icon).toBeUndefined()
+    expect(eng.data.note).toBe('论述。') // 角标/悬停由镜像驱动(Task 1)
+    const back = engineTreeToZen(eng)
+    expect(back.tree.icons).toEqual(['flag'])
   })
 
   test('正文空串口径：body 为空串时视为无正文（不挂角标、不设 data.body）', async () => {
@@ -77,13 +63,11 @@ describe('zen ⇄ engine 转换', () => {
     expect(engineTreeToZen(engine).tree.body).toBeUndefined()
   })
 
-  test('zen_body 去重：用户手敲 ::body 且有正文时不产生双角标（终审 M1）', async () => {
-    const { zenToEngineTree } = await import('./mdTree')
+  test('用户手敲 ::body 退役后按普通用户图标直通(无注入即无去重,roundtrip 恒等)', () => {
     const tree: ZenNode = { text: 'r', icons: ['body'], body: '论述。', children: [] }
-    expect(zenToEngineTree(tree).data.icon).toEqual(['zen_body']) // 已在册即不重复追加
-    // 用户另挂其他图标时：顺序保持用户图标在前，zen_body 不重复
-    const tree2: ZenNode = { text: 'r', icons: ['flag', 'body'], body: '论述。', children: [] }
-    expect(zenToEngineTree(tree2).data.icon).toEqual(['zen_flag', 'zen_body'])
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.icon).toEqual(['zen_body']) // 用户 icons 直 map,不追加不补角标
+    expect(engineTreeToZen(eng).tree.icons).toEqual(['body']) // zen_ 前缀全收,不再剥除保留名
   })
 
   test('engineTreeToZen 忽略镜像 data.note,只收 data.body', () => {
