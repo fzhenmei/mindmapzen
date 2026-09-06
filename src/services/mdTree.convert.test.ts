@@ -63,11 +63,11 @@ describe('zen ⇄ engine 转换', () => {
     expect(engineTreeToZen(engine).tree.body).toBeUndefined()
   })
 
-  test('用户手敲 ::body 退役后按普通用户图标直通(无注入即无去重,roundtrip 恒等)', () => {
+  test('用户手敲 ::body 退役后按普通用户图标直通（无注入即无去重，roundtrip 恒等）', () => {
     const tree: ZenNode = { text: 'r', icons: ['body'], body: '论述。', children: [] }
     const eng = zenToEngineTree(tree)
-    expect(eng.data.icon).toEqual(['zen_body']) // 用户 icons 直 map,不追加不补角标
-    expect(engineTreeToZen(eng).tree.icons).toEqual(['body']) // zen_ 前缀全收,不再剥除保留名
+    expect(eng.data.icon).toEqual(['zen_body']) // 用户 icons 直 map，不追加不补角标
+    expect(engineTreeToZen(eng).tree.icons).toEqual(['body']) // zen_ 前缀全收，不再剥除保留名
   })
 
   test('engineTreeToZen 忽略镜像 data.note,只收 data.body', () => {

@@ -40,6 +40,9 @@ vi.mock('../components/BodyEditor', () => ({
       <button type="button" data-testid="body-editor-fire" onClick={() => onChange(`${value}！`)}>
         fire
       </button>
+      <button type="button" data-testid="body-editor-fire-empty" onClick={() => onChange('')}>
+        fire-empty
+      </button>
       <span data-testid="body-editor-value">{value}</span>
     </div>
   ),
@@ -2420,7 +2423,7 @@ test('btn-body：开面板载入选中节点 body；编辑防抖后 SET_NODE_DAT
   expect(screen.getByTestId('btn-body')).toHaveAttribute('data-active', '') // 激活态走 data-active 通道
   expect(screen.getByTestId('body-editor-value').textContent).toBe('既有正文') // 预填节点实例 getData('body')
   expect(screen.getByTestId('body-wordcount')).toHaveTextContent('4') // 中文字符口径（去空白码点数）
-  // BodyEditor onChange → 500ms 防抖内不写；快进后提交（body 与镜像 note 同一命令成对落下 =
+  // BodyEditor onChange → 500ms 防抖内不写；快进后提交（body 与镜像 note 同一命令成对落下＝
   // 单条撤销记录；引擎「有 note→挂角标+悬停」由镜像驱动，reRenderNodeCheckChange 使其即时增删）
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
@@ -2432,12 +2435,31 @@ test('btn-body：开面板载入选中节点 body；编辑防抖后 SET_NODE_DAT
     })
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
     expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
     // 关面板即 flush 已由上面提交清空（pending 无）→ 仅关闭，面板卸载
     fireEvent.click(screen.getByTestId('body-close'))
     expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('btn-body：清空草稿提交时 body 与镜像 note 成对置 undefined（角标随镜像消失）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('body-editor-fire')) // 先编辑为「既有正文！」
+    fireEvent.click(screen.getByTestId('body-editor-fire-empty')) // 再清空（与引擎值「既有正文」不同，必提交）
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: undefined, // 清空成对置 undefined（2026-09-06 合并）：引擎按 truthy 判定，角标随镜像消失
+      note: undefined,
+    })
   } finally {
     vi.useRealTimers()
   }
@@ -2463,7 +2485,7 @@ test('切换节点先 flush 旧草稿；深层列表节点（layerIndex≥6）�
     })
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
     expect(screen.getByTestId('body-editor-value').textContent).toBe('')
     // 深层节点（layerIndex 6 = mdTree 深度 7 列表层，spec v1 深度限制）：空态提示 + 只读
@@ -2499,7 +2521,7 @@ test('关面板即 flush 未提交草稿（close 分支），计时器清空不�
     fireEvent.click(screen.getByTestId('body-close')) // 关面板 → 立即冲刷
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
     expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
     act(() => {
@@ -2520,7 +2542,7 @@ test('窗口失焦即 flush 防抖中的草稿（blur 分支）', async () => {
     fireEvent(window, new Event('blur')) // 切窗口 → 防抖草稿立即落引擎
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
   } finally {
     vi.useRealTimers()
@@ -2536,7 +2558,7 @@ test('Ctrl+S 显式保存先冲刷正文防抖草稿（审查 I-2：落盘 md �
     fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // explicitSave 开头 flushNow
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
     await act(async () => {}) // 排空保存链微任务（数据树为 mock，不真落 body——只锁「保存前冲刷」时序）
   } finally {
@@ -2572,7 +2594,7 @@ test('关闭守卫先冲防抖窗内草稿再走三态（终审 I2：干净图�
     expect(guard.fireClose()).toBe(true) // 拦截：hasPending 强制三态，不依赖（未及翻转的）dirtyRef
     expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
       body: '既有正文！',
-      note: '既有正文！', // 镜像 note 成对写(2026-09-06 合并):角标/悬停由它驱动
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
     })
     expect(screen.getByTestId('closeguard-save')).toBeInTheDocument() // 三态对话框弹出（保存/放弃/取消）
     expect(exitApp).not.toHaveBeenCalled()
@@ -2581,8 +2603,8 @@ test('关闭守卫先冲防抖窗内草稿再走三态（终审 I2：干净图�
   }
 })
 
-// ── 图标管理器（2026-09-06 zen_body 退役）：SET_NODE_ICON 整组覆写,落下数组即用户
-//    所选纯用户图标——不再按 data.body 重补内部保留名,「有正文」角标由镜像 note 承担 ──
+// ── 图标管理器（2026-09-06 zen_body 退役）：SET_NODE_ICON 整组覆写，落下数组即用户
+//    所选纯用户图标——不再按 data.body 重补内部保留名，「有正文」角标由镜像 note 承担 ──
 
 /** 给 fakeChildNode 临时挂几何（NodeActions 浮条锚点需要）并返回还原函数 */
 const withGeometry = (): (() => void) => {
@@ -2593,7 +2615,7 @@ const withGeometry = (): (() => void) => {
   }
 }
 
-test('图标管理器：有正文节点确认落下数组即纯用户图标（不掺内部名,角标走镜像 note）', async () => {
+test('图标管理器：有正文节点确认落下数组即纯用户图标（不掺内部名，角标走镜像 note）', async () => {
   fakeTree.children![0]!.data.body = '既有正文'
   const restore = withGeometry()
   try {

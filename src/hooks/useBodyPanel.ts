@@ -76,7 +76,7 @@ export function useBodyPanel(
     const current = typeof cur === 'string' ? cur : undefined
     const next = pending === '' ? undefined : pending
     if (current === next) return
-    // 成对写(2026-09-06 合并):note 是 body 的镜像,引擎角标/悬停由它驱动——清空时同为 undefined
+    // 成对写（2026-09-06 合并）：note 是 body 的镜像，引擎角标/悬停由它驱动——清空时同为 undefined
     mm.execCommand('SET_NODE_DATA', node, { body: next, note: next })
     mm.renderer?.reRenderNodeCheckChange(node)
   }

@@ -67,8 +67,8 @@ describe('精选集健全性（用例前提）', () => {
     const list = toEngineIconList()
     expect(list).toHaveLength(1)
     expect(list[0]!.type).toBe('zen')
-    expect(list[0]!.list.some((i) => i.name === 'body')).toBe(false) // zen_body 退役,无静态在册
-    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length) // 仅精选,不再并入内部表
+    expect(list[0]!.list.some((i) => i.name === 'body')).toBe(false) // zen_body 退役，无静态在册
+    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length) // 仅精选，不再并入内部表
   })
 })
 

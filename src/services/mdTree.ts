@@ -241,9 +241,9 @@ function visitHeading(md: string, block: MNode, state: OutlineState): string | n
 function visitBlock(md: string, block: MNode, state: OutlineState): string | null {
   if (block.type === 'heading') return visitHeading(md, block, state)
   if (block.type !== 'list') {
-    // 正文(2026-09 写作;2026-09-06 备注合并:引用块同归):非结构块原样(引用块含 >
-    // 前缀)收进最近标题级节点的 body;根 H1 之前无归属,仍收进 ignored
-    // (spec 兼容性:段落从静默忽略变为正文可见)
+    // 正文（2026-09 写作；2026-09-06 备注合并：引用块同归）：非结构块原样（引用块含 >
+    // 前缀）收进最近标题级节点的 body；根 H1 之前无归属，仍收进 ignored
+    // （spec 兼容性：段落从静默忽略变为正文可见）
     const target = state.lastHeading
     if (target === null) state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
     else assignBody(target, rawBlockText(md, block))

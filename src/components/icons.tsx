@@ -301,7 +301,7 @@ export const IconOutline = ({ size }: IconProps) =>
     size,
   )
 /** 节点正文（2026-09 正文面板）：文档轮廓 + 三行正文线，24→16 缩放（÷1.5）自
- *  lucide file-text 图形（zen_body 角标已退役 2026-09-06,画布角标由引擎 note 通道承担） */
+ *  lucide file-text 图形（zen_body 角标已退役 2026-09-06，画布角标由引擎 note 通道承担） */
 export const IconFileText = ({ size }: IconProps) =>
   base(
     <>
