@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import MindMap from 'simple-mind-map'
 import Drag from 'simple-mind-map/src/plugins/Drag.js'
 import AssociativeLine from 'simple-mind-map/src/plugins/AssociativeLine.js'
@@ -27,6 +27,7 @@ import { handleEngineKeyDown } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
 import { bridgeLinkToRegistry } from './linkBridge'
 import { seedUndoBaseline } from './undoSeed'
+import NodeContextMenu from './NodeContextMenu'
 
 // 节点拖拽插件：拖到节点上=成为其子节点，拖到两节点之间=调整同级顺序（spec P0"拖拽节点改变层级与顺序"）
 // eslint-disable-next-line react-hooks/rules-of-hooks -- 引擎静态注册 API，非 React Hook（use 前缀误报）
@@ -290,6 +291,9 @@ export default function MindMapCanvas({
   // 备注悬停窗（M17b）：引擎官方通道 customNoteContentShow 接管渲染（mermaid 备注画布内成图）；
   // tipRef 供主题 effect 引用
   const tipRef = useRef<NoteTooltip | null>(null)
+  // 节点右键菜单态（2026-09 纯鼠标操作）：node_contextmenu 坐标 + 节点实例（编辑文本动作
+  // 需传实例给 textEdit.show）；null = 关闭（onClose 卸载）。菜单动作全经 activeNodeList 生效
+  const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; isRoot: boolean; node: unknown } | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
   const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry })
   cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry }
@@ -369,6 +373,17 @@ export default function MindMapCanvas({
       cbRef.current.onActiveChange?.(uids)
     }
     mm.on('node_active', onActive)
+    // 节点右键菜单（2026-09 纯鼠标操作）：引擎在节点 svg 上 stopPropagation 后 emit 本事件
+    // （MindMapNode.js:432-456），DOM 包装层收不到——菜单只能经引擎事件总线受控打开。引擎已
+    // 在发事件前把右键节点设为单选（多选选区切为单选，批量删仍走 MultiSelectBar；空白右键/
+    // 只读/圈选拖拽中不触发，引擎门控）。此处只取坐标与节点，四项动作见 render 段
+    const onNodeCtxMenu = (...args: unknown[]) => {
+      const e = args[0] as MouseEvent | null | undefined
+      const node = args[1] as { isRoot?: boolean } | null | undefined
+      if (!e || !node) return
+      setNodeMenu({ x: e.clientX, y: e.clientY, isRoot: node.isRoot === true, node })
+    }
+    mm.on('node_contextmenu', onNodeCtxMenu)
     // 快捷键对调：裸 Ctrl+C 让给宿主复制 Markdown（useEditorHotkeys doCopy，md 复制高频），
     // 引擎原生 Control+c 复制节点挪至 Control+Shift+c（Render.js:438 注册的是匿名箭头函数拿不到
     // 引用，removeShortcut 不传 fn 整组删除后重挂 copy）。编辑框打开期引擎 keyCommand.save()/
@@ -545,6 +560,7 @@ export default function MindMapCanvas({
       window.removeEventListener('focus', onHealCheck)
       window.removeEventListener('paste', onPaste)
       mm.off('node_active', onActive)
+      mm.off('node_contextmenu', onNodeCtxMenu)
       mm.off('data_change', changed)
       mm.off('afterExecCommand', syncExpand)
       mm.destroy()
@@ -568,6 +584,30 @@ export default function MindMapCanvas({
     }
   }, [theme])
 
-  // role=application：向辅助技术标明这是应用区域（键盘交互在上方 window 监听中处理）
-  return <div ref={containerRef} role="application" style={{ width: '100%', height: '100%' }} />
+  // role=application：向辅助技术标明这是应用区域（键盘交互在上方 window 监听中处理）；
+  // 右键节点时条件挂载菜单（NodeContextMenu 自带 fixed 锚点与 Portal，不影响画布布局）
+  return (
+    <>
+      <div ref={containerRef} role="application" style={{ width: '100%', height: '100%' }} />
+      {nodeMenu !== null && (
+        <NodeContextMenu
+          x={nodeMenu.x}
+          y={nodeMenu.y}
+          isRoot={nodeMenu.isRoot}
+          onInsertChild={() => mmRef.current?.execCommand('INSERT_CHILD_NODE')}
+          onInsertSibling={() => mmRef.current?.execCommand('INSERT_NODE')}
+          onEditText={() => {
+            // 引擎 F2 同款路径（TextEdit.js:93）：show 定位并聚焦指定节点的编辑框。
+            // 须推迟到下一宏任务：菜单 Portal 挂在 body 下，菜单项 click 冒泡到 body 会被
+            // 引擎当作"点画布外提交编辑框"（Event.onBodyClick → body_click → hideEditTextBox，
+            // 与本次 click 同一派发内）——同步 show 会在 9ms 内被藏掉（e2e 实测抓栈）；
+            // 延后后 body_click 先落在未打开态（hideEditTextBox 空操作），编辑框稳定打开
+            setTimeout(() => mmRef.current?.renderer?.textEdit.show({ node: nodeMenu.node }), 0)
+          }}
+          onDelete={() => mmRef.current?.execCommand('REMOVE_NODE')}
+          onClose={() => setNodeMenu(null)}
+        />
+      )}
+    </>
+  )
 }

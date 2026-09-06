@@ -59,6 +59,13 @@ export default {
     image: '节点插图',
     link: '创建连线：点此钮后再点目标节点',
   },
+  nodeMenu: {
+    label: '节点操作菜单',
+    insertChild: '插入子节点',
+    insertSibling: '插入同级节点',
+    editText: '编辑文本',
+    delete: '删除节点',
+  },
   multiSelect: {
     count: '已选 {{count}} 个节点',
     deleteSelected: '删除所选 {{count}} 个节点',
