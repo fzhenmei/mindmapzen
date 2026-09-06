@@ -39,8 +39,6 @@ function renderBar(overrides: {
         onCopyPathClick={noop}
         scope="full"
         onSaveClick={noop}
-        onNoteClick={noop}
-        noteEnabled={false}
         onBodyClick={overrides.onBodyClick ?? noop}
         bodyActive={overrides.bodyActive ?? false}
         onExportClick={noop}

@@ -23,10 +23,13 @@
 // 2026-09（正文终审修复批）：480→490（doCopy 剥备注改树层接线 stripTreeNote +1；关闭
 //  守卫 flushPending 冲刷口（终审 I2 关窗丢尾部草稿）+7——doCopy 改写超限升限，
 //  功能性增长，无腐化）。
+// 2026-09-06 备注合并：NoteDialog/useNoteEdit 接线退役，490→484（useNoteEdit 调用/互斥项/
+//  砚栏两 props/对话框 note 槽接线全删，实测 479 + 5 行余量；卸载 Tiptap 系依赖，
+//  面板主体换原生 textarea——拆除性收缩，非腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 490 },
+  { path: '../src/views/EditorView.tsx', limit: 484 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

@@ -17,7 +17,6 @@ import { useLinkPurify } from '../hooks/useLinkPurify'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
-import { useNoteEdit } from '../hooks/useNoteEdit'
 import { useBodyPanel } from '../hooks/useBodyPanel'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
@@ -116,9 +115,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
   const selection = useActiveSelection()
 
-  // 节点备注编辑（M5b 拆出）：对话框状态与 SET_NODE_DATA 保存链（行数护栏）
-  const noteEdit = useNoteEdit(mmRef, selection.activeUidRef)
-  // 正文面板（2026-09 写作）：开闭/选中联动/防抖写回在 hook，面板本体在 BodyPanel.tsx（均无护栏）
+  // 正文面板（2026-09 写作；2026-09-06 备注合并后唯一附属文本入口）：开闭/选中联动/防抖写回
+  // 在 hook，面板本体在 BodyPanel.tsx（均无护栏）
   const bodyPanel = useBodyPanel(mmRef, selection.activeUidRef, selection.activeUid)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
@@ -261,18 +259,17 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     onFail: onOpenFail,
   })
 
-  // 任一对话框在开（终审修复）：备注快捷键守卫——互斥期/已开时不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
+  // 任一对话框在开（终审修复）：正文面板快捷键守卫——互斥期不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
   // 2026-09：新建导图对话框同列互斥
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || noteEdit.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
-  // 快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑 Shift+F2、Ctrl+. / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
+  // 快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关 Shift+F2 / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
   useEditorHotkeys({
     doCopy,
     explicitSave,
-    openNoteDialog: noteEdit.openNoteDialog,
-    activeUidRef: selection.activeUidRef,
+    toggleBodyPanel: bodyPanel.toggle,
     anyDialogRef,
     openQuickSwitch: quick.open,
     cycleStep: quick.cycleStep,
@@ -339,11 +336,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* 顶部导图胶囊条（2026-09 鼠标流切换）：最近打开常驻平铺，点选走安全链；仅一张时
           组件内不渲染。悬浮顶部居中（悬浮停泊同 ZenBar——canvas-host 恒满屏，引擎零配合） */}
       <MapTabs tabs={quick.mapTabCandidates} currentMdPath={mdPath} onPick={(p) => void quick.switchTo(p)} />
-      {/* 选中节点浮动条（验收轮）：备注笔 + 连线箭头，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
+      {/* 选中节点浮动条（验收轮）：正文笔 + 连线箭头等，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
       {nodePos && !anyDialog && (
         <NodeActions
           pos={nodePos}
-          onNoteClick={noteEdit.openNoteDialog}
+          onBodyClick={bodyPanel.toggle}
           onLinkClick={() => startLinkFromActive(mmRef.current)}
           onIconClick={() =>
             iconPick.openPicker(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeIconsOf(mmRef.current, selection.activeUidRef.current))
@@ -372,8 +369,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
-        onNoteClick={noteEdit.openNoteDialog}
-        noteEnabled={selection.activeUid !== null}
         onBodyClick={bodyPanel.toggle}
         bodyActive={bodyPanel.open}
         onExportClick={exportFlow.openExport}
@@ -413,10 +408,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           void saveAndStamp() // 仅落盘（含印记）：确认前挂起的返回/关闭动作不自动续行（用户再点一次）
         }}
         onIgnoredCancel={flow.confirmCancel}
-        // 备注框同样让位互斥（guarding > confirming 优先级同上）
-        noteDraft={!guard.guarding && !flow.confirming ? noteEdit.noteDraft : null}
-        onNoteSave={noteEdit.saveNote}
-        onNoteCancel={noteEdit.cancelNote}
         // 导出框同样让位互斥（guarding/confirming 优先，actions 稳定引用无重渲负担）
         exportActions={
           exportFlow.open && !guard.guarding && !flow.confirming ? exportFlow.actions : null

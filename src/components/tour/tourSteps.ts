@@ -72,9 +72,9 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     view: 'editor',
-    target: 'btn-note',
-    title: '节点备注',
-    body: '选中节点后可以为它补充备注，备注随 Markdown 一起保存。',
+    target: 'btn-body',
+    title: '节点正文',
+    body: '选中节点后在右侧面板撰写正文，支持手写 Markdown 语法，随导图文件一起保存。',
   },
   {
     view: 'editor',

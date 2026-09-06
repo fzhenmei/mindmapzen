@@ -1,5 +1,5 @@
 // src/hooks/useBodyPanel.ts —— 正文面板状态（2026-09 写作）：开闭、选中联动载入、
-// 防抖写回（500ms）与三处 flush（切节点/关面板/窗口失焦）。命令链同 useNoteEdit：
+// 防抖写回（500ms）与三处 flush（切节点/关面板/窗口失焦）。命令链：
 // SET_NODE_DATA 写 data.body 并同值成对写镜像 data.note（2026-09-06 备注合并：引擎
 // 「有 note→挂角标+悬停」原生通道由 note 驱动，body 是事实源；空串两者同置 undefined
 // 清除，角标随镜像消失）+ reRenderNodeCheckChange 补重渲（裸命令不重渲染，M5b 核验 13）。
@@ -26,13 +26,13 @@ export interface BodyPanel {
   bodyDraft: string | null
   /** 当前编辑节点文本（面板标题；'' 兼作「无选中」信号驱动空态文案） */
   nodeText: string
-  /** 可编辑信号：无选中或深层列表节点为 false（BodyEditor readOnly） */
+  /** 可编辑信号：无选中或深层列表节点为 false（面板 textarea readOnly） */
   editable: boolean
   /** 砚栏 btn-body：开 → 载入当前选中；关 → flush 后收起 */
   toggle(): void
   /** 面板 × 钮：flush 后收起（不动选中） */
   close(): void
-  /** BodyEditor onChange：更新草稿并重置 500ms 防抖计时（切节点/关面板/失焦时 flushNow 兜底） */
+  /** 面板 textarea onChange：更新草稿并重置 500ms 防抖计时（切节点/关面板/失焦时 flushNow 兜底） */
   edit(value: string): void
   /** 立即提交当前草稿（若与引擎值有差异）；无草稿/无节点为无害空操作 */
   flushNow(): void
@@ -49,7 +49,7 @@ export function useBodyPanel(
   const [bodyDraft, setBodyDraft] = useState<string | null>(null) // null = 面板关
   const [nodeText, setNodeText] = useState('')
   const [editable, setEditable] = useState(false)
-  // 打开期间持节点实例：提交命令的第二参（引擎命令按实例寻址，同 useNoteEdit 的 noteNodeRef）
+  // 打开期间持节点实例：提交命令的第二参（引擎命令按实例寻址）
   const nodeRef = useRef<unknown>(null)
   const pendingRef = useRef<string | null>(null) // 未提交草稿（flush 时与引擎值比对）
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

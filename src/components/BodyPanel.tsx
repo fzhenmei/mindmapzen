@@ -1,9 +1,10 @@
 // src/components/BodyPanel.tsx —— 右侧常驻正文面板（2026-09 写作）：标题=节点文本，
-// BodyEditor 主体（Task 5 契约：value/onChange/readOnly，testid body-editor 由其自带），
-// 面板底部显示正文字数（设计文档口径；中文字符口径：去除空白后的 Unicode 码点数）。
-// 无选中空态；深层列表节点空态。状态与命令全在 useBodyPanel（本组件纯展示，props 即其
-// 返回值整体展开）；不进 anyDialog——面板与画布并存（spec：常驻侧栏而非对话框）。
-import BodyEditor from './BodyEditor'
+// 原生 textarea 主体（2026-09-06 备注合并纯文本化：Tiptap 退役，无工具栏、无格式按钮、
+// 无快捷键拦截——md 语法手敲自由；值/输入直连 useBodyPanel 的 bodyDraft/edit，readOnly
+// 对应 textarea 原生属性），面板底部显示正文字数（设计文档口径；中文字符口径：去除空白
+// 后的 Unicode 码点数）。无选中空态；深层列表节点空态。状态与命令全在 useBodyPanel
+// （本组件纯展示，props 即其返回值整体展开）；不进 anyDialog——面板与画布并存
+// （spec：常驻侧栏而非对话框）。
 import type { BodyPanel as BodyPanelState } from '../hooks/useBodyPanel'
 
 /** 空态文案条（无选中 / 深层列表节点两态；muted 底浮于 card 面板上） */
@@ -44,7 +45,15 @@ export default function BodyPanel({ bodyDraft, nodeText, editable, close, edit }
         </button>
       </header>
       {hint !== null && <Hint text={hint} />}
-      <BodyEditor value={draft} onChange={edit} readOnly={!editable} />
+      <textarea
+        data-testid="body-editor"
+        className="body-editor"
+        aria-label="节点正文"
+        value={draft}
+        onChange={(e) => edit(e.target.value)}
+        readOnly={!editable}
+        spellCheck={false}
+      />
       <footer className="shrink-0 border-t border-border px-3 py-1.5 text-right">
         <span data-testid="body-wordcount" className="text-xs tabular-nums text-muted-foreground">
           {count} 字
