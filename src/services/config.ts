@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, parseFavorites, parseGitConfig, parseLayoutKind, parseLibrarySort, parsePanelWidth, parsePreviewOutlinePref, parseRecentOpened, parseSettings, parseThemePref, parseTourDone, type AppConfig, type FsAdapter } from '../types/files'
+import { DEFAULT_CONFIG, parseFavorites, parseGitConfig, parseLanguagePref, parseLayoutKind, parseLibrarySort, parsePanelWidth, parsePreviewOutlinePref, parseRecentOpened, parseSettings, parseThemePref, parseTourDone, type AppConfig, type FsAdapter } from '../types/files'
 
 /** 配置缺失或损坏时回退默认值（spec §8：容错不抛异常；旧配置无 preferredLayout 字段按 null、无 theme 按 auto、无 settings 按默认兼容） */
 export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig> {
@@ -10,6 +10,7 @@ export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig
       lastOpened: typeof parsed.lastOpened === 'string' ? parsed.lastOpened : null,
       preferredLayout: parseLayoutKind(parsed.preferredLayout),
       theme: parseThemePref(parsed.theme),
+      language: parseLanguagePref(parsed.language),
       previewOutline: parsePreviewOutlinePref(parsed.previewOutline),
       favorites: parseFavorites(parsed.favorites),
       librarySort: parseLibrarySort(parsed.librarySort),

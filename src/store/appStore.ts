@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
+import { changeUiLanguage } from '../i18n'
+import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
 import type { GitRun } from '../types/ports'
 
@@ -51,6 +53,10 @@ interface AppState {
   outlineWidth: number | null
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
+  /** 界面语言三态偏好(auto = 跟随系统) */
+  languagePref: LanguagePref
+  /** 解析后的实际界面语言(驱动 i18n 实例与 html lang) */
+  resolvedLanguage: UiLocale
   /** 顶部条（自定义标题栏）取色令牌：案头 '--sidebar'（视口顶是 sidebar 色场）、编辑器/
    *  开屏 '--background'；视图挂载时声明，TitleBar 据此换底色与视口顶部无缝 */
   titlebarBg: '--sidebar' | '--background'
@@ -92,6 +98,7 @@ interface AppState {
   dropRecent: (mdPath: string) => Promise<void>
   setPreferredLayout: (kind: LayoutKind) => Promise<void>
   setThemePref: (p: ThemePref) => Promise<void>
+  setLanguagePref: (pref: LanguagePref) => Promise<void>
   setPreviewOutline: (pref: PreviewOutlinePref) => Promise<void>
   /** 收藏切换（2026-09 收藏置顶）：已在清单=移除，不在=追加；load-merge-save 持久化 */
   toggleFavorite: (mdPath: string) => Promise<void>
@@ -148,12 +155,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
   preferredLayout: 'mindmap',
   themePref: 'auto',
+  languagePref: 'auto',
   previewOutline: 'auto',
   favorites: [],
   librarySort: 'modified',
   sidebarWidth: null,
   outlineWidth: null,
   resolvedTheme: 'light',
+  resolvedLanguage: 'zh-CN',
   titlebarBg: '--background',
   settings: DEFAULT_COPY_SETTINGS,
   gitConfig: DEFAULT_GIT_CONFIG,
@@ -173,8 +182,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 主题先于工作区分支应用（未选工作区也生效）：auto 按系统解析，显式值直出
     const themePref = cfg.theme ?? 'auto'
     const resolved = resolveTheme(themePref)
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
+    const languagePref = cfg.language ?? 'auto'
+    const locale = resolveUiLang(languagePref, systemUiLanguage())
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
+    changeUiLanguage(locale)
     if (cfg.workspaceDir) {
       // mapTabs 初始 = 持久 MRU 序前 5（2026-09 顶部胶囊条）：重启后胶囊仍在，跨会话保留
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened.slice(0, 5) })
@@ -243,6 +256,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     applyDocumentTheme(resolved)
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, theme: pref })
+  },
+
+  /** 语言三态偏好(spec §一.1)：即时切换 i18n + html lang(react-i18next 订阅自动
+   *  重渲染，无需重启)，load-merge-save 持久化到应用配置 */
+  setLanguagePref: async (pref) => {
+    const { adapter, configPath } = get()
+    const locale = resolveUiLang(pref, systemUiLanguage())
+    set({ languagePref: pref, resolvedLanguage: locale })
+    changeUiLanguage(locale)
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, language: pref })
   },
 
   /** 预览大纲三态偏好（2026-09 大纲面板）：即时生效 + load-merge-save 持久化

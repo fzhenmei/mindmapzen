@@ -96,6 +96,8 @@ export interface AppConfig {
   preferredLayout: LayoutKind | null
   /** 应用主题三态偏好（auto = 跟随系统；显式 light/dark 覆盖系统） */
   theme: ThemePref
+  /** 界面语言三态偏好(2026-09 i18n):auto = 跟随系统(zh* 归简体,其余回退英文) */
+  language: LanguagePref
   /** 预览大纲三态偏好（auto = 跟随预览主区宽；显式 on/off 记住用户手动开关） */
   previewOutline: PreviewOutlinePref
   /** 收藏清单（2026-09 收藏置顶）：mdPath 寻址，渲染时失联项宽容剔除（文件被删/换
@@ -158,6 +160,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   recentOpened: [],
   preferredLayout: null,
   theme: 'auto',
+  language: 'auto',
   previewOutline: 'auto',
   favorites: [],
   librarySort: 'modified',
