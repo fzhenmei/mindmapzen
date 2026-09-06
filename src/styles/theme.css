@@ -50,7 +50,9 @@
   --secondary: #E3F2EE;
   --secondary-foreground: #16655A;
   --muted: #EEF1F0;
-  --muted-foreground: #64707A;
+  /* muted 文字对比度（2026-09 UI 评审 P3-1）：#64707A on #F7F8F7 ≈4.42:1 低于 WCAG AA
+     正文 4.5:1（问候/引言/统计行等小字全用此档）；#5A6670 → 5.13:1（card 上 5.88:1） */
+  --muted-foreground: #5A6670;
   --accent: #E3F2EE;
   --accent-foreground: #16655A;
   --destructive: #B5453C;
@@ -74,7 +76,7 @@
   --sidebar-input: #E4E7E6;
   --sidebar-ring: #1D7A6B;
   --sidebar-muted: #EEF1F0;
-  --sidebar-muted-foreground: #64707A;
+  --sidebar-muted-foreground: #5A6670;
 }
 
 /* 夜航（暗）主题：同键覆盖驱动全部官方工具类（unlayered 恒胜 @layer theme 映射）。
