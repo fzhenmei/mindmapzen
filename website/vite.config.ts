@@ -8,6 +8,7 @@ import { zh } from './src/content/zh'
 // 端口避开主项目 5173,允许两边 dev 并行。
 // 双语双份构建(2026-09 i18n):默认中文出 dist/;`vite build --mode en` 出 dist/en/
 // (base /en/、不清空中文产物)。html 头(lang/title/description/hreflang)按 mode 注入。
+// 注意:中文构建(emptyOutDir=true)会清空整个 dist/ 含旧 dist/en,双份发布必须走 build:all(zh 先 en 后)。
 function localeHtml(mode: string): Plugin {
   const isEn = mode === 'en'
   const head = isEn ? en.html : zh.html

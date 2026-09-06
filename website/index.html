@@ -17,6 +17,20 @@
           : 'light'
       })()
     </script>
+    <script>
+      // 语言自动检测(2026-09 i18n):仅根路径生效——浏览器语言非中文且用户无显式选择
+      // (localStorage)时跳英文版;英文版页面不反向跳转,避免回路
+      ;(function () {
+        try {
+          if (localStorage.getItem('zen-lang')) return
+          if (location.pathname !== '/' && location.pathname !== '/index.html') return
+          var n = (navigator.language || '').toLowerCase()
+          if (n && n.indexOf('zh') !== 0) location.replace('/en/')
+        } catch (e) {
+          // localStorage 不可用(如隐私模式)时按当前语言继续,不阻断渲染
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
