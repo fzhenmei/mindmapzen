@@ -57,12 +57,14 @@ export async function installE2eHarness(): Promise<void> {
     // writeImage 记录图片字节长度（exportedBytes > 0 断言）
     savePaths: [] as string[],
     exportedBytes: null as number | null,
-    // 导入文件桩：默认返回 md 内置样例（含 1 个忽略块「忽略段。」）；M21 起支持
-    // xmind 用例覆写 __zenE2e.pickImportStub（返回 PickedImport 或 null）
+    // 导入文件桩：默认返回 md 内置样例（含 1 个忽略块「忽略段。」——2026-09-06 备注合并后
+    // 标题下段落归正文不再忽略，样例把忽略段放在根 H1 之前（根前无归属仍进 ignored），
+    // 维持导入预览确认链路可触发）；M21 起支持 xmind 用例覆写 __zenE2e.pickImportStub
+    // （返回 PickedImport 或 null）
     async pickImportFile(): Promise<PickedImport | null> {
       const stub = (this as unknown as { pickImportStub?: PickedImport | null }).pickImportStub
       if (stub !== undefined) return stub
-      return { name: '外部图', kind: 'md', text: '# 外部图\n\n忽略段。\n\n## A\n' }
+      return { name: '外部图', kind: 'md', text: '忽略段。\n\n# 外部图\n\n## A\n' }
     },
     // 读剪贴板图桩（粘贴截图「粘贴」按钮路径）：默认固定 1×1 PNG（同选图桩字节），
     // 名字与生产同构走 pasteImageName 时间戳；空剪贴板用例直接覆写整个函数为 async () => null

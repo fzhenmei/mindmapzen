@@ -2230,7 +2230,7 @@ describe('画布内新建导图', () => {
 /** 渲染并就绪后选中 child-uid：ready 在前、active 在后——useNodeActions 的锚点 effect
  *  须在 mmRef 就位后由 activeUid 变化触发（NodeActions 浮条才渲染，图标用例依赖）。
  *  返回 ready 时刻锁定的实例：假画布工厂每次重渲重赋模块级 fakeHandle，而 mmRef 只在
- *  ready 时接收一次——须在 emitReady 后立即捕获（同 renderWithSelection 的同源约定） */
+ *  ready 时接收一次——须在 emitReady 后立即捕获（同 renderReady 的同源约定） */
 const renderReadySelected = async (): Promise<MindMapHandle> => {
   render(
     <EditorView

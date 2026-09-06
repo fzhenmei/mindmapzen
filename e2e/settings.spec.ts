@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 // 复制选项下拉（2026-09 自设置面板移入砚栏复制钮）：默认值、切换、菜单保持、
 // 收起重开保持、配置落盘。复制内容的后处理行为由 copyFilter 单测 + EditorView
-// 单测钉死，此处只验证选项链路（UI 驱动沿用 note.spec 建图路径进入编辑器）。
+// 单测钉死，此处只验证选项链路（UI 驱动沿用工单建图路径进入编辑器）。
 // 2026-09-06 备注合并后 copyIncludeNote 退役：下拉两项（保留双链/含正文）。
 test('砚栏复制选项：默认值、切换、重开保持与配置落盘', async ({ page }) => {
   test.setTimeout(30_000)

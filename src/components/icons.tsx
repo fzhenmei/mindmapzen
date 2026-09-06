@@ -159,16 +159,6 @@ export const IconPencil = ({ size }: IconProps) =>
   base(<path d="M11.5 3.5l1 1L6 11l-1.8.8L5 10l6.5-6.5z" />, size)
 export const IconTrash = ({ size }: IconProps) =>
   base(<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5M7 7.5v3M9 7.5v3" />, size)
-/** 节点备注（M5b）：便签纸轮廓 + 右上折角 + 一行字线 */
-export const IconNote = ({ size }: IconProps) =>
-  base(
-    <>
-      <path d="M2.5 4A1.5 1.5 0 0 1 4 2.5h8A1.5 1.5 0 0 1 13.5 4v5L9 13.5H4A1.5 1.5 0 0 1 2.5 12z" />
-      <path d="M9 13.5V10a1 1 0 0 1 1-1h3.5" />
-      <path d="M5.5 6h5" />
-    </>,
-    size,
-  )
 /** 节点图标入口（M18）：笑脸（圆脸 + 双点 + 弧口） */
 export const IconSmile = ({ size }: IconProps) =>
   base(
