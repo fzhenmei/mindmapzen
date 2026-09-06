@@ -240,32 +240,40 @@ describe('previewOutline（预览大纲三态偏好）', () => {
 })
 
 describe('settings（M5b Task 4：复制行为）', () => {
-  test('初始默认 {copyIncludeNote:false, copyIncludeLinks:true, copyIncludeBody:true}', () => {
+  test('初始默认 {copyIncludeLinks:true, copyIncludeBody:true}（2026-09-06 copyIncludeNote 退役）', () => {
     expect(useAppStore.getState().settings).toEqual(DEFAULT_COPY_SETTINGS)
+    expect(DEFAULT_COPY_SETTINGS).toEqual({ copyIncludeLinks: true, copyIncludeBody: true })
   })
   test('init 读配置的 settings', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeLinks: false } }))
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: true })
+  })
+  test('旧配置含 copyIncludeNote 键：加载不炸且静默忽略（引用块已是正文，「剥备注」语义消失）', async () => {
     await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: true, copyIncludeLinks: false } }))
     useAppStore.setState({ configPath: '/cfg.json' })
     await useAppStore.getState().init()
-    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: true })
   })
-  test('copyIncludeBody 默认 true;旧配置无该键时补默认（2026-09 正文）', async () => {
-    expect(DEFAULT_COPY_SETTINGS).toEqual({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })
-    // 写入只有两个旧键的 config → loadConfig → settings.copyIncludeBody === true
-    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: false, copyIncludeLinks: true } }))
+  test('旧配置含 copyIncludeNote 键：setSetting 落盘不写回（load-merge-save 不使退役键复活）', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: true, copyIncludeLinks: true } }))
     useAppStore.setState({ configPath: '/cfg.json' })
-    await useAppStore.getState().init()
-    expect(useAppStore.getState().settings.copyIncludeBody).toBe(true)
+    await useAppStore.getState().setSetting('copyIncludeBody', false)
+    const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
+    expect(cfg.settings).toEqual({ copyIncludeLinks: true, copyIncludeBody: false })
+    expect(cfg.settings).not.toHaveProperty('copyIncludeNote')
   })
   test('setSetting 更新状态并 load-merge-save 持久化（单字段不覆盖另一字段）', async () => {
-    await useAppStore.getState().setSetting('copyIncludeNote', true)
-    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })
+    useAppStore.setState({ configPath: '/cfg.json', settings: { ...DEFAULT_COPY_SETTINGS } })
+    await useAppStore.getState().setSetting('copyIncludeBody', false)
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: true, copyIncludeBody: false })
     const cfg = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
-    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })
+    expect(cfg.settings).toEqual({ copyIncludeLinks: true, copyIncludeBody: false })
     await useAppStore.getState().setSetting('copyIncludeLinks', false)
     const cfg2 = JSON.parse(await (useAppStore.getState().adapter as MemoryFsAdapter).readTextFile('/cfg.json'))
-    expect(cfg2.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
-    expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
+    expect(cfg2.settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
+    expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
   })
 })
 

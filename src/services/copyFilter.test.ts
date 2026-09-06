@@ -1,35 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { applyCopySettings, stripLinkBrackets, stripTreeBody, stripTreeNote } from './copyFilter'
+import { applyCopySettings, stripLinkBrackets, stripTreeBody } from './copyFilter'
 import { serialize } from './mdTree'
 import type { ZenNode } from '../types/tree'
-
-describe('stripTreeNote（copyIncludeNote=false 树层剥备注；note 退役后为恒等中间态）', () => {
-  // 2026-09-06 备注合并:ZenNode.note 退役,树上不再有备注可剥——stripTreeNote 恒等返回;
-  // copyIncludeNote 设置键与 EditorView 调用链整体退役归 Task 5,此前保持签名兼容
-  test('note 退役后恒等：树上无 note 可剥，body/icons 原样保留', () => {
-    const tree: ZenNode = {
-      text: 'r', body: '论述。', children: [{ text: 'c', body: '子论述。', children: [] }],
-    }
-    expect(stripTreeNote(tree)).toEqual(tree)
-  })
-  test('纯函数：入参树不被改动', () => {
-    const child: ZenNode = { text: 'c', body: '子论述。', children: [] }
-    const tree: ZenNode = { text: 'r', body: '论述。', children: [child] }
-    stripTreeNote(tree)
-    expect(tree.body).toBe('论述。')
-    expect(child.body).toBe('子论述。')
-  })
-  test('C1 回归：copyIncludeNote=false 时正文代码块内 `> ` 行不丢（树层无 note 可剥，md 层零触碰）', () => {
-    const tree: ZenNode = { text: 'r', body: '```diff\n> 删除的行\n```', children: [] }
-    // doCopy 同款链：stripTreeNote → serialize（旧 stripNoteLines 行级正则会把代码块内 `> ` 行整行剥掉）
-    expect(serialize(stripTreeNote(tree))).toBe('# r\n```diff\n> 删除的行\n```\n')
-  })
-  test('C1 回归：copyIncludeNote=false 时正文内引用块不丢（引用块已是正文合法块类型）', () => {
-    // 2026-09-06 合并后引用块原样归 body,不再是独立备注层,任何剥除逻辑都不触碰它
-    const tree: ZenNode = { text: 'r', body: '论述。\n\n> 引用', children: [] }
-    expect(serialize(stripTreeNote(tree))).toBe('# r\n论述。\n\n> 引用\n')
-  })
-})
 
 describe('stripLinkBrackets（copyIncludeLinks=false 留名去括号）', () => {
   test('[[名称]] → 名称', () => {
@@ -59,14 +31,22 @@ describe('stripTreeBody（copyIncludeBody=false 树层剥正文，2026-09）', (
     expect(tree.body).toBe('论述。')
     expect(child.body).toBe('子论述。')
   })
+  test('「剥正文」管全部正文:body 内引用块随整块一并剥(2026-09-06 备注合并后引用块已是正文合法块类型,无独立备注层)', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。\n\n> 引用', children: [] }
+    expect(stripTreeBody(tree)).toEqual({ text: 'r', children: [] })
+  })
+  test('C1 回归:含正文时正文代码块内 `> ` 行不丢(剥除只发生在树层,md 层零触碰)', () => {
+    const tree: ZenNode = { text: 'r', body: '```diff\n> 删除的行\n```', children: [] }
+    expect(serialize(tree)).toBe('# r\n```diff\n> 删除的行\n```\n')
+  })
 })
 
-describe('applyCopySettings（按设置组合；终审 C1 后仅剩双链剥除——备注剥除已上移树层）', () => {
-  test('copyIncludeLinks=true：原文恒等（备注剥除不再走此处）', () => {
-    const md = '# 根\n\n## A\n> 备注\n'
-    expect(applyCopySettings(md, { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
+describe('applyCopySettings（按设置组合；md 层仅剩双链剥除——剥正文在树层先于 serialize）', () => {
+  test('copyIncludeLinks=true：原文恒等', () => {
+    const md = '# 根\n\n## A\n论述。\n'
+    expect(applyCopySettings(md, { copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
   })
   test('copyIncludeLinks=false：[[B]] → B', () => {
-    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })).toBe('## A 见 B\n')
+    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeLinks: false, copyIncludeBody: true })).toBe('## A 见 B\n')
   })
 })

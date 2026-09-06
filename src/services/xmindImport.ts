@@ -84,8 +84,8 @@ function fromXmlTopic(el: Element, warnings: IgnoredBlock[], path: string): ZenN
   const node: ZenNode = { text: el.getAttribute('title') ?? '(无标题)', children: [] }
   // XMind 备注归正文(2026-09-06 备注合并):ZenNode.note 已退役,body 是唯一附属文本
   const notes = el.querySelector(':scope > notes > plain')
-  const noteText = notes?.textContent?.trim()
-  if (noteText !== undefined && noteText !== '') node.body = noteText
+  const bodyText = notes?.textContent?.trim()
+  if (bodyText !== undefined && bodyText !== '') node.body = bodyText
   // 旧版子题：children/topics[@type='attached'] 下的 topic；detached 计入摘要
   for (const topics of Array.from(el.querySelectorAll(':scope > children > topics'))) {
     const type = topics.getAttribute('type') ?? 'attached'

@@ -193,7 +193,7 @@ beforeEach(async () => {
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
-    settings: { copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true },
+    settings: { copyIncludeLinks: true, copyIncludeBody: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
     // 泄漏的偏好会让后续用例的布局点击命中已激活项而 no-op——统一回默认
@@ -608,7 +608,7 @@ test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () 
 
 // ---- 复制 md 给 AI（图片绝对路径，2026-09）----
 
-test('复制带图节点：图片相对路径转绝对 + 头部说明行（头注在剥备注之后，不被误剥）', async () => {
+test('复制带图节点：图片相对路径转绝对 + 头部说明行（头注在剥正文之后，不被误剥）', async () => {
   const writes: string[] = []
   // 子节点带插图（engineTreeToZen 还原 data.image/imageTitle，serialize 注入行尾标记）
   fakeTree = {
@@ -635,7 +635,7 @@ test('复制带图节点：图片相对路径转绝对 + 头部说明行（头�
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(writes).toHaveLength(1))
-  // 默认 settings（剥备注）在前、图片转换在后：头注引用行存活，src 拼 workspaceDir 前缀
+  // 图片转换在复制链尾段（树层剥正文与 md 层后处理之后）：头注引用行存活，src 拼 workspaceDir 前缀
   expect(writes[0]).toBe('> 图片为本地绝对路径，请用工具读取\n\n# 根\n\n## 配图 ![图注](/ws/assets/配图.png)\n')
 })
 
@@ -672,18 +672,18 @@ const copyWith = async (settings: CopySettings, tree: EngineNode = noteLinkTree(
   return writes[0]!
 }
 
-test('复制后处理：默认设置剥备注、留双链', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
+test('复制后处理：默认设置含正文、留双链', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
-test('复制后处理：copyIncludeNote=true 也不再产出 > 备注行（data.note 为镜像被忽略）', async () => {
-  // 2026-09-06 备注合并:ZenNode.note 退役,engineTreeToZen 只收 data.body;
-  // copyIncludeNote 设置键与 stripTreeNote 整链退役归 Task 5,此前两值产出一致
-  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
+test('复制后处理：引擎镜像 data.note 不进复制产物（备注已并入正文，无独立备注层）', async () => {
+  // 2026-09-06 备注合并:ZenNode.note 退役,engineTreeToZen 只收 data.body——
+  // copyIncludeNote 设置键已随 Task 5 整链退役,任何设置组合下备注行都不再产出
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false, copyIncludeBody: true })).toBe('# 根\n\n## 见 B\n')
+  expect(await copyWith({ copyIncludeLinks: false, copyIncludeBody: true })).toBe('# 根\n\n## 见 B\n')
 })
 
 // ---- 复制含正文开关（2026-09 正文 Task 7）：树层剥除先于序列化 ----
@@ -694,25 +694,25 @@ const bodyTree = (): EngineNode => ({
   children: [{ data: { text: '新分支', expand: true, uid: 'child-uid', body: '既有正文' }, children: [] }],
 })
 
-test('复制后处理：copyIncludeBody=false 时树层剥正文——md 含节点文本、不含正文段', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: false }, bodyTree()))
+test('复制后处理：copyIncludeBody=false 时树层剥正文（管全部正文，含引用块部分）——md 含节点文本、不含正文段', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: false }, bodyTree()))
     .toBe('# 根\n\n## 新分支\n')
 })
 
 test('复制后处理：copyIncludeBody=true（默认含，给 AI 改稿刚需）时正文段随节点行原样输出', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }, bodyTree()))
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, bodyTree()))
     .toBe('# 根\n\n## 新分支\n既有正文\n')
 })
 
-// 终审 C1：剥备注改树层（stripTreeNote）——旧 md 行级正则会误伤正文代码块内 `> ` 行
-test('复制后处理：copyIncludeNote=false 不误伤正文代码块内 `> ` 行（默认组合即「复制给 AI 改稿」）', async () => {
+// 终审 C1 遗产：剥除只发生在树层，md 层零触碰——旧行级正则会误伤正文代码块内 `> ` 行
+test('复制后处理：copyIncludeBody=true 不误伤正文代码块内 `> ` 行（默认组合即「复制给 AI 改稿」）', async () => {
   const tree: EngineNode = {
     data: { text: '根', expand: true, uid: 'root-uid' },
     children: [
       { data: { text: '新分支', expand: true, uid: 'child-uid', body: '```diff\n> 删除的行\n```', note: '备注' }, children: [] },
     ],
   }
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true, copyIncludeBody: true }, tree))
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, tree))
     .toBe('# 根\n\n## 新分支\n```diff\n> 删除的行\n```\n')
 })
 

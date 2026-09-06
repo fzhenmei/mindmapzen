@@ -9,9 +9,10 @@ import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { LayoutKind } from '../editor/layoutMap'
 
 // 砚栏复制组 split button（2026-09 复制选项自设置面板移入）：主钮照常复制、箭头展开
-// 三勾选项（默认 备注off/双链on/含正文on，2026-09 正文起含「含正文」）、勾选即回调且
-// 菜单保持打开、接线真实 store 后勾选走 setSetting load-merge-save 持久化（链路测试自
-// SettingsDialog.test 迁入）。jsdom 驱动沿用 dropdown-menu.test 模式：pointerdown（button 0）展开，role 定位条目。
+// 两勾选项（默认 双链on/含正文on；2026-09-06 备注合并后 copyIncludeNote 退役，
+// 「包含备注」项随之拆除）、勾选即回调且菜单保持打开、接线真实 store 后勾选走
+// setSetting load-merge-save 持久化（链路测试自 SettingsDialog.test 迁入）。
+// jsdom 驱动沿用 dropdown-menu.test 模式：pointerdown（button 0）展开，role 定位条目。
 
 const noop = (): void => {}
 // bind 属引擎挂载钩（ZenBar 不触达），桩里补 no-op 只为满足 UndoRedo 形状
@@ -65,12 +66,12 @@ describe('ZenBar 复制选项下拉', () => {
   })
   afterEach(cleanup)
 
-  test('箭头展开菜单：三项勾选态反映 copySettings 现值（默认 备注off/双链on/含正文on）', () => {
+  test('箭头展开菜单：两项勾选态反映 copySettings 现值（默认 双链on/含正文on；「包含备注」项已随 copyIncludeNote 退役）', () => {
     renderBar()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     openMenu()
     expect(screen.getByRole('menu')).toBeInTheDocument()
-    expect(screen.getByTestId('copy-note-option')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByTestId('copy-note-option')).not.toBeInTheDocument()
     expect(screen.getByTestId('copy-links-option')).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByTestId('copy-include-body')).toHaveAttribute('aria-checked', 'true')
   })
@@ -79,11 +80,9 @@ describe('ZenBar 复制选项下拉', () => {
     const onToggle = vi.fn()
     renderBar({ onToggleCopySetting: onToggle })
     openMenu()
-    fireEvent.click(screen.getByTestId('copy-note-option'))
-    expect(onToggle).toHaveBeenCalledWith('copyIncludeNote')
-    // 菜单未关：后续项仍可点（同径再验 copyIncludeLinks 与 2026-09 正文项 copyIncludeBody）
     fireEvent.click(screen.getByTestId('copy-links-option'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeLinks')
+    // 菜单未关：后续项仍可点（同径再验 2026-09 正文项 copyIncludeBody）
     fireEvent.click(screen.getByTestId('copy-include-body'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeBody')
     expect(screen.getByRole('menu')).toBeInTheDocument()
@@ -103,13 +102,13 @@ describe('ZenBar 复制选项下拉', () => {
       },
     })
     openMenu()
-    fireEvent.click(screen.getByTestId('copy-note-option'))
     fireEvent.click(screen.getByTestId('copy-links-option'))
+    fireEvent.click(screen.getByTestId('copy-include-body'))
     await waitFor(() =>
-      expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true }),
+      expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false }),
     )
     const cfg = JSON.parse(await useAppStore.getState().adapter.readTextFile('/cfg.json'))
-    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false, copyIncludeBody: true })
+    expect(cfg.settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
     expect(cfg.workspaceDir).toBe('/ws') // 合并保存保留其他字段
     expect(cfg.preferredLayout).toBe('logic')
     expect(cfg.theme).toBe('dark')

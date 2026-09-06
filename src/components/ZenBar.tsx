@@ -203,8 +203,9 @@ export default function ZenBar({
       </Tip>
       <Separator orientation="vertical" className="mx-1" />
       {/* 复制组 = split button（2026-09 复制选项自设置面板移入）：主钮照常复制（Ctrl+C 同径），
-       *  箭头钮展开三项勾选（2026-09 正文起含「含正文」），勾选即改即存（store setSetting）；
-       *  onSelect preventDefault 保持菜单打开，可连续切换（ESC/点外部关闭）。箭头钮不加 Tooltip：菜单自身即说明 */}
+       *  箭头钮展开两项勾选（2026-09-06 备注合并后 copyIncludeNote 退役，「包含备注」项拆除），
+       *  勾选即改即存（store setSetting）；onSelect preventDefault 保持菜单打开，可连续切换
+       *  （ESC/点外部关闭）。箭头钮不加 Tooltip：菜单自身即说明 */}
       <DropdownMenu>
         <div className="flex items-center">
           <Tip label={copyLabel}>
@@ -233,14 +234,6 @@ export default function ZenBar({
           </DropdownMenuTrigger>
         </div>
         <DropdownMenuContent align="start">
-          <DropdownMenuCheckboxItem
-            data-testid="copy-note-option"
-            checked={copySettings.copyIncludeNote}
-            onCheckedChange={() => onToggleCopySetting('copyIncludeNote')}
-            onSelect={(e) => e.preventDefault()}
-          >
-            包含备注
-          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             data-testid="copy-links-option"
             checked={copySettings.copyIncludeLinks}
