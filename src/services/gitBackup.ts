@@ -15,9 +15,9 @@ export interface BackupOutcome {
   committed: boolean
   /** 提交消息（committed 时有值） */
   message?: string
-  /** push 结果：ok=成功 / skipped=未配远程或无提交 / 错误消息（中文，状态栏用） */
+  /** push 结果：ok=成功 / skipped=未配远程或无提交（reason 词典化，随界面语言）/ 错误消息（git 原文回报，状态栏用） */
   push: { kind: 'ok' } | { kind: 'skipped'; reason: string } | { kind: 'error'; message: string }
-  /** 执行中遇到的致命错误（如 git 不存在）；null = 流程走完 */
+  /** 执行中遇到的致命错误（如 git 不存在；词典化，随界面语言）；null = 流程走完 */
   fatal: string | null
 }
 
@@ -175,22 +175,22 @@ export async function gitDiffStat(
 /** 恢复到指定版本（M22）：工作区文件整体回到该提交内容，**以新提交落盘**——
  *  历史只增不改（git checkout <hash> -- . 后自动 commit），回滚本身可再回滚；
  *  工作区若有未提交变更一并被覆盖（入口在案头设置页，编辑器内无在途内容）。
- *  返回 null=成功，否则中文错误 */
+ *  返回 null=成功，否则错误文案（词典化，随界面语言） */
 export async function restoreToVersion(
   wsDir: string,
   hash: string,
   run: GitRun,
 ): Promise<string | null> {
   // 预检：非哈希形态直接拒绝（防脏数据把整行文本带进 checkout 报 git 原始错误）
-  if (!HASH_RE.test(hash)) return `版本号无效：${hash.slice(0, 20)}…`
+  if (!HASH_RE.test(hash)) return i18n.t('errors.git.rollback.invalidHash', { hash: hash.slice(0, 20) })
   const checkout = await run(wsDir, ['checkout', hash, '--', '.'])
-  if (!checkout.ok) return `恢复失败：${checkout.err.split('\n')[0] ?? ''}`
+  if (!checkout.ok) return i18n.t('errors.git.rollback.restoreFail', { detail: checkout.err.split('\n')[0] ?? '' })
   // 变更落为新提交（无变更时 commit 失败=无差异，视为成功）
   await run(wsDir, ['add', '-A'])
   const stamp = new Date().toLocaleString(i18n.language)
-  const commit = await run(wsDir, ['commit', '-m', `回滚到 ${hash} · ${stamp}`])
+  const commit = await run(wsDir, ['commit', '-m', i18n.t('errors.git.rollbackMessage', { hash, stamp })])
   if (!commit.ok && !/nothing to commit|无|no changes/i.test(commit.out + commit.err)) {
-    return `提交回滚失败：${commit.err.split('\n')[0] ?? ''}`
+    return i18n.t('errors.git.rollback.commitFail', { detail: commit.err.split('\n')[0] ?? '' })
   }
   return null
 }

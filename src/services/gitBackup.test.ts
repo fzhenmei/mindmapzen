@@ -184,6 +184,24 @@ describe('版本历史与回滚（M22）', () => {
     expect(await restoreToVersion('/ws', 'abc1234', bad.run)).toContain('恢复失败')
   })
 
+  // i18n（Task 12 修复）：回滚提交消息与错误串跟随界面语言——切 en 验证；
+  // setup.ts 每测前重钉 zh-CN，finally 切回兜底（防本测中途失败向后泄漏）
+  test('回滚提交消息与错误串跟随界面语言（英文）', async () => {
+    await i18n.changeLanguage('en')
+    try {
+      // 成功路径：回滚提交实参（calls 拼接形态）匹配英文模板（stamp 为 .+）
+      const ok = makeRun([{ match: 'checkout', ok: true }, { match: 'commit', ok: true }])
+      expect(await restoreToVersion('/ws', 'abc1234', ok.run)).toBeNull()
+      expect(ok.calls.some((c) => /^commit -m Rollback to .+ · .+$/.test(c))).toBe(true)
+      // 非法 hash 预检：英文报错且不发起任何 git 调用
+      const bad = makeRun([])
+      expect(await restoreToVersion('/ws', 'not-a-hash', bad.run)).toMatch(/^Invalid version: .+…$/)
+      expect(bad.calls).toHaveLength(0)
+    } finally {
+      await i18n.changeLanguage('zh-CN')
+    }
+  })
+
   test('gitDiffStat：unified=0 行级解析（恢复后视角）；无差异空；失败/非法 hash 为 null', async () => {
     const ok = makeRun([
       {

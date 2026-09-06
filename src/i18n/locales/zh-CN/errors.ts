@@ -60,7 +60,9 @@ export default {
   // Task 12 git 备份消息与服务层状态文案(checkAndBackup 调用期 i18n.t)
   git: {
     commitMessage: '自动备份 · {{stamp}} · {{count}} 文件变更',
+    rollbackMessage: '回滚到 {{hash}} · {{stamp}}',
     reason: { noInit: '未初始化', statusUnreadable: '状态不可读', noChange: '无变更', commitFail: '提交失败', noRemote: '未配置远程' },
     fatal: { init: 'git init 失败：{{detail}}', status: 'git status 失败：{{detail}}', commit: 'git commit 失败：{{detail}}' },
+    rollback: { invalidHash: '版本号无效：{{hash}}…', restoreFail: '恢复失败：{{detail}}', commitFail: '提交回滚失败：{{detail}}' },
   },
 }
