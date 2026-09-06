@@ -43,3 +43,7 @@ if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'unde
   }
   ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub
 }
+
+// i18n:测试环境固定中文(存量断言口径;英文行为由 i18n 相关新测试自行 changeLanguage 覆盖)
+import { initI18n } from '../i18n'
+initI18n('zh-CN')

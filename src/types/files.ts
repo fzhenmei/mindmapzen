@@ -24,6 +24,16 @@ export function parseThemePref(v: unknown): ThemePref {
   return THEME_PREFS.has(v as ThemePref) ? (v as ThemePref) : 'auto'
 }
 
+/** 界面语言三态偏好(2026-09 i18n):auto = 跟随系统(zh* 归简体,其余回退英文) */
+export type LanguagePref = 'auto' | 'zh-CN' | 'en'
+
+const LANGUAGE_PREFS = new Set<LanguagePref>(['auto', 'zh-CN', 'en'])
+
+/** 宽容解析配置中的语言偏好:非法/缺失回退 auto(旧配置无 language 字段按 auto 兼容) */
+export function parseLanguagePref(v: unknown): LanguagePref {
+  return LANGUAGE_PREFS.has(v as LanguagePref) ? (v as LanguagePref) : 'auto'
+}
+
 /** 预览大纲三态偏好（2026-09 大纲面板）：auto = 跟随预览主区宽（≥900px 默认显示，实时联动）；
  *  显式 on/off 覆盖响应式默认（用户手动开关后记住） */
 export type PreviewOutlinePref = 'auto' | 'on' | 'off'
