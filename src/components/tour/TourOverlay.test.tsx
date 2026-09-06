@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useAppStore } from '../../store/appStore'
 import TourOverlay from './TourOverlay'
-import { TOUR_STEPS } from './tourSteps'
+import { buildTourSteps } from './tourSteps'
 import { MemoryFsAdapter } from '../../services/fs/MemoryFsAdapter'
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ describe('TourOverlay', () => {
     fireEvent.click(screen.getByTestId('tour-prev'))
     await waitFor(() => expect(useAppStore.getState().tourStep).toBe(0))
     // 末步：按钮文案「完成」，点击关闭引导（跳过=完成同路径）
-    useAppStore.getState().setTourStep(TOUR_STEPS.length - 1)
+    useAppStore.getState().setTourStep(buildTourSteps().length - 1)
     await waitFor(() => expect(screen.getByTestId('tour-next').textContent).toBe('完成'))
     fireEvent.click(screen.getByTestId('tour-next'))
     await waitFor(() => expect(useAppStore.getState().tourActive).toBe(false))
