@@ -44,10 +44,10 @@ function oldXmind(): Uint8Array {
 }
 
 describe('parseXmind（M21 XMind 导入）', () => {
-  test('新版 content.json：树/备注还原；游离/标签/标记/多画布入摘要（不静默丢）', () => {
+  test('新版 content.json：树/备注(归正文)还原；游离/标签/标记/多画布入摘要（不静默丢）', () => {
     const r = parseXmind(newXmind())
     expect(r.tree.text).toBe('项目规划')
-    expect(r.tree.note).toBe('根节点备注')
+    expect(r.tree.body).toBe('根节点备注')
     expect(r.tree.children.map((c) => c.text)).toEqual(['目标', '风险'])
     expect(r.tree.children[0]?.children[0]?.text).toBe('上线')
     const kinds = r.warnings.map((w) => w.type)
@@ -57,19 +57,19 @@ describe('parseXmind（M21 XMind 导入）', () => {
     expect(kinds).toContain('多画布')
   })
 
-  test('旧版 content.xml：标题树与备注还原', () => {
+  test('旧版 content.xml：标题树与备注(归正文)还原', () => {
     const r = parseXmind(oldXmind())
     expect(r.tree.text).toBe('旧版根')
     expect(r.tree.children[1]?.children[0]?.text).toBe('孙一')
-    expect(r.tree.children[0]?.note).toBe('子一备注')
+    expect(r.tree.children[0]?.body).toBe('子一备注')
     expect(r.warnings).toEqual([])
   })
 
   test('产出树直落 md 规范序列化（导入链即用）', () => {
     const r = parseXmind(newXmind())
     const md = serialize(r.tree)
-    expect(md).toContain('# 项目规划\n')
-    expect(md).toContain('> 根节点备注')
+    // 备注归正文(2026-09-06 合并):原样正文块紧跟节点行,无 > 引用前缀
+    expect(md).toContain('# 项目规划\n根节点备注\n')
     expect(md).toContain('## 目标')
   })
 

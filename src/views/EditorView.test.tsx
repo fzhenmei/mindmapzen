@@ -5,14 +5,24 @@ import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
+import type { CopySettings } from '../types/files'
 import type { LinkRegistry } from '../editor/linkRegistry'
 import type { CloseGuardEvent, RegisterCloseGuard } from '../types/ports'
 
 // 引擎依赖真实 DOM 布局，组件测试用假画布
 // fakeRootNode/fakeChildNode：renderer.findNodeByUid 返回的"节点实例"（稳定引用，供命令参数断言）；
-// getData 备注预填用（M5b）：child 带「既有备注」，root 无（undefined）
-const fakeRootNode = { uid: 'root-uid', getData: () => undefined }
-const fakeChildNode = { uid: 'child-uid', getData: (k: string) => (k === 'note' ? '既有备注' : undefined) }
+// getData 正文预填用：child 带「既有正文」，root 无（undefined）。
+// layerIndex（2026-09 正文 Task 6，Step 0 实测字段）：引擎节点深度 root=0 起
+// （MindMapNode.js:52；mdTree 深度 = layerIndex+1）；fakeDeepNode 层级 6 = 深度 7（列表层）
+const fakeRootNode = { uid: 'root-uid', layerIndex: 0, getData: () => undefined }
+const fakeChildNode = {
+  uid: 'child-uid',
+  layerIndex: 1,
+  getData: (k: string) => (k === 'body' ? '既有正文' : undefined),
+}
+// 深层列表节点（layerIndex 6 = mdTree 深度 7）：正文面板深层门禁的空态样本
+const fakeDeepNode = { uid: 'deep-uid', layerIndex: 6, getData: () => undefined }
+
 // getData 树带 uid（引擎真实数据由 renderer 生成，见 Render.js/引擎核验笔记）。
 // 模块级可变：写盘窗口用例改写它模拟「落了新编辑」（getData 每次取当前值，跨重渲染可见）
 const defaultFakeTree = (): EngineNode => ({
@@ -118,7 +128,13 @@ vi.mock('../editor/MindMapCanvas', async () => {
       renderer: {
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
         findNodeByUid: (uid: string) =>
-          uid === 'root-uid' ? fakeRootNode : uid === 'child-uid' ? fakeChildNode : null,
+          uid === 'root-uid'
+            ? fakeRootNode
+            : uid === 'child-uid'
+              ? fakeChildNode
+              : uid === 'deep-uid'
+                ? fakeDeepNode
+                : null,
         textEdit: { hideEditTextBox: vi.fn() },
         // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
         reRenderNodeCheckChange: vi.fn(),
@@ -177,7 +193,7 @@ beforeEach(async () => {
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
-    settings: { copyIncludeNote: false, copyIncludeLinks: true },
+    settings: { copyIncludeLinks: true, copyIncludeBody: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
     // 泄漏的偏好会让后续用例的布局点击命中已激活项而 no-op——统一回默认
@@ -592,7 +608,7 @@ test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () 
 
 // ---- 复制 md 给 AI（图片绝对路径，2026-09）----
 
-test('复制带图节点：图片相对路径转绝对 + 头部说明行（头注在剥备注之后，不被误剥）', async () => {
+test('复制带图节点：图片相对路径转绝对 + 头部说明行（头注在剥正文之后，不被误剥）', async () => {
   const writes: string[] = []
   // 子节点带插图（engineTreeToZen 还原 data.image/imageTitle，serialize 注入行尾标记）
   fakeTree = {
@@ -619,19 +635,20 @@ test('复制带图节点：图片相对路径转绝对 + 头部说明行（头�
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(writes).toHaveLength(1))
-  // 默认 settings（剥备注）在前、图片转换在后：头注引用行存活，src 拼 workspaceDir 前缀
+  // 图片转换在复制链尾段（树层剥正文与 md 层后处理之后）：头注引用行存活，src 拼 workspaceDir 前缀
   expect(writes[0]).toBe('> 图片为本地绝对路径，请用工具读取\n\n# 根\n\n## 配图 ![图注](/ws/assets/配图.png)\n')
 })
 
 // ---- 复制后处理（M5b Task 4：settings 两开关）----
-// 样例树：child 带 note「备注」与文本双链 [[B]]（备注/双链均由 data 携带，engineTreeToZen 还原）
+// 样例树：child 带 note「备注」与文本双链 [[B]]（双链由 data 携带经 engineTreeToZen 还原；
+// data.note 为宿主镜像(2026-09-06 备注合并)，engineTreeToZen 忽略不收——备注行不再进复制产物）
 const noteLinkTree = (): EngineNode => ({
   data: { text: '根', expand: true, uid: 'root-uid' },
   children: [{ data: { text: '见 [[B]]', expand: true, uid: 'child-uid', note: '备注' }, children: [] }],
 })
 
-const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: boolean }): Promise<string> => {
-  fakeTree = noteLinkTree()
+const copyWith = async (settings: CopySettings, tree: EngineNode = noteLinkTree()): Promise<string> => {
+  fakeTree = tree
   useAppStore.setState({ settings })
   const writes: string[] = []
   render(
@@ -655,16 +672,48 @@ const copyWith = async (settings: { copyIncludeNote: boolean; copyIncludeLinks: 
   return writes[0]!
 }
 
-test('复制后处理：默认设置剥备注、留双链', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n')
+test('复制后处理：默认设置含正文、留双链', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
-test('复制后处理：copyIncludeNote=true 时保留 > 备注行', async () => {
-  expect(await copyWith({ copyIncludeNote: true, copyIncludeLinks: true })).toBe('# 根\n\n## 见 [[B]]\n> 备注\n')
+test('复制后处理：引擎镜像 data.note 不进复制产物（备注已并入正文，无独立备注层）', async () => {
+  // 2026-09-06 备注合并:ZenNode.note 退役,engineTreeToZen 只收 data.body——
+  // copyIncludeNote 设置键已随 Task 5 整链退役,任何设置组合下备注行都不再产出
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
-  expect(await copyWith({ copyIncludeNote: false, copyIncludeLinks: false })).toBe('# 根\n\n## 见 B\n')
+  expect(await copyWith({ copyIncludeLinks: false, copyIncludeBody: true })).toBe('# 根\n\n## 见 B\n')
+})
+
+// ---- 复制含正文开关（2026-09 正文 Task 7）：树层剥除先于序列化 ----
+// 样例树：child 带正文「既有正文」（data.body 经 engineTreeToZen 收进 ZenNode.body，
+// serialize 输出节点行后的原样块）；正文块无行前缀标记，md 层按行剥不可行——剥在树层
+const bodyTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [{ data: { text: '新分支', expand: true, uid: 'child-uid', body: '既有正文' }, children: [] }],
+})
+
+test('复制后处理：copyIncludeBody=false 时树层剥正文（管全部正文，含引用块部分）——md 含节点文本、不含正文段', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: false }, bodyTree()))
+    .toBe('# 根\n\n## 新分支\n')
+})
+
+test('复制后处理：copyIncludeBody=true（默认含，给 AI 改稿刚需）时正文段随节点行原样输出', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, bodyTree()))
+    .toBe('# 根\n\n## 新分支\n既有正文\n')
+})
+
+// 终审 C1 遗产：剥除只发生在树层，md 层零触碰——旧行级正则会误伤正文代码块内 `> ` 行
+test('复制后处理：copyIncludeBody=true 不误伤正文代码块内 `> ` 行（默认组合即「复制给 AI 改稿」）', async () => {
+  const tree: EngineNode = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      { data: { text: '新分支', expand: true, uid: 'child-uid', body: '```diff\n> 删除的行\n```', note: '备注' }, children: [] },
+    ],
+  }
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, tree))
+    .toBe('# 根\n\n## 新分支\n```diff\n> 删除的行\n```\n')
 })
 
 // ---- 连线净化（M5d Task 2）：uid 注册表、显示剥离与序列化注入 ----
@@ -1272,10 +1321,12 @@ test('保存在途点放弃被挡下：不清脏不退出，落盘完成后才�
 // ---- 忽略块横幅与显式保存确认（spec §3.5 实施细化：自动保存静默）----
 
 /** 渲染带未映射段落（「一段说明。」）的文档：打开成功即顶部横幅可见。
- *  独立路径 /ws/ignored.md，避免与 beforeEach 的 /ws/a.md 内容互相干扰。 */
+ *  独立路径 /ws/ignored.md，避免与 beforeEach 的 /ws/a.md 内容互相干扰。
+ *  段落置于根 H1 之前——正文功能（2026-09）后标题下的段落收进 body 不再进 ignoredBlocks，
+ *  根前块无归属仍进 ignored（触发载体换了位置，忽略流/横幅断言语义不变） */
 const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
   const exitApp = vi.fn()
-  await fs.writeTextFileAtomic('/ws/ignored.md', '# 根\n\n一段说明。\n\n## A\n')
+  await fs.writeTextFileAtomic('/ws/ignored.md', '一段说明。\n\n# 根\n\n## A\n')
   render(
     <EditorView
       mdPath="/ws/ignored.md"
@@ -1588,146 +1639,6 @@ test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
-})
-
-// ---- 节点备注（M5b：btn-note → NoteDialog → SET_NODE_DATA + 按需重渲）----
-
-/** 渲染并选中 child-uid 节点（备注对话框的常规前置）；ready 放 emitActive 后保证 mmRef 与返回实例同源。
- *  返回 ready 时刻的 handle：对话框开闭引发的假画布工厂重跑会重赋 fakeHandle，断言须锁定 mmRef 所持实例 */
-const renderWithSelection = async (): Promise<MindMapHandle> => {
-  render(
-    <EditorView
-      mdPath="/ws/a.md"
-      openInEditor={vi.fn()}
-      writeClipboard={vi.fn(async () => {})}
-      exportPorts={stubExportPorts}
-      registerCloseGuard={noopRegister}
-      pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage}
-      exitApp={noopExitApp}
-          />,
-  )
-  await screen.findByTestId('fake-canvas')
-  act(() => {
-    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
-  })
-  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
-  expect(screen.getByTestId('btn-note')).toBeEnabled()
-  return fakeHandle
-}
-
-test('btn-note：选中节点打开对话框预填既有备注，保存调用 SET_NODE_DATA 并补按需重渲', async () => {
-  const handle = await renderWithSelection()
-  fireEvent.click(screen.getByTestId('btn-note'))
-  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
-  expect(textarea.value).toBe('既有备注') // 预填节点实例 getData('note')
-  fireEvent.change(textarea, { target: { value: '第一行\n第二行' } })
-  fireEvent.click(screen.getByTestId('note-save'))
-  // 空值置 undefined 的清除语义见下用例；此处整值写入
-  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
-    note: '第一行\n第二行',
-  })
-  // 裸 SET_NODE_DATA 不重渲染（引擎核验 M5b (13)）：补调 reRenderNodeCheckChange 使角标即时增删
-  expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
-  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
-})
-
-test('btn-note：清空保存置 note=undefined（空值清除角标）', async () => {
-  const handle = await renderWithSelection()
-  fireEvent.click(screen.getByTestId('btn-note'))
-  fireEvent.change(screen.getByTestId('note-text'), { target: { value: '' } })
-  fireEvent.click(screen.getByTestId('note-save'))
-  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
-    note: undefined,
-  })
-})
-
-test('btn-note：Ctrl+Enter 保存（Enter 仍为换行，2026-09 快捷键）', async () => {
-  const handle = await renderWithSelection()
-  fireEvent.click(screen.getByTestId('btn-note'))
-  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
-  // 裸 Enter 不保存（多行备注正常换行，不触发命令）
-  fireEvent.keyDown(textarea, { key: 'Enter' })
-  expect(handle.execCommand).not.toHaveBeenCalled()
-  // Ctrl+Enter 即保存：整值写入并关框
-  fireEvent.change(textarea, { target: { value: '快捷保存\n第二行' } })
-  fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
-  expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
-    note: '快捷保存\n第二行',
-  })
-  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
-})
-
-test('btn-note：取消不执行命令且对话框关闭', async () => {
-  const handle = await renderWithSelection()
-  fireEvent.click(screen.getByTestId('btn-note'))
-  fireEvent.click(screen.getByTestId('note-cancel'))
-  expect(handle.execCommand).not.toHaveBeenCalled()
-  expect(handle.renderer?.reRenderNodeCheckChange).not.toHaveBeenCalled()
-  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
-})
-
-test('btn-note：无选中节点时禁用', async () => {
-  render(
-    <EditorView
-      mdPath="/ws/a.md"
-      openInEditor={vi.fn()}
-      writeClipboard={vi.fn(async () => {})}
-      exportPorts={stubExportPorts}
-      registerCloseGuard={noopRegister}
-      pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage}
-      exitApp={noopExitApp}
-          />,
-  )
-  await screen.findByTestId('fake-canvas')
-  expect(screen.getByTestId('btn-note')).toBeDisabled()
-  act(() => {
-    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
-  })
-  expect(screen.getByTestId('btn-note')).toBeEnabled()
-})
-
-test('备注快捷键：Shift+F2 / Ctrl+. 打开选中节点的备注框（预填既有备注）', async () => {
-  await renderWithSelection()
-  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
-  const textarea = screen.getByTestId('note-text') as HTMLTextAreaElement
-  expect(textarea.value).toBe('既有备注') // 预填与 btn-note 同源（节点实例 getData('note')）
-  fireEvent.click(screen.getByTestId('note-cancel'))
-  await waitFor(() => expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument())
-  fireEvent.keyDown(window, { key: '.', ctrlKey: true }) // Ctrl+. 同入口
-  expect(screen.getByTestId('note-dialog')).toBeInTheDocument()
-})
-
-test('备注快捷键：无选中节点时不打开对话框', async () => {
-  render(
-    <EditorView
-      mdPath="/ws/a.md"
-      openInEditor={vi.fn()}
-      writeClipboard={vi.fn(async () => {})}
-      exportPorts={stubExportPorts}
-      registerCloseGuard={noopRegister}
-      pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage}
-      exitApp={noopExitApp}
-          />,
-  )
-  await screen.findByTestId('fake-canvas')
-  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
-  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
-  fireEvent.keyDown(window, { key: '.', ctrlKey: true })
-  await act(async () => {}) // 排空微任务：若误开对话框，随后的同步查询即暴露
-  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
-})
-
-test('备注快捷键：任一对话框在开时不再开备注框（互斥约定）', async () => {
-  await renderWithSelection() // 有选中节点：仅互斥守卫能拦下（锁定 anyDialogRef 含导出框开态）
-  fireEvent.click(screen.getByTestId('btn-export'))
-  expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
-  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
-  await act(async () => {})
-  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument()
-  expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
 })
 
 // ---- 导出与复制为图片（M5b Task 5：btn-export → ExportDialog 三入口 → 端口注入）----
@@ -2310,4 +2221,295 @@ describe('画布内新建导图', () => {
     await waitFor(() => expect(useAppStore.getState().error).toContain('已存在同名导图'))
     expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md')
   })
+})
+
+// ── 正文面板（2026-09 写作，Task 6；2026-09-06 备注合并 textarea 纯文本化）：btn-body 开关、
+//    选中联动载入、防抖写回、切节点 flush、深层列表空态；主体为原生 textarea（testid
+//    body-editor，readOnly 对应原生属性，无工具栏无快捷键拦截——md 语法手敲自由）──
+
+/** 渲染并就绪后选中 child-uid：ready 在前、active 在后——useNodeActions 的锚点 effect
+ *  须在 mmRef 就位后由 activeUid 变化触发（NodeActions 浮条才渲染，图标用例依赖）。
+ *  返回 ready 时刻锁定的实例：假画布工厂每次重渲重赋模块级 fakeHandle，而 mmRef 只在
+ *  ready 时接收一次——须在 emitReady 后立即捕获（同 renderReady 的同源约定） */
+const renderReadySelected = async (): Promise<MindMapHandle> => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  return handle
+}
+
+test('btn-body：开面板载入选中节点 body；textarea 输入防抖后 SET_NODE_DATA 成对写 body＋镜像 note 并补重渲', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  expect(screen.getByTestId('body-panel')).toBeVisible()
+  expect(screen.getByTestId('btn-body')).toHaveAttribute('data-active', '') // 激活态走 data-active 通道
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  expect(ta.value).toBe('既有正文') // 预填节点实例 getData('body')
+  expect(ta.readOnly).toBe(false)
+  expect(screen.getByTestId('body-wordcount')).toHaveTextContent('4') // 中文字符口径（去空白码点数）
+  // textarea onChange → 500ms 防抖内不写；快进后提交（body 与镜像 note 同一命令成对落下＝
+  // 单条撤销记录；引擎「有 note→挂角标+悬停」由镜像驱动，reRenderNodeCheckChange 使其即时增删）
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } })
+    expect(handle.execCommand).not.toHaveBeenCalled()
+    expect(screen.getByTestId('body-wordcount')).toHaveTextContent('5')
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+    expect(handle.renderer?.reRenderNodeCheckChange).toHaveBeenCalledWith(fakeChildNode)
+    // 关面板即 flush 已由上面提交清空（pending 无）→ 仅关闭，面板卸载
+    fireEvent.click(screen.getByTestId('body-close'))
+    expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('btn-body：清空草稿提交时 body 与镜像 note 成对置 undefined（角标随镜像消失）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } }) // 先编辑为「既有正文！」
+    fireEvent.change(ta, { target: { value: '' } }) // 再清空（与引擎值「既有正文」不同，必提交）
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: undefined, // 清空成对置 undefined（2026-09-06 合并）：引擎按 truthy 判定，角标随镜像消失
+      note: undefined,
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('切换节点先 flush 旧草稿；深层列表节点（layerIndex≥6）面板空态不可编辑', async () => {
+  // 数据树补 deep-uid 节点（面板标题经 nodeTextOf 按 uid 查数据树；深层门禁读实例 layerIndex）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      { data: { text: '新分支', expand: true, uid: 'child-uid' }, children: [] },
+      { data: { text: '深层', expand: true, uid: 'deep-uid' }, children: [] },
+    ],
+  }
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } }) // 草稿在防抖窗内未提交
+    // 切到 root：先对 child 提交（防丢字），再载入 root（无 body → 空值）
+    act(() => {
+      ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('root-uid')
+    })
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+    expect((screen.getByTestId('body-editor') as HTMLTextAreaElement).value).toBe('')
+    // 深层节点（layerIndex 6 = mdTree 深度 7 列表层，spec v1 深度限制）：空态提示 + 只读
+    act(() => {
+      ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('deep-uid')
+    })
+    expect(screen.getByText('深层列表节点暂不支持正文')).toBeInTheDocument()
+    expect((screen.getByTestId('body-editor') as HTMLTextAreaElement).readOnly).toBe(true)
+    expect(handle.execCommand).toHaveBeenCalledTimes(1) // 深层载入不产生新命令
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('btn-body：无选中开面板显示空态文案；面板非对话框（画布与砚栏不受互斥影响）', async () => {
+  const handle = await renderReadySelected()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
+  })
+  fireEvent.click(screen.getByTestId('btn-body'))
+  expect(screen.getByText('在画布选中节点后在此撰写正文')).toBeInTheDocument()
+  expect((screen.getByTestId('body-editor') as HTMLTextAreaElement).readOnly).toBe(true)
+  expect(screen.getByTestId('zen-bar')).toBeInTheDocument() // 面板不进 anyDialog，画布照常
+  expect(handle.execCommand).not.toHaveBeenCalled()
+})
+
+test('关面板即 flush 未提交草稿（close 分支），计时器清空不二次提交', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } }) // 草稿在防抖窗内
+    fireEvent.click(screen.getByTestId('body-close')) // 关面板 → 立即冲刷
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+    expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(600) // 计时器已随 flush 清空，不再产生第二条命令
+    })
+    expect(handle.execCommand).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('窗口失焦即 flush 防抖中的草稿（blur 分支）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } })
+    fireEvent(window, new Event('blur')) // 切窗口 → 防抖草稿立即落引擎
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('Ctrl+S 显式保存先冲刷正文防抖草稿（审查 I-2：落盘 md 不缺尾部输入）', async () => {
+  const handle = await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } }) // 尾部输入悬在 500ms 窗内
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true }) // explicitSave 开头 flushNow
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+    await act(async () => {}) // 排空保存链微任务（数据树为 mock，不真落 body——只锁「保存前冲刷」时序）
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('关闭守卫先冲防抖窗内草稿再走三态（终审 I2：干净图关窗不丢尾部输入）', async () => {
+  const guard = makeGuardStub()
+  const exitApp = vi.fn()
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={guard.register}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={exitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  const handle = fakeHandle // ready 时刻锁定实例（工厂每次重渲重赋模块级 fakeHandle，同 renderReadySelected 约定）
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('child-uid')
+  })
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const ta = screen.getByTestId('body-editor') as HTMLTextAreaElement
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.change(ta, { target: { value: '既有正文！' } }) // 防抖窗内未提交：SET_NODE_DATA 未发生、dirty 仍 false
+    expect(guard.fireClose()).toBe(true) // 拦截：hasPending 强制三态，不依赖（未及翻转的）dirtyRef
+    expect(handle.execCommand).toHaveBeenCalledWith('SET_NODE_DATA', fakeChildNode, {
+      body: '既有正文！',
+      note: '既有正文！', // 镜像 note 成对写（2026-09-06 合并）：角标/悬停由它驱动
+    })
+    expect(screen.getByTestId('closeguard-save')).toBeInTheDocument() // 三态对话框弹出（保存/放弃/取消）
+    expect(exitApp).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+// ── 图标管理器（2026-09-06 zen_body 退役）：SET_NODE_ICON 整组覆写，落下数组即用户
+//    所选纯用户图标——不再按 data.body 重补内部保留名，「有正文」角标由镜像 note 承担 ──
+
+/** 给 fakeChildNode 临时挂几何（NodeActions 浮条锚点需要）并返回还原函数 */
+const withGeometry = (): (() => void) => {
+  const geo = { left: 10, top: 20, width: 60, height: 24 }
+  Object.assign(fakeChildNode, geo)
+  return () => {
+    for (const k of Object.keys(geo)) delete (fakeChildNode as Record<string, unknown>)[k]
+  }
+}
+
+test('图标管理器：有正文节点确认落下数组即纯用户图标（不掺内部名，角标走镜像 note）', async () => {
+  fakeTree.children![0]!.data.body = '既有正文'
+  const restore = withGeometry()
+  try {
+    const handle = await renderReadySelected()
+    fireEvent.click(screen.getByTestId('node-action-icon'))
+    expect(screen.getByTestId('icon-dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('icon-item-flag')) // 精选网格点选一项
+    fireEvent.click(screen.getByTestId('icon-save'))
+    // 生产链路：execCommandIcon → node.setIcon → SET_NODE_ICON；断言落下的数组不含 zen_body
+    expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_flag'])
+  } finally {
+    restore()
+  }
+})
+
+// ── 入口合并（2026-09-06 备注合并）：浮条/快捷键改指正文面板；btn-note/note-dialog 退役 ──
+
+test('浮条 node-action-body 开正文面板（aria-label 指正文）；btn-note 不复存在', async () => {
+  const restore = withGeometry() // NodeActions 锚点需节点几何（同图标用例的挂几何模式）
+  try {
+    const handle = await renderReadySelected()
+    expect(screen.queryByTestId('btn-note')).not.toBeInTheDocument() // 入口合并：砚栏备注钮退役
+    const btn = screen.getByTestId('node-action-body')
+    expect(btn).toHaveAttribute('aria-label', '编写选中节点的正文')
+    fireEvent.click(btn)
+    expect(screen.getByTestId('body-panel')).toBeVisible()
+    expect((screen.getByTestId('body-editor') as HTMLTextAreaElement).value).toBe('既有正文')
+    expect(handle.execCommand).not.toHaveBeenCalled() // 只开关未编辑，无命令
+  } finally {
+    restore()
+  }
+})
+
+test('Shift+F2 开关正文面板（toggle 语义）；note-dialog 不复存在', async () => {
+  await renderReadySelected()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  expect(screen.getByTestId('body-panel')).toBeVisible()
+  expect((screen.getByTestId('body-editor') as HTMLTextAreaElement).value).toBe('既有正文')
+  expect(screen.queryByTestId('note-dialog')).not.toBeInTheDocument() // 备注对话框退役
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true }) // 再按 = 关
+  expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+})
+
+test('Shift+F2 互斥守卫：任一对话框在开时不再开正文面板（anyDialog 总线）', async () => {
+  await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-export'))
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  await act(async () => {})
+  expect(screen.queryByTestId('body-panel')).not.toBeInTheDocument()
+  expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
 })

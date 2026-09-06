@@ -58,8 +58,8 @@ test('节点连线：[[名称]] 建线、保存重开复现', async ({ page }) =
   await expect(page.locator(LINE_PATHS)).toHaveCount(2)
 })
 
-// 验收轮：选中节点浮动操作条——免记快捷键点按钮加备注、点按钮拖出连线（连线经 linkBridge 落 [[..]] 文本）
-test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框', async ({ page }) => {
+// 验收轮：选中节点浮动操作条——免记快捷键点按钮写正文、点按钮拖出连线（连线经 linkBridge 落 [[..]] 文本）
+test('节点操作条：连线按钮建 [[..]] 双链、正文按钮开正文面板', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
   // M5d 适配：btn-workspace 已随工具栏重构移除（harness 已预设 workspaceDir=/ws）
@@ -84,11 +84,11 @@ test('节点操作条：连线按钮建 [[..]] 双链、备注按钮开备注框
   await expect(page.getByTestId('node-actions')).toBeVisible()
   await expect(page.locator('.smm-quick-create-child-btn').first()).toBeVisible()
 
-  // 备注按钮：打开备注对话框（与砚栏 btn-note 同流），取消关闭
-  await page.getByTestId('node-action-note').click()
-  await expect(page.getByTestId('note-dialog')).toBeVisible()
-  await page.getByTestId('note-cancel').click()
-  await expect(page.getByTestId('note-dialog')).toBeHidden()
+  // 正文按钮：打开正文面板（与砚栏 btn-body 同一 toggle 流），收起关闭
+  await page.getByTestId('node-action-body').click()
+  await expect(page.getByTestId('body-panel')).toBeVisible()
+  await page.getByTestId('body-close').click()
+  await expect(page.getByTestId('body-panel')).toHaveCount(0)
 
   // 连线按钮 → 引擎建线态 → 点目标 B：桥接只动注册表，A 显示文本保持纯净（净化断言，M5d §4）
   await page.getByText('A', { exact: true }).first().click()

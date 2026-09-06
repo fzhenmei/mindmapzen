@@ -157,7 +157,9 @@ test('删除按钮作用于当前选中文件，不误伤其他导图', async ()
 
 test('导入：有忽略块先预览，确认后入库并打开', async () => {
   await useAppStore.getState().setWorkspace('/ws')
-  const pickImport = vi.fn(async () => ({ name: '外部', kind: 'md' as const, text: '# 外部图\n\n一段会被忽略的说明。\n\n## A\n' }))
+  // 段落置于根 H1 之前——正文功能（2026-09）后标题下的段落收进 body 不再进 ignoredBlocks，
+  // 根前块无归属仍进 ignored（触发载体换了位置，预览/入库断言语义不变）
+  const pickImport = vi.fn(async () => ({ name: '外部', kind: 'md' as const, text: '一段会被忽略的说明。\n\n# 外部图\n\n## A\n' }))
   render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImport} writeClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-import'))
   expect(await screen.findByTestId('import-preview')).toHaveTextContent('1 个内容块未映射')

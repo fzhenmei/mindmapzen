@@ -3,14 +3,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import ZenBar from './ZenBar'
 import { TooltipProvider } from './ui/tooltip'
 import { useAppStore } from '../store/appStore'
-import { DEFAULT_COPY_SETTINGS } from '../types/files'
+import { DEFAULT_COPY_SETTINGS, type CopySettingKey } from '../types/files'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { LayoutKind } from '../editor/layoutMap'
 
 // 砚栏复制组 split button（2026-09 复制选项自设置面板移入）：主钮照常复制、箭头展开
-// 两勾选项（默认 备注off/双链on）、勾选即回调且菜单保持打开、接线真实 store 后
-// 勾选走 setSetting load-merge-save 持久化（链路测试自 SettingsDialog.test 迁入）。
+// 两勾选项（默认 双链on/含正文on；2026-09-06 备注合并后 copyIncludeNote 退役，
+// 「包含备注」项随之拆除）、勾选即回调且菜单保持打开、接线真实 store 后勾选走
+// setSetting load-merge-save 持久化（链路测试自 SettingsDialog.test 迁入）。
 // jsdom 驱动沿用 dropdown-menu.test 模式：pointerdown（button 0）展开，role 定位条目。
 
 const noop = (): void => {}
@@ -20,9 +21,11 @@ const undoRedoStub: UndoRedo = { canUndo: false, canRedo: false, onUndo: noop, o
 /** 全 props 桩（纯展示组件）：复制组三项与布局组两项由用例覆盖注入，其余状态无关项全 no-op */
 function renderBar(overrides: {
   copySettings?: typeof DEFAULT_COPY_SETTINGS
-  onToggleCopySetting?: (key: 'copyIncludeNote' | 'copyIncludeLinks') => void
+  onToggleCopySetting?: (key: CopySettingKey) => void
   layout?: LayoutKind
   onSwitchLayout?: (kind: LayoutKind) => void
+  bodyActive?: boolean
+  onBodyClick?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
@@ -37,8 +40,8 @@ function renderBar(overrides: {
         onCopyPathClick={noop}
         scope="full"
         onSaveClick={noop}
-        onNoteClick={noop}
-        noteEnabled={false}
+        onBodyClick={overrides.onBodyClick ?? noop}
+        bodyActive={overrides.bodyActive ?? false}
         onExportClick={noop}
         onZoomOut={noop}
         onZoomIn={noop}
@@ -63,24 +66,25 @@ describe('ZenBar 复制选项下拉', () => {
   })
   afterEach(cleanup)
 
-  test('箭头展开菜单：两项勾选态反映 copySettings 现值（默认 备注off/双链on）', () => {
+  test('箭头展开菜单：两项勾选态反映 copySettings 现值（默认 双链on/含正文on；「包含备注」项已随 copyIncludeNote 退役）', () => {
     renderBar()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     openMenu()
     expect(screen.getByRole('menu')).toBeInTheDocument()
-    expect(screen.getByTestId('copy-note-option')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByTestId('copy-note-option')).not.toBeInTheDocument()
     expect(screen.getByTestId('copy-links-option')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('copy-include-body')).toHaveAttribute('aria-checked', 'true')
   })
 
   test('勾选即回调对应 key，菜单保持打开可连续切换（onSelect preventDefault）', () => {
     const onToggle = vi.fn()
     renderBar({ onToggleCopySetting: onToggle })
     openMenu()
-    fireEvent.click(screen.getByTestId('copy-note-option'))
-    expect(onToggle).toHaveBeenCalledWith('copyIncludeNote')
-    // 菜单未关：第二项仍可点（同径再验 copyIncludeLinks）
     fireEvent.click(screen.getByTestId('copy-links-option'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeLinks')
+    // 菜单未关：后续项仍可点（同径再验 2026-09 正文项 copyIncludeBody）
+    fireEvent.click(screen.getByTestId('copy-include-body'))
+    expect(onToggle).toHaveBeenCalledWith('copyIncludeBody')
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
@@ -98,13 +102,13 @@ describe('ZenBar 复制选项下拉', () => {
       },
     })
     openMenu()
-    fireEvent.click(screen.getByTestId('copy-note-option'))
     fireEvent.click(screen.getByTestId('copy-links-option'))
+    fireEvent.click(screen.getByTestId('copy-include-body'))
     await waitFor(() =>
-      expect(useAppStore.getState().settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false }),
+      expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false }),
     )
     const cfg = JSON.parse(await useAppStore.getState().adapter.readTextFile('/cfg.json'))
-    expect(cfg.settings).toEqual({ copyIncludeNote: true, copyIncludeLinks: false })
+    expect(cfg.settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
     expect(cfg.workspaceDir).toBe('/ws') // 合并保存保留其他字段
     expect(cfg.preferredLayout).toBe('logic')
     expect(cfg.theme).toBe('dark')
@@ -147,5 +151,26 @@ describe('ZenBar 更多布局下拉', () => {
     const more = screen.getByTestId('btn-layout-more')
     expect(more).not.toHaveAttribute('data-active')
     expect(more).toHaveAttribute('aria-label', '更多布局')
+  })
+})
+
+// ---- 正文面板开关钮（2026-09 写作）：常态按钮非触发器，激活态走 data-active 通道 ----
+
+describe('ZenBar 正文面板开关', () => {
+  afterEach(cleanup)
+
+  test('点击回调 onBodyClick；面板开时点亮（data-active + aria-pressed），关时常态', () => {
+    const onBody = vi.fn()
+    renderBar({ onBodyClick: onBody, bodyActive: false })
+    const btn = screen.getByTestId('btn-body')
+    expect(btn).not.toHaveAttribute('data-active')
+    expect(btn).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(btn)
+    expect(onBody).toHaveBeenCalledTimes(1)
+    cleanup()
+    renderBar({ bodyActive: true })
+    const lit = screen.getByTestId('btn-body')
+    expect(lit).toHaveAttribute('data-active', '')
+    expect(lit).toHaveAttribute('aria-pressed', 'true')
   })
 })

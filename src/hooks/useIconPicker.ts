@@ -23,7 +23,8 @@ export function nodeTextOf(mm: MindMapHandle | null, uid: string | null): string
   return typeof n?.data.text === 'string' ? n.data.text : ''
 }
 
-/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名；无返回空数组） */
+/** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名，纯用户图标——2026-09-06
+ *  备注合并后无内部保留名；无返回空数组） */
 export function nodeIconsOf(mm: MindMapHandle | null, uid: string | null): string[] {
   const node = mm !== null ? findByUid(mm.getData(), uid) : null
   return Array.isArray(node?.data.icon)
@@ -78,7 +79,10 @@ export function useIconPicker(
           if (!known.has(e.name)) list[0].list.push(e)
         }
       }
-      mm.execCommandIcon?.(uid, names.map((n) => `zen_${n}`))
+      // SET_NODE_ICON 是整组覆写：落下数组即用户所选（纯用户图标，2026-09-06 备注合并后
+      // 无内部保留名掺入，「有正文」角标由镜像 data.note 承担，不受图标覆写影响）
+      const icons = names.map((n) => `zen_${n}`)
+      mm.execCommandIcon?.(uid, icons)
       onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
     },
     [mmRef, onDataChanged],

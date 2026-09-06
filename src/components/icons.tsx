@@ -159,16 +159,6 @@ export const IconPencil = ({ size }: IconProps) =>
   base(<path d="M11.5 3.5l1 1L6 11l-1.8.8L5 10l6.5-6.5z" />, size)
 export const IconTrash = ({ size }: IconProps) =>
   base(<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.6 8h4.8L11 5M7 7.5v3M9 7.5v3" />, size)
-/** 节点备注（M5b）：便签纸轮廓 + 右上折角 + 一行字线 */
-export const IconNote = ({ size }: IconProps) =>
-  base(
-    <>
-      <path d="M2.5 4A1.5 1.5 0 0 1 4 2.5h8A1.5 1.5 0 0 1 13.5 4v5L9 13.5H4A1.5 1.5 0 0 1 2.5 12z" />
-      <path d="M9 13.5V10a1 1 0 0 1 1-1h3.5" />
-      <path d="M5.5 6h5" />
-    </>,
-    size,
-  )
 /** 节点图标入口（M18）：笑脸（圆脸 + 双点 + 弧口） */
 export const IconSmile = ({ size }: IconProps) =>
   base(
@@ -297,6 +287,17 @@ export const IconOutline = ({ size }: IconProps) =>
     <>
       <path d="M5.5 3.5H13M5.5 8H13M5.5 12.5H13" />
       <path d="M3 3.5h.01M3 8h.01M3 12.5h.01" />
+    </>,
+    size,
+  )
+/** 节点正文（2026-09 正文面板）：文档轮廓 + 三行正文线，24→16 缩放（÷1.5）自
+ *  lucide file-text 图形（zen_body 角标已退役 2026-09-06，画布角标由引擎 note 通道承担） */
+export const IconFileText = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M10 1.5H4A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V4.5z" />
+      <path d="M9.5 1.5v2.5a1 1 0 0 0 1 1H13" />
+      <path d="M6.7 6H5.3M10.7 8.7H5.3M10.7 11.3H5.3" />
     </>,
     size,
   )

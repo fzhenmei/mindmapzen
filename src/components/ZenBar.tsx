@@ -1,7 +1,8 @@
 // src/components/ZenBar.tsx —— 纸面命令栏（M5a 拆分自 EditorView；M12b 底部停泊）：
 // 底部居中 40px 全不透明（spec §3：旧「静置淡化、悬停浮现」隐身游戏随青松工作台退役）。
-// 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+C 复制 md / 备注编辑）不在此处，
+// 纯展示组件：状态与回调全经 props；快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关）不在此处，
 // 仍由 EditorView 的 window keydown effect 承担（命令栏只是按钮路径）。
+// 2026-09-06 备注合并：btn-note 退役——正文（含备注语义）唯一砚栏入口为 btn-body。
 // M14 Task 5：内件全 ui——Button(ghost,icon) + ui Tooltip（官方默认内距 py-1.5 px-3）+
 // ui Separator + 布局组 ui ToggleGroup；外壳仅存停泊定位（M14 spec §4 唯一手搓例外）。
 import type { ReactNode } from 'react'
@@ -26,6 +27,7 @@ import {
   IconCopy,
   IconCrosshair,
   IconFilePlus,
+  IconFileText,
   IconFrame,
   IconImage,
   IconLayoutBoth,
@@ -34,7 +36,6 @@ import {
   IconLayoutRight,
   IconLayoutTimeline,
   IconMinus,
-  IconNote,
   IconPlus,
   IconRedo,
   IconRoute,
@@ -58,7 +59,7 @@ interface Props {
   onCopyClick(): void
   /** 复制选项开关值（2026-09 从设置面板移入）：驱动下拉勾选态（数据与持久化在 store） */
   copySettings: CopySettings
-  /** 切换复制选项（2026-09）：下拉勾选项的回写路径，key 限定两个复制开关 */
+  /** 切换复制选项（2026-09）：下拉勾选项的回写路径，key 限定三个复制开关 */
   onToggleCopySetting(key: CopySettingKey): void
   /** 复制文件路径（2026-09：发给 AI 直接读本文件；按钮紧邻复制 md 钮，
    *  IconRoute 路径图标与 IconCopy 形状区分） */
@@ -67,10 +68,11 @@ interface Props {
   scope: 'full' | 'branch'
   /** 保存（Ctrl+S 的按钮路径） */
   onSaveClick(): void
-  /** 编辑选中节点备注（M5b）：无选中节点时禁用（逻辑在 EditorView 的 useNoteEdit；快捷键 Shift+F2/Ctrl+.） */
-  onNoteClick(): void
-  /** btn-note 可用信号：有激活节点才可编辑备注 */
-  noteEnabled: boolean
+  /** 正文面板开关（2026-09 写作）：右侧常驻面板开/收（面板状态与防抖写回在 useBodyPanel；
+   *  无选中也可开——面板出空态文案，选中后联动载入） */
+  onBodyClick(): void
+  /** btn-body 激活信号：面板开着时点亮（data-active 通道） */
+  bodyActive: boolean
   /** 导出/复制为图片（M5b）：打开三入口对话框（对话框状态在 EditorView 的 useExportFlow） */
   onExportClick(): void
   onZoomOut(): void
@@ -101,7 +103,7 @@ const MORE_LAYOUTS = [
   ['fishbone', '鱼骨图', <IconLayoutFishbone key="f" />],
 ] as const
 
-/** 纸面命令栏：返回/回退/重做/复制/保存/备注/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
+/** 纸面命令栏：返回/回退/重做/复制/保存/正文面板/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
   onBack,
@@ -114,8 +116,8 @@ export default function ZenBar({
   onCopyPathClick,
   scope,
   onSaveClick,
-  onNoteClick,
-  noteEnabled,
+  onBodyClick,
+  bodyActive,
   onExportClick,
   onZoomOut,
   onZoomIn,
@@ -201,8 +203,9 @@ export default function ZenBar({
       </Tip>
       <Separator orientation="vertical" className="mx-1" />
       {/* 复制组 = split button（2026-09 复制选项自设置面板移入）：主钮照常复制（Ctrl+C 同径），
-       *  箭头钮展开两项勾选，勾选即改即存（store setSetting）；onSelect preventDefault 保持
-       *  菜单打开，可连续切换两项（ESC/点外部关闭）。箭头钮不加 Tooltip：菜单自身即说明 */}
+       *  箭头钮展开两项勾选（2026-09-06 备注合并后 copyIncludeNote 退役，「包含备注」项拆除），
+       *  勾选即改即存（store setSetting）；onSelect preventDefault 保持菜单打开，可连续切换
+       *  （ESC/点外部关闭）。箭头钮不加 Tooltip：菜单自身即说明 */}
       <DropdownMenu>
         <div className="flex items-center">
           <Tip label={copyLabel}>
@@ -232,20 +235,20 @@ export default function ZenBar({
         </div>
         <DropdownMenuContent align="start">
           <DropdownMenuCheckboxItem
-            data-testid="copy-note-option"
-            checked={copySettings.copyIncludeNote}
-            onCheckedChange={() => onToggleCopySetting('copyIncludeNote')}
-            onSelect={(e) => e.preventDefault()}
-          >
-            包含备注
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
             data-testid="copy-links-option"
             checked={copySettings.copyIncludeLinks}
             onCheckedChange={() => onToggleCopySetting('copyIncludeLinks')}
             onSelect={(e) => e.preventDefault()}
           >
             保留双链标记
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            data-testid="copy-include-body"
+            checked={copySettings.copyIncludeBody}
+            onCheckedChange={() => onToggleCopySetting('copyIncludeBody')}
+            onSelect={(e) => e.preventDefault()}
+          >
+            含正文
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -273,17 +276,21 @@ export default function ZenBar({
           <IconSave />
         </Button>
       </Tip>
-      <Tip label="编辑选中节点的备注（Shift+F2）">
+      {/* 正文面板开关（2026-09 写作）：常态按钮（非 DropdownMenu 触发器），激活态走
+       *  data-active 通道（同 btn-layout-more 的点亮语言；不依赖 data-state） */}
+      <Tip label="撰写选中节点的正文">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          data-testid="btn-note"
-          aria-label="编辑选中节点的备注（Shift+F2）"
-          onClick={onNoteClick}
-          disabled={!noteEnabled}
+          data-testid="btn-body"
+          data-active={bodyActive ? '' : undefined}
+          aria-label="撰写选中节点的正文"
+          aria-pressed={bodyActive}
+          onClick={onBodyClick}
+          className="data-[active]:bg-accent data-[active]:text-accent-foreground"
         >
-          <IconNote />
+          <IconFileText />
         </Button>
       </Tip>
       <Tip label="导出或复制为图片">

@@ -1,12 +1,10 @@
-// src/services/copyFilter.ts —— 复制行为后处理（M5b Task 4）：纯字符串函数，无 React/引擎依赖。
+// src/services/copyFilter.ts —— 复制行为后处理（M5b Task 4）：纯函数，无 React/引擎依赖。
+// 2026-09 正文起树层剥除（stripTreeBody）先于 serialize（正文块无统一的行前缀标记——
+// 引用块/代码块前缀形态各异，md 层按行剥不可行）；md 字符串层只剩双链括号剥除。
+// 2026-09-06 备注合并后 ZenNode.note 退役、引用块已是正文合法块类型，旧 stripTreeNote
+// 与 copyIncludeNote 设置键整链拆除——「剥正文」单开关管全部正文。
 import type { CopySettings } from '../types/files'
-
-/** copyIncludeNote=false：剥掉全部备注引用块行。规范序列化（mdTree.serialize）是唯一产出源，
- *  其中所有 `> ` 行都是节点备注——含列表项缩进形式（深度 ≥7 的嵌套列表引用块缩进进内容列 `  > `）；
- *  行尾换行一并移除（备注紧跟节点行，剥除后不留空行） */
-export function stripNoteLines(md: string): string {
-  return md.replace(/^[ \t]*> .*\n?/gm, '')
-}
+import type { ZenNode } from '../types/tree'
 
 /** copyIncludeLinks=false：[[名称]] → 名称（保留名字，剥双方括号）。
  *  空括号 [[]] 与含内层括号的非法形式原样保留（与 links.ts 的 LINK_RE 解析口径一致：
@@ -17,10 +15,14 @@ export function stripLinkBrackets(md: string): string {
   return md.replace(/\[\[([^\][]*)\]\]/g, (m, inner: string) => (inner === '' ? m : inner))
 }
 
-/** 按复制设置组合后处理（EditorView doCopy 调用，行数护栏友好） */
+/** 按复制设置组合后处理（EditorView doCopy 调用，行数护栏友好）；正文剥除
+ *  已上移树层（stripTreeBody，先于 serialize），此处仅剩双链括号 */
 export function applyCopySettings(md: string, settings: CopySettings): string {
-  let out = md
-  if (!settings.copyIncludeNote) out = stripNoteLines(out)
-  if (!settings.copyIncludeLinks) out = stripLinkBrackets(out)
-  return out
+  return settings.copyIncludeLinks ? md : stripLinkBrackets(md)
+}
+
+/** 剥除树内全部正文（2026-09）：tree 层递归删 body，先于 serialize（正文块无统一的行前缀
+ *  标记——引用块/代码块前缀形态各异，md 层按行剥不可行）；纯函数不改入参 */
+export function stripTreeBody(tree: ZenNode): ZenNode {
+  return { ...tree, body: undefined, children: tree.children.map(stripTreeBody) }
 }

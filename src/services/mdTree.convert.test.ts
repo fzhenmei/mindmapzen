@@ -35,24 +35,52 @@ describe('zen ⇄ engine 转换', () => {
     expect(engineTreeToZen({ data: { text: 'r', uid: 42 }, children: [] }).tree).toEqual(n('r'))
   })
 
-  test('zen→engine：note 透传进 data（undefined 不设键）', () => {
-    const eng = zenToEngineTree(n('根', [{ text: 'A', note: '备注', children: [] }]))
-    expect(eng.children![0].data.note).toBe('备注')
-    expect('note' in eng.data).toBe(false) // 根无 note：不设键而非 undefined 值
+  test('正文镜像 note(2026-09-06 合并)：zenToEngineTree 对有 body 节点同值产出 data.note', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。', children: [{ text: 'c', body: '引用\n> 行', children: [] }, { text: '无', children: [] }] }
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.body).toBe('论述。')
+    expect(eng.data.note).toBe('论述。') // 镜像:引擎角标/悬停由它驱动
+    expect(eng.children![0]?.data.note).toBe('引用\n> 行')
+    expect('note' in (eng.children![1]!.data)).toBe(false) // 无 body 不设键
   })
 
-  test('engine→zen：收集 data.note（仅字符串，其余视为无备注）', () => {
-    const eng: EngineNode = {
-      data: { text: '根' },
-      children: [
-        { data: { text: 'A', note: '备注' }, children: [] },
-        { data: { text: 'B', note: 42 }, children: [] },
-        { data: { text: 'C', note: undefined }, children: [] },
-      ],
-    }
-    const r = engineTreeToZen(eng)
-    expect(r.tree.children[0].note).toBe('备注')
-    expect('note' in r.tree.children[1]).toBe(false)
-    expect('note' in r.tree.children[2]).toBe(false)
+  test('zen_body 退役(2026-09-06 合并):有正文节点 data.icon 为纯用户图标,角标走镜像 note', () => {
+    const tree: ZenNode = { text: 'r', body: '论述。', icons: ['flag'], children: [{ text: 'c', body: '子论述。', children: [] }] }
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.icon).toEqual(['zen_flag']) // 不再追加 zen_body
+    expect(eng.children![0]?.data.icon).toBeUndefined()
+    expect(eng.data.note).toBe('论述。') // 角标/悬停由镜像驱动(Task 1)
+    const back = engineTreeToZen(eng)
+    expect(back.tree.icons).toEqual(['flag'])
+  })
+
+  test('正文空串口径：body 为空串时视为无正文（不挂角标、不设 data.body）', async () => {
+    const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+    const tree: ZenNode = { text: 'r', body: '', children: [] }
+    const engine = zenToEngineTree(tree)
+    expect(engine.data.body).toBeUndefined()
+    expect(engine.data.icon).toBeUndefined()
+    expect(engineTreeToZen(engine).tree.body).toBeUndefined()
+  })
+
+  test('用户手敲 ::body 退役后按普通用户图标直通（无注入即无去重，roundtrip 恒等）', () => {
+    const tree: ZenNode = { text: 'r', icons: ['body'], body: '论述。', children: [] }
+    const eng = zenToEngineTree(tree)
+    expect(eng.data.icon).toEqual(['zen_body']) // 用户 icons 直 map，不追加不补角标
+    expect(engineTreeToZen(eng).tree.icons).toEqual(['body']) // zen_ 前缀全收，不再剥除保留名
+  })
+
+  test('engineTreeToZen 忽略镜像 data.note,只收 data.body', () => {
+    const eng: EngineNode = { data: { text: 'r', body: '正文', note: '正文' }, children: [] }
+    const back = engineTreeToZen(eng)
+    expect(back.tree.body).toBe('正文')
+    expect('note' in back.tree).toBe(false)
+    // 纯镜像无 body(不应出现的形态)也不误收
+    const lone: EngineNode = { data: { text: 'x', note: '孤儿' }, children: [] }
+    expect('note' in engineTreeToZen(lone).tree).toBe(false)
+    expect(engineTreeToZen(lone).tree.body).toBeUndefined()
+    // data.note 非字符串(引擎他源写入)同样忽略
+    const weird: EngineNode = { data: { text: 'y', note: 42 }, children: [] }
+    expect('note' in engineTreeToZen(weird).tree).toBe(false)
   })
 })

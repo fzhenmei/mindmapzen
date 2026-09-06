@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { collectUncuratedIcons, CURATED_ICONS, registerIconsInto, safeReRender } from './zenIcons'
+import { collectUncuratedIcons, CURATED_ICONS, registerIconsInto, safeReRender, toEngineIconList } from './zenIcons'
 import type { EngineNode } from '../types/engine'
 
 /** 最小引擎树构造：children 递归展开 [data, ...children] 对 */
@@ -60,6 +60,15 @@ describe('精选集健全性（用例前提）', () => {
     expect(CURATED_ICONS['search']).toBeDefined()
     expect(CURATED_ICONS['shield-alert']).toBeUndefined()
     expect(CURATED_ICONS['book-search']).toBeUndefined()
+  })
+
+  it('body 不在精选集也不进引擎 iconList（2026-09-06 退役：无内部保留名，iconList 即精选集）', () => {
+    expect(CURATED_ICONS['body']).toBeUndefined() // 图标管理器网格不露出
+    const list = toEngineIconList()
+    expect(list).toHaveLength(1)
+    expect(list[0]!.type).toBe('zen')
+    expect(list[0]!.list.some((i) => i.name === 'body')).toBe(false) // zen_body 退役，无静态在册
+    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length) // 仅精选，不再并入内部表
   })
 })
 

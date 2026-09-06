@@ -96,7 +96,9 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
   Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
 )
 
-/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项） */
+/** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。
+ *  2026-09-06 备注合并：zen_body 内部保留名退役，iconList 恢复纯精选集（「有正文」
+ *  角标由镜像 data.note 驱动引擎原生通道，不再借道 iconList 静态注册） */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
   return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
 }

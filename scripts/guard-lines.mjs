@@ -17,10 +17,19 @@
 // 2026-09（收藏与排序批）：520→550（收藏行派生/排序适用 + 树四 props 接线 + 重命名
 //  relocate + 详情星标钮两 props——收藏组与排序钮本体在 DirectoryTree.tsx（无护栏），
 //  relocate 在 appStore/useTreeMoves——功能性增长，无腐化）。
+// 2026-09（正文面板批）：460→480（useBodyPanel 接线 + 砚栏两 props + BodyPanel 渲染 +
+//  让位 resize effect + body-open 挂类 + 保存前冲刷正文草稿（审查 I-2），+20；
+//  面板本体在 BodyPanel.tsx、状态在 useBodyPanel.ts（均无护栏）——功能性增长，无腐化）。
+// 2026-09（正文终审修复批）：480→490（doCopy 剥备注改树层接线 stripTreeNote +1；关闭
+//  守卫 flushPending 冲刷口（终审 I2 关窗丢尾部草稿）+7——doCopy 改写超限升限，
+//  功能性增长，无腐化）。
+// 2026-09-06 备注合并：NoteDialog/useNoteEdit 接线退役，490→484（useNoteEdit 调用/互斥项/
+//  砚栏两 props/对话框 note 槽接线全删，实测 479 + 5 行余量；卸载 Tiptap 系依赖，
+//  面板主体换原生 textarea——拆除性收缩，非腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 460 },
+  { path: '../src/views/EditorView.tsx', limit: 484 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

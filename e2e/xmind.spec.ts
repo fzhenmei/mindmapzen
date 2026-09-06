@@ -41,7 +41,7 @@ test('XMind 导入：新版 content.json 转树入库；未映射内容进预览
   await page.getByTestId('import-confirm').click()
   await expect(page.getByText('XMind 迁入').first()).toBeVisible()
 
-  // 落盘断言：规范 md（根/子级/备注引用块）
+  // 落盘断言：规范 md（根/子级/正文原样块——2026-09-06 备注合并后 XMind 备注归正文，无 > 前缀）
   const md = await page.evaluate(() =>
     (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
       '/ws/XMind 迁入.md',
@@ -50,5 +50,5 @@ test('XMind 导入：新版 content.json 转树入库；未映射内容进预览
   expect(md).toContain('# XMind 迁入\n')
   expect(md).toContain('## 目标')
   expect(md).toContain('### 上线')
-  expect(md).toContain('> 从 XMind 搬来的备注')
+  expect(md).toContain('# XMind 迁入\n从 XMind 搬来的备注\n')
 })
