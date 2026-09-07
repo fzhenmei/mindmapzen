@@ -174,22 +174,28 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     )
   }
 
-  /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图。陈旧 uid 兜底：未命中渲染树
-   *  （如撤销删除）时清选中回退整图。正文按 settings 树层剥除（终审 C1，先于序列化——md 层正则
+  /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图；陈旧 uid（未命中渲染树，
+   *  如撤销删除）清选中回退整图。正文按 settings 树层剥除（终审 C1，先于序列化——md 层正则
    *  剥 `> ` 行会误伤正文代码块/引用行）；md 层后处理仅剩双链括号（getState 取实时值）。
-   *  尾段图片引用相对→绝对（2026-09，AI 消费者）：须在剥正文之后——头注引用行不能被一并剥掉。
-   *  序列化同步无守卫（纯函数）；写剪贴板异步段以 then 双参兜错（Sonar S3776 认知复杂度） */
+   *  尾段图片引用相对→绝对（2026-09）：须在剥正文之后——头注引用行不能被一并剥掉。序列化同步段
+   *  try 兜底（2026-09-07 回归：Word 粘贴携 \r\n 致 assert 抛错曾无声失败），异步段 then 同口径 */
   const doCopy = (): void => {
     const mm = mmRef.current
     if (!mm) return
-    const full = mm.getData()
-    selection.clearStaleIfMissing(full)
-    const uid = selection.activeUidRef.current
-    const active = uid ? findSubtreeByUid(full, uid) : null
-    const settings = useAppStore.getState().settings
-    let zen = engineTreeToZen(active ?? full).tree
-    if (!settings.copyIncludeBody) zen = stripTreeBody(zen)
-    let md = applyCopySettings(serialize(zen, registry.byUid), settings)
+    let md: string
+    try {
+      const full = mm.getData()
+      selection.clearStaleIfMissing(full)
+      const uid = selection.activeUidRef.current
+      const active = uid ? findSubtreeByUid(full, uid) : null
+      const settings = useAppStore.getState().settings
+      let zen = engineTreeToZen(active ?? full).tree
+      if (!settings.copyIncludeBody) zen = stripTreeBody(zen)
+      md = applyCopySettings(serialize(zen, registry.byUid), settings)
+    } catch (e) {
+      setError(t('errors.copyMdFailed', { reason: e instanceof Error ? e.message : String(e) }))
+      return
+    }
     const wsDir = useAppStore.getState().workspaceDir
     if (wsDir !== null) md = absolutizeImagePaths(md, wsDir)
     void writeClipboard(md).then(

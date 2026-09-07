@@ -13,6 +13,7 @@ import {
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
+import { sanitizeExecArgs } from '../services/multiline'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
 import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
@@ -342,6 +343,13 @@ export default function MindMapCanvas({
       // 节点标签渲染上限（引擎默认 5）：to-do 分类场景放宽到 10（超限静默截断，与引擎一致）
       maxTag: 10,
     })
+    // 提交口换行归一化（2026-09-07 Word 粘贴毒节点治本）：引擎编辑框提交（TextEdit.js:492
+    // 经 this.mindMap.execCommand）与宿主正文面板写入在此统一剥 \r\n/裸 \r——残留换行命中
+    // serialize 断言（复制/保存抛错）或污染 md 落盘（重开毒害标题）。引擎内部调用取实例
+    // 属性，包装对引擎与宿主（mmRef）双端生效
+    const origExec = mm.execCommand.bind(mm)
+    mm.execCommand = ((cmd: string, ...args: unknown[]) =>
+      origExec(cmd, ...sanitizeExecArgs(cmd, args))) as MindMapHandle['execCommand']
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
     // 无载荷的调用（下方展开命令同步上报）视为必有变化。
