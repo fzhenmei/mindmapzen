@@ -51,76 +51,82 @@ function friendlyTime(ms: number, locale: string): string {
  *  居中并排双按钮承担「开始」（新建导图 + 导入均 outline，等宽对称，窄屏竖排通栏）；
  *  「最近的」居中小节题（朱砂印点签名，呼应 logo 印面）+ 全宽行列表（发丝分隔线 +
  *  hover 浮起 + 人性化时间）；页脚落款寄语一行收尾。空态保持邀请语气。
+ *  纵向溢出（小窗体 + 最近列表满 8 行）：根容器 overflow-y-auto 整体内滚，居中改由
+ *  内层 wrapper my-auto 承担——justify-center 与 overflow 同轴会把上溢裁到滚不到
+ *  （flex 经典坑），auto margin 空间不足时自动退化为顶部对齐，全程可滚。
  *  testid 契约不变（desk-idle/desk-idle-new/desk-recent/recent-item-*） */
 export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonly<Props>) {
   const { t } = useTranslation()
   return (
     <div
-      className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center gap-8 p-10"
+      className="mx-auto flex w-full max-w-xl flex-1 flex-col overflow-y-auto p-10"
       data-testid="desk-idle"
     >
-      {/* 品牌头：身份 + 语境（时段问候 · 品牌标语） */}
-      <header className="flex flex-col items-center gap-2 text-center">
-        <AppLogo size={56} />
-        <h1 className="text-2xl font-semibold tracking-tight">Mind Map Zen</h1>
-        <p className="text-sm text-muted-foreground">
-          {greeting()} {t('welcome.greetingSuffix')}
-        </p>
-      </header>
-
-      {/* 开始：居中并排双按钮，等宽对称（窄屏竖排通栏） */}
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <Button type="button" variant="outline" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
-          <IconPlus />
-          <span>{t('welcome.newMap')}</span>
-        </Button>
-        <Button type="button" variant="outline" className="sm:w-32" onClick={onImport}>
-          <IconImport />
-          <span>{t('welcome.importMap')}</span>
-        </Button>
-      </div>
-
-      {/* 最近的：居中小节题（朱砂印点）+ 全宽行列表（发丝分隔线） */}
-      <section className="w-full">
-        <h2 className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium tracking-widest text-muted-foreground">
-          <span aria-hidden="true" className="size-1.5 rounded-[1px] bg-destructive" />
-          {t('welcome.recentTitle')}
-        </h2>
-        {recent.length === 0 ? (
-          <p className="rounded-lg bg-muted/50 px-4 py-6 text-center text-sm text-muted-foreground">
-            {t('welcome.emptyHint')}
+      {/* 居中由 my-auto 承担（空间不足退化为顶部对齐，见组件头注释） */}
+      <div className="my-auto flex w-full flex-col items-center gap-8">
+        {/* 品牌头：身份 + 语境（时段问候 · 品牌标语） */}
+        <header className="flex flex-col items-center gap-2 text-center">
+          <AppLogo size={56} />
+          <h1 className="text-2xl font-semibold tracking-tight">Mind Map Zen</h1>
+          <p className="text-sm text-muted-foreground">
+            {greeting()} {t('welcome.greetingSuffix')}
           </p>
-        ) : (
-          <ul className="flex flex-col divide-y" data-testid="desk-recent">
-            {recent.map((m) => (
-              <li key={m.mdPath}>
-                <button
-                  type="button"
-                  data-testid={`recent-item-${m.name}`}
-                  className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
-                  onClick={() => onOpen(m)}
-                >
-                  <span className="shrink-0 text-muted-foreground group-hover:text-primary">
-                    <IconMarkdown size={16} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-file text-[13px]">{m.name}</span>
-                  {m.relDir !== '' && (
-                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-file text-xs text-muted-foreground">
-                      {m.relDir}
-                    </span>
-                  )}
-                  <span className="shrink-0 font-file text-xs text-muted-foreground">
-                    {friendlyTime(m.modifiedAt, i18n.language)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        </header>
 
-      {/* 落款：页脚寄语（居中，案头题跋气质） */}
-      <footer className="text-center text-xs text-muted-foreground">{t('welcome.footer')}</footer>
+        {/* 开始：居中并排双按钮，等宽对称（窄屏竖排通栏） */}
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button type="button" variant="outline" data-testid="desk-idle-new" className="sm:w-32" onClick={onNew}>
+            <IconPlus />
+            <span>{t('welcome.newMap')}</span>
+          </Button>
+          <Button type="button" variant="outline" className="sm:w-32" onClick={onImport}>
+            <IconImport />
+            <span>{t('welcome.importMap')}</span>
+          </Button>
+        </div>
+
+        {/* 最近的：居中小节题（朱砂印点）+ 全宽行列表（发丝分隔线） */}
+        <section className="w-full">
+          <h2 className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium tracking-widest text-muted-foreground">
+            <span aria-hidden="true" className="size-1.5 rounded-[1px] bg-destructive" />
+            {t('welcome.recentTitle')}
+          </h2>
+          {recent.length === 0 ? (
+            <p className="rounded-lg bg-muted/50 px-4 py-6 text-center text-sm text-muted-foreground">
+              {t('welcome.emptyHint')}
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y" data-testid="desk-recent">
+              {recent.map((m) => (
+                <li key={m.mdPath}>
+                  <button
+                    type="button"
+                    data-testid={`recent-item-${m.name}`}
+                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
+                    onClick={() => onOpen(m)}
+                  >
+                    <span className="shrink-0 text-muted-foreground group-hover:text-primary">
+                      <IconMarkdown size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-file text-[13px]">{m.name}</span>
+                    {m.relDir !== '' && (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-file text-xs text-muted-foreground">
+                        {m.relDir}
+                      </span>
+                    )}
+                    <span className="shrink-0 font-file text-xs text-muted-foreground">
+                      {friendlyTime(m.modifiedAt, i18n.language)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* 落款：页脚寄语（居中，案头题跋气质） */}
+        <footer className="text-center text-xs text-muted-foreground">{t('welcome.footer')}</footer>
+      </div>
     </div>
   )
 }
