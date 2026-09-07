@@ -5,6 +5,10 @@ export interface ZenNode {
   /** 节点图标（M18 方案 A）：lucide kebab 名（md 句尾 ::name 标记 ⇄ 此字段）；
    *  引擎侧经 data.icon（'zen_'+name）承载。parse 提取、序列化注入；空数组不设 */
   icons?: string[]
+  /** 节点标签：自由文本（中文/英文等，md 句尾 #标签 标记 ⇄ 此字段，与 ::icon 同构）；
+   *  引擎侧经 data.tag 承载（原生彩色小标签渲染，颜色按标签文本稳定生成——同名同色）；
+   *  parse 提取、序列化注入；空数组不设 */
+  tags?: string[]
   /** 节点插图（M19）：md 行尾 ![alt](src) 标记 ⇄ 此字段；src 相对工作区路径，
    *  画布经引擎 imgMap（src→dataURL）渲染；每节点至多一枚 */
   image?: { src: string; alt: string }

@@ -96,6 +96,8 @@ vi.mock('../editor/MindMapCanvas', async () => {
       // M18 图标：opts 引用与设图标入口（真实语义见 MindMapCanvas 装配）
       opt: { iconList: [{ type: 'zen', list: [] }] },
       execCommandIcon: vi.fn(),
+      // 节点标签：设标签入口（真实语义见 MindMapCanvas 装配的 execCommandTag）
+      execCommandTag: vi.fn(),
       // 导出插件（M5b Task 5）：png/svg 返回固定 data URL（引擎真实返回为 base64 字符串，见 exportImage.test）
       doExport: {
         png: vi.fn(async () => pngDataUrl),
@@ -2472,6 +2474,31 @@ test('图标管理器：有正文节点确认落下数组即纯用户图标（�
     // 生产链路：execCommandIcon → node.setIcon → SET_NODE_ICON；断言落下的数组不含 zen_body
     expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_flag'])
   } finally {
+    restore()
+  }
+})
+
+// ── 标签选择器（feature/node-tags）：浮条钮 → 对话框 → SET_NODE_TAG 整组覆写链路 ──
+
+test('标签选择器：已选/已用来自整树 data.tag，确认走 execCommandTag 整组覆写', async () => {
+  // 预置当前节点已有标签 urgent（链路：nodeTagsOf/usedTagsOf → getData → data.tag）
+  fakeTree.children![0]!.data.tag = ['urgent']
+  const restore = withGeometry()
+  try {
+    const handle = await renderReadySelected()
+    fireEvent.click(screen.getByTestId('node-action-tag'))
+    expect(screen.getByTestId('tag-dialog')).toBeInTheDocument()
+    // 当前节点标签进已选 chips；同树收集的已用标签列表在场
+    expect(screen.getByTestId('tag-chip-urgent')).toBeInTheDocument()
+    expect(screen.getByTestId('tag-used-urgent')).toBeInTheDocument()
+    // 输入新建 + 确认：整组覆写 = 既有 + 新增
+    fireEvent.change(screen.getByTestId('tag-input'), { target: { value: '采购' } })
+    fireEvent.keyDown(screen.getByTestId('tag-input'), { key: 'Enter' })
+    fireEvent.click(screen.getByTestId('tag-save'))
+    // 生产链路：execCommandTag → node.setTag → SET_NODE_TAG
+    expect(handle.execCommandTag).toHaveBeenCalledWith('child-uid', ['urgent', '采购'])
+  } finally {
+    delete fakeTree.children![0]!.data.tag
     restore()
   }
 })

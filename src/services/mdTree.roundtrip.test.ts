@@ -9,10 +9,17 @@ import type { ZenNode } from '../types/tree'
 // 1) 换行 \n、\r：标题/列表项均为单行结构,行内不可能含换行,序列化必然断裂；
 // 2) 首尾空白（含纯空白文本）：CommonMark 中标题/列表项行内容的首尾空白不显著,
 //    parse 侧 sourceLine 的 trimEnd 与标题/标记剥离正则的 \s* 会将其吞掉,
-//    属 markdown 语义边界而非实现缺陷,边界行为见下方"首尾空白规范化"用例。
+//    属 markdown 语义边界而非实现缺陷,边界行为见下方"首尾空白规范化"用例；
+// 3) 行尾 #标签词 形态（空白+#+白名单词）：#tag 是行内即标签手势语义（Obsidian/
+//    GitHub 同款）,文本自带该形态时 parse 收为 tags 字段属合法标记侵入而非漂移;
+//    ::与[[]]双字符标记随机概率≈0天然豁免,# 单字符概率不可忽略故显式排除,
+//    边界行为见下方标签用例（符号词 #$ 不构成标记恒等往返）。
 const textArb = fc
   .string({ minLength: 0, maxLength: 12 })
-  .filter((t) => !t.includes('\n') && !t.includes('\r') && t === t.trim())
+  .filter(
+    (t) =>
+      !t.includes('\n') && !t.includes('\r') && t === t.trim() && !/[ \t][#＃][\p{L}\p{N}_-]+$/u.test(t),
+  )
 
 // —— M5c Task 2 生成器扩展（M5d 终审欠账）：textArb 以 1/3 概率混入三类片段 ——
 // 句中标记 / 句尾标记 / 无标记，覆盖净化链原始输入的三种形态（随机串几乎不可能自发产出
@@ -421,4 +428,61 @@ test('防御：列表层节点（深度≥7）带 body 时 serialize 抛错，�
   expect(() => serialize(leafAtDepth(8, '更深层'))).toThrow()
   expect(() => serialize(leafAtDepth(6, '末级标题正文'))).not.toThrow() // H6 末级标题仍可正文
   expect(() => serialize(leafAtDepth(7))).not.toThrow()
+})
+
+// —— 节点标签：句尾 #tag 标记（与 ::icon 同构）——serialize 注入、parse 提取、
+//    三标记共存顺序 `文本 #tag ::icon ![alt](src)`、engine 装配 ——
+test('标签序列化注入与解析提取（中文/英文，保序去重，roundtrip 恒等）', () => {
+  const tree: ZenNode = { text: '买牛奶', tags: ['采购', 'urgent'], children: [] }
+  const md = serialize(tree)
+  expect(md).toBe('# 买牛奶 #采购 #urgent\n')
+  const r = parse(md)
+  expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
+})
+
+test('标签与图标/插图标记共存：行尾固定顺序 `#tag ::icon ![alt](src)` 全还原', () => {
+  const tree: ZenNode = {
+    text: '节点',
+    tags: ['采购'],
+    icons: ['flag'],
+    image: { src: 'assets/x.png', alt: '配图' },
+    children: [],
+  }
+  const md = serialize(tree)
+  expect(md).toBe('# 节点 #采购 ::flag ![配图](assets/x.png)\n')
+  const r = parse(md)
+  expect(r).toEqual({ ok: true, tree, ignoredBlocks: [] })
+})
+
+test('标签空数组不设字段（与 icons 同口径）；手写标记同样生效', () => {
+  expect(serialize({ text: 'x', tags: [], children: [] })).toBe('# x\n')
+  const r = parse('# x\n')
+  if (!r.ok) return
+  expect(r.tree.tags).toBeUndefined()
+  // 手写 md（不经选择器）与选择器产物同口径（列表层标记同样提取）
+  const hand = parse('# 根\n\n- 项 #待处理\n')
+  expect(hand).toEqual({
+    ok: true,
+    tree: { text: '根', children: [{ text: '项', tags: ['待处理'], children: [] }] },
+    ignoredBlocks: [],
+  })
+})
+
+test('标签词白名单：全符号词不构成标记，正文恒等往返（fuzz 排除项边界钉子）', () => {
+  // `! #$` 曾是 fuzz 反例（宽容字符类劫持符号词）；白名单后无标签语义、恒等
+  const tree: ZenNode = { text: '! #$', children: [] }
+  expect(parse(serialize(tree))).toEqual({ ok: true, tree, ignoredBlocks: [] })
+})
+
+test('zen→engine：tags 装配 data.tag；engine→zen 宽容回收（字符串与 {text} 对象）', async () => {
+  const { zenToEngineTree, engineTreeToZen } = await import('./mdTree')
+  const engine = zenToEngineTree({ text: 'n', tags: ['采购'], children: [] })
+  expect(engine.data.tag).toEqual(['采购'])
+  expect(engineTreeToZen(engine).tree.tags).toEqual(['采购'])
+  // {text} 对象形态（引擎 v0.10.3+ tag 格式/外部来源）宽容回收文本
+  const objForm = engineTreeToZen({ data: { text: 'n', tag: [{ text: '紧急' }] }, children: [] })
+  expect(objForm.tree.tags).toEqual(['紧急'])
+  // 非法形态宽容忽略（引擎其他 tag 源不受影响）
+  const badForm = engineTreeToZen({ data: { text: 'n', tag: [1, 2] }, children: [] })
+  expect(badForm.tree.tags).toBeUndefined()
 })

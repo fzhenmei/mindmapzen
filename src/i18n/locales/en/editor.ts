@@ -58,6 +58,7 @@ const editor: Dict['editor'] = {
   nodeActions: {
     body: 'Write body text for the selected node',
     icon: 'Node icon',
+    tag: 'Node tags',
     image: 'Node image',
     link: 'Create link: click, then click the target node',
   },
@@ -93,6 +94,11 @@ const editor: Dict['editor'] = {
     title: 'Node icon',
     removeIcon: 'Remove {{name}}',
     searchPlaceholder: 'Search the full lucide set (by name or tag, e.g. flag / clock)',
+  },
+  tagPicker: {
+    title: 'Node tags',
+    removeTag: 'Remove {{name}}',
+    inputPlaceholder: 'Type a new tag and press Enter',
   },
   imageDialog: {
     title: 'Node image',

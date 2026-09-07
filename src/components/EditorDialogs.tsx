@@ -16,6 +16,7 @@ import IconPickerDialog from './IconPickerDialog'
 import ImageDialog from './ImageDialog'
 import NewMapDialog from './NewMapDialog'
 import QuickSwitchDialog from './QuickSwitchDialog'
+import TagPickerDialog from './TagPickerDialog'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 
@@ -33,6 +34,8 @@ interface EditorDialogsProps {
   exportActions: ExportActions | null
   /** 图标管理器（M18，2026-09 迁入）：槽 = 组件 props；null = 关（门闩在调用方） */
   iconPicker: ComponentProps<typeof IconPickerDialog> | null
+  /** 标签选择器（feature/node-tags）：同上 */
+  tagPicker: ComponentProps<typeof TagPickerDialog> | null
   /** 插图（M19，2026-09 迁入）：同上 */
   imageEdit: ComponentProps<typeof ImageDialog> | null
   /** 快速切换浮层（v2.5，2026-09 迁入）：搜索/轮换两形态共用；同上 */
@@ -53,6 +56,7 @@ export default function EditorDialogs({
   onIgnoredCancel,
   exportActions,
   iconPicker,
+  tagPicker,
   imageEdit,
   quickSwitch,
   newMap,
@@ -80,6 +84,7 @@ export default function EditorDialogs({
       )}
       {exportActions !== null && <ExportDialog actions={exportActions} />}
       {iconPicker !== null && <IconPickerDialog {...iconPicker} />}
+      {tagPicker !== null && <TagPickerDialog {...tagPicker} />}
       {imageEdit !== null && <ImageDialog {...imageEdit} />}
       {quickSwitch !== null && <QuickSwitchDialog {...quickSwitch} />}
       {newMap !== null && <NewMapDialog {...newMap} />}

@@ -56,6 +56,7 @@ export default {
   nodeActions: {
     body: '编写选中节点的正文',
     icon: '节点图标',
+    tag: '节点标签',
     image: '节点插图',
     link: '创建连线：点此钮后再点目标节点',
   },
@@ -91,6 +92,11 @@ export default {
     title: '节点图标',
     removeIcon: '移除 {{name}}',
     searchPlaceholder: '搜索 lucide 全集（名字或语义标签，如 flag / 时间）',
+  },
+  tagPicker: {
+    title: '节点标签',
+    removeTag: '移除 {{name}}',
+    inputPlaceholder: '输入新标签，回车添加',
   },
   imageDialog: {
     title: '节点插图',

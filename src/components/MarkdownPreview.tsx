@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { stripMarkers } from '../services/linkMarkers'
 import { stripIconMarkers } from '../services/iconMarkers'
+import { stripTagMarkers } from '../services/tagMarkers'
 import MermaidBlock from './MermaidBlock'
 
 /** 元素映射（模块级常量，S6478：不在组件内定义）：全走令牌类名，无第三方排版插件。
@@ -135,10 +136,11 @@ interface Props {
  *  标题锚点（2026-09 大纲联动）：渲染后按文档序注入 zen-h-N，与 mdOutline 同解析器
  *  （remark）同序号对齐；不在渲染期计数（React 并发下渲染重放不可靠） */
 export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
-  // 连线/图标标记按行剥离（标记永不跨行，与画布显示层同口径——md 原文仍是唯一事实源）
+  // 连线/图标/标签标记按行剥离（标记永不跨行，与画布显示层同口径——md 原文仍是唯一事实源；
+  //  标签在图标内侧，须先剥 icon 再剥 tag）
   const display = text
     .split('\n')
-    .map((l) => stripIconMarkers(stripMarkers(l)))
+    .map((l) => stripTagMarkers(stripIconMarkers(stripMarkers(l))))
     .join('\n')
   const components = useMemo(() => ({ ...MD_COMPONENTS, img: imgRenderer(imgMap) }), [imgMap])
   const rootRef = useRef<HTMLDivElement>(null)

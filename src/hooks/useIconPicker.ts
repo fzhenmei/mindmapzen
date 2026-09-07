@@ -6,8 +6,9 @@
 import { useCallback, useRef, useState } from 'react'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 
-/** 按引擎整树深找 uid 命中节点（getData 快照 DFS；uid 唯一，首中即返） */
-function findByUid(root: EngineNode, uid: string | null): EngineNode | null {
+/** 按引擎整树深找 uid 命中节点（getData 快照 DFS；uid 唯一，首中即返）——
+ *  导出供 useTagPicker 等同构选择器复用 */
+export function findByUid(root: EngineNode, uid: string | null): EngineNode | null {
   if (uid === null) return null
   if (root.data.uid === uid) return root
   for (const c of root.children ?? []) {

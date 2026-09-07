@@ -339,6 +339,8 @@ export default function MindMapCanvas({
       // 节点图标集（M18）：lucide 精选 64 经 iconList 通道注册（data.icon 'zen_'+name
       // 解析到此处 svg）；全集新图标由 useIconPicker 运行时 push 进本数组
       iconList: toEngineIconList(),
+      // 节点标签渲染上限（引擎默认 5）：to-do 分类场景放宽到 10（超限静默截断，与引擎一致）
+      maxTag: 10,
     })
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
@@ -419,6 +421,15 @@ export default function MindMapCanvas({
         | null
         | undefined
       node?.setIcon?.(icons)
+    }
+    // 设节点标签：node.setTag → SET_NODE_TAG 命令（nodeCommandWraps.js:37，入历史）；
+    // data.tag 字符串数组经引擎原生彩色小标签渲染（颜色按文本稳定生成——同名同色）
+    ;(mm as MindMapHandle).execCommandTag = (uid, tags) => {
+      const node = mm.renderer.findNodeByUid(uid) as
+        | { setTag?(tags: string[]): void }
+        | null
+        | undefined
+      node?.setTag?.(tags)
     }
     // 设节点插图（M19）：node.setImage → SET_NODE_IMAGE 命令（Render.js:1760 setNodeImage
     // 解构 { url, title, width, height, custom } 后落 data.image/imageTitle/imageSize——
