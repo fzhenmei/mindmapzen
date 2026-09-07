@@ -108,6 +108,10 @@ export interface MindMapHandle {
    *  （nodeCommandWraps.js:18 → SET_NODE_ICON 命令，入历史、触发重渲）；
    *  icons 为引擎 data.icon 形态（'zen_'+name） */
   execCommandIcon?(uid: string, icons: string[]): void
+  /** 设节点标签：宿主侧装配方法——node.setTag（nodeCommandWraps.js:37
+   *  → SET_NODE_TAG 命令，入历史、触发重渲）；tags 为引擎 data.tag 形态
+   *  （字符串数组，渲染彩色小标签、颜色按文本稳定生成）；空数组即移除 */
+  execCommandTag?(uid: string, tags: string[]): void
   /** 设节点插图（M19）：宿主侧装配方法——node.setImage（nodeCommandWraps.js:12
    *  → SET_NODE_IMAGE 命令，入历史、触发重渲）；imgData = { image, imageTitle,
    *  imageSize }，image 为 imgMap 键（相对路径），image 清空即移除 */

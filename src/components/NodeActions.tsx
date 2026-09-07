@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import type { NodeActionPos } from '../hooks/useNodeActions'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { IconFileText, IconImage, IconLink, IconSmile } from './icons'
+import { IconFileText, IconImage, IconLink, IconSmile, IconTag } from './icons'
 
 interface Props {
   /** 锚点（useNodeActions 产出；仅在有值时由父级渲染本组件） */
@@ -20,9 +20,11 @@ interface Props {
   onIconClick(): void
   /** 插图（M19 想法10：选图/换图/移除） */
   onImageClick(): void
+  /** 标签选择器（节点标签的唯一增删 UI 通道） */
+  onTagClick(): void
 }
 
-export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick, onImageClick }: Readonly<Props>) {
+export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick, onImageClick, onTagClick }: Readonly<Props>) {
   const { t } = useTranslation()
   return (
     <div
@@ -59,6 +61,21 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
           </Button>
         </TooltipTrigger>
         <TooltipContent>{t('editor.nodeActions.icon')}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="node-action-tag"
+            aria-label={t('editor.nodeActions.tag')}
+            onClick={onTagClick}
+          >
+            <IconTag />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t('editor.nodeActions.tag')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>

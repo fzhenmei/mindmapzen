@@ -3,6 +3,7 @@ import remarkParse from 'remark-parse'
 import { i18n } from '../i18n'
 import { extractTargets, injectMarkers } from './linkMarkers'
 import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
+import { extractTagMarkers, injectTagMarkers, stripTagMarkers } from './tagMarkers'
 import { extractImageMarker, injectImageMarker, stripImageMarker } from './imageMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
@@ -42,7 +43,9 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   const lines: string[] = []
 
   /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
-   *  图标（M18 ::name）与插图（M19 ![alt](src)）同口径句尾注入（图片最尾） */
+   *  标签（#tag）、图标（M18 ::name）与插图（M19 ![alt](src)）同口径句尾注入，行尾固定
+   *  顺序 `文本 [[链接]] #tag ::icon ![alt](src)`（图片最尾；tag 在 icon 内侧——剥除序
+   *  image → icon → tag 与注入序严格互逆） */
   function textOf(node: ZenNode): string {
     const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
     let text = node.text
@@ -51,7 +54,10 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
       const missing = targets.filter((t) => !existing.has(t))
       if (missing.length > 0) text = injectMarkers(text, missing)
     }
-    return injectImageMarker(injectIconMarkers(text, node.icons ?? []), node.image ?? null)
+    return injectImageMarker(
+      injectIconMarkers(injectTagMarkers(text, node.tags ?? []), node.icons ?? []),
+      node.image ?? null,
+    )
   }
 
   /** 正文输出为原样块，紧跟节点行、先于子结构（与 parse「归属最近标题」互逆）；
@@ -134,14 +140,17 @@ function listItemText(md: string, item: MNode): string {
   )
 }
 
-/** 建节点（M18 图标 / M19 插图）：行尾标记提取进结构化字段（文本剥离、序列化注入互逆）；
- *  行尾约定顺序：`文本 ::icon ![alt](src)`（图片最尾）；无标记快速路径零开销 */
+/** 建节点（M18 图标 / M19 插图 / 标签）：行尾标记提取进结构化字段（文本剥离、序列化注入
+ *  互逆）；行尾约定顺序：`文本 #tag ::icon ![alt](src)`（图片最尾）；无标记快速路径零开销 */
 function makeNode(raw: string): ZenNode {
   const image = extractImageMarker(raw)
   const stripped = stripImageMarker(raw)
   const icons = extractIconMarkers(stripped)
-  const node: ZenNode = { text: stripIconMarkers(stripped), children: [] }
+  const noIcons = stripIconMarkers(stripped)
+  const tags = extractTagMarkers(noIcons)
+  const node: ZenNode = { text: stripTagMarkers(noIcons), children: [] }
   if (icons.length > 0) node.icons = icons
+  if (tags.length > 0) node.tags = tags
   if (image !== null) node.image = image
   return node
 }
@@ -309,6 +318,8 @@ export function zenToEngineTree(
       // 镜像 note(2026-09-06 合并):复用引擎「有 note→挂角标+悬停」通道,body 是事实源
       ...(tree.body ? { body: tree.body, note: tree.body } : {}),
       ...(icons.length > 0 ? { icon: icons } : {}),
+      // 标签直传 data.tag（引擎原生彩色小标签；颜色按文本稳定生成——同名同色）
+      ...(tree.tags !== undefined && tree.tags.length > 0 ? { tag: tree.tags } : {}),
       ...(tree.image !== undefined && imgEntry !== undefined
         ? {
             image: tree.image.src,
@@ -331,6 +342,20 @@ function collectIcons(icon: unknown): string[] {
     .map((n) => n.slice(4))
 }
 
+/** data.tag 收集：字符串（宿主注入形态）与 {text} 对象（引擎 v0.10.3+ 格式/外部来源）
+ *  两形态宽容收文本；非数组/非法项忽略（引擎其他 tag 源不受影响）——
+ *  导出供 useTagPicker 等宿主侧选择器复用 */
+export function collectTags(tag: unknown): string[] {
+  if (!Array.isArray(tag)) return []
+  const out: string[] = []
+  for (const t of tag) {
+    if (typeof t === 'string') out.push(t)
+    else if (t !== null && typeof t === 'object' && typeof (t as { text?: unknown }).text === 'string')
+      out.push((t as { text: string }).text)
+  }
+  return out
+}
+
 /** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）；
  *  data.body（非空字符串）收进 ZenNode.body；data.note 为宿主镜像（2026-09-06 合并），
  *  不收集——事实源是 data.body；
@@ -346,6 +371,8 @@ export function engineTreeToZen(
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
   // 图标收集（M18）：仅收 'zen_' 前缀项（纯用户图标，无内部保留名）
   const icons = collectIcons(root.data.icon)
+  // 标签收集：字符串与 {text} 对象两形态宽容收文本
+  const tags = collectTags(root.data.tag)
   // 插图收集（M19）：data.image（src 键）+ imageTitle（alt）；imgMap 不回写（引擎根 data 临时物）
   const image =
     typeof root.data.image === 'string' && root.data.image !== ''
@@ -357,6 +384,7 @@ export function engineTreeToZen(
       ...(uid !== undefined ? { uid } : {}),
       ...(body !== undefined ? { body } : {}),
       ...(icons.length > 0 ? { icons } : {}),
+      ...(tags.length > 0 ? { tags } : {}),
       ...(image !== undefined ? { image } : {}),
       children: subs.map((s) => s.tree),
     },

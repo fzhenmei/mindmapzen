@@ -2,6 +2,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { stripMarkers } from './linkMarkers'
 import { stripIconMarkers } from './iconMarkers'
+import { stripTagMarkers } from './tagMarkers'
 import { stripImageMarker } from './imageMarkers'
 
 /** 预览大纲条目：id = 'zen-h-' + 文档序号——与 MarkdownPreview 渲染侧锚点注入按同一
@@ -38,7 +39,7 @@ export function mdOutline(md: string): OutlineHeading[] {
     if (block.type !== 'heading') continue
     // setext 标题源码行无 # 前缀，剥前缀 replace 对其无副作用
     const raw = lines[(block.position?.start.line ?? 1) - 1] ?? ''
-    const text = stripIconMarkers(stripMarkers(stripImageMarker(raw.trimEnd())))
+    const text = stripTagMarkers(stripIconMarkers(stripMarkers(stripImageMarker(raw.trimEnd()))))
       .replace(/^#{1,6}\s*/, '')
       .trim()
     out.push({ id: `zen-h-${out.length}`, depth: block.depth ?? 1, text })

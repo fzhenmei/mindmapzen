@@ -15,6 +15,10 @@ describe('mdOutline（预览大纲提取）', () => {
     const md = '# 根 [[目标]] ::flag ![alt](a.png)'
     expect(mdOutline(md)).toEqual([{ id: 'zen-h-0', depth: 1, text: '根' }])
   })
+  test('标签标记一并剥净（#tag，含与图标/插图共存序）', () => {
+    const md = '# 根 #采购 ::flag ![alt](a.png)'
+    expect(mdOutline(md)).toEqual([{ id: 'zen-h-0', depth: 1, text: '根' }])
+  })
   test('围栏代码块内的 # 行不算标题', () => {
     const md = ['# 根', '```', '# 注释伪标题', '```', '## 真'].join('\n')
     expect(mdOutline(md).map((h) => h.text)).toEqual(['根', '真'])

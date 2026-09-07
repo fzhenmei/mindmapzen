@@ -22,6 +22,15 @@ const base = (d: ReactNode, size = 16) => (
 )
 
 export const IconArrowLeft = ({ size }: IconProps) => base(<path d="M10 3 5 8l5 5" />, size)
+/** 节点标签（feature/node-tags）：斜置标签牌 + 穿绳孔，同 16 网格线性风格 */
+export const IconTag = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M9.5 2H4a2 2 0 0 0-2 2v5.5a2 2 0 0 0 .59 1.41l4.5 4.5a2 2 0 0 0 2.82 0l5.5-5.5a2 2 0 0 0 0-2.82l-4.5-4.5A2 2 0 0 0 9.5 2Z" />
+      <circle cx="5.5" cy="5.5" r="0.75" />
+    </>,
+    size,
+  )
 /** 切换导图（v2.5 快速切换）：左右双向箭头上下错行（⇄），行高对齐 16 网格 */
 export const IconSwitch = ({ size }: IconProps) =>
   base(

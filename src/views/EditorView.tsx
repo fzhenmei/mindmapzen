@@ -28,6 +28,7 @@ import { useMapStats } from '../hooks/useMapStats'
 import CanvasHint from '../components/CanvasHint'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
 import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import { useTagPicker, nodeTagsOf, usedTagsOf } from '../hooks/useTagPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
@@ -123,6 +124,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const bodyPanel = useBodyPanel(mmRef, selection.activeUidRef, selection.activeUid)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
+  // 标签选择器：确认即 SET_NODE_TAG 整组覆写；无载荷上报走保存链（同上）
+  const tagPick = useTagPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
   // 插图编辑（M19 + 粘贴截图）：选图/粘贴复制入 assets/ + imgMap 运行时注入 + SET_NODE_IMAGE
   const imageEdit = useImageEdit(
     mmRef,
@@ -350,6 +353,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onIconClick={() =>
             iconPick.openPicker(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeIconsOf(mmRef.current, selection.activeUidRef.current))
           }
+          onTagClick={() =>
+            tagPick.openPicker(
+              nodeTextOf(mmRef.current, selection.activeUidRef.current),
+              nodeTagsOf(mmRef.current, selection.activeUidRef.current),
+              usedTagsOf(mmRef.current),
+            )
+          }
           onImageClick={() =>
             imageEdit.openDialog(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeImageOf(mmRef.current, selection.activeUidRef.current))
           }
@@ -421,6 +431,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         iconPicker={
           iconPick.open && !guard.guarding && !flow.confirming
             ? { nodeText: iconPick.nodeText, current: iconPick.icons, onCancel: iconPick.close, onConfirm: iconPick.apply }
+            : null
+        }
+        // 标签选择器：同上
+        tagPicker={
+          tagPick.open && !guard.guarding && !flow.confirming
+            ? { nodeText: tagPick.nodeText, current: tagPick.tags, used: tagPick.used, onCancel: tagPick.close, onConfirm: tagPick.apply }
             : null
         }
         // 插图（M19 + 粘贴截图）：同上
