@@ -862,6 +862,34 @@ test('复制成功盖「已复制为 Markdown」墨青印记（替代按钮内 �
   expect(screen.getByTestId('btn-copy')).not.toHaveTextContent('✓')
 })
 
+test('复制序列化抛错（节点文本含换行）→ 错误横幅可见而非静默（2026-09-07 release 回归）', async () => {
+  // 实案复刻：从外部粘贴的节点文本携带隐藏换行（\n/\r 随节点移动，任何层级都炸）——
+  // serialize assertNoNewline 抛错。此前 doCopy 同步段无兜底：异常沿 React 合成事件吞掉，
+  // 无印记无横幅（无声失败）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [{ data: { text: 'SpringBoot Actuator\r未授权访问漏洞', expand: true, uid: 'poison-uid' }, children: [] }],
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await act(async () => {})
+  // 修复目标：错误可见（含定位信息），而不是无任何反馈
+  expect(useAppStore.getState().error).toMatch(/复制失败.*换行.*SpringBoot/)
+})
+
 test('引擎节点复制上报盖「已复制为节点」墨青印记（Ctrl+Shift+C 路径）', async () => {
   render(
     <EditorView
