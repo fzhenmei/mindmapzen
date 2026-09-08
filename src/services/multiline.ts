@@ -24,7 +24,7 @@ interface NodeDataPayload {
 }
 
 /** 提交口命令参数归一化（2026-09-07 Word 粘贴毒节点治本）：编辑框提交（SET_NODE_TEXT，
- *  引擎 TextEdit.js:492）与正文面板写入（SET_NODE_DATA，useBodyPanel flushNow）是节点
+ *  引擎 TextEdit.js:492）与正文弹窗写入（SET_NODE_DATA，useBodyDialog flushNow）是节点
  *  文本/正文的两条入口——在 execCommand 包装层统一剥换行，粘贴口拦截（MindMapCanvas
  *  onPaste）之外的漏网路径在此兜底。非目标命令原样返回 */
 export function sanitizeExecArgs(cmd: string, args: unknown[]): unknown[] {

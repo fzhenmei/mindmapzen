@@ -48,6 +48,10 @@ describe('VditorEditor:VDitor 薄包装契约', () => {
     expect(toolbar.some((it) => typeof it === 'object' && it.tip === 'Mermaid')).toBe(true)
     // vditor 4.0.0 IMenuItem.name 必填(运行时作 data-type 与 elements 键),自定义项必须带
     expect(toolbar.some((it) => typeof it === 'object' && it.name === 'mermaid')).toBe(true)
+    // mermaid 项接线:click 调实例 insertValue 插入围栏模板图源
+    const mermaid = toolbar.find((it) => typeof it === 'object' && it.name === 'mermaid') as { click: () => void }
+    mermaid.click()
+    expect(inst.insertValue).toHaveBeenCalledWith('```mermaid\ngraph LR\n  A --> B\n```')
     expect(toolbar).toContain('bold')
     expect(toolbar).toContain('table')
   })

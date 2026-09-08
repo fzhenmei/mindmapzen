@@ -46,5 +46,7 @@ export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
       cancelled = true
     }
   }, [display, imgMap, theme])
-  return <div ref={rootRef} data-testid="md-preview" className="min-h-0 flex-1 overflow-y-auto p-6 pb-2" />
+  // md-preview 类名是 App.css 融合样式钩子（.md-preview .vditor-reset 案头预览字号/行高,
+  //  同 zen-bar/caption-name 的类名钩子先例）;data-testid 供测试/e2e 定位
+  return <div ref={rootRef} data-testid="md-preview" className="md-preview min-h-0 flex-1 overflow-y-auto p-6 pb-2" />
 }

@@ -38,12 +38,13 @@ export default function BodyDialog({ open, bodyDraft, nodeText, editable, close,
       <DialogContent
         data-testid="body-dialog"
         showCloseButton={false}
-        aria-label={t('editor.bodyPanel.ariaLabel')}
         className="body-dialog flex h-[80vh] w-[min(1280px,90vw)] max-w-none flex-col gap-0 overflow-hidden p-0"
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
+          {/* 无 aria-label（radix 由 DialogTitle 生成 aria-labelledby 会遮蔽它）；可访问名
+              全由标题承担——无选中（nodeText 空串）给回退文案防空名弹窗 */}
           <DialogTitle className="min-w-0 flex-1 truncate text-left text-sm font-medium" title={nodeText}>
-            {nodeText}
+            {nodeText !== '' ? nodeText : t('editor.bodyPanel.ariaLabel')}
           </DialogTitle>
           <button
             type="button"

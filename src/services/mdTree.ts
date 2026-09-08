@@ -23,7 +23,7 @@ function assertNoNewline(node: ZenNode): void {
 }
 
 /** 列表层节点（深度≥7）不支持正文（spec v1 深度限制）：宁可抛错拦截，不静默丢内容
- *  （正常 UI 路径由 useBodyPanel 的 layer 门禁拦截，此处防其他写入路径） */
+ *  （正常 UI 路径由 useBodyDialog 的 layer 门禁拦截，此处防其他写入路径） */
 function assertNoBodyInList(node: ZenNode, depth: number): void {
   if (depth >= 7 && node.body !== undefined) {
     throw new Error(i18n.t('errors.mdBodyInListLayer', { text: node.text.slice(0, 20) }))

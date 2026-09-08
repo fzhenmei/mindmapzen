@@ -125,7 +125,7 @@ export function useBodyDialog(
     loadNode(activeUidRef.current)
   }
 
-  // 窗口失焦：立即冲刷（防抖中的草稿不因切窗口搁置；hook 内 flush 即关弹窗与此两处，
+  // 窗口失焦：立即冲刷（防抖中的草稿不因切窗口搁置；hook 内即时 flush 即关弹窗与此处共两处，
   // 卸载不冲——引擎销毁竞态下的写入风险大于 500ms 窗口的丢字概率，保存链另有
   // unmountFlush 兜底）
   useEffect(() => {

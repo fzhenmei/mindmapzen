@@ -7,6 +7,7 @@
 // destroy 读未建的 this.vditor.element 会抛 TypeError(2026-09-09 e2e 真浏览器实测:
 // StrictMode 双挂载即触发,异常炸穿 React 整树白屏),故卸载分两态处理(见清理段)。
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import { VDITOR_CDN } from '../services/vditorPreview'
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function VditorEditor({ value, onChange, lang, theme }: Readonly<Props>) {
+  const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
   const vdRef = useRef<Vditor | null>(null)
   // 最近一次上抛的值:滤掉受控回流的同值回声(否则 setValue 重置光标)
@@ -93,5 +95,7 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
     vdRef.current?.setValue(value)
   }, [value])
 
-  return <div ref={hostRef} data-testid="vditor-host" className="h-full min-h-0" />
+  // aria-label 消费 editor.bodyPanel.editorLabel(双语):sv 编辑区是 textarea,宿主 div
+  // 命名让屏幕阅读器在「节点正文」语境下定位编辑器
+  return <div ref={hostRef} data-testid="vditor-host" aria-label={t('editor.bodyPanel.editorLabel')} className="h-full min-h-0" />
 }

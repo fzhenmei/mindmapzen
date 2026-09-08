@@ -280,7 +280,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   useEditorHotkeys({
     doCopy,
     explicitSave,
-    toggleBodyPanel: bodyDialog.toggle,
+    toggleBodyDialog: bodyDialog.toggle,
     anyDialogRef,
     openQuickSwitch: quick.open,
     cycleStep: quick.cycleStep,

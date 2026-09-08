@@ -12,7 +12,7 @@ import { IconFileText, IconImage, IconLink, IconSmile, IconTag } from './icons'
 interface Props {
   /** 锚点（useNodeActions 产出；仅在有值时由父级渲染本组件） */
   pos: NodeActionPos
-  /** 打开正文面板（复用命令栏 btn-body 同一 useBodyPanel.toggle 流） */
+  /** 打开正文弹窗（复用命令栏 btn-body 同一 useBodyDialog.toggle 流） */
   onBodyClick(): void
   /** 发起连线（引擎建线态 → 点目标节点经 linkBridge 落 [[..]] 文本） */
   onLinkClick(): void
