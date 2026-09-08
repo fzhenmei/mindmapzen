@@ -5,8 +5,8 @@ import { stripIconMarkers } from './iconMarkers'
 import { stripTagMarkers } from './tagMarkers'
 import { stripImageMarker } from './imageMarkers'
 
-/** 预览大纲条目：id = 'zen-h-' + 文档序号——与 MarkdownPreview 渲染侧锚点注入按同一
- *  解析器（remark）计数对齐；depth 1-6；text 为显示口径纯文本 */
+/** 预览大纲条目：id = 'zen-h-' + 文档序号——MarkdownPreview 渲染后按本列表注入正文
+ *  锚点（injectHeadingAnchors）；depth 1-6；text 为显示口径纯文本 */
 export interface OutlineHeading {
   id: string
   depth: number
@@ -23,9 +23,10 @@ interface MNode {
   position?: MPosition
 }
 
-/** md → 预览大纲标题列表（文档序）。与 react-markdown 同用 remark 解析，标题序列天然
- *  对齐（含 setext 下划线式标题）；文本剥行内标记（双链/图标/插图——与画布显示层
- *  同口径，md 原文仍是唯一事实源）。任何输入不抛异常（解析失败回退空大纲） */
+/** md → 预览大纲标题列表（文档序）。remark 解析（含 setext 下划线式标题）；渲染侧已切
+ *  lute，锚点配对由 injectHeadingAnchors 数量守卫保证（解析器分歧保守跳过）；文本剥
+ *  行内标记（双链/图标/插图——与画布显示层同口径，md 原文仍是唯一事实源）。
+ *  任何输入不抛异常（解析失败回退空大纲） */
 export function mdOutline(md: string): OutlineHeading[] {
   let ast: MNode
   try {

@@ -36,8 +36,6 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.13",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "simple-mind-map": "^0.14.0-fix.3",
     "tailwind-merge": "^3.6.0",

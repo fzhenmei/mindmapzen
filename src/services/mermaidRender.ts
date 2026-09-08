@@ -1,5 +1,6 @@
 // src/services/mermaidRender.ts —— mermaid 源码渲染服务（M17b 共享层）
-// 消费方：MermaidBlock（详情态预览）与 noteTooltip（画布备注悬停窗）。
+// 消费方：noteTooltip（画布备注悬停窗）。详情态预览已切 lute 管线（vditorPreview，
+// mermaid 由 vditor dist 自带资源成图，2026-09 渲染统一）。
 
 // SVG 缓存键自增序号（模块级）：唯一即可，无需随机（Sonar S2245）
 let mermaidSeq = 0

@@ -17,9 +17,13 @@ export default defineConfig({
     tailwindcss(),
     // vditor 子资源本地化(2026-09 渲染统一):VDitor 动态加载 lute/mermaid/css 等
     // dist 子资源,默认走 unpkg CDN——离线 Tauri 必须本地化。VDitor 内部拼
-    // `${cdn}/dist/js|css/...`,故拷 dist 内容到 vendor/vditor/dist、cdn 设 'vendor/vditor'
+    // `${cdn}/dist/js|css/...`,故拷 dist 内容到 vendor/vditor/dist、cdn 设 'vendor/vditor'。
+    // rename.stripBase 3 剥掉 glob 匹配保留的 node_modules/vditor/dist 路径前缀——
+    // 不剥则 dest 全部嵌套成 vendor/vditor/dist/node_modules/...(Task 2 e2e 实测 404)
     viteStaticCopy({
-      targets: [{ src: 'node_modules/vditor/dist/', dest: 'vendor/vditor/dist' }],
+      targets: [
+        { src: 'node_modules/vditor/dist/**/*', dest: 'vendor/vditor/dist', rename: { stripBase: 3 } },
+      ],
     }),
   ],
   define: {
