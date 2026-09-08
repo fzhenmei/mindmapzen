@@ -2,16 +2,20 @@ import { render } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 // jsdom 无布局度量,CodeMirror 完整 init 不可行:mock Vditor 构造,锁 options 契约
-// (mode/lang/cdn/value/toolbar)与 input→onChange 接线、受控回流抑制、销毁
+// (mode/lang/cdn/value/toolbar)与 input→onChange 接线、受控回流抑制、销毁。
+// 构造 options 暴露给测试(__opts):after 回调模拟 vditor 异步 init 完成(真浏览器
+// 里 i18n/lute 脚本加载后才 initUI;卸载 destroy 的就绪门控依赖它)
 vi.mock('vditor', () => {
-  const inst = { setValue: vi.fn(), insertValue: vi.fn(), destroy: vi.fn() }
+  const inst = { setValue: vi.fn(), insertValue: vi.fn(), destroy: vi.fn(), isDestroyed: false }
+  let lastOpts: Record<string, unknown> | null = null
   // 实现须用 function/class 才可 new(vitest 4:箭头函数实现不可构造,stderr 有警告);
   // 构造函数返回对象会替换 new 的 this,故 new Vditor(...) 恒得单例 inst
-  const Ctor = vi.fn(function () {
+  const Ctor = vi.fn(function (_host: unknown, opts: Record<string, unknown>) {
+    lastOpts = opts
     return inst
   })
-  // __inst 挂 default 上(default import 经 Object.assign 拿得到;挂命名空间则取不到)
-  return { default: Object.assign(Ctor, { preview: vi.fn(), __inst: inst }) }
+  // __inst/__opts 挂 default 上(default import 经 Object.assign 拿得到;挂命名空间则取不到)
+  return { default: Object.assign(Ctor, { preview: vi.fn(), __inst: inst, __opts: () => lastOpts }) }
 })
 
 import Vditor from 'vditor'
@@ -20,13 +24,16 @@ import VditorEditor from './VditorEditor'
 // mock 工厂注入的构造函数与单例 stub(类型断言经 unknown 中转,vi.mock 泛型对不上)
 const Ctor = vi.mocked(Vditor)
 const inst = (Vditor as unknown as {
-  __inst: { setValue: ReturnType<typeof vi.fn>; insertValue: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }
+  __inst: { setValue: ReturnType<typeof vi.fn>; insertValue: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; isDestroyed: boolean }
+  __opts: () => Record<string, unknown> | null
 }).__inst
+const lastOpts = () => (Vditor as unknown as { __opts: () => Record<string, unknown> | null }).__opts()
 
 afterEach(() => {
   Ctor.mockClear()
   inst.setValue.mockClear()
   inst.destroy.mockClear()
+  inst.isDestroyed = false
 })
 
 describe('VditorEditor:VDitor 薄包装契约', () => {
@@ -57,9 +64,21 @@ describe('VditorEditor:VDitor 薄包装契约', () => {
     expect(inst.setValue).toHaveBeenCalledWith('c') // 外部真值变化才同步
   })
 
-  test('卸载销毁', () => {
+  test('卸载销毁(init 完成后:after 回调已触发)', () => {
     const { unmount } = render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" />)
+    // 模拟 vditor 异步 init 完成(i18n/lute 加载 → initUI → after)。注:StrictMode 首轮
+    // 挂载-清理在 after 前走阻断分支置过单例 isDestroyed——不影响 destroy 分支的断言
+    ;(lastOpts()!.after as () => void)()
     unmount()
     expect(inst.destroy).toHaveBeenCalled()
+  })
+
+  test('init 完成前卸载:不 destroy(未建 internal state 会抛错),置 isDestroyed 阻断挂起 init', () => {
+    // 真浏览器缺陷回归(2026-09-09 e2e 实测):vditor 构造两段异步,StrictMode 双挂载
+    // 在 init 前走卸载清理——裸 destroy 读 this.vditor.element 抛 TypeError 炸穿整树
+    const { unmount } = render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" />)
+    unmount() // 未触发 after:模拟 init 未完成
+    expect(inst.destroy).not.toHaveBeenCalled()
+    expect(inst.isDestroyed).toBe(true) // 令挂起的 init() 入口早退
   })
 })

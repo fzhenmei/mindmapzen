@@ -2,7 +2,10 @@
 // mode sv 分屏(左源码右预览)、工具栏精选、lang 跟 i18next、主题跟 appStore(经
 // props 注入)。受控语义:value 初值进构造;input 回调上抛 onChange(lastEmitted 防
 // 受控回流回声重置光标);外部真值变化才 setValue。cache 关闭——草稿由宿主
-// useBodyDialog 管理,不用 vditor 的 localStorage 草稿。卸载 destroy。
+// useBodyDialog 管理,不用 vditor 的 localStorage 草稿。卸载 destroy——但 vditor
+// 构造是两段异步(i18n/lute 脚本加载后才 init 建 internal state),init 完成前
+// destroy 读未建的 this.vditor.element 会抛 TypeError(2026-09-09 e2e 真浏览器实测:
+// StrictMode 双挂载即触发,异常炸穿 React 整树白屏),故卸载分两态处理(见清理段)。
 import { useEffect, useRef } from 'react'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
@@ -30,6 +33,9 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
   useEffect(() => {
     const host = hostRef.current
     if (host === null) return
+    // init 就绪标记:vditor 在 i18n/lute 脚本加载完成(initUI 挂 DOM、注册监听)后
+    // 调 after——此后 destroy 才是完整安全的(清 DOM + UIUnbindListener 摘 resize 监听)
+    let inited = false
     const vd = new Vditor(host, {
       mode: 'sv',
       lang,
@@ -58,12 +64,23 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
         lastEmittedRef.current = md
         onChangeRef.current(md)
       },
+      after: () => {
+        inited = true
+      },
     })
     lastEmittedRef.current = value
     vdRef.current = vd
     return () => {
       vdRef.current = null
-      vd.destroy()
+      if (inited) {
+        vd.destroy()
+        return
+      }
+      // init 未完成即卸载(dev StrictMode 双挂载必经;生产首开脚本慢时关弹窗同窗):
+      // 不能 destroy(internal state 未建,读 this.vditor.element 即抛 TypeError);
+      // 置 isDestroyed 令挂起的 init() 入口早退——不建 DOM 不挂监听,无需清理。
+      // isDestroyed 是 vditor 私有字段,类型面走断言(运行时普通属性赋值)
+      ;(vd as unknown as { isDestroyed: boolean }).isDestroyed = true
     }
     // 弹窗生命周期内 lang/theme 不变(模态切不了语言/主题),重建仅防御
     // eslint-disable-next-line react-hooks/exhaustive-deps -- value 只作初值,后续变化走下方受控 effect
