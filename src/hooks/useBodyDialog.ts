@@ -1,11 +1,12 @@
-// src/hooks/useBodyPanel.ts —— 正文面板状态（2026-09 写作）：开闭、选中联动载入、
-// 防抖写回（500ms）与三处 flush（切节点/关面板/窗口失焦）。命令链：
+// src/hooks/useBodyDialog.ts —— 正文弹窗状态（2026-09 写作）：开闭、防抖写回（500ms）与
+// flush（关弹窗/窗口失焦）。命令链：
 // SET_NODE_DATA 写 data.body 并同值成对写镜像 data.note（2026-09-06 备注合并：引擎
 // 「有 note→挂角标+悬停」原生通道由 note 驱动，body 是事实源；空串两者同置 undefined
 // 清除，角标随镜像消失）+ reRenderNodeCheckChange 补重渲（裸命令不重渲染，M5b 核验 13）。
 // 深度门禁（Step 0 实测）：引擎节点深度字段为 layerIndex（MindMapNode.js:52，root=0 起），
-// mdTree 深度 = layerIndex+1，≥7 进列表层——故 layerIndex≥6 面板空态不可编辑
+// mdTree 深度 = layerIndex+1，≥7 进列表层——故 layerIndex≥6 弹窗空态不可编辑
 // （spec v1 深度限制；serialize 侧 assertNoBodyInList 抛错兜底防其他写入路径）。
+// 2026-09-08 弹窗化：模态一次编辑一个节点，选中联动载入链删除（打开时载入、关闭即结束）。
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { MindMapHandle } from '../types/engine'
 import { nodeTextOf } from './useIconPicker'
@@ -19,20 +20,20 @@ const isListNode = (node: unknown): boolean => {
   return typeof v === 'number' && v >= 6
 }
 
-export interface BodyPanel {
-  /** 面板开状态（= bodyDraft !== null；EditorView 据此挂 .body-open 让位与 resize） */
+export interface BodyDialog {
+  /** 弹窗开状态（= bodyDraft !== null；EditorView 据此进 anyDialog 互斥总线） */
   open: boolean
-  /** 当前草稿；null = 面板关（EditorView 的渲染门） */
+  /** 当前草稿；null = 弹窗关（EditorView 的渲染门） */
   bodyDraft: string | null
-  /** 当前编辑节点文本（面板标题；'' 兼作「无选中」信号驱动空态文案） */
+  /** 当前编辑节点文本（弹窗标题；'' 兼作「无选中」信号驱动空态文案） */
   nodeText: string
-  /** 可编辑信号：无选中或深层列表节点为 false（面板 textarea readOnly） */
+  /** 可编辑信号：无选中或深层列表节点为 false（弹窗出空态文案不渲染编辑器） */
   editable: boolean
   /** 砚栏 btn-body：开 → 载入当前选中；关 → flush 后收起 */
   toggle(): void
-  /** 面板 × 钮：flush 后收起（不动选中） */
+  /** 弹窗关闭（×/Esc/遮罩均汇于 onOpenChange(false)）：flush 后收起（不动选中） */
   close(): void
-  /** 面板 textarea onChange：更新草稿并重置 500ms 防抖计时（切节点/关面板/失焦时 flushNow 兜底） */
+  /** 弹窗编辑器 input：更新草稿并重置 500ms 防抖计时（关弹窗/失焦时 flushNow 兜底） */
   edit(value: string): void
   /** 立即提交当前草稿（若与引擎值有差异）；无草稿/无节点为无害空操作 */
   flushNow(): void
@@ -41,12 +42,11 @@ export interface BodyPanel {
   hasPending(): boolean
 }
 
-export function useBodyPanel(
+export function useBodyDialog(
   mmRef: RefObject<MindMapHandle | null>,
   activeUidRef: RefObject<string | null>,
-  activeUid: string | null,
-): BodyPanel {
-  const [bodyDraft, setBodyDraft] = useState<string | null>(null) // null = 面板关
+): BodyDialog {
+  const [bodyDraft, setBodyDraft] = useState<string | null>(null) // null = 弹窗关
   const [nodeText, setNodeText] = useState('')
   const [editable, setEditable] = useState(false)
   // 打开期间持节点实例：提交命令的第二参（引擎命令按实例寻址）
@@ -125,15 +125,9 @@ export function useBodyPanel(
     loadNode(activeUidRef.current)
   }
 
-  // 选中联动：切节点先冲刷旧节点草稿（防丢字），面板开着才载入新节点（关着零成本）
-  useEffect(() => {
-    flushNow()
-    if (openRef.current) loadNode(activeUid)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- flushNow/loadNode 皆 ref 闭包（无响应依赖），activeUid 是唯一驱动
-  }, [activeUid])
-
-  // 窗口失焦：立即冲刷（防抖中的草稿不因切窗口搁置；仅此三处 flush，卸载不冲——
-  // 引擎销毁竞态下的写入风险大于 500ms 窗口的丢字概率，保存链另有 unmountFlush 兜底）
+  // 窗口失焦：立即冲刷（防抖中的草稿不因切窗口搁置；hook 内 flush 即关弹窗与此两处，
+  // 卸载不冲——引擎销毁竞态下的写入风险大于 500ms 窗口的丢字概率，保存链另有
+  // unmountFlush 兜底）
   useEffect(() => {
     const onBlur = (): void => {
       flushNow()
@@ -147,7 +141,7 @@ export function useBodyPanel(
 
   // 卸载清理（I-1）：只清防抖计时器、不提交——否则返回案头/切导图后 ≤500ms 内 timer
   // 仍触发 flushNow，对已 destroy 的引擎 execCommand（销毁竞态）。「卸载不冲刷」由此
-  // 真正兑现；防抖窗内的收尾由关面板/切节点/失焦三处 flush 兜住
+  // 真正兑现；防抖窗内的收尾由关弹窗/窗口失焦兜住
   useEffect(() => {
     return () => {
       if (timerRef.current !== null) {

@@ -79,8 +79,8 @@ const editor: Dict['editor'] = {
     ignoreConfirm: 'Save anyway',
   },
   bodyPanel: {
-    ariaLabel: 'Node body panel',
-    close: 'Collapse body panel',
+    ariaLabel: 'Node body editor',
+    close: 'Close the body editor',
     editorLabel: 'Node body text',
     hintNoSelection: 'Select a node on the canvas, then write its body text here',
     hintListNode: 'Body text is not available for deep list nodes',

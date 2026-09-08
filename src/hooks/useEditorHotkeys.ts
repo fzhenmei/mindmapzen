@@ -13,7 +13,7 @@ interface Params {
   doCopy(): void
   /** 显式保存链（Ctrl+S 的快捷键路径） */
   explicitSave(): void
-  /** 开关正文面板（useBodyPanel.toggle；无选中也开——面板出空态文案，选中后联动载入） */
+  /** 开关正文弹窗（useBodyDialog.toggle；无选中也开——弹窗出空态文案） */
   toggleBodyPanel(): void
   /** 任一对话框在开（EditorView 渲染期同步）：正文面板/切换快捷键互斥守卫 */
   anyDialogRef: RefObject<boolean>
