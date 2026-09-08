@@ -29,9 +29,14 @@ export function applyImageMap(root: ParentNode, imgMap: ReadonlyMap<string, stri
 
 /** 大纲锚点注入:mdOutline(remark)与 lute 是两套解析器,DOM 标题数与大纲一致才按
  *  文档序配对注入 zen-h-N(与 OutlinePanel 点击跳转对齐);数量不等(如 HTML 块内
- *  标题的解析器分歧)保守跳过——大纲点击无锚点,不跳错位 */
+ *  标题的解析器分歧)保守跳过——大纲点击无锚点,不跳错位。
+ *  引用块(=正文块)内标题先过滤:mdOutline 只遍历 AST 顶层,`> # x` 不进大纲,
+ *  lute 却渲染成 blockquote>h1——不过滤则数量被顶飞、守卫整档跳过,真顶层标题
+ *  锚点也丢;过滤后两端口径一致(引用块不算大纲层级) */
 export function injectHeadingAnchors(root: ParentNode, headings: readonly { id: string }[]): void {
-  const els = root.querySelectorAll('h1,h2,h3,h4,h5,h6')
+  const els = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6')).filter(
+    (el) => el.closest('blockquote') === null,
+  )
   if (els.length !== headings.length) return
   els.forEach((el, i) => {
     el.id = headings[i].id

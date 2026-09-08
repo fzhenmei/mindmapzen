@@ -53,4 +53,15 @@ describe('injectHeadingAnchors:大纲锚点注入(数量守卫)', () => {
     expect(root.querySelector('h1')!.id).toBe('')
     expect(root.querySelector('h2')!.id).toBe('')
   })
+
+  test('引用块内标题不占位:过滤 blockquote 后代后,顶层标题仍按文档序注入', () => {
+    // mdOutline 只遍历 AST 顶层,`> # x`(引用块=正文块)不进大纲;lute 渲染成
+    // blockquote>h1——DOM 集合须同口径过滤,否则数量被顶飞、守卫整档跳过
+    const root = document.createElement('div')
+    root.innerHTML = '<blockquote><h1>引用块内标题</h1></blockquote><h1>a</h1><h2>b</h2>'
+    injectHeadingAnchors(root, [{ id: 'zen-h-0' }, { id: 'zen-h-1' }])
+    expect(root.querySelector('blockquote h1')!.id).toBe('') // 不占位、不注锚点
+    expect(root.querySelector(':scope > h1')!.id).toBe('zen-h-0') // 顶层真标题不丢
+    expect(root.querySelector(':scope > h2')!.id).toBe('zen-h-1')
+  })
 })
