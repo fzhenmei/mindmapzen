@@ -131,7 +131,7 @@ const editor: Dict['editor'] = {
     item: '{{type}}: {{excerpt}}',
   },
   noteTooltip: {
-    more: 'Open the panel to read the full text',
+    more: 'Open the editor dialog (Shift+F2)',
   },
 }
 export default editor

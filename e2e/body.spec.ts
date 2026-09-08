@@ -227,15 +227,15 @@ test('正文 mermaid：围栏正文悬停节点出图，移出隐藏', async ({ 
   await page.getByTestId('body-close').click()
 
   // 悬停正文角标（镜像 note → 引擎原生 .smm-node-note；直接 hover 文本元素在画布
-  // transform 下坐标可能落偏，角标是更稳的命中目标）→ 悬停窗出现：文本段 + 图源段成
-  // SVG（mermaid 懒加载首渲染留 15s）
+  // transform 下坐标可能落偏，角标是更稳的命中目标）→ 悬停窗出现：vditor 预览 DOM
+  // 内 mermaid 围栏自动成图（svg 直挂预览容器，无独立宿主 testid；首渲染留 15s）
   const noteIcon = page.locator('.smm-node-note').first()
   await expect(noteIcon).toBeVisible()
   await noteIcon.hover()
   const tip = page.getByTestId('zen-note-tip')
   await expect(tip).toBeVisible()
   await expect(tip).toContainText('流程说明：')
-  await expect(tip.getByTestId('zen-note-tip-mermaid').locator('svg')).toBeVisible({ timeout: 15_000 })
+  await expect(tip.locator('svg')).toBeVisible({ timeout: 15_000 })
 
   // 移出节点 → 悬停窗隐藏
   await page.getByTestId('btn-save').hover()

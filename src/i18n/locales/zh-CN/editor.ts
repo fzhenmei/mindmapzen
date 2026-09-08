@@ -131,6 +131,6 @@ export default {
     item: '{{type}}：{{excerpt}}',
   },
   noteTooltip: {
-    more: '打开面板查看全文',
+    more: '打开弹窗编辑正文(Shift+F2)',
   },
 }
