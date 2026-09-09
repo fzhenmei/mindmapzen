@@ -35,10 +35,13 @@ export default function BodyDialog({ open, bodyDraft, nodeText, editable, close,
   const hint = hintOf(nodeText, editable, t)
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
+      {/* 宽度类契约：sm:max-w-none 须压过 DialogContent 默认 sm:max-w-lg——裸 max-w-none
+          不同 modifier，twMerge 不清、CSS 源序反被默认类覆盖，宽度被钳 512px（2026-09-09；
+          契约测试见 EditorView.test.tsx「宽度不被默认 sm:max-w-lg 钳制」） */}
       <DialogContent
         data-testid="body-dialog"
         showCloseButton={false}
-        className="body-dialog flex h-[92vh] w-[min(1600px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0"
+        className="body-dialog flex h-[92vh] w-[min(1600px,96vw)] flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
           {/* 无 aria-label（radix 由 DialogTitle 生成 aria-labelledby 会遮蔽它）；可访问名
