@@ -122,6 +122,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 正文弹窗（2026-09-08 弹窗化；模态一次编辑一个节点）：开闭/防抖写回在 hook，
   // 弹窗本体在 BodyDialog.tsx（无护栏，遮罩锁选中无联动载入）
   const bodyDialog = useBodyDialog(mmRef, selection.activeUidRef)
+  // 正文角标悬停 uid（2026-09-09）：热键 Shift+F2 悬停优先编辑被预览节点；null = 退场回落选中
+  const noteHoverUidRef = useRef<string | null>(null)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
   // 标签选择器：确认即 SET_NODE_TAG 整组覆写；无载荷上报走保存链（同上）
@@ -280,7 +282,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   useEditorHotkeys({
     doCopy,
     explicitSave,
-    toggleBodyDialog: bodyDialog.toggle,
+    // 悬停优先：悬停预览在场 → 编辑被预览节点；否则 toggle 内回落选中（按钮入口不传恒为选中）
+    toggleBodyDialog: () => bodyDialog.toggle(noteHoverUidRef.current),
     anyDialogRef,
     openQuickSwitch: quick.open,
     cycleStep: quick.cycleStep,
@@ -333,6 +336,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             pipeline.onTreeDataChange(data)
           }}
           onActiveChange={selection.handleActiveChange}
+          onNoteHover={(uid) => { noteHoverUidRef.current = uid }}
           onPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
           {...canvasPaste}
           // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
