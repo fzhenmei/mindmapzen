@@ -2296,6 +2296,16 @@ const renderReadySelected = async (): Promise<MindMapHandle> => {
   return handle
 }
 
+test('body-dialog：宽度不被默认 sm:max-w-lg 钳制——覆盖类须用 sm:max-w-none 同断点压掉（2026-09-09 修复契约）', async () => {
+  // 坑：DialogContent 默认类带 sm:max-w-lg（512px）；裸 max-w-none 与它不同 modifier，
+  // twMerge 不清、Tailwind 源序 sm: 变体在后反胜 → w-[…] 全被钳住（改 w- 类看似无效）。
+  // 须用同断点 sm:max-w-none 才能压掉；此断言防将来被"简化"回裸 max-w-none。
+  await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  expect(screen.getByTestId('body-dialog')).toHaveClass('sm:max-w-none')
+  expect(screen.getByTestId('body-dialog')).not.toHaveClass('sm:max-w-lg')
+})
+
 test('btn-body：开弹窗载入选中节点 body；VDitor input 防抖后 SET_NODE_DATA 成对写 body＋镜像 note 并补重渲', async () => {
   const handle = await renderReadySelected()
   fireEvent.click(screen.getByTestId('btn-body'))
