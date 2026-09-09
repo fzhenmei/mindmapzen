@@ -46,6 +46,9 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
       height: '100%',
       theme: theme === 'dark' ? 'dark' : 'classic',
       cache: { enable: false },
+      // 弹窗预览区关导出工具条(视口切换+公众号/知乎按钮):正文编辑场景无用且碍眼
+      // (2026-09-09 用户反馈;案头详情的发布场景另行走 PUBLISH_ACTIONS 白名单)
+      preview: { actions: [] },
       toolbar: [
         'undo', 'redo', '|', 'headings', 'bold', 'italic', 'strike', '|',
         'quote', 'line', 'code', 'inline-code', '|', 'link', 'list', 'check', '|', 'table',

@@ -8,7 +8,10 @@ import Vditor from 'vditor'
  *  node_modules/vditor/dist 内容拷到 vendor/vditor/dist(vite.config.ts) */
 export const VDITOR_CDN = 'vendor/vditor'
 
-/** md 渲染进容器(异步:首次动态加载 lute/样式,其后 vditor 内部缓存复用) */
+/** md 渲染进容器(异步:首次动态加载 lute/样式,其后 vditor 内部缓存复用)。
+ *  注:静态 VDitor.preview 不渲染预览区导出工具条(actions 配置仅编辑器构造
+ *  消费,弹窗侧在 VditorEditor 里置空;2026-09-09 实测 method.js 无此逻辑),
+ *  故本服务无需也无法配置 actions */
 export function renderVditorPreview(el: HTMLElement, markdown: string, theme: 'light' | 'dark'): Promise<void> {
   // vditor 4.0 类型声明 preview 首参收 HTMLDivElement;本服务对外契约(下游任务消费)
   // 是更宽的 HTMLElement,故在此收窄断言,容器是普通 div 时运行时等价

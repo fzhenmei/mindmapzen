@@ -44,6 +44,8 @@ describe('VditorEditor:VDitor 薄包装契约', () => {
     expect(opts.cdn).toBe('vendor/vditor')
     expect(opts.lang).toBe('zh_CN')
     expect(opts.value).toBe('初始')
+    // 弹窗预览区关导出工具条(2026-09-09:视口切换+公众号/知乎按钮在编辑场景无用)
+    expect((opts.preview as { actions: unknown[] }).actions).toEqual([])
     const toolbar = opts.toolbar as Array<Record<string, unknown>>
     expect(toolbar.some((it) => typeof it === 'object' && it.tip === 'Mermaid')).toBe(true)
     // vditor 4.0.0 IMenuItem.name 必填(运行时作 data-type 与 elements 键),自定义项必须带
