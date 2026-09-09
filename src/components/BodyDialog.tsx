@@ -38,7 +38,7 @@ export default function BodyDialog({ open, bodyDraft, nodeText, editable, close,
       <DialogContent
         data-testid="body-dialog"
         showCloseButton={false}
-        className="body-dialog flex h-[80vh] w-[min(1280px,90vw)] max-w-none flex-col gap-0 overflow-hidden p-0"
+        className="body-dialog flex h-[92vh] w-[min(1600px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0"
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
           {/* 无 aria-label（radix 由 DialogTitle 生成 aria-labelledby 会遮蔽它）；可访问名
