@@ -42,6 +42,8 @@ export default {
     hideOutline: '隐藏大纲',
     closePreview: '关闭预览',
     copyPath: '复制文件路径',
+    copyWechat: '复制为公众号格式',
+    copyWechatFailed: '复制为公众号格式失败：{{reason}}',
     openMap: '打开导图',
     moreActions: '更多操作',
     meta: '{{size}} · 创建 {{created}} · 修改 {{modified}}',

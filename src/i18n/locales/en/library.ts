@@ -43,6 +43,8 @@ const library: Dict['library'] = {
     hideOutline: 'Hide outline',
     closePreview: 'Close preview',
     copyPath: 'Copy file path',
+    copyWechat: 'Copy for WeChat',
+    copyWechatFailed: 'Failed to copy for WeChat: {{reason}}',
     openMap: 'Open map',
     moreActions: 'More actions',
     meta: '{{size}} · Created {{created}} · Modified {{modified}}',

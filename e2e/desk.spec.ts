@@ -97,6 +97,30 @@ test('案头：树文件行单击出详情、详情打开进纸面', async ({ pa
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
+// 2026-09 发布复制：详情态 btn-copy-wechat 走真渲染全链（离屏 vditor → 内联样式），
+// 出 section 根 HTML 写富文本剪贴板端口（E2E web 模式记录到 __zenE2e.lastCopiedHtml）；
+// 真实粘贴进公众号编辑器的往返验证归 docs/manual-checklist.md 真机项
+test('案头：详情态「复制为公众号格式」出内联样式 HTML', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+  await page.getByTestId('file-node-根图').click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await page.getByTestId('btn-copy-wechat').click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+      ),
+    )
+    .toContain('<section')
+  const html = await page.evaluate(
+    () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+  )
+  // section 根承担正文排版，标题/段落在真渲染产物上获得内联样式
+  expect(html).toContain('font-size: 15px')
+  expect(html).toContain('font-size: 20px')
+})
+
 test('案头：目录树含文件行，双击文件行打开进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')

@@ -18,6 +18,7 @@ import {
   IconFolder,
   IconMore,
   IconOpen,
+  IconPaste,
   IconPencil,
   IconStar,
   IconTrash,
@@ -39,6 +40,8 @@ interface Props {
   onAction(a: MapAction, m: MapInfo): void
   /** 复制文件路径（写剪贴板端口经 LibraryView 注入） */
   onCopyPath(path: string): void
+  /** 复制为公众号格式（整篇 md → 内联样式 HTML 写富文本剪贴板，2026-09 发布复制） */
+  onCopyWechat(): void
   /** 打开导图进纸面 */
   onOpen(m: MapInfo): void
 }
@@ -57,7 +60,7 @@ export const detailMeta = (m: Readonly<MapInfo>): string =>
  *  同一份数据喂两处渲染——宽容器整组平铺（Tooltip 纯图标）、窄容器「更多」下拉
  *  （icon + 文字，浮层平铺）。宽窄由页首 @container 容器查询纯 CSS 分流（680px 阈值，
  *  零 JS 测量）。条目 testid 加 more- 前缀（与宽组同名钮区分，E2E 严格模式不撞名） */
-export default function DetailActions({ info, favorite, onToggleFavorite, onBack, onAction, onCopyPath, onOpen }: Readonly<Props>) {
+export default function DetailActions({ info, favorite, onToggleFavorite, onBack, onAction, onCopyPath, onCopyWechat, onOpen }: Readonly<Props>) {
   const { t } = useTranslation()
   const groups = [
     [{ testid: 'btn-detail-back', label: t('library.fileDetail.closePreview'), Icon: IconArrowLeft, run: onBack }],
@@ -81,6 +84,12 @@ export default function DetailActions({ info, favorite, onToggleFavorite, onBack
         label: t('library.fileDetail.copyPath'),
         Icon: IconCopy,
         run: () => onCopyPath(info.mdPath),
+      },
+      {
+        testid: 'btn-copy-wechat',
+        label: t('library.fileDetail.copyWechat'),
+        Icon: IconPaste,
+        run: onCopyWechat,
       },
       { testid: 'btn-detail-open', label: t('library.fileDetail.openMap'), Icon: IconOpen, run: () => onOpen(info) },
     ],

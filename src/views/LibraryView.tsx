@@ -6,7 +6,8 @@ import { sortLocale } from '../i18n/resolve'
 import { useLibraryDialogs, type PickedImport } from '../hooks/useLibraryDialogs'
 import { useTreeMoves } from '../hooks/useTreeMoves'
 import { useSidebarResize } from '../hooks/useSidebarResize'
-import type { WriteClipboard } from '../services/clipboard'
+import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
+import { copyAsWechatHtml } from '../services/wechatCopy'
 import LibraryDialogs from '../components/LibraryDialogs'
 import WelcomePane from '../components/WelcomePane'
 import { ThemeFab } from '../components/ThemeToggle'
@@ -40,6 +41,8 @@ interface Props {
   pickImportFile: () => Promise<PickedImport | null>
   /** 剪贴板写入端口（2026-09 复制路径）：生产为 Tauri 插件实现，测试注入内存实现（同 EditorView prop 模式） */
   writeClipboard: WriteClipboard
+  /** 富文本剪贴板写入端口（2026-09 公众号复制）：text/html 形态，注入模式同上 */
+  writeHtmlClipboard: WriteHtmlClipboard
 }
 
 /** 案头（2026-09 主区纯预览化）：SidebarProvider + inset 骨架；主区两态——
@@ -48,7 +51,7 @@ interface Props {
  *  导航全部由左树承担（目录下直列文件行）；文件操作（移动/重命名/删除）收敛到
  *  详情页首动作钮。交互语义：树目录行单击=选中目录（主区欢迎页），树文件行
  *  单击=选中进详情，双击=进纸面 */
-export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard }: Readonly<Props>) {
+export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard, writeHtmlClipboard }: Readonly<Props>) {
   const { t, i18n } = useTranslation()
   const { workspaceDir, maps, error, selectedDir, favorites, librarySort } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
@@ -325,6 +328,18 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                     dlg.openMapAction(a, m)
                   }}
                   onCopyPath={(p) => void writeClipboard(p)}
+                  onCopyWechat={() => {
+                    // 公众号格式复制（2026-09 发布复制）：全链失败（读盘/渲染/剪贴板）走
+                    // error 横幅显式出口，成功静默（与复制路径惯例一致）
+                    void copyAsWechatHtml(
+                      useAppStore.getState().adapter,
+                      workspaceDir,
+                      selectedInfo.mdPath,
+                      writeHtmlClipboard,
+                    ).catch((e: unknown) =>
+                      store.setError(t('library.fileDetail.copyWechatFailed', { reason: String(e) })),
+                    )
+                  }}
                   onOpen={(m) => void store.openMap(m.mdPath)}
                 />
               )}

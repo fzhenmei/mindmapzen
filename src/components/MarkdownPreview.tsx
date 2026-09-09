@@ -6,9 +6,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { mdOutline } from '../services/mdOutline'
-import { stripIconMarkers } from '../services/iconMarkers'
-import { stripMarkers } from '../services/linkMarkers'
-import { stripTagMarkers } from '../services/tagMarkers'
+import { toDisplayText } from '../services/displayText'
 import { applyImageMap, injectHeadingAnchors, renderVditorPreview } from '../services/vditorPreview'
 
 const EMPTY_MAP: ReadonlyMap<string, string> = new Map()
@@ -25,11 +23,8 @@ interface Props {
  *  console.error 显式出口(禁止吞异常)——预览区留空但链路可追溯 */
 export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
   const theme = useAppStore((s) => s.resolvedTheme)
-  // 连线/图标/标签标记按行剥离(标记永不跨行;标签在图标内侧,先剥 icon 再剥 tag)
-  const display = text
-    .split('\n')
-    .map((l) => stripTagMarkers(stripIconMarkers(stripMarkers(l))))
-    .join('\n')
+  // 连线/图标/标签标记按行剥离(displayText 共享口径,与发布复制同链)
+  const display = toDisplayText(text)
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const root = rootRef.current

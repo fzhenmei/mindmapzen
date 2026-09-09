@@ -3,7 +3,7 @@ import { useAppStore } from './store/appStore'
 import { i18n } from './i18n'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
 import { migrateOldConfig } from './services/migration'
-import { writeClipboardViaTauri, type WriteClipboard } from './services/clipboard'
+import { writeClipboardViaTauri, writeHtmlClipboardViaTauri, type WriteClipboard, type WriteHtmlClipboard } from './services/clipboard'
 import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import { describeBackendError } from './services/backendError'
 import LibraryView, { type PickedImport } from './views/LibraryView'
@@ -149,6 +149,15 @@ const writeClipboard: WriteClipboard = E2E
       ).lastCopied = text
     }
   : writeClipboardViaTauri
+
+/** 富文本剪贴板端口（2026-09 公众号复制）：E2E 记录到 harness 桩（__zenE2e.lastCopiedHtml），生产走 Tauri writeHtml */
+const writeHtmlClipboard: WriteHtmlClipboard = E2E
+  ? async (html) => {
+      ;(
+        (window as unknown as Record<string, unknown>).__zenE2e as { lastCopiedHtml: string | null }
+      ).lastCopiedHtml = html
+    }
+  : writeHtmlClipboardViaTauri
 
 /** git 命令端口（M20 版本管理）：生产走 Tauri git_exec（Rust Command 调系统 git）；
  *  E2E web 模式记录命令到 harness 桩（__zenE2e.gitCalls，可配置应答） */
@@ -329,6 +338,6 @@ export default function App() {
     )
   }
   return shell(
-    <LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={writeClipboard} />,
+    <LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={writeClipboard} writeHtmlClipboard={writeHtmlClipboard} />,
   )
 }
