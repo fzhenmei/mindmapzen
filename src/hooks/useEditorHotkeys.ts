@@ -13,8 +13,8 @@ interface Params {
   doCopy(): void
   /** 显式保存链（Ctrl+S 的快捷键路径） */
   explicitSave(): void
-  /** 开关正文面板（useBodyPanel.toggle；无选中也开——面板出空态文案，选中后联动载入） */
-  toggleBodyPanel(): void
+  /** 开关正文弹窗（useBodyDialog.toggle；无选中也开——弹窗出空态文案） */
+  toggleBodyDialog(): void
   /** 任一对话框在开（EditorView 渲染期同步）：正文面板/切换快捷键互斥守卫 */
   anyDialogRef: RefObject<boolean>
   /** 呼出快速切换浮层（Ctrl+P；v2.5） */
@@ -23,7 +23,7 @@ interface Params {
   cycleStep(reverse: boolean): void
 }
 
-export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyPanel, anyDialogRef, openQuickSwitch, cycleStep }: Params): void {
+export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep }: Params): void {
   useEffect(() => {
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
@@ -63,11 +63,11 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyPanel, anyDia
       if (isBodyHotkey(e)) {
         e.preventDefault()
         // 守卫同切换族：对话框互斥期 no-op（面板非对话框，但快捷键让位互斥总线）
-        if (!anyDialogRef.current) toggleBodyPanel()
+        if (!anyDialogRef.current) toggleBodyDialog()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy/toggleBodyPanel/切换族守卫均走 refs 或稳定引用无需重绑
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 监听只绑一次（闭包取首渲染值），explicitSave/doCopy/toggleBodyDialog/切换族守卫均走 refs 或稳定引用无需重绑
   }, [])
 }

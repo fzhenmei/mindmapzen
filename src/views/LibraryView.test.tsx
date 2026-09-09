@@ -4,6 +4,27 @@ import LibraryView from './LibraryView'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
+// jsdom 不执行 vditor 注入的子资源脚本(渲染 promise 永不 resolve),真实渲染归 e2e;
+// 单测 mock renderVditorPreview 注入代表性 DOM(标题行 → 标题元素),详情态预览文本
+// 断言与 FileDetail.test 同口径
+vi.mock('../services/vditorPreview', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('../services/vditorPreview')>()
+  return {
+    ...orig,
+    renderVditorPreview: vi.fn(async (el: HTMLElement, md: string) => {
+      el.innerHTML = md
+        .split('\n')
+        .flatMap((l) => {
+          const m = /^(#{1,6})\s/.exec(l)
+          if (m === null) return []
+          const level = m[1].length
+          return [`<h${level}>${l.slice(m[0].length)}</h${level}>`]
+        })
+        .join('')
+    }),
+  }
+})
+
 let fs: MemoryFsAdapter
 const pickDirectory = vi.fn(async () => '/ws')
 // pickImportFile 桩：默认未选择任何文件（导入相关用例内各自注入实现）

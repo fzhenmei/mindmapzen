@@ -1,0 +1,90 @@
+import { render } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+
+// jsdom 无布局度量,CodeMirror 完整 init 不可行:mock Vditor 构造,锁 options 契约
+// (mode/lang/cdn/value/toolbar)与 input→onChange 接线、受控回流抑制、销毁。
+// 构造 options 暴露给测试(__opts):after 回调模拟 vditor 异步 init 完成(真浏览器
+// 里 i18n/lute 脚本加载后才 initUI;卸载 destroy 的就绪门控依赖它)
+vi.mock('vditor', () => {
+  const inst = { setValue: vi.fn(), insertValue: vi.fn(), destroy: vi.fn(), isDestroyed: false }
+  let lastOpts: Record<string, unknown> | null = null
+  // 实现须用 function/class 才可 new(vitest 4:箭头函数实现不可构造,stderr 有警告);
+  // 构造函数返回对象会替换 new 的 this,故 new Vditor(...) 恒得单例 inst
+  const Ctor = vi.fn(function (_host: unknown, opts: Record<string, unknown>) {
+    lastOpts = opts
+    return inst
+  })
+  // __inst/__opts 挂 default 上(default import 经 Object.assign 拿得到;挂命名空间则取不到)
+  return { default: Object.assign(Ctor, { preview: vi.fn(), __inst: inst, __opts: () => lastOpts }) }
+})
+
+import Vditor from 'vditor'
+import VditorEditor from './VditorEditor'
+
+// mock 工厂注入的构造函数与单例 stub(类型断言经 unknown 中转,vi.mock 泛型对不上)
+const Ctor = vi.mocked(Vditor)
+const inst = (Vditor as unknown as {
+  __inst: { setValue: ReturnType<typeof vi.fn>; insertValue: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; isDestroyed: boolean }
+  __opts: () => Record<string, unknown> | null
+}).__inst
+const lastOpts = () => (Vditor as unknown as { __opts: () => Record<string, unknown> | null }).__opts()
+
+afterEach(() => {
+  Ctor.mockClear()
+  inst.setValue.mockClear()
+  inst.destroy.mockClear()
+  inst.isDestroyed = false
+})
+
+describe('VditorEditor:VDitor 薄包装契约', () => {
+  test('构造参数:sv 分屏、本地 cdn、lang、value 初值、工具栏含自定义 mermaid 项', () => {
+    render(<VditorEditor value="初始" onChange={() => {}} lang="zh_CN" theme="light" />)
+    const opts = Ctor.mock.calls[0]![1] as Record<string, unknown>
+    expect(opts.mode).toBe('sv')
+    expect(opts.cdn).toBe('vendor/vditor')
+    expect(opts.lang).toBe('zh_CN')
+    expect(opts.value).toBe('初始')
+    // 弹窗预览区关导出工具条(2026-09-09:视口切换+公众号/知乎按钮在编辑场景无用)
+    expect((opts.preview as { actions: unknown[] }).actions).toEqual([])
+    const toolbar = opts.toolbar as Array<Record<string, unknown>>
+    expect(toolbar.some((it) => typeof it === 'object' && it.tip === 'Mermaid')).toBe(true)
+    // vditor 4.0.0 IMenuItem.name 必填(运行时作 data-type 与 elements 键),自定义项必须带
+    expect(toolbar.some((it) => typeof it === 'object' && it.name === 'mermaid')).toBe(true)
+    // mermaid 项接线:click 调实例 insertValue 插入围栏模板图源
+    const mermaid = toolbar.find((it) => typeof it === 'object' && it.name === 'mermaid') as { click: () => void }
+    mermaid.click()
+    expect(inst.insertValue).toHaveBeenCalledWith('```mermaid\ngraph LR\n  A --> B\n```')
+    expect(toolbar).toContain('bold')
+    expect(toolbar).toContain('table')
+  })
+
+  test('input 回调上抛 onChange;外部同值回流不触发 setValue(受控回声抑制)', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(<VditorEditor value="a" onChange={onChange} lang="en_US" theme="light" />)
+    const opts = Ctor.mock.calls[0]![1] as { input: (md: string) => void }
+    opts.input('b')
+    expect(onChange).toHaveBeenCalledWith('b')
+    rerender(<VditorEditor value="b" onChange={onChange} lang="en_US" theme="light" />)
+    expect(inst.setValue).not.toHaveBeenCalled() // b 是本组件回声,不回写
+    rerender(<VditorEditor value="c" onChange={onChange} lang="en_US" theme="light" />)
+    expect(inst.setValue).toHaveBeenCalledWith('c') // 外部真值变化才同步
+  })
+
+  test('卸载销毁(init 完成后:after 回调已触发)', () => {
+    const { unmount } = render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" />)
+    // 模拟 vditor 异步 init 完成(i18n/lute 加载 → initUI → after)。注:StrictMode 首轮
+    // 挂载-清理在 after 前走阻断分支置过单例 isDestroyed——不影响 destroy 分支的断言
+    ;(lastOpts()!.after as () => void)()
+    unmount()
+    expect(inst.destroy).toHaveBeenCalled()
+  })
+
+  test('init 完成前卸载:不 destroy(未建 internal state 会抛错),置 isDestroyed 阻断挂起 init', () => {
+    // 真浏览器缺陷回归(2026-09-09 e2e 实测):vditor 构造两段异步,StrictMode 双挂载
+    // 在 init 前走卸载清理——裸 destroy 读 this.vditor.element 抛 TypeError 炸穿整树
+    const { unmount } = render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" />)
+    unmount() // 未触发 after:模拟 init 未完成
+    expect(inst.destroy).not.toHaveBeenCalled()
+    expect(inst.isDestroyed).toBe(true) // 令挂起的 init() 入口早退
+  })
+})

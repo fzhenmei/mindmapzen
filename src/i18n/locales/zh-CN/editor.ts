@@ -77,8 +77,8 @@ export default {
     ignoreConfirm: '继续保存',
   },
   bodyPanel: {
-    ariaLabel: '节点正文面板',
-    close: '收起正文面板',
+    ariaLabel: '节点正文编辑',
+    close: '关闭正文编辑',
     editorLabel: '节点正文',
     hintNoSelection: '在画布选中节点后在此撰写正文',
     hintListNode: '深层列表节点暂不支持正文',
@@ -131,6 +131,6 @@ export default {
     item: '{{type}}：{{excerpt}}',
   },
   noteTooltip: {
-    more: '打开面板查看全文',
+    more: '打开弹窗编辑正文(Shift+F2)',
   },
 }

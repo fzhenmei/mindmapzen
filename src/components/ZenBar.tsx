@@ -69,8 +69,8 @@ interface Props {
   scope: 'full' | 'branch'
   /** 保存（Ctrl+S 的按钮路径） */
   onSaveClick(): void
-  /** 正文面板开关（2026-09 写作）：右侧常驻面板开/收（面板状态与防抖写回在 useBodyPanel；
-   *  无选中也可开——面板出空态文案，选中后联动载入） */
+  /** 正文弹窗开关（2026-09 写作；2026-09-08 弹窗化）：弹窗开/收（弹窗状态与防抖写回在
+   *  useBodyDialog；无选中也可开——弹窗出空态文案，打开时载入当前选中） */
   onBodyClick(): void
   /** btn-body 激活信号：面板开着时点亮（data-active 通道） */
   bodyActive: boolean

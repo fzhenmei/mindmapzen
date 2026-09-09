@@ -5,6 +5,27 @@ import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import type { MapInfo } from '../types/files'
 
+// jsdom 不执行 vditor 注入的子资源脚本(渲染 promise 永不 resolve),真实渲染归 e2e;
+// 单测 mock renderVditorPreview 注入代表性 DOM(标题行 → 标题元素),锚点后处理
+// (injectHeadingAnchors)保留真实实现——大纲联动断言仍走完整链路
+vi.mock('../services/vditorPreview', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('../services/vditorPreview')>()
+  return {
+    ...orig,
+    renderVditorPreview: vi.fn(async (el: HTMLElement, md: string) => {
+      el.innerHTML = md
+        .split('\n')
+        .flatMap((l) => {
+          const m = /^(#{1,6})\s/.exec(l)
+          if (m === null) return []
+          const level = m[1].length
+          return [`<h${level}>${l.slice(m[0].length)}</h${level}>`]
+        })
+        .join('')
+    }),
+  }
+})
+
 const info: MapInfo = {
   name: '周计划',
   mdPath: '/ws/周计划.md',

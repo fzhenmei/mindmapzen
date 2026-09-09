@@ -18,7 +18,7 @@ import { useLinkPurify } from '../hooks/useLinkPurify'
 import { useIgnoredFlow } from '../hooks/useIgnoredFlow'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useActiveSelection } from '../hooks/useActiveSelection'
-import { useBodyPanel } from '../hooks/useBodyPanel'
+import { useBodyDialog } from '../hooks/useBodyDialog'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
@@ -36,7 +36,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
 import EditorDialogs from '../components/EditorDialogs'
-import BodyPanel from '../components/BodyPanel'
+import BodyDialog from '../components/BodyDialog'
 import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import MapTabs from '../components/MapTabs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
@@ -119,9 +119,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 选中跟踪（M5a 拆分）：激活节点 uid 的 ref/state 双轨与复制前的陈旧清理兜底
   const selection = useActiveSelection()
 
-  // 正文面板（2026-09 写作；2026-09-06 备注合并后唯一附属文本入口）：开闭/选中联动/防抖写回
-  // 在 hook，面板本体在 BodyPanel.tsx（均无护栏）
-  const bodyPanel = useBodyPanel(mmRef, selection.activeUidRef, selection.activeUid)
+  // 正文弹窗（2026-09-08 弹窗化；模态一次编辑一个节点）：开闭/防抖写回在 hook，
+  // 弹窗本体在 BodyDialog.tsx（无护栏，遮罩锁选中无联动载入）
+  const bodyDialog = useBodyDialog(mmRef, selection.activeUidRef)
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
   // 标签选择器：确认即 SET_NODE_TAG 整组覆写；无载荷上报走保存链（同上）
@@ -217,7 +217,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
    *  2026-09（I-2）：先冲刷正文防抖草稿——否则 Ctrl+S 落盘的 md 缺防抖窗内尾部输入，
    *  「已存」印记强化错觉，Ctrl+S→立刻关窗路径尾部永久丢失 */
   const explicitSave = async (): Promise<boolean> => {
-    bodyPanel.flushNow()
+    bodyDialog.flushNow()
     if (!flow.gateExplicitSave()) return false
     return saveAndStamp()
   }
@@ -231,8 +231,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   /** 关闭请求先冲正文防抖草稿（终审 I2）：干净图防抖窗内直接关窗（Alt+F4/点 X）时
    *  dirty 未及置（data_change 经引擎节流异步），返回「是否有草稿被冲」供守卫按三态处理 */
   const flushPending = (): boolean => {
-    if (!bodyPanel.hasPending()) return false
-    bodyPanel.flushNow()
+    if (!bodyDialog.hasPending()) return false
+    bodyDialog.flushNow()
     return true
   }
 
@@ -270,17 +270,17 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     onFail: onOpenFail,
   })
 
-  // 任一对话框在开（终审修复）：正文面板快捷键守卫——互斥期不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
+  // 任一对话框在开（终审修复）：正文弹窗快捷键守卫——互斥期不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
-  // 2026-09：新建导图对话框同列互斥
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open
+  // 2026-09：新建导图对话框同列互斥；2026-09-08 弹窗化：正文弹窗同列互斥（模态锁节点）
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关 Shift+F2 / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
   useEditorHotkeys({
     doCopy,
     explicitSave,
-    toggleBodyPanel: bodyPanel.toggle,
+    toggleBodyDialog: bodyDialog.toggle,
     anyDialogRef,
     openQuickSwitch: quick.open,
     cycleStep: quick.cycleStep,
@@ -306,17 +306,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 对话框组（含快速切换浮层）始终挂载——打开失败时 Ctrl+P / Ctrl+Tab / 返回案头照常可达
   const docReady = state === 'ready'
 
-  // 面板开闭 → 画布让位后引擎按新宽重排（.body-open 收窄 canvas-host 右缘，CSS 见 App.css）。
-  // 让位是 CSS 过渡（0.15s）：过渡中 resize 会读到中间宽、树排进面板底下（联调实案），
-  // 故延迟到过渡完成再调；resize 不触发重渲、无渲染竞态（区别于 reRender，见竞态记忆）
-  useEffect(() => {
-    const t = setTimeout(() => mmRef.current?.resize(), 170)
-    return () => clearTimeout(t)
-  }, [bodyPanel.open])
-
-  // @container：停泊栏避让的查询容器（UI评审P1，题签/主题钮 @max-[1150px] 上移基准）
+  // @container：停泊栏避让的查询容器（UI评审P1，题签/主题钮 @max-[1150px] 上移基准）。
+  // 2026-09-08 弹窗化：画布让位（.body-open 收窄右缘 + 延迟 resize）随常驻面板退役——
+  // 模态弹窗浮于画布上，画布宽度恒定不再重排
   return (
-    <div className={`editor @container${bodyPanel.open ? ' body-open' : ''}`}><TooltipProvider>
+    <div className="editor @container"><TooltipProvider>
       <div className="canvas-host">
         <EditorCanvasArea
           state={state}
@@ -354,7 +348,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {nodePos && !anyDialog && (
         <NodeActions
           pos={nodePos}
-          onBodyClick={bodyPanel.toggle}
+          onBodyClick={bodyDialog.toggle}
           onLinkClick={() => startLinkFromActive(mmRef.current)}
           onIconClick={() =>
             iconPick.openPicker(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeIconsOf(mmRef.current, selection.activeUidRef.current))
@@ -390,8 +384,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
-        onBodyClick={bodyPanel.toggle}
-        bodyActive={bodyPanel.open}
+        onBodyClick={bodyDialog.toggle}
+        bodyActive={bodyDialog.open}
         onExportClick={exportFlow.openExport}
         onZoomOut={() => mmRef.current?.view.narrow()}
         onZoomIn={() => mmRef.current?.view.enlarge()}
@@ -401,9 +395,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSwitchLayout={switchLayout}
       />
       )}
-      {/* 正文面板（2026-09 写作）：右侧常驻浮层，与画布并存（不进 anyDialog 互斥总线）；
-          bodyDraft !== null 即开，open 态经 .editor.body-open 驱动画布让位（CSS 见 App.css） */}
-      {docReady && bodyPanel.bodyDraft !== null && <BodyPanel {...bodyPanel} />}
+      {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；
+          bodyDraft !== null 即开（渲染门兼卸载门，close 置 null 即整树摘除） */}
+      {docReady && bodyDialog.bodyDraft !== null && <BodyDialog {...bodyDialog} />}
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
