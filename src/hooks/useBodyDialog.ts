@@ -29,8 +29,11 @@ export interface BodyDialog {
   nodeText: string
   /** 可编辑信号：无选中或深层列表节点为 false（弹窗出空态文案不渲染编辑器） */
   editable: boolean
-  /** 砚栏 btn-body：开 → 载入当前选中；关 → flush 后收起 */
-  toggle(): void
+  /** 砚栏 btn-body/浮条钮：开 → 载入当前选中；关 → flush 后收起。
+   *  uid 覆盖（2026-09-09 悬停优先修复）：热键路径传悬停节点 uid（悬停预览页脚 Shift+F2
+   *  承诺编辑被预览节点，悬停不产生选中）；按钮入口不传走选中。非字符串值（onClick 直传
+   *  时 React 事件对象泄入首参）同样回落选中 */
+  toggle(uidOverride?: string | null): void
   /** 弹窗关闭（×/Esc/遮罩均汇于 onOpenChange(false)）：flush 后收起（不动选中） */
   close(): void
   /** 弹窗编辑器 input：更新草稿并重置 500ms 防抖计时（关弹窗/失焦时 flushNow 兜底） */
@@ -117,12 +120,12 @@ export function useBodyDialog(
   /** 未提交草稿查询（终审 I2）：pendingRef 非空即有——供关闭守卫在 dirty 判定前决断 */
   const hasPending = (): boolean => pendingRef.current !== null
 
-  const toggle = (): void => {
+  const toggle = (uidOverride?: string | null): void => {
     if (openRef.current) {
       close()
       return
     }
-    loadNode(activeUidRef.current)
+    loadNode(typeof uidOverride === 'string' && uidOverride !== '' ? uidOverride : activeUidRef.current)
   }
 
   // 窗口失焦：立即冲刷（防抖中的草稿不因切窗口搁置；hook 内即时 flush 即关弹窗与此处共两处，

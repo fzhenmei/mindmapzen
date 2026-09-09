@@ -29,10 +29,14 @@
 // 2026-09（节点标签批）：484→506（useTagPicker 接线 + NodeActions 钮 + tagPicker 槽
 //  组装，实测 500 + 6 行余量；选择器本体在 TagPickerDialog.tsx、状态在 useTagPicker.ts
 //  （均无护栏）——功能性增长，无腐化）。
+// 2026-09-09（Shift+F2 悬停优先 + 无目标警告签批）：506→530（悬停 uid ref + 入口守卫
+//  toggleBodyOrWarn + WarnStamp 渲染接线，实测 520 + 10 行余量；警告签本体在
+//  WarnStamp.tsx（无护栏）、无目标判定在入口层（useBodyDialog 空态语义不动）——
+//  功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 506 },
+  { path: '../src/views/EditorView.tsx', limit: 530 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

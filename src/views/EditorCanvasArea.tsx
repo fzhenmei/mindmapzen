@@ -39,6 +39,8 @@ interface Props {
   onDataChange(data?: EngineNode): void
   /** 引擎激活列表变化（圈选多选镜像：uid 数组，空数组 = 无选中） */
   onActiveChange(uids: string[]): void
+  /** 正文角标悬停上报（2026-09-09）：uid = 悬停预览在场节点，null = 退场（Shift+F2 悬停优先信号源） */
+  onNoteHover?(uid: string | null): void
   onPaste(rawText: string): void
   /** 画布态粘贴图片（2026-09 宿主接管 Control+v）：clipboardData 免权限，宿主异步落盘 assets/ */
   onCanvasImagePaste(clipboardData: DataTransfer): void
@@ -62,6 +64,7 @@ export default function EditorCanvasArea({
   onCanvasReady,
   onDataChange,
   onActiveChange,
+  onNoteHover,
   onPaste,
   onCanvasImagePaste,
   onCanvasPasteText,
@@ -94,6 +97,7 @@ export default function EditorCanvasArea({
       }}
       onDataChange={onDataChange}
       onActiveChange={onActiveChange}
+      onNoteHover={onNoteHover}
       onEditorPaste={onPaste}
       onCanvasImagePaste={onCanvasImagePaste}
       onCanvasPasteText={onCanvasPasteText}

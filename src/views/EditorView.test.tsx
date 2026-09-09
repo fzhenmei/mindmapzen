@@ -78,6 +78,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
       onReady,
       onDataChange,
       onActiveChange,
+      onNoteHover,
       onEditorPaste,
       onNodeCopy,
       layout,
@@ -86,6 +87,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
       onReady: (h: MindMapHandle) => void
       onDataChange: () => void
       onActiveChange?: (uids: string[]) => void
+      onNoteHover?: (uid: string | null) => void
       onEditorPaste?: (rawText: string) => void
       onNodeCopy?: () => void
       layout?: string
@@ -153,6 +155,10 @@ vi.mock('../editor/MindMapCanvas', async () => {
     // 圈选多选镜像（2026-09）：桩对外仍收单 uid/null，转发时包装为 uid 数组（新契约，空数组 = 无选中）
     ;(globalThis as unknown as Record<string, unknown>).__emitActive = (uid: string | null) =>
       onActiveChange?.(uid ? [uid] : [])
+    // 正文角标悬停上报镜像（2026-09-09 修复）：生产经 customNoteContentShow.show 第四参
+    // （悬停节点实例）提取 uid，hide 清 null（真实链路见 MindMapCanvas 装配）
+    ;(globalThis as unknown as Record<string, unknown>).__emitNoteHover = (uid: string | null) =>
+      onNoteHover?.(uid)
     ;(globalThis as unknown as Record<string, unknown>).__emitPaste = (raw: string) =>
       onEditorPaste?.(raw)
     // 快捷键对调：Control+Shift+c 引擎节点复制成功上报（真实链路见 MindMapCanvas remap 闭包）
@@ -2412,20 +2418,32 @@ test('弹窗模态锁节点：开着时引擎选中变化不冲刷不重载；�
   }
 })
 
-test('btn-body：无选中开弹窗显示空态文案（不渲染编辑器）；弹窗进互斥总线（开着时 Ctrl+P 浮层不再触发）', async () => {
+test('btn-body：无选中盖警告签不开空态弹窗（1.2s 受控卸载）；弹窗进互斥总线（开着时 Ctrl+P 浮层不再触发）', async () => {
   const handle = await renderReadySelected()
-  act(() => {
-    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
-  })
+  // 互斥半场（有选中）：弹窗开 → 其他浮层快捷键让位（2026-09-08 弹窗化进 anyDialog 总线）
   fireEvent.click(screen.getByTestId('btn-body'))
   expect(screen.getByTestId('body-dialog')).toBeVisible()
-  expect(screen.getByText('在画布选中节点后在此撰写正文')).toBeInTheDocument()
-  expect(screen.queryByTestId('vditor-host')).not.toBeInTheDocument() // 空态不渲染编辑器
-  expect(handle.execCommand).not.toHaveBeenCalled()
-  // 反转（2026-09-08 弹窗化）：弹窗进 anyDialog 互斥总线——开着时其他浮层快捷键让位
   fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
   await act(async () => {})
   expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('body-close'))
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null) // 无选中
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-body'))
+    await act(async () => {})
+    expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不再弹无关联空态弹窗
+    expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签（复制印记同款短窗）
+    expect(handle.execCommand).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('warn-stamp')).not.toBeInTheDocument() // 到期已受控卸载
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('关弹窗即 flush 未提交草稿（close 分支），计时器清空不二次提交', async () => {
@@ -2626,4 +2644,52 @@ test('Shift+F2 互斥守卫：任一对话框在开时不再开正文弹窗（an
   await act(async () => {})
   expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument()
   expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
+})
+
+// ── Shift+F2 悬停优先（2026-09-09 修复）：悬停预览页脚「Shift+F2」承诺编辑的是被预览节点 ──
+// 根因：热键走选中（activeUidRef），悬停不产生选中——无选中出无关联空态；选着别的节点
+// 则编辑错节点。修复：引擎 customNoteContentShow.show 第四参（悬停节点实例）提取 uid
+// 上报，热键路径悬停优先、退场回落选中
+
+test('Shift+F2 悬停优先：无选中但悬停预览在场 → 弹窗关联悬停节点（不出无选中空态）', async () => {
+  await renderReadySelected()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null) // 无选中
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitNoteHover!('child-uid') // 悬停预览在场
+  })
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  expect(screen.getByTestId('body-dialog')).toBeVisible()
+  expect(screen.queryByTestId('body-empty')).not.toBeInTheDocument() // 修复前：无关联空态
+  const calls = (Vditor as unknown as ReturnType<typeof vi.fn>).mock.calls
+  expect(calls.at(-1)![1].value).toBe('既有正文') // 载入悬停节点 body
+})
+
+test('Shift+F2 悬停优先/退场回落：悬停盖过选中，hide 后热键回到选中节点', async () => {
+  await renderReadySelected() // 选中 child-uid
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitNoteHover!('root-uid') // 悬停另一节点
+  })
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  expect(screen.getByTestId('body-dialog')).toBeVisible()
+  let calls = (Vditor as unknown as ReturnType<typeof vi.fn>).mock.calls
+  expect(calls.at(-1)![1].value).toBe('') // 悬停优先：root 无正文载空串（非选中的 child）
+  fireEvent.keyDown(document, { key: 'Escape' }) // 关弹窗
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitNoteHover!(null) // 悬停退场
+  })
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  calls = (Vditor as unknown as ReturnType<typeof vi.fn>).mock.calls
+  expect(calls.at(-1)![1].value).toBe('既有正文') // 回落选中节点
+})
+
+test('Shift+F2 无目标（悬停/选中皆空）→ 盖警告签不开弹窗；有目标不盖（悬停优先用例互证）', async () => {
+  const handle = await renderReadySelected()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitNoteHover!(null)
+  })
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不弹无关联空态弹窗
+  expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签劝导（2026-09-09 无目标反馈）
+  expect(handle.execCommand).not.toHaveBeenCalled()
 })

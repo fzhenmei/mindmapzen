@@ -42,6 +42,7 @@ import MapTabs from '../components/MapTabs'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
+import WarnStamp from '../components/WarnStamp'
 import ZenBar from '../components/ZenBar'
 interface Props {
   mdPath: string
@@ -81,6 +82,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const stampSeqRef = useRef(0) // 印记序号：每次盖印自增，key 变化强制重挂载（重置 1.2s 计时，且不因旧印记未卸载而失效）
   const [copyStamp, setCopyStamp] = useState<{ kind: 'copied-md' | 'copied-node'; left: number; top: number; seq: number } | null>(null) // 复制印记：贴目标节点上方闪现（右上角对画布内操作不可见）；锚定版独立计时序号
   const copyStampSeqRef = useRef(0)
+  const [warnStamp, setWarnStamp] = useState<{ seq: number } | null>(null) // 警告印记（2026-09-09）：无目标正文编辑 1.2s 居中劝导（seq 重挂载语义同上）
+  const warnSeqRef = useRef(0)
   const [newMapOpen, setNewMapOpen] = useState(false) // 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog，确认走 leaveTo 安全链
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
@@ -122,6 +125,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 正文弹窗（2026-09-08 弹窗化；模态一次编辑一个节点）：开闭/防抖写回在 hook，
   // 弹窗本体在 BodyDialog.tsx（无护栏，遮罩锁选中无联动载入）
   const bodyDialog = useBodyDialog(mmRef, selection.activeUidRef)
+  // 正文角标悬停 uid（2026-09-09）：热键 Shift+F2 悬停优先编辑被预览节点；null = 退场回落选中
+  const noteHoverUidRef = useRef<string | null>(null)
+  /** 正文编辑入口守卫（2026-09-09）：悬停/选中皆空且弹窗未开 → 盖居中警告签（WarnStamp），
+   *  不弹无关联空态弹窗；有目标或开着（toggle 关闭语义）→ 照常 toggle。热键与砚栏/浮条
+   *  两按钮入口共走此口 */
+  const toggleBodyOrWarn = (uid: string | null): void => {
+    if (!uid && !selection.activeUidRef.current && !bodyDialog.open) {
+      warnSeqRef.current += 1
+      setWarnStamp({ seq: warnSeqRef.current })
+      return
+    }
+    bodyDialog.toggle(uid)
+  }
   // 图标管理器（M18）：确认即注册新图标 + SET_NODE_ICON；无载荷上报走保存链（markDirty 由管线置脏）
   const iconPick = useIconPicker(mmRef, selection.activeUidRef, () => pipeline.onTreeDataChange())
   // 标签选择器：确认即 SET_NODE_TAG 整组覆写；无载荷上报走保存链（同上）
@@ -280,7 +296,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   useEditorHotkeys({
     doCopy,
     explicitSave,
-    toggleBodyDialog: bodyDialog.toggle,
+    // 悬停优先 + 无目标守卫：悬停在场编辑被预览节点；悬停/选中皆空盖警告签不弹空态弹窗
+    toggleBodyDialog: () => toggleBodyOrWarn(noteHoverUidRef.current),
     anyDialogRef,
     openQuickSwitch: quick.open,
     cycleStep: quick.cycleStep,
@@ -333,6 +350,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             pipeline.onTreeDataChange(data)
           }}
           onActiveChange={selection.handleActiveChange}
+          onNoteHover={(uid) => { noteHoverUidRef.current = uid }}
           onPaste={(raw) => applyMultilinePaste(mmRef.current, selection.activeUidRef.current, raw)}
           {...canvasPaste}
           // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
@@ -348,7 +366,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {nodePos && !anyDialog && (
         <NodeActions
           pos={nodePos}
-          onBodyClick={bodyDialog.toggle}
+          onBodyClick={() => toggleBodyOrWarn(null)}
           onLinkClick={() => startLinkFromActive(mmRef.current)}
           onIconClick={() =>
             iconPick.openPicker(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeIconsOf(mmRef.current, selection.activeUidRef.current))
@@ -384,7 +402,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onCopyPathClick={copyPath}
         scope={selection.activeUid ? 'branch' : 'full'}
         onSaveClick={() => void explicitSave()}
-        onBodyClick={bodyDialog.toggle}
+        onBodyClick={() => toggleBodyOrWarn(null)}
         bodyActive={bodyDialog.open}
         onExportClick={exportFlow.openExport}
         onZoomOut={() => mmRef.current?.view.narrow()}
@@ -405,6 +423,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {copyStamp && (
         <CopyStamp key={copyStamp.seq} kind={copyStamp.kind} pos={{ left: copyStamp.left, top: copyStamp.top }} onDone={() => setCopyStamp(null)} />
       )}
+      {/* 警告印记：无目标正文编辑居中劝导（2026-09-09），key/seq 重挂载与到期卸载同上 */}
+      {warnStamp && <WarnStamp key={warnStamp.seq} onDone={() => setWarnStamp(null)} />}
       {/* 左下题签 + 朱砂脏印 + 统计行；右下主题钮（M5a 拆分至 EditorCaption）。仅就绪态渲染（2026-09） */}
       {docReady && <EditorCaption name={name} dirty={dirty} nodeCount={stats.nodeCount} savedAt={stats.savedAt} />}
       {/* 忽略块横幅改挂砚栏下方（.zen-banner 浮于画布）——既有结构照搬，仅换容器类（Task 6 迁移） */}

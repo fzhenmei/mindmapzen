@@ -259,6 +259,10 @@ interface Props {
   /** 引擎数据变化回调；data 为引擎随事件附带的整树快照（无载荷的调用视为必有变化，见下） */
   onDataChange: (data?: EngineNode) => void
   onActiveChange?: (uids: string[]) => void
+  /** 正文角标悬停上报（2026-09-09 悬停优先修复）：customNoteContentShow.show 第四参
+   *  （悬停节点实例，nodeCreateContents.js:466）提取 uid；hide 上报 null = 退场。
+   *  Shift+F2 热键据此优先编辑被预览节点（悬停不产生选中） */
+  onNoteHover?: (uid: string | null) => void
   onEditorPaste?: (rawText: string) => void
   /** 画布态（非编辑框/输入框/对话框）粘贴图片：clipboardData 由 paste 事件同步携带
    *  （免 navigator.clipboard.read 权限弹窗）；宿主异步读 bytes 并落盘 assets/ 应用 */
@@ -280,6 +284,7 @@ export default function MindMapCanvas({
   onReady,
   onDataChange,
   onActiveChange,
+  onNoteHover,
   onEditorPaste,
   onCanvasImagePaste,
   onCanvasPasteText,
@@ -296,8 +301,8 @@ export default function MindMapCanvas({
   // 需传实例给 textEdit.show）；null = 关闭（onClose 卸载）。菜单动作全经 activeNodeList 生效
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; isRoot: boolean; node: unknown } | null>(null)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
-  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry })
-  cbRef.current = { onReady, onDataChange, onActiveChange, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry }
+  const cbRef = useRef({ onReady, onDataChange, onActiveChange, onNoteHover, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry })
+  cbRef.current = { onReady, onDataChange, onActiveChange, onNoteHover, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry }
 
   useEffect(() => {
     // 悬停窗先建后传（引擎构造期即可能注册 mouseover 钩子）；主题取挂载期值
@@ -332,10 +337,20 @@ export default function MindMapCanvas({
           () => cbRef.current.onDataChange(), // 无载荷上报=必有变化：置脏 + 5s 自动保存链
         ),
       // 备注悬停窗接管（M17b，nodeCreateContents.js:446-478 官方通道）：设置后引擎不建
-      // 内置 noteEl，mermaid 备注在画布悬停即成图（文本段转义、图源 strict SVG）
+      // 内置 noteEl，mermaid 备注在画布悬停即成图（文本段转义、图源 strict SVG）。
+      // show 第四参 = 悬停节点实例（引擎 mouseover 回调的 this）→ 提取 uid 上报宿主
+      // （2026-09-09 悬停优先：Shift+F2 编辑被预览节点），hide 清 null（uid 取法同 node_active）
       customNoteContentShow: {
-        show: (note: string, left: number, top: number) => tip.show(note, left, top),
-        hide: () => tip.hide(),
+        show: (note: string, left: number, top: number, node: unknown) => {
+          tip.show(note, left, top)
+          const n = node as { getUid?: () => string; uid?: string } | null | undefined
+          const uid = n?.getUid ? n.getUid() : n?.uid
+          cbRef.current.onNoteHover?.(typeof uid === 'string' ? uid : null)
+        },
+        hide: () => {
+          tip.hide()
+          cbRef.current.onNoteHover?.(null)
+        },
       },
       // 节点图标集（M18）：lucide 精选 64 经 iconList 通道注册（data.icon 'zen_'+name
       // 解析到此处 svg）；全集新图标由 useIconPicker 运行时 push 进本数组
