@@ -52,6 +52,7 @@ export default {
     copied: '已复制',
     copiedMd: '已复制为 Markdown',
     copiedNode: '已复制为节点',
+    noTarget: '请先选中或悬停节点',
   },
   nodeActions: {
     body: '编写选中节点的正文',

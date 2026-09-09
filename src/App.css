@@ -81,6 +81,13 @@ html, body { overflow: hidden; }
   font-size: var(--font-size-sm); border-radius: 6px; animation: copy-in var(--duration-2) ease-out;
   pointer-events: none; background: var(--card); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 @keyframes copy-in { from { opacity: 0; } to { opacity: 1; } }
+/* 警告印记（2026-09-09）：无目标正文编辑（悬停/选中皆空）劝导——复制印记同款短窗淡入，
+   朱砂配色（警示语义，同 .zen-banner 的 destructive），无节点可锚故居中浮现；实底同上 */
+.warn-stamp { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9;
+  padding: var(--space-1) 10px; font-size: var(--font-size-sm); border-radius: 6px;
+  animation: copy-in var(--duration-2) ease-out; pointer-events: none;
+  background: var(--card); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  color: var(--destructive); border: 1.5px solid var(--destructive); }
 /* 圈选框主题色（2026-09）：引擎 Select 插件选框硬编码 #0984e3 蓝（svg.js 写 stroke/fill 为
    presentation attribute，Select.js:165-176），CSS 规则优先级恒高于 presentation attribute，
    据此覆盖为青松主题色（与选中环 hoverRectColor 同源，engineThemes.ts）；属性选择器精确匹配
@@ -102,5 +109,5 @@ html, body { overflow: hidden; }
   .library, .library * { transition: none; animation: none; transform: none; }
   .zen-bar, .zen-bar *, .node-actions, .node-actions *, .editor-caption, .theme-fab, .theme-fab *,
   .canvas-host { transition: none; animation: none; }
-  .save-stamp, .copy-stamp { transition: none; animation: none; }
+  .save-stamp, .copy-stamp, .warn-stamp { transition: none; animation: none; }
 }

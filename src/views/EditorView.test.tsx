@@ -2418,20 +2418,32 @@ test('弹窗模态锁节点：开着时引擎选中变化不冲刷不重载；�
   }
 })
 
-test('btn-body：无选中开弹窗显示空态文案（不渲染编辑器）；弹窗进互斥总线（开着时 Ctrl+P 浮层不再触发）', async () => {
+test('btn-body：无选中盖警告签不开空态弹窗（1.2s 受控卸载）；弹窗进互斥总线（开着时 Ctrl+P 浮层不再触发）', async () => {
   const handle = await renderReadySelected()
-  act(() => {
-    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
-  })
+  // 互斥半场（有选中）：弹窗开 → 其他浮层快捷键让位（2026-09-08 弹窗化进 anyDialog 总线）
   fireEvent.click(screen.getByTestId('btn-body'))
   expect(screen.getByTestId('body-dialog')).toBeVisible()
-  expect(screen.getByText('在画布选中节点后在此撰写正文')).toBeInTheDocument()
-  expect(screen.queryByTestId('vditor-host')).not.toBeInTheDocument() // 空态不渲染编辑器
-  expect(handle.execCommand).not.toHaveBeenCalled()
-  // 反转（2026-09-08 弹窗化）：弹窗进 anyDialog 互斥总线——开着时其他浮层快捷键让位
   fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
   await act(async () => {})
   expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('body-close'))
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null) // 无选中
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    fireEvent.click(screen.getByTestId('btn-body'))
+    await act(async () => {})
+    expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不再弹无关联空态弹窗
+    expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签（复制印记同款短窗）
+    expect(handle.execCommand).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(1300)
+    })
+    expect(screen.queryByTestId('warn-stamp')).not.toBeInTheDocument() // 到期已受控卸载
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('关弹窗即 flush 未提交草稿（close 分支），计时器清空不二次提交', async () => {
@@ -2668,4 +2680,16 @@ test('Shift+F2 悬停优先/退场回落：悬停盖过选中，hide 后热键�
   fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
   calls = (Vditor as unknown as ReturnType<typeof vi.fn>).mock.calls
   expect(calls.at(-1)![1].value).toBe('既有正文') // 回落选中节点
+})
+
+test('Shift+F2 无目标（悬停/选中皆空）→ 盖警告签不开弹窗；有目标不盖（悬停优先用例互证）', async () => {
+  const handle = await renderReadySelected()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!(null)
+    ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitNoteHover!(null)
+  })
+  fireEvent.keyDown(window, { key: 'F2', shiftKey: true })
+  expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不弹无关联空态弹窗
+  expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签劝导（2026-09-09 无目标反馈）
+  expect(handle.execCommand).not.toHaveBeenCalled()
 })

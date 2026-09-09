@@ -54,6 +54,7 @@ const editor: Dict['editor'] = {
     copied: 'Copied',
     copiedMd: 'Copied as Markdown',
     copiedNode: 'Copied as node',
+    noTarget: 'Select or hover a node first',
   },
   nodeActions: {
     body: 'Write body text for the selected node',
