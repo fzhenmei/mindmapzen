@@ -40,7 +40,7 @@ beforeEach(async () => {
 
 // 无工作区 → 开屏页（M5d Task 3）：替代旧 hint；页首栏随之隐藏（spec §2）
 test('无工作区时渲染开屏页，创建工作区后进入案头', async () => {
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   expect(screen.getByTestId('welcome-screen')).toBeInTheDocument()
   expect(screen.getByTestId('btn-welcome-create')).toBeInTheDocument()
   // 页首栏隐藏：设置入口不渲染；主题钮 2026-09 起开屏态常驻右下角 fab（开屏/案头/纸面三态统一）
@@ -58,7 +58,7 @@ test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框',
   await fs.writeTextFileAtomic('/ws2/新家.md', '# 新家\n')
   await useAppStore.getState().setWorkspace('/ws')
   const pick = vi.fn(async () => '/ws2')
-  render(<LibraryView pickDirectory={pick} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pick} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-settings'))
   expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('settings-workspace-change'))
@@ -75,7 +75,7 @@ test('设置退出工作区：回到开屏页，配置落 workspaceDir:null（�
   useAppStore.setState({ configPath: '/cfg.json' })
   await useAppStore.getState().setWorkspace('/ws')
   await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-settings'))
   fireEvent.click(screen.getByTestId('settings-workspace-exit'))
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
@@ -91,13 +91,13 @@ test('设置退出工作区：回到开屏页，配置落 workspaceDir:null（�
 
 test('空态引导文案', async () => {
   await useAppStore.getState().setWorkspace('/ws-empty')
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   expect(await screen.findByTestId('library-empty')).toHaveTextContent('空白的纸')
 })
 
 test('已有工作区时列出导图，双击打开进纸面', async () => {
   await useAppStore.getState().setWorkspace('/ws')
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   // 树文件行双击进纸面（主区纯预览化后打开文件的唯一案头入口）
   fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
   await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
@@ -105,7 +105,7 @@ test('已有工作区时列出导图，双击打开进纸面', async () => {
 
 test('新建流程：输入名称后创建并进入编辑器', async () => {
   await useAppStore.getState().setWorkspace('/ws')
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-new'))
   fireEvent.input(screen.getByTestId('input-name'), { target: { value: '想法B' } })
   fireEvent.click(screen.getByTestId('btn-confirm'))
@@ -116,7 +116,7 @@ test('新建流程：输入名称后创建并进入编辑器', async () => {
 // M16 验收：输入类错误在对话框内提示、不关框（通常做法）
 test('新建空名：对话框保留、错误框内提示（不关框、不进全局 banner）', async () => {
   await useAppStore.getState().setWorkspace('/ws')
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-new'))
   fireEvent.click(screen.getByTestId('btn-confirm'))
   expect(await screen.findByTestId('dialog-error')).toHaveTextContent('名称不能为空')
@@ -127,7 +127,7 @@ test('新建空名：对话框保留、错误框内提示（不关框、不进�
 
 test('新建重名：服务错误框内显示、对话框保留', async () => {
   await useAppStore.getState().setWorkspace('/ws') // /ws 已预置 想法A.md
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-new'))
   fireEvent.input(screen.getByTestId('input-name'), { target: { value: '想法A' } })
   fireEvent.click(screen.getByTestId('btn-confirm'))
@@ -138,7 +138,7 @@ test('新建重名：服务错误框内显示、对话框保留', async () => {
 
 test('删除需二次确认', async () => {
   await useAppStore.getState().setWorkspace('/ws')
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   // 选中文件进详情态，删除入口在页首动作组
   fireEvent.click(await screen.findByTestId('file-node-想法A'))
   expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -152,7 +152,7 @@ test('删除需二次确认', async () => {
 test('删除按钮作用于当前选中文件，不误伤其他导图', async () => {
   await fs.writeTextFileAtomic('/ws/想法B.md', '# B\n')
   await useAppStore.getState().setWorkspace('/ws')
-  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={pickDirectory} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   // 树中两行文件行俱在；选中想法A进详情态
   expect(await screen.findByTestId('file-node-想法A')).toBeInTheDocument()
   expect(screen.getByTestId('file-node-想法B')).toBeInTheDocument()
@@ -173,7 +173,7 @@ test('导入：有忽略块先预览，确认后入库并打开', async () => {
   // 段落置于根 H1 之前——正文功能（2026-09）后标题下的段落收进 body 不再进 ignoredBlocks，
   // 根前块无归属仍进 ignored（触发载体换了位置，预览/入库断言语义不变）
   const pickImport = vi.fn(async () => ({ name: '外部', kind: 'md' as const, text: '一段会被忽略的说明。\n\n# 外部图\n\n## A\n' }))
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImport} writeClipboard={vi.fn(async () => {})} />)
+  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImport} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
   fireEvent.click(screen.getByTestId('btn-import'))
   expect(await screen.findByTestId('import-preview')).toHaveTextContent('1 个内容块未映射')
   expect(screen.getByTestId('import-preview')).toHaveTextContent('段落：一段会被忽略的说明')
@@ -193,7 +193,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // 默认全展开：根下与子目录下的 .md 均有文件行；主区欢迎页（主区不再有文件列表）
     expect(await screen.findByTestId('dir-node-项目')).toBeInTheDocument()
     expect(screen.getByTestId('file-node-甲')).toBeInTheDocument()
@@ -216,7 +216,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.mkdir('/ws/灵')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // 选中文件进详情态，移动入口在页首动作组
     fireEvent.click(await screen.findByTestId('file-node-根图'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -238,7 +238,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // 选中文件进详情态，移动入口在页首动作组
     fireEvent.click(await screen.findByTestId('file-node-根图'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -260,7 +260,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // 选中文件进详情态，移动入口在页首动作组
     fireEvent.click(await screen.findByTestId('file-node-根图'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -278,7 +278,7 @@ describe('案头目录（M5a）', () => {
     const dirFs = new MemoryFsAdapter()
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(screen.getByTestId('dir-create'))
     fireEvent.input(screen.getByTestId('input-name'), { target: { value: '新层' } })
     fireEvent.click(screen.getByTestId('btn-confirm'))
@@ -291,7 +291,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.mkdir('/ws/空层')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('dir-node-空层'))
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('空层'))
     // 主区纯预览化：选中目录不切换主区内容，仍是欢迎页
@@ -306,7 +306,7 @@ describe('案头目录（M5a）', () => {
     await dirFs.writeTextFileAtomic('/ws/根图.md', '# 根\n')
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     expect(await screen.findByTestId('file-node-根图')).toBeInTheDocument()
     expect(screen.queryByTestId('dir-node-assets')).not.toBeInTheDocument()
   })
@@ -317,7 +317,7 @@ describe('案头目录（M5a）', () => {
     const dirFs = new MemoryFsAdapter()
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(screen.getByTestId('btn-settings'))
     expect(await screen.findByTestId('settings-dialog')).toBeInTheDocument()
     expect(screen.queryByTestId('copy-note-toggle')).not.toBeInTheDocument()
@@ -339,7 +339,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('命令栏：印章 + 工作区名面包屑、设置/导入/新建均纯图标（M5c 起 ZenTooltip 承担提示，title 退役防双提示）；工作区路径移到树根 tooltip', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // M12b 案头三区：左面包屑为工作区名（品牌名归开屏页）
     // 欢迎页品牌头也有 h1（Mind Map Zen）——面包屑按名称精确断言
     expect(screen.getByRole('heading', { level: 1, name: 'ws' })).toHaveTextContent('ws')
@@ -361,7 +361,7 @@ describe('案头三区与交互（M5d）', () => {
 
   test('树文件行单击 = 选中进详情态（header 标题/动作钮上移 + md 预览），不进纸面', async () => {
     const writeClipboard = vi.fn(async () => {})
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={writeClipboard} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={writeClipboard} writeHtmlClipboard={vi.fn(async () => {})} />)
     expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument()
     // 详情动作钮仅详情态渲染（容器合并：自卡头上移页首）
     expect(screen.queryByTestId('btn-detail-back')).not.toBeInTheDocument()
@@ -373,13 +373,14 @@ describe('案头三区与交互（M5d）', () => {
     // 名称定位：预览区 md 内容的 # 想法A 也渲染 h1，按可访问名区分
     const h1 = screen.getByRole('heading', { level: 1, name: '想法A.md' })
     expect(h1).toHaveAttribute('title', expect.stringContaining('B'))
-    // 六枚详情动作钮 + 「更多」触发钮均在页首（宽组/窄组由容器查询 CSS 分流）
+    // 七枚详情动作钮 + 「更多」触发钮均在页首（宽组/窄组由容器查询 CSS 分流）
     for (const id of [
       'btn-detail-back',
       'btn-move',
       'btn-rename',
       'btn-delete',
       'btn-copy-path',
+      'btn-copy-wechat',
       'btn-detail-open',
       'btn-detail-more',
     ]) {
@@ -393,8 +394,47 @@ describe('案头三区与交互（M5d）', () => {
     expect(useAppStore.getState().route).toBe('library')
   })
 
+  test('详情态「复制为公众号格式」：全链出内联样式 HTML 写富文本端口，失败走错误横幅', async () => {
+    const writeHtmlClipboard = vi.fn(async () => {})
+    render(
+      <LibraryView
+        pickDirectory={vi.fn()}
+        pickImportFile={vi.fn()}
+        writeClipboard={vi.fn(async () => {})}
+        writeHtmlClipboard={writeHtmlClipboard}
+      />,
+    )
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
+    await screen.findByTestId('file-detail')
+    fireEvent.click(screen.getByTestId('btn-copy-wechat'))
+    // 全链(真 copyAsWechatHtml + mock 渲染)出 section 根内联样式 HTML
+    await waitFor(() => expect(writeHtmlClipboard).toHaveBeenCalledTimes(1))
+    expect(writeHtmlClipboard).toHaveBeenCalledWith(expect.stringContaining('<section'))
+    expect(writeHtmlClipboard).toHaveBeenCalledWith(expect.stringContaining('font-size: 15px'))
+    expect(useAppStore.getState().error).toBeNull()
+  })
+
+  test('详情态「复制为公众号格式」失败：剪贴板写失败显式报错（不吞异常）', async () => {
+    const writeHtmlClipboard = vi.fn(async () => {
+      throw new Error('boom')
+    })
+    render(
+      <LibraryView
+        pickDirectory={vi.fn()}
+        pickImportFile={vi.fn()}
+        writeClipboard={vi.fn(async () => {})}
+        writeHtmlClipboard={writeHtmlClipboard}
+      />,
+    )
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
+    await screen.findByTestId('file-detail')
+    fireEvent.click(screen.getByTestId('btn-copy-wechat'))
+    expect(await screen.findByText(/复制为公众号格式失败/)).toBeInTheDocument()
+    expect(useAppStore.getState().error).toContain('boom')
+  })
+
   test('详情态「更多」浮层：平铺全部动作，菜单项直达（打开导图）', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     // pointerdown 开菜单（Radix Trigger 口径，同 ui/dropdown-menu.test 模式）；条目 testid 加 more- 前缀与宽组同名钮区分（E2E 严格模式）
@@ -407,7 +447,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('树文件行渲染：目录与根下文件行可见，单击选中进详情；目录行带文件夹图标', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     expect(await screen.findByTestId('file-node-甲')).toBeInTheDocument()
     expect(screen.getByTestId('file-node-想法A')).toBeInTheDocument()
     // 目录节点图标化（spec §3）：IconFolder 存在于目录行
@@ -422,7 +462,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('选中态失效清理：重命名/删除选中图后详情态清空回欢迎页', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     // 选中 想法A（树文件行）进详情态
     fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -442,7 +482,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('详情态就地操作：删除按钮在页首动作组可用，确认后删除并回欢迎页', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('btn-delete'))
@@ -456,7 +496,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('树文件行双击打开进纸面', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.dblClick(await screen.findByTestId('file-node-想法A'))
     await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
     expect(useAppStore.getState().currentMdPath).toBe('/ws/想法A.md')
@@ -464,7 +504,7 @@ describe('案头三区与交互（M5d）', () => {
 
   // 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中——VSCode 惯例）
   test('右键文件行：即选中进详情态，菜单重命名走对话框流', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
     // 右键即选中：主区切详情态（预览该文件）
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
@@ -479,7 +519,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('右键文件行：菜单删除走二次确认', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-delete'))
     expect(screen.getByText('删除「想法A」？')).toBeInTheDocument()
@@ -489,7 +529,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('右键目录行：在此新建导图落盘到该目录', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-new-map'))
     // 对话框标题示目标目录
@@ -501,7 +541,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('右键目录行：新建子目录落在该目录下', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
     expect(screen.getByText('在「项目」新建目录')).toBeInTheDocument()
@@ -512,7 +552,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('右键树根：新建目录落工作区根', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-all'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-new-dir'))
     // 对话框标题（heading 角色，避开侧栏「新建目录」按钮同名文本）
@@ -526,7 +566,7 @@ describe('案头三区与交互（M5d）', () => {
 
   // 2026-09 目录右键删除：整目录进回收站（含子树导图），选中目录在被删子树内则回根视图
   test('右键目录行：删除走二次确认（确认框报导图数），子树整删不动根层其他导图', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-delete-dir'))
     expect(screen.getByText('删除目录「项目」？')).toBeInTheDocument()
@@ -541,7 +581,7 @@ describe('案头三区与交互（M5d）', () => {
   })
 
   test('右键目录行：选中目录在被删子树内时，删除后回根视图（idle 置位）', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('dir-node-项目'))
     await waitFor(() => expect(useAppStore.getState().selectedDir).toBe('项目'))
     fireEvent.contextMenu(screen.getByTestId('dir-node-项目'), { button: 2 })
@@ -554,7 +594,7 @@ describe('案头三区与交互（M5d）', () => {
 
   test('右键目录行：目录含子目录但无导图时，确认框不说「为空」', async () => {
     await fs.mkdir('/ws/项目/空巢层/内层')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-空巢层'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-delete-dir'))
     expect(screen.getByText('该目录下没有导图，但含子目录，将随目录一并移入回收站。')).toBeInTheDocument()
@@ -581,7 +621,7 @@ describe('案头左树拖拽移动（2026-09）', () => {
   })
 
   test('拖文件行到目录行：文件落位目标目录（重名自动后缀语义同对话框流），无错误', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('file-node-想法A'), { dataTransfer: dt })
     fireEvent.dragOver(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
@@ -595,7 +635,7 @@ describe('案头左树拖拽移动（2026-09）', () => {
   test('拖文件行到树根：从子目录上提回根层', async () => {
     await fs.writeTextFileAtomic('/ws/项目/乙.md', '# 乙\n')
     await useAppStore.getState().setWorkspace('/ws') // 乙.md 写于 beforeEach 扫描后，重扫入册
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('file-node-乙'), { dataTransfer: dt })
     fireEvent.dragOver(screen.getByTestId('dir-node-all'), { dataTransfer: dt })
@@ -608,7 +648,7 @@ describe('案头左树拖拽移动（2026-09）', () => {
   test('拖目录到另一目录：整子树迁移，选中目录在被移子树内时前缀随迁', async () => {
     await fs.mkdir('/ws/乙')
     useAppStore.setState({ selectedDir: '项目' })
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
     fireEvent.dragOver(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
@@ -621,7 +661,7 @@ describe('案头左树拖拽移动（2026-09）', () => {
 
   test('拖目录到自身子孙：不落不移动、无错误（真实浏览器中非法落点本就不触发 drop，此处直发 drop 验防御）', async () => {
     await fs.mkdir('/ws/项目/子')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
     fireEvent.drop(screen.getByTestId('dir-node-子'), { dataTransfer: dt })
@@ -636,7 +676,7 @@ describe('案头左树拖拽移动（2026-09）', () => {
   test('目标下同名目录：拒绝并提示（不静默改名不合并），原位不动', async () => {
     await fs.mkdir('/ws/项目/子')
     await fs.mkdir('/ws/乙/子')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     // 树中两处「子」同名撞 testid（dir-node-<name> 用名不用路径），按 title=path 圈定被拖方
     const src = (await screen.findAllByTestId('dir-node-子')).find((el) => el.title === '项目/子')!
@@ -658,7 +698,7 @@ describe('左栏分区拖拽', () => {
     // 上一用例提交的宽度会残留 store（全局 beforeEach 不含新字段），先清回默认
     useAppStore.setState({ configPath: '/cfg.json', sidebarWidth: null })
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const handle = await screen.findByRole('separator', { name: '调整侧栏宽度' })
     const wrapper = screen.getByTestId('dir-panel').closest<HTMLElement>('[data-slot="sidebar-wrapper"]')!
     return { handle, wrapper }
@@ -704,7 +744,7 @@ describe('左栏分区拖拽', () => {
   test('init 载入已存宽度：启动即覆盖变量（350px）', async () => {
     await useAppStore.getState().setWorkspace('/ws')
     await useAppStore.getState().setSidebarWidth(350)
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     await waitFor(() => {
       const w = screen.getByTestId('dir-panel').closest<HTMLElement>('[data-slot="sidebar-wrapper"]')!
       expect(w.style.getPropertyValue('--sidebar-width')).toBe('350px')
@@ -728,7 +768,7 @@ describe('案头收藏与排序（2026-09）', () => {
   })
 
   test('右键收藏：收藏组出现且行可进详情；再取消收藏组隐藏', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'), { button: 2 })
     fireEvent.click(await screen.findByTestId('ctx-btn-favorite'))
     // 组出现在目录组之上，行交互与文件行同语义（单击进详情）
@@ -748,7 +788,7 @@ describe('案头收藏与排序（2026-09）', () => {
     await fs.writeTextFileAtomic('/ws/初稿.md', '# 初\n')
     await fs.writeTextFileAtomic('/ws/最新稿.md', '# 新\n')
     await useAppStore.getState().setWorkspace('/ws') // 重扫纳入新文件
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const order = () =>
       Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="file-node-"]')).map((el) => el.dataset.testid)
     await screen.findByTestId('file-node-最新稿')
@@ -765,7 +805,7 @@ describe('案头收藏与排序（2026-09）', () => {
 
   test('重命名跟随：收藏的图改名后收藏不丢（组内行随新名）', async () => {
     useAppStore.setState({ favorites: ['/ws/想法A.md'] })
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('btn-rename'))
@@ -777,7 +817,7 @@ describe('案头收藏与排序（2026-09）', () => {
 
   test('拖拽移动跟随：收藏文件拖进目录后 mdPath 随迁，收藏组仍可达', async () => {
     useAppStore.setState({ favorites: ['/ws/想法A.md'] })
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('file-node-想法A'), { dataTransfer: dt })
     fireEvent.dragOver(screen.getByTestId('dir-node-项目'), { dataTransfer: dt })
@@ -790,7 +830,7 @@ describe('案头收藏与排序（2026-09）', () => {
   test('目录拖拽跟随：子树整体迁移，子内收藏前缀随迁', async () => {
     await fs.mkdir('/ws/乙')
     useAppStore.setState({ favorites: ['/ws/项目/甲.md'] })
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     const dt = dragDT()
     fireEvent.dragStart(await screen.findByTestId('dir-node-项目'), { dataTransfer: dt })
     fireEvent.dragOver(screen.getByTestId('dir-node-乙'), { dataTransfer: dt })
@@ -800,7 +840,7 @@ describe('案头收藏与排序（2026-09）', () => {
   })
 
   test('详情页首星标钮切换收藏（宽组与更多浮层共用动作）', async () => {
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} />)
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.click(await screen.findByTestId('file-node-想法A'))
     expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('btn-detail-favorite'))

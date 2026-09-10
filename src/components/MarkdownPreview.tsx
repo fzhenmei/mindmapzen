@@ -6,9 +6,8 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { mdOutline } from '../services/mdOutline'
-import { stripIconMarkers } from '../services/iconMarkers'
-import { stripMarkers } from '../services/linkMarkers'
-import { stripTagMarkers } from '../services/tagMarkers'
+import { toDisplayText } from '../services/displayText'
+import { highlightCodeBlocks } from '../services/codeHighlight'
 import { applyImageMap, injectHeadingAnchors, renderVditorPreview } from '../services/vditorPreview'
 
 const EMPTY_MAP: ReadonlyMap<string, string> = new Map()
@@ -25,11 +24,8 @@ interface Props {
  *  console.error 显式出口(禁止吞异常)——预览区留空但链路可追溯 */
 export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
   const theme = useAppStore((s) => s.resolvedTheme)
-  // 连线/图标/标签标记按行剥离(标记永不跨行;标签在图标内侧,先剥 icon 再剥 tag)
-  const display = text
-    .split('\n')
-    .map((l) => stripTagMarkers(stripIconMarkers(stripMarkers(l))))
-    .join('\n')
+  // 连线/图标/标签标记按行剥离(displayText 共享口径,与发布复制同链)
+  const display = toDisplayText(text)
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const root = rootRef.current
@@ -40,6 +36,9 @@ export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
         if (cancelled) return
         applyImageMap(root, imgMap ?? EMPTY_MAP)
         injectHeadingAnchors(root, mdOutline(display))
+        // 自管语法高亮(vditor 内置已关,自毒化循环见 vditorPreview 注释):预览形态
+        // 只出 token span,着色交 vditor CSS,深浅主题通吃
+        return highlightCodeBlocks(root, undefined, { inlineColors: false })
       })
       .catch((e: unknown) => console.error('案头 md 预览渲染失败', e))
     return () => {

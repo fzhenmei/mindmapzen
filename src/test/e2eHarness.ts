@@ -55,6 +55,8 @@ export async function installE2eHarness(): Promise<void> {
     },
     // 剪贴板桩：App E2E 装配的 writeClipboard 将复制内容记录于此，供 spec 断言
     lastCopied: null as string | null,
+    // 富文本剪贴板桩（2026-09 公众号复制）：writeHtmlClipboard 记录 text/html 内容
+    lastCopiedHtml: null as string | null,
     // 导出端口桩（M5b Task 5）：App E2E 装配的 pickSavePath 记录导出路径；
     // writeImage 记录图片字节长度（exportedBytes > 0 断言）
     savePaths: [] as string[],

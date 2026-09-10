@@ -97,6 +97,70 @@ test('案头：树文件行单击出详情、详情打开进纸面', async ({ pa
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
+// 2026-09 发布复制：详情态 btn-copy-wechat 走真渲染全链（离屏 vditor → 内联样式 →
+// mermaid 成图），出 section 根 HTML 写富文本剪贴板端口（E2E web 模式记录到
+// __zenE2e.lastCopiedHtml）；真实粘贴进公众号编辑器的往返验证归 docs/manual-checklist.md 真机项
+test('案头：详情态「复制为公众号格式」出内联样式 HTML（mermaid 转 PNG 图）', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+  // harness 异步装配:先等左树出现(装配完成门)再覆写预置文件加 mermaid 块(同文件名,左树无需刷新)。
+  // 用正文块(引用块)形态的围栏——mermaid 实际多居于此,带 > 前缀的围栏改标是本链路的关键路径
+  await expect(page.getByTestId('file-node-根图')).toBeVisible()
+  await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e.writeFile(
+      '/ws/根图.md',
+      '# 根图\n\n> ```mermaid\n> graph TD\n>   A-->B\n> ```\n\n> ```ts\n> const hi = "泽"\n> ```\n',
+    ),
+  )
+  await page.getByTestId('file-node-根图').click()
+  await expect(page.getByTestId('file-detail')).toBeVisible()
+  // 案头预览自身应有语法高亮(lute 挂的 hljs 类曾毒化 vditor 语言识别致全部 plaintext,已修)
+  await expect
+    .poll(() => page.locator('.md-preview pre code span[class]').count(), { timeout: 10_000 })
+    .toBeGreaterThan(0)
+  await page.getByTestId('btn-copy-wechat').click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+      ),
+    )
+    .toContain('<section')
+  const html = await page.evaluate(
+    () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+  )
+  // section 根承担正文排版，标题/段落在真渲染产物上获得内联样式
+  expect(html).toContain('font-size: 15px')
+  expect(html).toContain('font-size: 20px')
+  // mermaid 块经自有管线成图（真 mermaid.min.js + canvas 光栅化），pre 换 PNG dataURL img
+  expect(html).toContain('<img')
+  expect(html).toContain('data:image/png')
+  expect(html).not.toContain('zen-mermaid')
+  // 代码块：vditor 复制按钮壳/零宽 span 剥净（公众号侧大空白元凶），hljs token 内联色
+  // （浏览器序列化把 hex 规范化为 rgb，断言按 rgb 形态）
+  expect(html).not.toContain('vditor-copy')
+  expect(html).not.toContain('max-height')
+  expect(html).toContain('hljs-keyword')
+  expect(html).toContain('color: rgb(207, 34, 46)')
+  // 压两端对齐:微信粘贴继承 justify 会拉伸代码行内空格(真机实测),pre 显式左对齐
+  expect(html).toContain('text-align: left')
+  // 微信形态（doocs/md 实战公式）：code 内无 \n 文本（全转 br）、有单一 display:block 包裹
+  const codeShape = await page.evaluate((h: string) => {
+    const doc = new DOMParser().parseFromString(h, 'text/html')
+    const codes = [...doc.querySelectorAll('pre > code')]
+    return {
+      withNewline: codes.filter((c) => c.textContent?.includes('\n')).length,
+      wrapped: codes.filter((c) => {
+        const kids = [...c.children]
+        return kids.length === 1 && kids[0]!.tagName === 'SPAN' && (kids[0] as HTMLElement).getAttribute('style')?.includes('display: block')
+      }).length,
+      total: codes.length,
+    }
+  }, html)
+  expect(codeShape.withNewline).toBe(0)
+  expect(codeShape.wrapped).toBe(codeShape.total)
+})
+
 test('案头：目录树含文件行，双击文件行打开进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
