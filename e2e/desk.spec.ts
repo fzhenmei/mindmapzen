@@ -114,6 +114,10 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   )
   await page.getByTestId('file-node-根图').click()
   await expect(page.getByTestId('file-detail')).toBeVisible()
+  // 案头预览自身应有语法高亮(lute 挂的 hljs 类曾毒化 vditor 语言识别致全部 plaintext,已修)
+  await expect
+    .poll(() => page.locator('.md-preview pre code span[class]').count(), { timeout: 10_000 })
+    .toBeGreaterThan(0)
   await page.getByTestId('btn-copy-wechat').click()
   await expect
     .poll(() =>
@@ -138,6 +142,14 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   expect(html).not.toContain('max-height')
   expect(html).toContain('hljs-keyword')
   expect(html).toContain('color: rgb(207, 34, 46)')
+  // code 内不留裸文本直接子节点（公众号粘贴会把它提升成独立 leaf 块，代码视觉碎裂）
+  const bareText = await page.evaluate((h: string) => {
+    const doc = new DOMParser().parseFromString(h, 'text/html')
+    return [...doc.querySelectorAll('pre > code')].filter((c) =>
+      Array.from(c.childNodes).some((n) => n.nodeType === Node.TEXT_NODE),
+    ).length
+  }, html)
+  expect(bareText).toBe(0)
 })
 
 test('案头：目录树含文件行，双击文件行打开进纸面', async ({ page }) => {

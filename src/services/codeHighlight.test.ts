@@ -71,6 +71,23 @@ describe('highlightCodeBlocks:pre>code 语法高亮内联化', () => {
     expect(deps.load).not.toHaveBeenCalled()
   })
 
+  test('裸文本节点包 span:token 之间的裸文本不留直接文本子节点(公众号粘贴会提升成独立 leaf 块)', async () => {
+    const deps: HighlightDeps = {
+      load: async () => ({
+        getLanguage: () => ({ name: 'x' }),
+        highlight: () => ({ value: '<span class="hljs-keyword">const</span> bare = <span class="hljs-string">"x"</span>\n' }),
+      }),
+    }
+    const root = document.createElement('div')
+    root.innerHTML = '<pre><code class="language-ts">const</code></pre>'
+    await highlightCodeBlocks(root, deps)
+    const code = root.querySelector('code')!
+    const bareText = Array.from(code.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE)
+    expect(bareText).toHaveLength(0) // 全部包进 span
+    // 包裹后文本内容一字不差
+    expect(code.textContent).toBe('const bare = "x"\n')
+  })
+
   test('预览形态(inlineColors:false):出 token span 但不上内联色、不硬化空格', async () => {
     const deps: HighlightDeps = {
       load: async () => ({

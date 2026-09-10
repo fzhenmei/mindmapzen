@@ -71,6 +71,19 @@ const HLJS_COLORS: Record<string, string> = {
   'hljs-bullet': '#953800',
 }
 
+/** 裸文本节点包裹:公众号粘贴转换会把 pre 内与 span 并列的裸文本节点提升为
+ *  独立 leaf 段落块(实测 token 间 " xxx = " 游离成块,代码视觉碎裂),逐段包进
+ *  无类 span——微信只见 span 子元素,不再提升 */
+function wrapBareTextNodes(code: HTMLElement): void {
+  for (const node of Array.from(code.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const span = document.createElement('span')
+      node.replaceWith(span)
+      span.append(node)
+    }
+  }
+}
+
 /** 类名映射内联色:遍历 token span 的 classList,首个命中表项刷 color */
 function applyTokenColors(code: HTMLElement): void {
   for (const span of code.querySelectorAll<HTMLElement>('span[class]')) {
@@ -127,6 +140,7 @@ export async function highlightCodeBlocks(
       // 发布形态行首空格随即硬化为 nbsp——公众号粘贴会归一化行首普通空格(缩进丢失)
       const value = hljs.highlight(code.textContent ?? '', { language: lang, ignoreIllegals: true }).value
       code.innerHTML = inline ? hardenLeadingSpaces(value) : value
+      wrapBareTextNodes(code)
       if (inline) applyTokenColors(code)
     } catch (e) {
       console.error(`代码块高亮失败,保持纯文本(language-${lang ?? '?'})`, e)
