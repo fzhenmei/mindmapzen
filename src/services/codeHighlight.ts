@@ -71,19 +71,6 @@ const HLJS_COLORS: Record<string, string> = {
   'hljs-bullet': '#953800',
 }
 
-/** 裸文本节点包裹:公众号粘贴转换会把 pre 内与 span 并列的裸文本节点提升为
- *  独立 leaf 段落块(实测 token 间 " xxx = " 游离成块,代码视觉碎裂),逐段包进
- *  无类 span——微信只见 span 子元素,不再提升 */
-function wrapBareTextNodes(code: HTMLElement): void {
-  for (const node of Array.from(code.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const span = document.createElement('span')
-      node.replaceWith(span)
-      span.append(node)
-    }
-  }
-}
-
 /** 类名映射内联色:遍历 token span 的 classList,首个命中表项刷 color */
 function applyTokenColors(code: HTMLElement): void {
   for (const span of code.querySelectorAll<HTMLElement>('span[class]')) {
@@ -97,17 +84,41 @@ function applyTokenColors(code: HTMLElement): void {
   }
 }
 
+/** 微信发布形态转换(doocs/md 实战公式,DOM 版):公众号粘贴管线会归一化普通
+ *  空格文本节点、提升 pre 内文本碎片为独立段落块(实测 " xxx = " 游离成块)、且
+ *  代码块按 -webkit-box 横排多子元素会打乱行序。三件套免疫:
+ *  ① 换行全转 <br>(消灭 \n 文本节点)② 空格全量转 nbsp(含行内与行首,tab 展开
+ *  四空格)③ 全部子元素收进单一 display:block span(唯一 flex 子项,行序不乱) */
+function wechatFormify(code: HTMLElement): void {
+  const texts: Text[] = []
+  const collect = (parent: Node): void => {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) texts.push(child as Text)
+      else collect(child)
+    }
+  }
+  collect(code)
+  for (const node of texts) {
+    const segs = (node.textContent ?? '').replace(/\t/g, '    ').split('\n')
+    const frag = document.createDocumentFragment()
+    segs.forEach((seg, i) => {
+      if (i > 0) frag.append(document.createElement('br'))
+      if (seg !== '') frag.append(seg.replace(/ /g, '\u00A0'))
+    })
+    node.replaceWith(frag)
+  }
+  const wrap = document.createElement('span')
+  wrap.style.display = 'block'
+  wrap.append(...Array.from(code.childNodes))
+  code.append(wrap)
+}
+
 /** 生产依赖:真脚本加载 */
 const defaultDeps: HighlightDeps = { load: loadHljs }
 
-/** 行首空格硬化:公众号粘贴管线会归一化行首普通空格文本节点(代码缩进丢失),
- *  逐行把行首连续空格替换为等量 nbsp——pre-wrap 下渲染形态不变,归一化免疫 */
-export function hardenLeadingSpaces(html: string): string {
-  return html.replace(/(^|\n)( +)/g, (_m, nl: string, sp: string) => nl + '\u00A0'.repeat(sp.length))
-}
-
-/** 高亮选项:inlineColors(默认 true)= 发布复制形态,token 同时刷内联色并硬化
- *  行首空格;false = 预览形态,只出 token span(类名着色交 vditor CSS,深浅主题通吃) */
+/** 高亮选项:inlineColors(默认 true)= 发布复制形态,token 刷内联色并做微信
+ *  形态转换(br/nbsp/单一块级包裹);false = 预览形态,只出 token span(类名着色
+ *  交 vditor CSS,深浅主题通吃) */
 export interface HighlightOpts {
   inlineColors?: boolean
 }
@@ -136,12 +147,12 @@ export async function highlightCodeBlocks(
     if (lang === undefined || lang === '') continue
     if (hljs.getLanguage(lang) === null) continue
     try {
-      // highlight 产物为对源码转义后的安全 HTML(token span 带 hljs-* 类名);
-      // 发布形态行首空格随即硬化为 nbsp——公众号粘贴会归一化行首普通空格(缩进丢失)
-      const value = hljs.highlight(code.textContent ?? '', { language: lang, ignoreIllegals: true }).value
-      code.innerHTML = inline ? hardenLeadingSpaces(value) : value
-      wrapBareTextNodes(code)
-      if (inline) applyTokenColors(code)
+      // highlight 产物为对源码转义后的安全 HTML(token span 带 hljs-* 类名)
+      code.innerHTML = hljs.highlight(code.textContent ?? '', { language: lang, ignoreIllegals: true }).value
+      if (inline) {
+        wechatFormify(code)
+        applyTokenColors(code)
+      }
     } catch (e) {
       console.error(`代码块高亮失败,保持纯文本(language-${lang ?? '?'})`, e)
     }

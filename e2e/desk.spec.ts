@@ -142,14 +142,21 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   expect(html).not.toContain('max-height')
   expect(html).toContain('hljs-keyword')
   expect(html).toContain('color: rgb(207, 34, 46)')
-  // code 内不留裸文本直接子节点（公众号粘贴会把它提升成独立 leaf 块，代码视觉碎裂）
-  const bareText = await page.evaluate((h: string) => {
+  // 微信形态（doocs/md 实战公式）：code 内无 \n 文本（全转 br）、有单一 display:block 包裹
+  const codeShape = await page.evaluate((h: string) => {
     const doc = new DOMParser().parseFromString(h, 'text/html')
-    return [...doc.querySelectorAll('pre > code')].filter((c) =>
-      Array.from(c.childNodes).some((n) => n.nodeType === Node.TEXT_NODE),
-    ).length
+    const codes = [...doc.querySelectorAll('pre > code')]
+    return {
+      withNewline: codes.filter((c) => c.textContent?.includes('\n')).length,
+      wrapped: codes.filter((c) => {
+        const kids = [...c.children]
+        return kids.length === 1 && kids[0]!.tagName === 'SPAN' && (kids[0] as HTMLElement).getAttribute('style')?.includes('display: block')
+      }).length,
+      total: codes.length,
+    }
   }, html)
-  expect(bareText).toBe(0)
+  expect(codeShape.withNewline).toBe(0)
+  expect(codeShape.wrapped).toBe(codeShape.total)
 })
 
 test('案头：目录树含文件行，双击文件行打开进纸面', async ({ page }) => {

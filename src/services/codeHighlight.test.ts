@@ -1,8 +1,8 @@
 // src/services/codeHighlight.test.ts —— 代码块语法高亮单测:jsdom 不跑真 hljs,
 // 经依赖注入替换加载器;断言 token 切分回填与类名→内联色映射、未知语言跳过、
-// 失败降级不阻塞三路
+// 失败降级不阻塞,以及微信发布形态(br/nbsp/单一块级包裹)与预览形态的差异
 import { describe, expect, test, vi } from 'vitest'
-import { hardenLeadingSpaces, highlightCodeBlocks, type HighlightDeps } from './codeHighlight'
+import { highlightCodeBlocks, type HighlightDeps } from './codeHighlight'
 
 /** 伪 hljs:getLanguage 认 ts/python,highlight 回固定 token 结构 */
 function fakeHljs() {
@@ -71,24 +71,48 @@ describe('highlightCodeBlocks:pre>code 语法高亮内联化', () => {
     expect(deps.load).not.toHaveBeenCalled()
   })
 
-  test('裸文本节点包 span:token 之间的裸文本不留直接文本子节点(公众号粘贴会提升成独立 leaf 块)', async () => {
+  test('微信形态(发布复制):换行全转 br、空格全量 nbsp、单一 display:block 包裹(doocs/md 实战公式)', async () => {
     const deps: HighlightDeps = {
       load: async () => ({
         getLanguage: () => ({ name: 'x' }),
-        highlight: () => ({ value: '<span class="hljs-keyword">const</span> bare = <span class="hljs-string">"x"</span>\n' }),
+        highlight: () => ({
+          value: '<span class="hljs-keyword">export</span> const copyForWechat = <span class="hljs-string">"泽"</span>\n    indent\n',
+        }),
       }),
     }
     const root = document.createElement('div')
-    root.innerHTML = '<pre><code class="language-ts">const</code></pre>'
+    root.innerHTML = '<pre><code class="language-ts">x</code></pre>'
     await highlightCodeBlocks(root, deps)
     const code = root.querySelector('code')!
-    const bareText = Array.from(code.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE)
-    expect(bareText).toHaveLength(0) // 全部包进 span
-    // 包裹后文本内容一字不差
-    expect(code.textContent).toBe('const bare = "x"\n')
+    // 无 \n 文本节点(全转 br),无普通空格(全量 nbsp,含行内与行首)
+    expect(code.textContent).not.toContain('\n')
+    expect(code.textContent).not.toContain(' ')
+    expect(code.querySelectorAll('br').length).toBeGreaterThan(0)
+    expect(code.textContent).toContain('copyForWechat')
+    // 单一 display:block 包裹(微信代码块 -webkit-box,多子元素横排打乱)
+    const wrap = code.querySelector<HTMLElement>('span[style*="display: block"]')
+    expect(wrap).not.toBeNull()
+    expect([...code.children].filter((el) => el !== wrap)).toHaveLength(0)
   })
 
-  test('预览形态(inlineColors:false):出 token span 但不上内联色、不硬化空格', async () => {
+  test('多行缩进代码(br 数按行数,空格全 nbsp)', async () => {
+    const deps: HighlightDeps = {
+      load: async () => ({
+        getLanguage: () => ({ name: 'x' }),
+        highlight: () => ({ value: 'def hi():\n    return 1\n' }),
+      }),
+    }
+    const root = document.createElement('div')
+    root.innerHTML = '<pre><code class="language-ts hljs">def hi():</code></pre>'
+    await highlightCodeBlocks(root, deps)
+    const code = root.querySelector('code')!
+    expect(code.textContent).not.toContain(' ')
+    expect(code.textContent).not.toContain('\n')
+    // 2 个换行处 → 2 个 br(值以 \n 结尾产生的空尾段不额外产 br)
+    expect(code.querySelectorAll('br')).toHaveLength(2)
+  })
+
+  test('预览形态(inlineColors:false):出 token span 但不上内联色、不做微信形态转换', async () => {
     const deps: HighlightDeps = {
       load: async () => ({
         getLanguage: () => ({ name: 'x' }),
@@ -101,33 +125,6 @@ describe('highlightCodeBlocks:pre>code 语法高亮内联化', () => {
     const code = root.querySelector('code')!
     expect(code.querySelector('span[class]')).not.toBeNull() // token 在(类名着色交 CSS)
     expect(code.querySelector<HTMLElement>('.hljs-keyword')!.style.color).toBe('') // 无内联色
-    expect(code.innerHTML).toContain(':\n    x') // 普通空格保留(不硬化)
-  })
-
-  test('高亮产物行首空格硬化为 nbsp(公众号粘贴会归一化行首普通空格文本节点)', async () => {
-    const deps: HighlightDeps = {
-      load: async () => ({
-        getLanguage: () => ({ name: 'x' }),
-        highlight: () => ({ value: 'def hi():\n    return 1\n' }),
-      }),
-    }
-    const root = document.createElement('div')
-    root.innerHTML = '<pre><code class="language-ts hljs">def hi():</code></pre>'
-    await highlightCodeBlocks(root, deps)
-    const code = root.querySelector('code')!
-    // jsdom 序列化 nbsp 为实体;文本形态是等量 nbsp(渲染同为空格)
-    expect(code.innerHTML).toContain(':\n&nbsp;&nbsp;&nbsp;&nbsp;return')
-    expect(code.textContent).toBe("def hi():\n    return 1\n")
-  })
-})
-
-describe('hardenLeadingSpaces:行首空格 → nbsp(纯字符串函数)', () => {
-  test('逐行行首连续空格替换为等量 nbsp,行内空格不动', () => {
-    expect(hardenLeadingSpaces('a\n  b\n    c d\n e')).toBe('a\n  b\n    c d\n e')
-  })
-
-  test('无行首空格与空串原样', () => {
-    expect(hardenLeadingSpaces('ab cd\nef')).toBe('ab cd\nef')
-    expect(hardenLeadingSpaces('')).toBe('')
+    expect(code.innerHTML).toContain(':\n    x') // 普通空格与换行保留(不做微信转换)
   })
 })
