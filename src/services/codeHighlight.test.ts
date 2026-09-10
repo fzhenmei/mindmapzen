@@ -2,7 +2,7 @@
 // 经依赖注入替换加载器;断言 token 切分回填与类名→内联色映射、未知语言跳过、
 // 失败降级不阻塞三路
 import { describe, expect, test, vi } from 'vitest'
-import { highlightCodeBlocks, type HighlightDeps } from './codeHighlight'
+import { hardenLeadingSpaces, highlightCodeBlocks, type HighlightDeps } from './codeHighlight'
 
 /** 伪 hljs:getLanguage 认 ts/python,highlight 回固定 token 结构 */
 function fakeHljs() {
@@ -69,5 +69,48 @@ describe('highlightCodeBlocks:pre>code 语法高亮内联化', () => {
     root.innerHTML = '<p>纯文本</p>'
     await highlightCodeBlocks(root, deps)
     expect(deps.load).not.toHaveBeenCalled()
+  })
+
+  test('预览形态(inlineColors:false):出 token span 但不上内联色、不硬化空格', async () => {
+    const deps: HighlightDeps = {
+      load: async () => ({
+        getLanguage: () => ({ name: 'x' }),
+        highlight: () => ({ value: '<span class="hljs-keyword">def</span> hi:\n    x\n' }),
+      }),
+    }
+    const root = document.createElement('div')
+    root.innerHTML = '<pre><code class="language-ts">def</code></pre>'
+    await highlightCodeBlocks(root, deps, { inlineColors: false })
+    const code = root.querySelector('code')!
+    expect(code.querySelector('span[class]')).not.toBeNull() // token 在(类名着色交 CSS)
+    expect(code.querySelector<HTMLElement>('.hljs-keyword')!.style.color).toBe('') // 无内联色
+    expect(code.innerHTML).toContain(':\n    x') // 普通空格保留(不硬化)
+  })
+
+  test('高亮产物行首空格硬化为 nbsp(公众号粘贴会归一化行首普通空格文本节点)', async () => {
+    const deps: HighlightDeps = {
+      load: async () => ({
+        getLanguage: () => ({ name: 'x' }),
+        highlight: () => ({ value: 'def hi():\n    return 1\n' }),
+      }),
+    }
+    const root = document.createElement('div')
+    root.innerHTML = '<pre><code class="language-ts hljs">def hi():</code></pre>'
+    await highlightCodeBlocks(root, deps)
+    const code = root.querySelector('code')!
+    // jsdom 序列化 nbsp 为实体;文本形态是等量 nbsp(渲染同为空格)
+    expect(code.innerHTML).toContain(':\n&nbsp;&nbsp;&nbsp;&nbsp;return')
+    expect(code.textContent).toBe("def hi():\n    return 1\n")
+  })
+})
+
+describe('hardenLeadingSpaces:行首空格 → nbsp(纯字符串函数)', () => {
+  test('逐行行首连续空格替换为等量 nbsp,行内空格不动', () => {
+    expect(hardenLeadingSpaces('a\n  b\n    c d\n e')).toBe('a\n  b\n    c d\n e')
+  })
+
+  test('无行首空格与空串原样', () => {
+    expect(hardenLeadingSpaces('ab cd\nef')).toBe('ab cd\nef')
+    expect(hardenLeadingSpaces('')).toBe('')
   })
 })

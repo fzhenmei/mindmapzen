@@ -87,9 +87,26 @@ function applyTokenColors(code: HTMLElement): void {
 /** 生产依赖:真脚本加载 */
 const defaultDeps: HighlightDeps = { load: loadHljs }
 
+/** 行首空格硬化:公众号粘贴管线会归一化行首普通空格文本节点(代码缩进丢失),
+ *  逐行把行首连续空格替换为等量 nbsp——pre-wrap 下渲染形态不变,归一化免疫 */
+export function hardenLeadingSpaces(html: string): string {
+  return html.replace(/(^|\n)( +)/g, (_m, nl: string, sp: string) => nl + '\u00A0'.repeat(sp.length))
+}
+
+/** 高亮选项:inlineColors(默认 true)= 发布复制形态,token 同时刷内联色并硬化
+ *  行首空格;false = 预览形态,只出 token span(类名着色交 vditor CSS,深浅主题通吃) */
+export interface HighlightOpts {
+  inlineColors?: boolean
+}
+
 /** 高亮编排:pre>code 按 language-* 类找语言,未注册(含降级残留的 zen-mermaid)
  *  跳过保持纯文本;单块失败 console.error 降级,不阻塞复制 */
-export async function highlightCodeBlocks(root: ParentNode, deps: HighlightDeps = defaultDeps): Promise<void> {
+export async function highlightCodeBlocks(
+  root: ParentNode,
+  deps: HighlightDeps = defaultDeps,
+  opts: HighlightOpts = {},
+): Promise<void> {
+  const inline = opts.inlineColors !== false
   const blocks = Array.from(root.querySelectorAll<HTMLElement>('pre > code[class*="language-"]'))
   if (blocks.length === 0) return // 快速路径:无代码块不加载脚本
   let hljs: HljsLike
@@ -106,9 +123,11 @@ export async function highlightCodeBlocks(root: ParentNode, deps: HighlightDeps 
     if (lang === undefined || lang === '') continue
     if (hljs.getLanguage(lang) === null) continue
     try {
-      // highlight 产物为对源码转义后的安全 HTML(token span 带 hljs-* 类名)
-      code.innerHTML = hljs.highlight(code.textContent ?? '', { language: lang, ignoreIllegals: true }).value
-      applyTokenColors(code)
+      // highlight 产物为对源码转义后的安全 HTML(token span 带 hljs-* 类名);
+      // 发布形态行首空格随即硬化为 nbsp——公众号粘贴会归一化行首普通空格(缩进丢失)
+      const value = hljs.highlight(code.textContent ?? '', { language: lang, ignoreIllegals: true }).value
+      code.innerHTML = inline ? hardenLeadingSpaces(value) : value
+      if (inline) applyTokenColors(code)
     } catch (e) {
       console.error(`代码块高亮失败,保持纯文本(language-${lang ?? '?'})`, e)
     }

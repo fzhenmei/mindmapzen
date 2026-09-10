@@ -11,13 +11,20 @@ export const VDITOR_CDN = 'vendor/vditor'
 /** md 渲染进容器(异步:首次动态加载 lute/样式,其后 vditor 内部缓存复用)。
  *  注:静态 VDitor.preview 不渲染预览区导出工具条(actions 配置仅编辑器构造
  *  消费,弹窗侧在 VditorEditor 里置空;2026-09-09 实测 method.js 无此逻辑),
- *  故本服务无需也无法配置 actions */
+ *  故本服务无需也无法配置 actions。
+ *  hljs 显式关闭:vditor 自带 highlightRender 有自毒化循环——高亮成功即给 code 挂
+ *  hljs 类,下一轮朴素语言提取(className.replace("language-","") → "ts hljs")
+ *  查表必败回退 plaintext,把已上的色抹掉(2026-09 实测内部连跑 5 轮全数回退)。
+ *  高亮 CSS 仍会加载;token 由调用方走 codeHighlight 自管 pass(案头预览)或
+ *  发布复制管线,不挂 hljs 类、无后续轮次,永不回退 */
 export function renderVditorPreview(el: HTMLElement, markdown: string, theme: 'light' | 'dark'): Promise<void> {
   // vditor 4.0 类型声明 preview 首参收 HTMLDivElement;本服务对外契约(下游任务消费)
   // 是更宽的 HTMLElement,故在此收窄断言,容器是普通 div 时运行时等价
   return Vditor.preview(el as HTMLDivElement, markdown, {
     cdn: VDITOR_CDN,
     mode: theme === 'dark' ? 'dark' : 'light',
+    // preview 的 hljs 开关在顶层选项(md2html 的 lute 配置才是 markdown.*),深合并
+    hljs: { enable: false },
   })
 }
 

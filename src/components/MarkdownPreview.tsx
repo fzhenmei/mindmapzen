@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { mdOutline } from '../services/mdOutline'
 import { toDisplayText } from '../services/displayText'
+import { highlightCodeBlocks } from '../services/codeHighlight'
 import { applyImageMap, injectHeadingAnchors, renderVditorPreview } from '../services/vditorPreview'
 
 const EMPTY_MAP: ReadonlyMap<string, string> = new Map()
@@ -35,6 +36,9 @@ export default function MarkdownPreview({ text, imgMap }: Readonly<Props>) {
         if (cancelled) return
         applyImageMap(root, imgMap ?? EMPTY_MAP)
         injectHeadingAnchors(root, mdOutline(display))
+        // 自管语法高亮(vditor 内置已关,自毒化循环见 vditorPreview 注释):预览形态
+        // 只出 token span,着色交 vditor CSS,深浅主题通吃
+        return highlightCodeBlocks(root, undefined, { inlineColors: false })
       })
       .catch((e: unknown) => console.error('案头 md 预览渲染失败', e))
     return () => {
