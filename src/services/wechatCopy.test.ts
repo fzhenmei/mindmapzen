@@ -4,22 +4,22 @@ import { describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, stripMermaid } from './wechatCopy'
 
-describe('stripMermaid:mermaid 代码块语言降级(防离屏渲染成 SVG,公众号会剥)', () => {
-  test('```mermaid 围栏降级为 ```text,其余围栏不动', () => {
+describe('stripMermaid:mermaid 围栏改 zen-mermaid 标记(vditor 无此适配器不触其成图,成图由 mermaidImage 管线接管)', () => {
+  test('```mermaid 围栏改标 ```zen-mermaid,其余围栏不动', () => {
     const md = ['# 标题', '', '```mermaid', 'graph TD', '```', '', '```js', 'const a = 1', '```'].join('\n')
     expect(stripMermaid(md)).toBe(
-      ['# 标题', '', '```text', 'graph TD', '```', '', '```js', 'const a = 1', '```'].join('\n'),
+      ['# 标题', '', '```zen-mermaid', 'graph TD', '```', '', '```js', 'const a = 1', '```'].join('\n'),
     )
   })
 
-  test('~~~mermaid 围栏同样降级(围栏字符保持原样)', () => {
+  test('~~~mermaid 围栏同样改标(围栏字符保持原样)', () => {
     const md = ['~~~mermaid', 'graph TD', '~~~'].join('\n')
-    expect(stripMermaid(md)).toBe(['~~~text', 'graph TD', '~~~'].join('\n'))
+    expect(stripMermaid(md)).toBe(['~~~zen-mermaid', 'graph TD', '~~~'].join('\n'))
   })
 
-  test('围栏后带空格与 info 附加串(如 mermaid x)也降级', () => {
+  test('围栏后带空格与 info 附加串(如 mermaid x)也改标', () => {
     const md = ['```mermaid ', 'A-->B', '```'].join('\n')
-    expect(stripMermaid(md)).toBe(['```text', 'A-->B', '```'].join('\n'))
+    expect(stripMermaid(md)).toBe(['```zen-mermaid', 'A-->B', '```'].join('\n'))
   })
 
   test('正文中的 mermaid 单词不误伤(非围栏行)', () => {
@@ -119,22 +119,36 @@ describe('buildWechatHtml:渲染容器 → 可粘贴 HTML 串', () => {
   })
 })
 
-// 编排链:仅 mock 渲染(jsdom 不跑 vditor),插图解析走真 buildImageMetaFromSrcs
-// + MemoryFsAdapter(真读盘换 dataURL);捕获渲染入参与剪贴板出参断言全链
+// 编排链:仅 mock 渲染(jsdom 不跑 vditor)与 mermaid 成图(无 canvas),插图解析走真
+// buildImageMetaFromSrcs + MemoryFsAdapter(真读盘换 dataURL);捕获渲染入参与剪贴板
+// 出参断言全链
 vi.mock('./vditorPreview', async (importOriginal) => {
   const orig = await importOriginal<typeof import('./vditorPreview')>()
   return {
     ...orig,
     renderVditorPreview: vi.fn(async (el: HTMLElement, md: string) => {
-      // 模拟真实 vditor 渲染:包 vditor-reset,且非 ASCII src 被百分号编码
+      // 模拟真实 vditor 渲染:包 vditor-reset,mermaid 块按改标后的语言出 code,且非 ASCII src 被百分号编码
+      const mermaid = md.includes('zen-mermaid') ? '<pre><code class="language-zen-mermaid">A--&gt;B</code></pre>' : ''
       const hasCn = md.includes('配图')
-      el.innerHTML = `<div class="vditor-reset"><p>正文</p><img src="assets/pic.png">${
+      el.innerHTML = `<div class="vditor-reset"><p>正文</p>${mermaid}<img src="assets/pic.png">${
         hasCn ? '<img src="assets/%E9%85%8D%E5%9B%BE.png">' : ''
       }</div>`
     }),
   }
 })
+// mermaid 成图 mock:模拟真管线把 zen-mermaid 代码块换成 dataURL img
+vi.mock('./mermaidImage', () => ({
+  replaceMermaidCode: vi.fn(async (root: ParentNode) => {
+    const code = root.querySelector('code.language-zen-mermaid')
+    if (code !== null) {
+      const img = document.createElement('img')
+      img.src = 'data:image/png;base64,RENGRVJNQUlO'
+      code.parentElement?.replaceWith(img)
+    }
+  }),
+}))
 import { renderVditorPreview } from './vditorPreview'
+import { replaceMermaidCode } from './mermaidImage'
 
 describe('copyAsWechatHtml:读盘 → 预处理 → 渲染 → 插图 → 内联样式 → 剪贴板', () => {
   test('全链:标记/mermaid 预处理进渲染,出参带内联样式与 dataURL 插图,舞台即用即清', async () => {
@@ -157,18 +171,21 @@ describe('copyAsWechatHtml:读盘 → 预处理 → 渲染 → 插图 → 内联
     await copyAsWechatHtml(fs, '/ws', '/ws/文.md', async (html) => {
       written.push(html)
     })
-    // 渲染入参 = 显示层标记剥净 + mermaid 降级
-    expect(vi.mocked(renderVditorPreview)).toHaveBeenCalledWith(expect.any(HTMLElement), expect.stringContaining('```text'), 'light')
+    // 渲染入参 = 显示层标记剥净 + mermaid 改标 zen-mermaid
+    expect(vi.mocked(renderVditorPreview)).toHaveBeenCalledWith(expect.any(HTMLElement), expect.stringContaining('```zen-mermaid'), 'light')
     const renderedMd = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
     expect(renderedMd).toBe(
-      ['# 标题', '', '![图](assets/pic.png)', '', '![配图](assets/配图.png)', '', '```text', 'A-->B', '```'].join('\n'),
+      ['# 标题', '', '![图](assets/pic.png)', '', '![配图](assets/配图.png)', '', '```zen-mermaid', 'A-->B', '```'].join('\n'),
     )
-    // 剪贴板出参:section 根 + 内联样式 + 插图换 dataURL(含被编码的非 ASCII src)
+    // mermaid 成图管线在编排内被调用,产物 img(内联样式由 applyWechatStyles 补)
+    expect(vi.mocked(replaceMermaidCode)).toHaveBeenCalledTimes(1)
+    // 剪贴板出参:section 根 + 内联样式 + 插图换 dataURL(含被编码的非 ASCII src)+ mermaid 成图
     expect(written).toHaveLength(1)
     expect(written[0]!).toContain('<section')
     expect(written[0]!).toContain('font-size: 15px')
     expect(written[0]!).toContain('data:image/png;base64,AQID')
     expect(written[0]!).toContain('data:image/png;base64,BAU=')
+    expect(written[0]!).toContain('data:image/png;base64,RENGRVJNQUlO')
     // 离屏舞台即用即清,不留痕
     expect(document.querySelector('.wechat-copy-stage')).toBeNull()
   })

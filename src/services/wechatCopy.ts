@@ -5,6 +5,7 @@ import type { FsAdapter } from '../types/files'
 import { toDisplayText } from './displayText'
 import { buildImageMetaFromSrcs } from './imageAssets'
 import { extractImageMarker } from './imageMarkers'
+import { replaceMermaidCode } from './mermaidImage'
 import { renderVditorPreview } from './vditorPreview'
 
 /** src 解码形态(vditor 预览会把非 ASCII src 百分号编码,如 assets/配图.png →
@@ -50,14 +51,17 @@ export async function copyAsWechatHtml(
   try {
     await renderVditorPreview(stage, display, 'light')
     if (wsDir !== null) await resolveImages(fs, wsDir, display, stage)
+    await replaceMermaidCode(stage)
     await writeHtml(buildWechatHtml(stage))
   } finally {
     stage.remove()
   }
 }
 
-/** mermaid 代码块语言降级(```mermaid → ```text):离屏渲染会触发 vditor 异步成图,
- *  而 SVG 粘进公众号必被剥掉——降级为纯代码块,内容不丢、成图不白做。
+/** mermaid 代码块改标(```mermaid → ```zen-mermaid):vditor 无此语言适配器,预渲染
+ *  改标防其异步成图竞态;渲染后由 mermaidImage.replaceMermaidCode 以自有配置
+ *  (htmlLabels:false 无 foreignObject)成图换 PNG dataURL img——公众号剥 SVG,
+ *  唯图片可存活,单块失败保留代码块降级。
  *  逐行围栏状态机:跟踪开围栏字符与长度,闭合围栏(同字符、够长、无 info)才出块,
  *  代码块内部的 "```mermaid" 内容行不误伤 */
 /** 单行围栏探测:行首忽略 ≤3 空格缩进,3+ 连续 ` 或 ~ 记为围栏;返回缩进、
@@ -82,7 +86,7 @@ export function stripMermaid(md: string): string {
       if (f === null) continue
       const info = f.rest.trim()
       if (info === 'mermaid' || info.startsWith('mermaid ')) {
-        lines[i] = `${f.indent}${f.ch.repeat(f.len)}text`
+        lines[i] = `${f.indent}${f.ch.repeat(f.len)}zen-mermaid`
       }
       open = { ch: f.ch, len: f.len }
     } else if (f !== null && f.ch === open.ch && f.len >= open.len && f.rest.trim() === '') {
