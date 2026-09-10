@@ -135,7 +135,9 @@ const TAG_STYLE: Record<string, string> = {
   A: 'color:#576b95;text-decoration:none',
   BLOCKQUOTE: 'margin:16px 0;padding:10px 14px;border-left:3px solid #d0d0d0;background-color:#f7f7f7;color:#5f5f5f',
   CODE: `background-color:#f5f5f5;padding:2px 5px;border-radius:4px;font-size:14px;font-family:${FONT_MONO}`,
-  PRE: `margin:16px 0;padding:14px;border-radius:6px;background-color:#f6f8fa;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:${FONT_MONO}`,
+  // white-space:pre(不折行,超宽由公众号代码组件横向滚动,doocs 同款);text-align:left
+  // 显式压两端对齐——微信粘贴会继承 justify,代码行内空格被拉伸(真机实测)
+  PRE: `margin:16px 0;padding:14px;border-radius:6px;background-color:#f6f8fa;white-space:pre;text-align:left;font-size:13px;line-height:1.6;font-family:${FONT_MONO}`,
   UL: 'margin:12px 0;padding-left:1.6em',
   OL: 'margin:12px 0;padding-left:1.6em',
   LI: 'margin:6px 0',

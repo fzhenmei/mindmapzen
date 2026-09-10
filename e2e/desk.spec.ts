@@ -142,6 +142,8 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   expect(html).not.toContain('max-height')
   expect(html).toContain('hljs-keyword')
   expect(html).toContain('color: rgb(207, 34, 46)')
+  // 压两端对齐:微信粘贴继承 justify 会拉伸代码行内空格(真机实测),pre 显式左对齐
+  expect(html).toContain('text-align: left')
   // 微信形态（doocs/md 实战公式）：code 内无 \n 文本（全转 br）、有单一 display:block 包裹
   const codeShape = await page.evaluate((h: string) => {
     const doc = new DOMParser().parseFromString(h, 'text/html')

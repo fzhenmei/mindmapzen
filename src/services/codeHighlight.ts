@@ -99,16 +99,17 @@ function wechatFormify(code: HTMLElement): void {
   }
   collect(code)
   for (const node of texts) {
-    const segs = (node.textContent ?? '').replace(/\t/g, '    ').split('\n')
+    const segs = (node.textContent ?? '').replaceAll('\t', '    ').split('\n')
     const frag = document.createDocumentFragment()
     segs.forEach((seg, i) => {
       if (i > 0) frag.append(document.createElement('br'))
-      if (seg !== '') frag.append(seg.replace(/ /g, '\u00A0'))
+      if (seg !== '') frag.append(seg.replaceAll(' ', '\u00A0'))
     })
     node.replaceWith(frag)
   }
   const wrap = document.createElement('span')
   wrap.style.display = 'block'
+  wrap.style.textAlign = 'left' // 与 pre 同款双保险:压微信粘贴继承的 justify 拉伸
   wrap.append(...Array.from(code.childNodes))
   code.append(wrap)
 }

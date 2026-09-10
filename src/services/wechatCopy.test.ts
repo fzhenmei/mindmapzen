@@ -84,7 +84,8 @@ describe('applyWechatStyles:逐元素内联样式(公众号只认元素 style)',
     expect(inline.style.backgroundColor).not.toBe('')
     expect(inline.style.borderRadius).not.toBe('')
     const pre = root.querySelector<HTMLElement>('pre')!
-    expect(pre.style.whiteSpace).toBe('pre-wrap')
+    expect(pre.style.whiteSpace).toBe('pre') // 不折行:超宽交公众号代码组件横向滚动
+    expect(pre.style.textAlign).toBe('left') // 压微信粘贴继承的 justify 拉伸
     const blockCode = root.querySelector<HTMLElement>('pre code')!
     expect(blockCode.style.backgroundColor).toBe('')
   })

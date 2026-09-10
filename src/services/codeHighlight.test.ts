@@ -89,9 +89,10 @@ describe('highlightCodeBlocks:pre>code 语法高亮内联化', () => {
     expect(code.textContent).not.toContain(' ')
     expect(code.querySelectorAll('br').length).toBeGreaterThan(0)
     expect(code.textContent).toContain('copyForWechat')
-    // 单一 display:block 包裹(微信代码块 -webkit-box,多子元素横排打乱)
+    // 单一 display:block 包裹(微信代码块 -webkit-box,多子元素横排打乱),且压左对齐
     const wrap = code.querySelector<HTMLElement>('span[style*="display: block"]')
     expect(wrap).not.toBeNull()
+    expect(wrap!.style.textAlign).toBe('left')
     expect([...code.children].filter((el) => el !== wrap)).toHaveLength(0)
   })
 
