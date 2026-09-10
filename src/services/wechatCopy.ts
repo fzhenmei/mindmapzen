@@ -5,6 +5,7 @@ import type { FsAdapter } from '../types/files'
 import { toDisplayText } from './displayText'
 import { buildImageMetaFromSrcs } from './imageAssets'
 import { extractImageMarker } from './imageMarkers'
+import { highlightCodeBlocks } from './codeHighlight'
 import { replaceMermaidCode } from './mermaidImage'
 import { renderVditorPreview } from './vditorPreview'
 
@@ -34,9 +35,10 @@ async function resolveImages(fs: FsAdapter, wsDir: string, display: string, root
   }
 }
 
-/** 编排:读盘 → 预处理(显示层标记剥净 + mermaid 降级)→ 离屏渲染 → 插图换
- *  dataURL → 内联样式 → 剪贴板。失败原样上抛,由调用方 setError 兜底;离屏舞台
- *  attached 但移出视口(vditor 内部 IntersectionObserver 依赖挂载),finally 即清 */
+/** 编排:读盘 → 预处理(显示层标记剥净 + mermaid 改标)→ 离屏渲染 → 插图换
+ *  dataURL → mermaid 成图 → 代码高亮 → 剥 vditor 残留 + 内联样式 → 剪贴板。
+ *  失败原样上抛,由调用方 setError 兜底;离屏舞台 attached 但移出视口(vditor
+ *  内部 IntersectionObserver 依赖挂载),finally 即清 */
 export async function copyAsWechatHtml(
   fs: FsAdapter,
   wsDir: string | null,
@@ -52,7 +54,11 @@ export async function copyAsWechatHtml(
     await renderVditorPreview(stage, display, 'light')
     if (wsDir !== null) await resolveImages(fs, wsDir, display, stage)
     await replaceMermaidCode(stage)
-    await writeHtml(buildWechatHtml(stage))
+    // 先克隆脱离再高亮:舞台上的 vditor 异步 hljs 会重刷已知语言代码块并
+    // 抹掉内联色,克隆体它碰不到
+    const body = extractPublishBody(stage)
+    await highlightCodeBlocks(body)
+    await writeHtml(wrapPublishHtml(body))
   } finally {
     stage.remove()
   }
@@ -152,15 +158,31 @@ export function applyWechatStyles(root: ParentNode): void {
   }
 }
 
-/** 渲染容器 → 可粘贴 HTML 串:取 .vditor-reset 内容(无则容器自身兜底)克隆,
- *  剥全部 id(锚点/编辑器内部标识,发布无用),刷内联样式,包一层 section 承担
- *  基础排版(公众号粘贴惯例:单 section 根) */
-export function buildWechatHtml(rendered: HTMLElement): string {
+/** 渲染容器 → 脱离的发布正文体:取 .vditor-reset 内容(无则容器自身兜底)克隆,
+ *  剥全部 id(锚点/编辑器内部标识,发布无用)与 vditor 预览残留——复制按钮壳
+ *  (textarea/svg,公众号剥控件后留大空腔)、末尾零宽测量 span;pre>code 上
+ *  vditor 的内联残留(max-height 等)一并清空,代码块样式全部由 pre 承担。
+ *  返回克隆体(已脱离文档)——后续高亮等处理作用于其上,舞台上的 vditor 异步
+ *  任务(hljs 重刷)无法染指 */
+export function extractPublishBody(rendered: HTMLElement): HTMLElement {
   const body = (rendered.querySelector('.vditor-reset') ?? rendered).cloneNode(true) as HTMLElement
   for (const el of body.querySelectorAll('[id]')) el.removeAttribute('id')
+  for (const el of body.querySelectorAll('.vditor-copy, span[style*="position: absolute"]')) el.remove()
+  for (const el of body.querySelectorAll<HTMLElement>('pre > code')) el.style.cssText = ''
+  return body
+}
+
+/** 发布正文体 → 可粘贴 HTML 串:刷内联样式,包一层 section 承担基础排版
+ *  (公众号粘贴惯例:单 section 根) */
+export function wrapPublishHtml(body: HTMLElement): string {
   applyWechatStyles(body)
   const section = document.createElement('section')
   section.style.cssText = ROOT_STYLE
   section.append(...Array.from(body.childNodes))
   return section.outerHTML
+}
+
+/** 渲染容器 → 可粘贴 HTML 串(extract + wrap 直连,无中间处理场景/测试用) */
+export function buildWechatHtml(rendered: HTMLElement): string {
+  return wrapPublishHtml(extractPublishBody(rendered))
 }

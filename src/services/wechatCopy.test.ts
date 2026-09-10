@@ -132,6 +132,21 @@ describe('buildWechatHtml:渲染容器 → 可粘贴 HTML 串', () => {
     sink.innerHTML = html
     expect(sink.querySelector('p')!.textContent).toBe('裸')
   })
+
+  test('剥 vditor 预览残留:复制按钮壳与零宽测量 span 不进产物(公众号侧大空白元凶)', () => {
+    const rendered = document.createElement('div')
+    rendered.innerHTML =
+      '<div class="vditor-reset"><pre><div class="vditor-copy"><textarea></textarea><span class="vditor-tooltipped"><svg></svg></span></div><code class="language-ts">const a = 1</code><span style="position: absolute">​</span></pre></div>'
+    const html = buildWechatHtml(rendered)
+    const sink = document.createElement('div')
+    sink.innerHTML = html
+    expect(sink.querySelector('.vditor-copy')).toBeNull()
+    expect(sink.querySelector('textarea')).toBeNull()
+    expect(sink.querySelector('svg')).toBeNull()
+    // vditor 挂在 code 上的 max-height 等内联残留一并清除(pre 承担全部样式)
+    expect(sink.querySelector('pre code')!.getAttribute('style')).toBe('')
+    expect(sink.querySelector('code')!.textContent).toBe('const a = 1')
+  })
 })
 
 // 编排链:仅 mock 渲染(jsdom 不跑 vditor)与 mermaid 成图(无 canvas),插图解析走真

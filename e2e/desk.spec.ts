@@ -109,7 +109,7 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   await page.evaluate(() =>
     (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e.writeFile(
       '/ws/根图.md',
-      '# 根图\n\n> ```mermaid\n> graph TD\n>   A-->B\n> ```\n',
+      '# 根图\n\n> ```mermaid\n> graph TD\n>   A-->B\n> ```\n\n> ```ts\n> const hi = "泽"\n> ```\n',
     ),
   )
   await page.getByTestId('file-node-根图').click()
@@ -132,6 +132,12 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
   expect(html).toContain('<img')
   expect(html).toContain('data:image/png')
   expect(html).not.toContain('zen-mermaid')
+  // 代码块：vditor 复制按钮壳/零宽 span 剥净（公众号侧大空白元凶），hljs token 内联色
+  // （浏览器序列化把 hex 规范化为 rgb，断言按 rgb 形态）
+  expect(html).not.toContain('vditor-copy')
+  expect(html).not.toContain('max-height')
+  expect(html).toContain('hljs-keyword')
+  expect(html).toContain('color: rgb(207, 34, 46)')
 })
 
 test('案头：目录树含文件行，双击文件行打开进纸面', async ({ page }) => {
