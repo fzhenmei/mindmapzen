@@ -103,12 +103,13 @@ test('案头：树文件行单击出详情、详情打开进纸面', async ({ pa
 test('案头：详情态「复制为公众号格式」出内联样式 HTML（mermaid 转 PNG 图）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
-  // harness 异步装配:先等左树出现(装配完成门)再覆写预置文件加 mermaid 块(同文件名,左树无需刷新)
+  // harness 异步装配:先等左树出现(装配完成门)再覆写预置文件加 mermaid 块(同文件名,左树无需刷新)。
+  // 用正文块(引用块)形态的围栏——mermaid 实际多居于此,带 > 前缀的围栏改标是本链路的关键路径
   await expect(page.getByTestId('file-node-根图')).toBeVisible()
   await page.evaluate(() =>
     (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e.writeFile(
       '/ws/根图.md',
-      '# 根图\n\n```mermaid\ngraph TD\n  A-->B\n```\n',
+      '# 根图\n\n> ```mermaid\n> graph TD\n>   A-->B\n> ```\n',
     ),
   )
   await page.getByTestId('file-node-根图').click()

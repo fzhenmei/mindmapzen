@@ -64,17 +64,29 @@ export async function copyAsWechatHtml(
  *  唯图片可存活,单块失败保留代码块降级。
  *  逐行围栏状态机:跟踪开围栏字符与长度,闭合围栏(同字符、够长、无 info)才出块,
  *  代码块内部的 "```mermaid" 内容行不误伤 */
-/** 单行围栏探测:行首忽略 ≤3 空格缩进,3+ 连续 ` 或 ~ 记为围栏;返回缩进、
- *  围栏字符、长度与其后 info 串(手工计数不走正则,避开 S8786 回溯告警) */
-function fenceRun(line: string): { indent: string; ch: string; len: number; rest: string } | null {
+/** 单行围栏探测:行首允许空格与引用块 > 标记交错(正文块即引用块、列表嵌套围栏
+ *  深缩进——前缀原样保留,只改写围栏 info),其后 3+ 连续 ` 或 ~ 记为围栏;
+ *  返回前缀、围栏字符、长度与其后 info 串(手工计数不走正则,避开 S8786 回溯告警) */
+function fenceRun(line: string): { prefix: string; ch: string; len: number; rest: string } | null {
   let i = 0
-  while (i < line.length && i < 3 && line[i] === ' ') i++
+  let advanced = true
+  while (advanced) {
+    advanced = false
+    while (i < line.length && line[i] === ' ') {
+      i++
+      advanced = true
+    }
+    if (i < line.length && line[i] === '>') {
+      i++
+      advanced = true
+    }
+  }
   const ch = line[i]
   if (ch !== '`' && ch !== '~') return null
   let len = 0
   while (i + len < line.length && line[i + len] === ch) len++
   if (len < 3) return null
-  return { indent: line.slice(0, i), ch, len, rest: line.slice(i + len) }
+  return { prefix: line.slice(0, i), ch, len, rest: line.slice(i + len) }
 }
 
 export function stripMermaid(md: string): string {
@@ -86,7 +98,7 @@ export function stripMermaid(md: string): string {
       if (f === null) continue
       const info = f.rest.trim()
       if (info === 'mermaid' || info.startsWith('mermaid ')) {
-        lines[i] = `${f.indent}${f.ch.repeat(f.len)}zen-mermaid`
+        lines[i] = `${f.prefix}${f.ch.repeat(f.len)}zen-mermaid`
       }
       open = { ch: f.ch, len: f.len }
     } else if (f !== null && f.ch === open.ch && f.len >= open.len && f.rest.trim() === '') {

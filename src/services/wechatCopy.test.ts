@@ -25,6 +25,21 @@ describe('stripMermaid:mermaid 围栏改 zen-mermaid 标记(vditor 无此适配�
   test('正文中的 mermaid 单词不误伤(非围栏行)', () => {
     expect(stripMermaid('提到 mermaid 工具')).toBe('提到 mermaid 工具')
   })
+
+  test('正文块(引用块)内的围栏带 > 前缀,同样改标(正文即引用块,mermaid 多居于此)', () => {
+    const md = ['> ```mermaid', '> graph TD', '> ```'].join('\n')
+    expect(stripMermaid(md)).toBe(['> ```zen-mermaid', '> graph TD', '> ```'].join('\n'))
+  })
+
+  test('列表深嵌套缩进围栏(>3 空格)同样改标,前缀与缩进保留', () => {
+    const md = ['      ```mermaid', '      graph TD', '      ```'].join('\n')
+    expect(stripMermaid(md)).toBe(['      ```zen-mermaid', '      graph TD', '      ```'].join('\n'))
+  })
+
+  test('开围栏内的 "```mermaid" 内容行不误伤(围栏状态机防伪开)', () => {
+    const md = ['```js', 'const s = "```mermaid"', '```'].join('\n')
+    expect(stripMermaid(md)).toBe(md)
+  })
 })
 
 /** 构造代表性 DOM 片段并应用内联样式(applyWechatStyles 直接吃真 DOM) */
