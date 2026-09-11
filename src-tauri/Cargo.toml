@@ -30,6 +30,12 @@ tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 trash = "5"
 tokio = { version = "1.53.1", features = ["process", "time"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+
+[dev-dependencies]
+# 契约测试起本地 mock server（TcpListener 手写 HTTP 响应）所需特性；与主依赖 tokio 特性并集生效
+tokio = { version = "1.53.1", features = ["macros", "rt", "net", "io-util"] }
 
 # 标题栏主题染色（DWM 染色命令 set_titlebar_colors 的 win32 绑定，仅 Windows 需要）
 [target.'cfg(windows)'.dependencies]

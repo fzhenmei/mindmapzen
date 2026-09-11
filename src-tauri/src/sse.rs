@@ -1,8 +1,6 @@
 // src-tauri/src/sse.rs —— SSE 增量解析（AI 对话流，spec §2.1）：
 // OpenAI 兼容流只用 data: 行、事件以空行分隔；逐块喂入，产出完整 data 载荷串。
 // \r\n 归一为 \n；跨块断裂的孤立 \r 极罕见（各家实现均 \n 分隔），注释明示局限不再处理。
-// Task 2 ai_stream.rs 接入前本模块暂无调用方，先压掉 dead_code 警告；接入后可移除。
-#![allow(dead_code)]
 pub struct SseParser {
     buf: String,
 }
