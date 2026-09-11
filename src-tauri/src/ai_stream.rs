@@ -138,10 +138,15 @@ pub async fn run_chat_stream(
 
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}…(截断)", &s[..max])
+        return s.to_string();
     }
+    // 按字节切 max 可能落在多字节字符内部（中文错误体即命中）导致 panic——
+    // 后台任务 panic 后前端将收不到 error/end，故回退到最近的 char boundary
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…(截断)", &s[..end])
 }
 
 #[cfg(test)]
@@ -224,5 +229,18 @@ mod tests {
         let got = sink.0.lock().unwrap();
         assert_eq!(got.last().unwrap()["type"], "end");
         assert!(got.iter().any(|v| v["type"] == "error"));
+    }
+
+    #[test]
+    fn truncate多字节边界不panic() {
+        // "ab你"=5 字节/周期，2048 mod 5 = 3，截断点落在"你"的中间字节——
+        // 旧按字节切片在此 panic（中文错误体即命中）；char-boundary 回退后安全
+        let s = "ab你".repeat(1500);
+        let out = super::truncate(&s, 2048);
+        assert!(out.len() < 2048 + 16);
+        assert!(out.ends_with("(截断)"));
+        // 对照：截断点恰为单字节字符起点（"a你"=4B/周期，2048 mod 4 = 0）不受影响
+        assert!(super::truncate(&"a你".repeat(1500), 2048).ends_with("(截断)"));
+        assert_eq!(super::truncate("short", 2048), "short");
     }
 }
