@@ -2759,4 +2759,24 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     cleanup()
     expect(useChatStore.getState().messages).toEqual([])
   })
+
+  test('面板开合触发画布补偿 resize；容器 0×0 时被门禁跳过（webview2 污染链路复刻）', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    const el = document.createElement('div')
+    let rect = { width: 400, height: 300 } as DOMRect
+    el.getBoundingClientRect = () => rect
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      ;(fakeHandle as { el: HTMLElement | null }).el = el
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    const resize = vi.mocked(fakeHandle.resize)
+    fireEvent.click(screen.getByTestId('ai-toggle'))
+    expect(resize).toHaveBeenCalled() // 正常 rect：开面板即补偿一次
+    resize.mockClear()
+    rect = { width: 0, height: 0 } as DOMRect // 窄窗口下面板挤压画布至 0×0
+    fireEvent.click(screen.getByTestId('ai-close'))
+    expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
+  })
 })

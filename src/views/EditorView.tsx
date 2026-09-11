@@ -320,9 +320,20 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   }, [])
 
   // AI 面板开/关/定宽后画布让位重算：引擎只监听 window resize，容器收窄（canvas-host 内联 right）
-  // 须宿主补调 resize()；拖拽暂存不进依赖——不逐帧重排，开合/onCommit/onReset 各触发一次
+  // 须宿主补调 resize()；拖拽暂存不进依赖——不逐帧重排，开合/onCommit/onReset 各触发一次。
+  // 补偿调用必须复刻 MindMapCanvas safeResize 的 0×0 门禁（rect 校验+try/catch）：引擎
+  // getElRectInfo 先写 0 再抛错——窄窗口（tauri 无 minWidth）面板开/定宽时 canvas-host 宽
+  // 可 ≤0，裸 resize 会命中"先污染后抛错"链路（2026-09 全树平移事故，见 webview2-zero-resize-corruption）
   useEffect(() => {
-    mmRef.current?.resize()
+    const el = mmRef.current?.el
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return // 0×0 门禁：跳过本次补偿，窗口恢复后 focus/resize 自愈
+    try {
+      mmRef.current?.resize()
+    } catch (e) {
+      console.warn('AI 面板画布补偿 resize 失败（窗口尺寸异常，暂跳过）', e) // 显式出口
+    }
   }, [aiOpen, aiChatWidth])
 
   /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。

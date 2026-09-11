@@ -1,6 +1,6 @@
 // src/components/ChatPanel.tsx —— AI 对话面板（spec §7）：纯装配 + 回合编排（send/stop）。
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
-import { useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useRef, useState, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
@@ -35,7 +35,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   const [input, setInput] = useState('')
   const stopRef = useRef<{ request(): void } | null>(null)
 
-  async function handleSend(e?: FormEvent): Promise<void> {
+  async function handleSend(e?: SubmitEvent): Promise<void> {
     e?.preventDefault()
     const text = input.trim()
     const chat = useChatStore.getState()
@@ -56,7 +56,10 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       .map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.text }))
     chat.pushUser(text)
     const sel = selectionLine(contextNode ?? selection)
-    const url = `${ai.baseUrl.replace(/\/+$/, '')}/chat/completions`
+    // 尾部斜杠循环剥除（Sonar S8786 只认单量词正则，/\/+$/ 亦被报——循行尾重复标记先例改循环）
+    let base = ai.baseUrl
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    const url = `${base}/chat/completions`
     beginAiTurn()
     const stop = createTurnStop()
     stopRef.current = stop
@@ -151,7 +154,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   )
 }
 
-function MessageRow({ msg, idx }: { msg: ChatMessage; idx: number }) {
+function MessageRow({ msg, idx }: Readonly<{ msg: ChatMessage; idx: number }>) {
   if (msg.role === 'user') {
     return (
       <div className="mb-2 flex justify-end">
@@ -174,13 +177,15 @@ function MessageRow({ msg, idx }: { msg: ChatMessage; idx: number }) {
           <span className="animate-pulse">▍</span>
         </p>
       )}
+      {/* 卡片 append-only 无删除重排（chatStore.pushCard 只追加），内容复合键即稳定标识 */}
       {(msg.cards ?? []).map((c, i) => (
         <p
-          key={i}
+          key={`${c.kind}-${c.ok}-${i}`}
           data-testid={`ai-card-${idx}-${i}`}
           className={`mt-1 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs ${c.ok ? 'border-border text-muted-foreground' : 'border-destructive/40 text-destructive'}`}
         >
-          {c.ok ? '✓' : '✕'} {cardText(c)}
+          {/* spec §7「成功绿/失败红」：成功仅 ✓ 图标着绿（克制处理，正文保持 muted）；失败整卡红 */}
+          {c.ok ? <span className="text-emerald-600 dark:text-emerald-400">✓</span> : '✕'} {cardText(c)}
         </p>
       ))}
     </div>

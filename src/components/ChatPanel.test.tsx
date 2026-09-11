@@ -69,9 +69,15 @@ test('发送→流式→定稿切 md 渲染', async () => {
   expect(screen.queryByTestId('ai-msg-streaming')).not.toBeInTheDocument()
 })
 
-test('卡片渲染：失败红字', () => {
+test('卡片渲染：失败红字；成功 ✓ 图标绿、正文保持 muted（spec §7 Ruling 5）', () => {
   useChatStore.getState().pushUser('x') // 产生 [user, assistant 占位] 两条——卡片挂在 assistant（idx 1）
   useChatStore.getState().pushCard({ kind: 'remove', ok: false, text: '节点不存在：[zz]' })
+  useChatStore.getState().pushCard({ kind: 'add', ok: true, text: '新想法' })
   mount()
   expect(screen.getByTestId('ai-card-1-0')).toHaveTextContent('失败')
+  expect(screen.getByTestId('ai-card-1-0')).toHaveClass('text-destructive')
+  const okCard = screen.getByTestId('ai-card-1-1')
+  expect(okCard).toHaveTextContent(/新增/) // 成功正文仍走词典文案（muted 正文）
+  expect(okCard).toHaveClass('text-muted-foreground') // 正文档位不变
+  expect(okCard.querySelector('span')).toHaveClass('text-emerald-600') // 仅 ✓ 图标着绿
 })
