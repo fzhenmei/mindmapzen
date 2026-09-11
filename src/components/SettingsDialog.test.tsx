@@ -93,7 +93,7 @@ describe('SettingsDialog', () => {
 
   // AI 分区（2026-09 AI Agent v1，spec §1 BYOK）：填写三项保存 → 整包 patch 调 setAiConfig
   // （持久化链路本身由 appStore.test 覆盖，此处守卫对话框装配与收集口径）。
-  // harness 沿用本文件 fireEvent 惯例（项目未装 @testing-library/user-event）
+  // harness 对齐本文件既有 fireEvent 惯例
   test('AI 分区：填写三项保存并持久化', async () => {
     const setAiConfig = vi.fn(async () => {})
     useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, setAiConfig } as never)
@@ -109,5 +109,20 @@ describe('SettingsDialog', () => {
         model: 'deepseek-chat',
       }),
     )
+  })
+
+  // 保存失败必须有显式出口（吞异常禁令）：setAiConfig 经 fs 端口可 reject（工作区丢失/权限），
+  // 失败时渲染 set-ai-error（errors.saveFailed 包 reason），"已保存"提示不出现
+  test('AI 分区：保存失败显示错误且不亮已保存', async () => {
+    const setAiConfig = vi.fn(async () => {
+      throw new Error('workspace gone')
+    })
+    useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, setAiConfig } as never)
+    render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.change(screen.getByTestId('set-ai-baseurl'), { target: { value: 'https://api.deepseek.com/v1' } })
+    fireEvent.click(screen.getByTestId('set-ai-save'))
+    await waitFor(() => expect(screen.getByTestId('set-ai-error')).toBeInTheDocument())
+    expect(screen.getByTestId('set-ai-error')).toHaveTextContent('workspace gone')
+    expect(screen.queryByText('AI 配置已保存')).not.toBeInTheDocument()
   })
 })

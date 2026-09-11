@@ -65,6 +65,7 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const setAiConfig = useAppStore((s) => s.setAiConfig)
   const [aiDraft, setAiDraft] = useState(aiConfig)
   const [aiSaved, setAiSaved] = useState(false)
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null)
   const { t } = useTranslation()
   const languagePref = useAppStore((s) => s.languagePref)
   const setLanguagePref = useAppStore((s) => s.setLanguagePref)
@@ -75,9 +76,18 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   }, [])
 
   async function handleAiSave(): Promise<void> {
-    await setAiConfig({ baseUrl: aiDraft.baseUrl.trim(), apiKey: aiDraft.apiKey.trim(), model: aiDraft.model.trim() })
-    setAiSaved(true)
-    window.setTimeout(() => setAiSaved(false), 1600)
+    setAiSaveError(null)
+    try {
+      const trimmed = { baseUrl: aiDraft.baseUrl.trim(), apiKey: aiDraft.apiKey.trim(), model: aiDraft.model.trim() }
+      await setAiConfig(trimmed)
+      setAiDraft(trimmed) // 成功回写草稿，输入框与 store 对齐
+      setAiSaved(true)
+      window.setTimeout(() => setAiSaved(false), 1600)
+    } catch (e) {
+      // fs 端口可拒绝（工作区丢失/权限）——保存失败必须显式出口（吞异常禁令）
+      console.error('AI 配置保存失败', e)
+      setAiSaveError(i18n.t('errors.saveFailed', { reason: String(e) }))
+    }
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
@@ -191,6 +201,11 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                 {t('ai.settings.save')}
               </Button>
               {aiSaved && <span className="text-xs text-muted-foreground">{t('ai.settings.saved')}</span>}
+              {aiSaveError !== null && (
+                <p data-testid="set-ai-error" role="alert" className="text-xs text-destructive">
+                  {aiSaveError}
+                </p>
+              )}
             </div>
           </div>
           {/* 语言三态(2026-09 i18n)：默认跟随系统；显式选择即时生效并持久化 */}
