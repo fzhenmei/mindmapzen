@@ -329,8 +329,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // 悬停优先 + 无目标守卫：悬停在场编辑被预览节点；悬停/选中皆空盖警告签不弹空态弹窗
     toggleBodyDialog: () => toggleBodyOrWarn(noteHoverUidRef.current),
     anyDialogRef,
-    openQuickSwitch: quick.open,
-    cycleStep: quick.cycleStep,
+    // AI 回合拦呼出（Task 12 fix，spec §6）：Ctrl+P 搜索浮层 / Ctrl+Tab 轮换浮层回合中
+    // 均不开——open 即被拦，commit 路径自然封死（无需改 useQuickSwitch 内部）
+    openQuickSwitch: () => guardAiTurn(quick.open),
+    cycleStep: (reverse: boolean) => guardAiTurn(() => quick.cycleStep(reverse)),
   })
 
   useEffect(() => {
@@ -392,7 +394,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           errorInfo={errorInfo}
           mdPath={mdPath}
           openInEditor={openInEditor}
-          onBack={() => void quick.leaveTo(backToLibrary)}
+          onBack={() => guardAiTurn(() => void quick.leaveTo(backToLibrary))}
           onSwitch={() => guardAiTurn(quick.open)}
           engineTree={engineTree}
           registry={registry}
@@ -495,8 +497,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* 浮动砚栏（M5a 拆分至 ZenBar）。仅就绪态渲染（2026-09）：错误/加载态引擎未建，按钮无意义 */}
       {docReady && (
       <ZenBar
-        onBack={() => void quick.leaveTo(backToLibrary)} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）
-        onSwitchClick={quick.open}
+        onBack={() => guardAiTurn(() => void quick.leaveTo(backToLibrary))} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）；AI 回合拦截（Task 12 fix）
+        onSwitchClick={() => guardAiTurn(quick.open)}
         onNewClick={() => setNewMapOpen(true)}
         undoRedo={undoRedo}
         onCopyClick={doCopy}
@@ -579,7 +581,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             : null
         }
         // 快速切换浮层（v2.5）：槽组装拆至 buildQuickSwitchSlot（复杂度护栏，槽内两形态互斥）
-        quickSwitch={buildQuickSwitchSlot(guard, flow, quick)}
+        quickSwitch={buildQuickSwitchSlot(guard, flow, quick, guardAiTurn)}
         // 新建导图对话框（2026-09 画布内入口）：互斥优先级同上（guarding > confirming > 新建）。
         // 确认即关框走 leaveTo 安全链——保存当前图成功才 createAndOpen 跳转；保存失败/未映射块
         // 确认挂起留在原图（与「返回案头」同款约定，确认后不自动续行）。创建失败（如重名）走横幅
@@ -609,11 +611,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 }
 
 /** 快速切换浮层槽组装（v2.5.1 拆出，复杂度护栏）：搜索态（Ctrl+P）/ 轮换态（Ctrl+Tab）
- *  两形态互斥共用——cycleActive 传 undefined 即搜索态；守卫/确认框让位互斥（同其他槽） */
+ *  两形态互斥共用——cycleActive 传 undefined 即搜索态；守卫/确认框让位互斥（同其他槽）。
+ *  onPick 经 guardAiTurn 包装（Task 12 fix，spec §6）：浮层开着进入 AI 回合时 commit 仍拦 */
 function buildQuickSwitchSlot(
   guard: Readonly<{ guarding: boolean }>,
   flow: Readonly<{ confirming: boolean }>,
   quick: ReturnType<typeof useQuickSwitch>,
+  guardAiTurn: (next: () => void) => void,
 ): ComponentProps<typeof QuickSwitchDialog> | null {
   if (guard.guarding || flow.confirming) return null
   if (!quick.switchOpen && quick.cycle === null) return null
@@ -621,7 +625,7 @@ function buildQuickSwitchSlot(
     candidates: quick.cycle !== null ? quick.cycleCandidates : quick.candidates,
     cycleActive: quick.cycle ?? undefined,
     onActiveChange: quick.setCycleActive,
-    onPick: (p) => void quick.switchTo(p),
+    onPick: (p) => guardAiTurn(() => void quick.switchTo(p)),
     onClose: quick.cycle !== null ? quick.cancelCycle : quick.close,
   }
 }

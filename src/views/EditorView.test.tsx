@@ -2047,6 +2047,28 @@ describe('快速切换（v2.5）', () => {
     fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
+
+  // AI 回合锁（Task 12 fix，spec §6 禁切导图）：快速切换全拦——Ctrl+P/Ctrl+Tab 呼不出
+  // 浮层（open/cycleStep 入口即拦，commit 路径自然封死）；浮层开着进入回合时回车 commit
+  // （onPick）也不 openMap；拦截以 blockedPulse 脉冲提示。回合中切图会卸载 EditorView，
+  // 异步回合循环写旧 mm 引用（孤儿回合），故键盘三条通路与鼠标路径同口径
+  test('AI 回合中快速切换全拦：浮层呼不出、开着也 commit 不动，脉冲提示', async () => {
+    await renderForSwitch()
+    useChatStore.getState().setPhase('streaming')
+    // 呼出通路：Ctrl+P 搜索浮层 / Ctrl+Tab 轮换浮层均不开
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument()
+    expect(useChatStore.getState().blockedPulse).toBe(true) // notifyBlocked 生效（状态签脉冲）
+    // commit 通路：idle 下呼出浮层后进入回合，回车选择（onPick）不切图
+    useChatStore.getState().setPhase('idle')
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(screen.getByTestId('switch-input')).toBeInTheDocument()
+    useChatStore.getState().setPhase('streaming')
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Enter' })
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // quick.switchTo 被拦，未 openMap
+  })
 })
 
 // ---- 顶部导图胶囊条（2026-09 鼠标流切换）：mapTabs 稳定序平铺、当前图高亮、点选走安全链 ----
