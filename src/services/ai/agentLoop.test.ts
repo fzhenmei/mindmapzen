@@ -4,9 +4,11 @@ import { createTurnStop, runUserTurn } from './agentLoop'
 import type { AiTransport, ChatRequestPayload, StreamOutcome } from './client'
 import type { ToolCallResult } from './tools'
 
-/** 脚本化 transport：按脚本逐轮吐 chunk 序列 */
+/** 脚本化 transport：按脚本逐轮吐 chunk 序列；abort() 令挂起的流以 'aborted' 主动收尾
+ *  （对齐 Task 8 真实 transport 契约：inFlightFinish 模式，settle 单次守卫） */
 function scriptedTransport(scripts: Array<Array<string>>, abortAfterMs = 0): AiTransport & { calls: number } {
   let round = 0
+  let pendingAbort: (() => void) | null = null
   return {
     calls: 0,
     start(_payload: ChatRequestPayload, onDelta: (d: string) => void): Promise<StreamOutcome> {
@@ -14,19 +16,29 @@ function scriptedTransport(scripts: Array<Array<string>>, abortAfterMs = 0): AiT
       const chunks = scripts[Math.min(round, scripts.length - 1)]!
       round++
       return new Promise((resolve) => {
+        let settled = false
         let i = 0
+        const finish = (o: StreamOutcome): void => {
+          if (settled) return
+          settled = true
+          clearInterval(timer)
+          pendingAbort = null
+          resolve(o)
+        }
         const timer = setInterval(() => {
           if (i >= chunks.length) {
-            clearInterval(timer)
-            resolve({ endedWith: 'done' })
+            finish({ endedWith: 'done' })
             return
           }
           onDelta(chunks[i]!)
           i++
         }, abortAfterMs || 1)
+        pendingAbort = () => finish({ endedWith: 'aborted' })
       })
     },
-    abort() {},
+    abort() {
+      pendingAbort?.()
+    },
   } as AiTransport & { calls: number }
 }
 
@@ -97,13 +109,15 @@ test('连续 3 次工具失败终止', async () => {
   expect(t.calls).toBe(1) // 单轮内即终止，不发起下一轮
 })
 
-test('streaming 中停止：中止传输不再执行工具', async () => {
+test('streaming 中停止：就地 abort 掐断网络流，不执行工具', async () => {
   const t = scriptedTransport([[okAdd, finishToolCalls, textHi]], 5)
+  const abortSpy = vi.spyOn(t, 'abort')
   const { deps, on, executeTool } = makeDeps(t)
   const stop = createTurnStop()
   const p = runUserTurn(deps, stop, INIT)
   setTimeout(() => stop.request(), 8) // 第 2 个 chunk 后请求停止
-  await p
+  await p // abort 令 start 以 'aborted' 主动收尾，不等流自然结束（回合有限时间返回）
+  expect(abortSpy).toHaveBeenCalled()
   expect(executeTool).not.toHaveBeenCalled()
   expect(on.error).not.toHaveBeenCalled()
 })

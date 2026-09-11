@@ -1,9 +1,9 @@
 // src/services/ai/agentLoop.ts —— AI 回合状态机（spec §4）：streaming ↔ executing 循环，
-// 护栏（12 轮 / 连续 3 败）、停止语义（streaming 中止传输；executing 当前工具做完即停，
+// 护栏（12 轮 / 连续 3 败）、停止语义（streaming 就地 abort 传输；executing 当前工具做完即停，
 // 已应用编辑保留不回滚）。纯函数：状态经 deps.on 回调外写，engine 经 executeTool 注入。
 import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
-import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport } from './client'
+import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
 import { AI_TOOL_SCHEMAS } from './tools'
 import type { ToolCallResult } from './tools'
 
@@ -59,18 +59,101 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
   move_node: 'move',
 }
 
+/** OpenAI assistant tool_call 消息形态（assembleAssistantToolCalls 的产物） */
+type AssistantToolCall = ReturnType<typeof assembleAssistantToolCalls>[number]
+
+/** Ruling 1：非 Tauri 环境的错误码给专用文案，其余按网络错误原文透出 */
+function transportErrorMessage(errorMessage: string | undefined): string {
+  return errorMessage === 'AI_TRANSPORT_UNAVAILABLE'
+    ? i18n.t('ai.turn.transportUnavailable')
+    : i18n.t('ai.error.network', { message: errorMessage ?? 'unknown' })
+}
+
+/** 解析工具参数：arguments 非法按空参执行，工具自会回失败文本给 AI 自纠 */
+function parseToolArgs(raw: string): unknown {
+  try {
+    return JSON.parse(raw || '{}')
+  } catch {
+    return {}
+  }
+}
+
+/** 流式累计器：文本增量外写 + tool_calls 分片合并；停止传染——就地 abort 掐断网络流
+ *  （Task 8 契约：abort 后 start 以 'aborted' 主动收尾，不等流自然结束） */
+function createStreamCollector(stop: TurnStop, transport: AiTransport, emitDelta: (text: string) => void) {
+  let text = ''
+  const acc = new Map<number, ToolCallAcc>()
+  const handle = (data: string): void => {
+    if (stop.stopped) {
+      transport.abort()
+      return
+    }
+    const p = parseDeltaChunk(data)
+    if (!p) return
+    if (p.text) {
+      text += p.text
+      emitDelta(p.text)
+    }
+    if (p.toolCallChunks) mergeToolCallChunks(acc, p.toolCallChunks)
+  }
+  return { handle, text: () => text, acc }
+}
+
+/** 首个编辑工具成功后落 git 备份恰一次（spec §6：纯闲聊回合不灌 git 历史） */
+async function backupOnceBeforeFirstEdit(
+  deps: AgentTurnDeps,
+  kind: ToolCardData['kind'] | undefined,
+  backupDone: { value: boolean },
+): Promise<void> {
+  if (backupDone.value || !kind) return
+  backupDone.value = true
+  try {
+    await deps.backupBeforeFirstEdit()
+  } catch (e) {
+    console.warn('AI 回合前 git 备份失败（不阻断，仍有撤销兜底）', e) // 显式出口
+  }
+}
+
+/** 执行一轮工具：卡片外写、tool 结果回灌 history、停止让位与连败护栏（3 败终止）。
+ *  返回 false = 回合终止（用户停止或护栏触发），已应用编辑保留不回滚 */
+async function executeRoundTools(
+  deps: AgentTurnDeps,
+  stop: TurnStop,
+  history: Array<Record<string, unknown>>,
+  toolCalls: AssistantToolCall[],
+  backupDone: { value: boolean },
+): Promise<boolean> {
+  deps.on.phase('executing')
+  let failStreak = 0
+  for (const call of toolCalls) {
+    if (stop.stopped) return false // executing 中停止：当前工具未启动即让位（已应用编辑保留）
+    const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
+    const kind = CARD_KIND_BY_TOOL[call.function.name]
+    if (kind) deps.on.card({ kind, ok: r.ok, text: r.detail })
+    history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: r.ok, detail: r.detail, uid: r.uid }) })
+    if (r.ok) {
+      failStreak = 0
+      await backupOnceBeforeFirstEdit(deps, kind, backupDone)
+    } else if (++failStreak >= MAX_FAIL_STREAK) {
+      deps.on.error(i18n.t('ai.turn.toolFailStreak'))
+      return false
+    }
+  }
+  return true
+}
+
 export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: TurnInit): Promise<void> {
   const history: Array<Record<string, unknown>> = [...init.history]
   const userContent = init.selection
     ? `${init.userText}\n\n（用户当前选中：${init.selection}）`
     : init.userText
   history.push({ role: 'user', content: userContent })
-  let backupDone = false
+  const backupDone = { value: false }
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    if (stop.stopped) return // 停止传染：上一轮工具执行尾部置位时，不再发起新请求
     deps.on.phase('streaming')
-    let text = ''
-    const acc = new Map<number, { id: string; name: string; arguments: string }>()
+    const stream = createStreamCollector(stop, deps.transport, deps.on.delta)
     const outcome = await deps.transport.start(
       {
         url: init.url,
@@ -82,70 +165,23 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
           stream: true,
         },
       },
-      (data) => {
-        if (stop.stopped) return
-        const p = parseDeltaChunk(data)
-        if (!p) return
-        if (p.text) {
-          text += p.text
-          deps.on.delta(p.text)
-        }
-        if (p.toolCallChunks) mergeToolCallChunks(acc, p.toolCallChunks)
-      },
+      stream.handle,
     )
     if (outcome.endedWith === 'error') {
-      // Ruling 1：非 Tauri 环境（web/e2e）的特判码给专用文案，其余按网络错误原文透出
-      deps.on.error(
-        outcome.errorMessage === 'AI_TRANSPORT_UNAVAILABLE'
-          ? i18n.t('ai.turn.transportUnavailable')
-          : i18n.t('ai.error.network', { message: outcome.errorMessage ?? 'unknown' }),
-      )
+      deps.on.error(transportErrorMessage(outcome.errorMessage))
       return
     }
     if (stop.stopped) return // 用户停止：已流出文本保留（chatStore 兜底 finalize 由编排层 finally 做）
     deps.on.finalize()
 
-    const toolCalls = assembleAssistantToolCalls(acc)
+    const toolCalls = assembleAssistantToolCalls(stream.acc)
     if (toolCalls.length === 0) {
-      history.push({ role: 'assistant', content: text || '（空回复）' })
+      history.push({ role: 'assistant', content: stream.text() || '（空回复）' })
       deps.on.phase('idle')
       return
     }
-    history.push({ role: 'assistant', content: text || null, tool_calls: toolCalls })
-
-    deps.on.phase('executing')
-    let failStreak = 0
-    for (const call of toolCalls) {
-      if (stop.stopped) return // executing 中停止：当前工具未启动即让位（已应用编辑保留）
-      let args: unknown
-      try {
-        args = JSON.parse(call.function.arguments || '{}')
-      } catch {
-        args = {} // arguments 非法按空参执行，工具自会回失败文本给 AI
-      }
-      const r = await deps.executeTool(call.function.name, args)
-      const kind = CARD_KIND_BY_TOOL[call.function.name]
-      if (kind) deps.on.card({ kind, ok: r.ok, text: r.detail })
-      history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: r.ok, detail: r.detail, uid: r.uid }) })
-      if (!r.ok) {
-        failStreak++
-        if (failStreak >= MAX_FAIL_STREAK) {
-          deps.on.error(i18n.t('ai.turn.toolFailStreak'))
-          return
-        }
-      } else {
-        failStreak = 0
-        // 首个编辑工具成功前落 git 备份（spec §6：纯闲聊回合不灌 git 历史）
-        if (!backupDone && kind) {
-          backupDone = true
-          try {
-            await deps.backupBeforeFirstEdit()
-          } catch (e) {
-            console.warn('AI 回合前 git 备份失败（不阻断，仍有撤销兜底）', e) // 显式出口
-          }
-        }
-      }
-    }
+    history.push({ role: 'assistant', content: stream.text() || null, tool_calls: toolCalls })
+    if (!(await executeRoundTools(deps, stop, history, toolCalls, backupDone))) return
   }
   deps.on.error(i18n.t('ai.turn.roundLimit'))
 }
