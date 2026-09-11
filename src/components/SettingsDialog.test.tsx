@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SettingsDialog from './SettingsDialog'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -89,5 +89,25 @@ describe('SettingsDialog', () => {
     expect(screen.getByText('Version control (auto-commit to workspace git repo)')).toBeInTheDocument()
     // html lang 同步
     expect(document.documentElement.lang).toBe('en')
+  })
+
+  // AI 分区（2026-09 AI Agent v1，spec §1 BYOK）：填写三项保存 → 整包 patch 调 setAiConfig
+  // （持久化链路本身由 appStore.test 覆盖，此处守卫对话框装配与收集口径）。
+  // harness 沿用本文件 fireEvent 惯例（项目未装 @testing-library/user-event）
+  test('AI 分区：填写三项保存并持久化', async () => {
+    const setAiConfig = vi.fn(async () => {})
+    useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, setAiConfig } as never)
+    render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.change(screen.getByTestId('set-ai-baseurl'), { target: { value: 'https://api.deepseek.com/v1' } })
+    fireEvent.change(screen.getByTestId('set-ai-key'), { target: { value: 'sk-test' } })
+    fireEvent.change(screen.getByTestId('set-ai-model'), { target: { value: 'deepseek-chat' } })
+    fireEvent.click(screen.getByTestId('set-ai-save'))
+    await waitFor(() =>
+      expect(setAiConfig).toHaveBeenCalledWith({
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-test',
+        model: 'deepseek-chat',
+      }),
+    )
   })
 })
