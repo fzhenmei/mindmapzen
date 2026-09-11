@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AppConfig } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AppConfig } from '../types/files'
 import { loadConfig, saveConfig } from './config'
 
 /** 便捷构造完整配置对象（新字段补齐后各用例只写差异项） */
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, language: 'auto', ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, language: 'auto', ...over,
 })
 
 describe('配置读写', () => {
@@ -22,17 +22,17 @@ describe('配置读写', () => {
   })
   test('保存后可读回', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: '/ws/a.md', preferredLayout: null, theme: 'auto', previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, recentOpened: [], git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
-    expect(await loadConfig(fs, '/cfg.json')).toEqual({ workspaceDir: '/ws', lastOpened: '/ws/a.md', recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ lastOpened: '/ws/a.md' }))
+    expect(await loadConfig(fs, '/cfg.json')).toEqual(cfg({ lastOpened: '/ws/a.md' }))
   })
 })
 
 describe('previewOutline（预览大纲三态偏好）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'on', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ previewOutline: 'on' }))
     expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('on')
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'off', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ previewOutline: 'off' }))
     expect((await loadConfig(fs, '/cfg.json')).previewOutline).toBe('off')
   })
   test('非法值与缺失回退 auto（旧配置兼容）', async () => {
@@ -47,7 +47,7 @@ describe('previewOutline（预览大纲三态偏好）', () => {
 describe('preferredLayout（验收轮三：记住默认布局）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: 'logic', theme: 'auto', previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ preferredLayout: 'logic' }))
     expect((await loadConfig(fs, '/cfg.json')).preferredLayout).toBe('logic')
   })
   test('非法值与缺失回退 null', async () => {
@@ -69,7 +69,7 @@ describe('preferredLayout（验收轮三：记住默认布局）', () => {
 describe('theme（M4 禅意视觉）', () => {
   test('theme 往返与非法回退 auto', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: null, lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'dark', previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ workspaceDir: null, theme: 'dark' }))
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('dark')
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: null, lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'x' }))
     expect((await loadConfig(fs, '/cfg.json')).theme).toBe('auto')
@@ -79,14 +79,7 @@ describe('theme（M4 禅意视觉）', () => {
 describe('settings（M5b Task 4：复制行为；2026-09-06 copyIncludeNote 退役）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', {
-      workspaceDir: null, lastOpened: null, preferredLayout: null, theme: 'auto', previewOutline: 'auto',
-      favorites: [], librarySort: 'modified',
-      settings: { copyIncludeLinks: false, copyIncludeBody: false },
-      recentOpened: [],
-      git: DEFAULT_GIT_CONFIG,
-      tourDone: false, sidebarWidth: null, outlineWidth: null, language: 'auto',
-    })
+    await saveConfig(fs, '/cfg.json', cfg({ workspaceDir: null, settings: { copyIncludeLinks: false, copyIncludeBody: false } }))
     expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
   })
   test('缺失 settings 字段回退默认（旧配置兼容）', async () => {
@@ -111,7 +104,7 @@ describe('settings（M5b Task 4：复制行为；2026-09-06 copyIncludeNote 退�
 describe('tourDone（漫游引导完成标记）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', { workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto', previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: true, sidebarWidth: null, outlineWidth: null, language: 'auto' })
+    await saveConfig(fs, '/cfg.json', cfg({ tourDone: true }))
     expect((await loadConfig(fs, '/cfg.json')).tourDone).toBe(true)
   })
   test('缺失与非法回退 false（旧配置兼容：老用户升级后首次启动可看一次引导）', async () => {

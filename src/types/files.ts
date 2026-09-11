@@ -116,6 +116,10 @@ export interface AppConfig {
   sidebarWidth: number | null
   /** 预览大纲面板像素宽（2026-09 分区拖拽）；null = 默认 14rem（w-56） */
   outlineWidth: number | null
+  /** AI 对话配置（2026-09 AI Agent v1）；全空 = 未配置（AI 入口隐藏） */
+  ai: AiConfig
+  /** AI 面板像素宽（2026-09 AI Agent v1）；null = 默认 320 */
+  aiChatWidth: number | null
 }
 /** 版本管理配置（M20）：宽容解析见 config.ts（parseGitConfig） */
 export interface GitConfig {
@@ -140,6 +144,29 @@ export function parseGitConfig(v: unknown): GitConfig {
     enabled: typeof o.enabled === 'boolean' ? o.enabled : DEFAULT_GIT_CONFIG.enabled,
     remoteUrl: typeof o.remoteUrl === 'string' && o.remoteUrl !== '' ? o.remoteUrl : null,
     token: typeof o.token === 'string' && o.token !== '' ? o.token : null,
+  }
+}
+
+/** AI 对话配置（2026-09 AI Agent v1，spec §1 BYOK）：三项全非空才算"已配置"（入口显隐依据）；
+ *  宽容解析见下方 parseAiConfig（旧配置无 ai 字段按默认兼容） */
+export interface AiConfig {
+  /** OpenAI 兼容 API 地址，如 https://api.deepseek.com/v1；空串 = 未配置 */
+  baseUrl: string
+  /** 仅存本机 cfg.json，不上传（设置页有明示文案） */
+  apiKey: string
+  model: string
+}
+export const DEFAULT_AI_CONFIG: AiConfig = { baseUrl: '', apiKey: '', model: '' }
+
+/** 宽容解析 AI 配置：逐字段回退默认（旧配置无字段兼容）；baseUrl/model 去空白 */
+export function parseAiConfig(v: unknown): AiConfig {
+  if (typeof v !== 'object' || v === null) return DEFAULT_AI_CONFIG
+  const o = v as Record<string, unknown>
+  const str = (x: unknown): string => (typeof x === 'string' ? x : '')
+  return {
+    baseUrl: str(o.baseUrl).trim(),
+    apiKey: str(o.apiKey),
+    model: str(o.model).trim(),
   }
 }
 
@@ -169,6 +196,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   tourDone: false,
   sidebarWidth: null,
   outlineWidth: null,
+  ai: DEFAULT_AI_CONFIG,
+  aiChatWidth: null,
 }
 /** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
  *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，
