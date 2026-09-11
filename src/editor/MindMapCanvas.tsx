@@ -14,6 +14,7 @@ import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { sanitizeExecArgs } from '../services/multiline'
+import { isUserCommandBlocked } from '../services/ai/lock'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
 import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
@@ -363,8 +364,15 @@ export default function MindMapCanvas({
     // serialize 断言（复制/保存抛错）或污染 md 落盘（重开毒害标题）。引擎内部调用取实例
     // 属性，包装对引擎与宿主（mmRef）双端生效
     const origExec = mm.execCommand.bind(mm)
-    mm.execCommand = ((cmd: string, ...args: unknown[]) =>
-      origExec(cmd, ...sanitizeExecArgs(cmd, args))) as MindMapHandle['execCommand']
+    mm.execCommand = ((cmd: string, ...args: unknown[]) => {
+      // AI 回合锁（spec §6）：回合期间拒绝用户编辑命令；console.warn 留排查线索
+      // （拒绝是显式出口，静默吞掉才是违规）
+      if (isUserCommandBlocked(cmd)) {
+        console.warn(`AI 回合锁定：已拒绝用户命令 ${cmd}`)
+        return
+      }
+      origExec(cmd, ...sanitizeExecArgs(cmd, args))
+    }) as MindMapHandle['execCommand']
     mmRef.current = mm
     // data_change 附带整树快照透传（宿主据此判定「与已落盘一致」的同值事件，见 EditorView）；
     // 无载荷的调用（下方展开命令同步上报）视为必有变化。
