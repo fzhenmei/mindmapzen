@@ -1,3 +1,5 @@
+mod sse;
+
 #[tauri::command]
 fn trash_delete(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
