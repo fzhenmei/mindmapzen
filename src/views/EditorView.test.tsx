@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, vi } from 'vitest'
 import Vditor from 'vditor'
 import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
+import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -2692,4 +2693,70 @@ test('Shift+F2 无目标（悬停/选中皆空）→ 盖警告签不开弹窗；
   expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不弹无关联空态弹窗
   expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签劝导（2026-09-09 无目标反馈）
   expect(handle.execCommand).not.toHaveBeenCalled()
+})
+
+// ── AI 对话面板挂载（2026-09 AI Agent v1 Task 11）：入口显隐（未配置隐藏）、面板开合、
+//    选中节点上行 chatStore.contextNode、卸载 reset 会话内存态（切图经 App key 重挂同点）──
+describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset()
+    useAppStore.setState({ aiChatWidth: null })
+  })
+
+  const renderEditor = () =>
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+
+  test('未配置：入口隐藏；配置后：入口可见，点击开面板，面板关闭钮收起回入口', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' } } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    expect(screen.queryByTestId('ai-toggle')).not.toBeInTheDocument()
+    cleanup()
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    renderEditor()
+    fireEvent.click(await screen.findByTestId('ai-toggle'))
+    expect(screen.getByTestId('ai-panel')).toBeInTheDocument() // 面板开
+    expect(screen.queryByTestId('ai-toggle')).not.toBeInTheDocument() // 入口让位
+    fireEvent.click(screen.getByTestId('ai-close'))
+    expect(screen.queryByTestId('ai-panel')).not.toBeInTheDocument() // 面板关
+    expect(screen.getByTestId('ai-toggle')).toBeInTheDocument() // 入口回归
+  })
+
+  test('选中节点上行 contextNode：单选写 uid/文本，清选置空', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    act(() => {
+      ;(globalThis as unknown as { __emitActive: (uid: string | null) => void }).__emitActive('child-uid')
+    })
+    expect(useChatStore.getState().contextNode).toEqual({ uid: 'child-uid', text: '新分支' })
+    act(() => {
+      ;(globalThis as unknown as { __emitActive: (uid: string | null) => void }).__emitActive(null)
+    })
+    expect(useChatStore.getState().contextNode).toBeNull()
+  })
+
+  test('卸载清空 AI 会话内存态（切图/关闭同点覆盖）', async () => {
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      useChatStore.getState().pushUser('历史消息')
+    })
+    cleanup()
+    expect(useChatStore.getState().messages).toEqual([])
+  })
 })

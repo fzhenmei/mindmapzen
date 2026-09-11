@@ -33,10 +33,14 @@
 //  toggleBodyOrWarn + WarnStamp 渲染接线，实测 520 + 10 行余量；警告签本体在
 //  WarnStamp.tsx（无护栏）、无目标判定在入口层（useBodyDialog 空态语义不动）——
 //  功能性增长，无腐化）。
+// 2026-09（AI Agent v1 Task11）：530→600（ChatPanel 右栏挂载：面板开合/拖宽两态 +
+// 配置/落盘宽订阅 + 入口开关（未配置隐藏）+ onActiveChange 上下文上行 + 卸载 reset +
+// 引擎 resize 补调 + canvas-host 让位接线，实测 588 + 12 行余量；面板本体在
+// ChatPanel.tsx（无护栏）——功能性增长，非腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 530 },
+  { path: '../src/views/EditorView.tsx', limit: 600 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 
