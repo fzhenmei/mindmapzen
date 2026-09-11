@@ -1,6 +1,6 @@
 // src/components/ChatPanel.tsx —— AI 对话面板（spec §7）：纯装配 + 回合编排（send/stop）。
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
-import { useRef, useState, type RefObject, type SubmitEvent } from 'react'
+import { useState, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
@@ -33,7 +33,6 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   const phase = useChatStore((s) => s.phase)
   const contextNode = useChatStore((s) => s.contextNode)
   const [input, setInput] = useState('')
-  const stopRef = useRef<{ request(): void } | null>(null)
 
   async function handleSend(e?: SubmitEvent): Promise<void> {
     e?.preventDefault()
@@ -62,12 +61,20 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
     const url = `${base}/chat/completions`
     beginAiTurn()
     const stop = createTurnStop()
-    stopRef.current = stop
+    // transport 每回合新实例（Task 8 契约：实例不可跨回合复用/并发）
+    const transport = getTransport()
+    // 停止句柄挂 store（终审 I3）：回合中 ai-close 卸载重开后新组件实例 ref 归零，
+    // 停止钮会 no-op（孤儿回合失控）——闭包同时持有 stop 与 transport，重开面板也能
+    // 停掉在途回合。除 stop.request 外直接 abort transport（终审 I2）：模型停摆（无
+    // 后续 delta）时 abort 传染不触发，不主动掐流就要挂到 Rust 空闲超时 120s 才收尾
+    useChatStore.getState().setStopRequest(() => {
+      stop.request()
+      transport.abort()
+    })
     try {
       await runUserTurn(
         {
-          // transport 每回合新实例（Task 8 契约：实例不可跨回合复用/并发）
-          transport: getTransport(),
+          transport,
           buildMessages: (msgs) => [
             { role: 'system', content: buildSystemPrompt(mm.renderer?.renderTree ?? null) },
             ...msgs,
@@ -95,12 +102,8 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       useChatStore.getState().finalizeStream() // 停止/异常路径也定稿半截消息
       useChatStore.getState().setPhase('idle')
       endAiTurn()
-      stopRef.current = null
+      useChatStore.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
     }
-  }
-
-  function handleStop(): void {
-    stopRef.current?.request()
   }
 
   return (
@@ -152,6 +155,13 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       </form>
     </aside>
   )
+}
+
+/** 全局停止句柄（终审 I2/I3）：不依赖组件实例 ref——回合中 ai-close 卸载重开后
+ *  新实例仍可停掉进行中回合；句柄内同时 stop.request + transport.abort（模型停摆
+ *  时 abort 传染不触发，主动掐流不等 Rust 空闲超时 120s） */
+function handleStop(): void {
+  useChatStore.getState().stopRequest?.()
 }
 
 function MessageRow({ msg, idx }: Readonly<{ msg: ChatMessage; idx: number }>) {

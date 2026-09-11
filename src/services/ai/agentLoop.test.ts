@@ -141,6 +141,28 @@ test('executing 中停止：当前工具做完即停，后续工具不再执行'
   expect(on.error).not.toHaveBeenCalled()
 })
 
+test('终审 I2：stop 后到达的 error outcome 按已停止静默处理，不误报错误卡', async () => {
+  // 模型停摆：start 挂起且无任何 delta，abort 传染无从触发；用户停止后 Rust 空闲
+  // 超时（120s）才以 error 收尾——stop 检查须先于 error 归因，否则错误卡误报+锁悬挂
+  let resolveStart: (o: StreamOutcome) => void = () => {}
+  const t: AiTransport = {
+    start: () =>
+      new Promise<StreamOutcome>((resolve) => {
+        resolveStart = resolve
+      }),
+    abort: () => {
+      resolveStart({ endedWith: 'error', errorMessage: 'HTTP 504 gateway stall' })
+    },
+  }
+  const { deps, on } = makeDeps(t)
+  const stop = createTurnStop()
+  const p = runUserTurn(deps, stop, INIT)
+  stop.request() // 用户点停止；编排层 handleStop 随后调 transport.abort()（此处由 abort 显式触发）
+  t.abort()
+  await p
+  expect(on.error).not.toHaveBeenCalled() // 旧序：error 分支先于 stop 检查 → 停止回合误报错误卡
+})
+
 test('网络错误：error 卡片收尾', async () => {
   const t: AiTransport = {
     start: async (): Promise<StreamOutcome> => ({ endedWith: 'error', errorMessage: 'HTTP 401' }),

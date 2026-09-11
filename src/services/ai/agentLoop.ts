@@ -167,11 +167,16 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
       },
       stream.handle,
     )
+    // 用户停止须在 error 归因之前（终审 I2）：模型停摆（无后续 delta）时 abort 传染不
+    // 触发，停止后到达的任何 outcome（含 Rust 空闲超时 120s 的 error）一律按已停止静默
+    // 处理——旧序 error 分支先行会误报错误卡且锁悬挂到超时才释放；同步代码段内 stop
+    // 不与 outcome 处理交错，先查 stop 无吞真错风险。已流出文本保留（chatStore 兜底
+    // finalize 由编排层 finally 做）
+    if (stop.stopped) return
     if (outcome.endedWith === 'error') {
       deps.on.error(transportErrorMessage(outcome.errorMessage))
       return
     }
-    if (stop.stopped) return // 用户停止：已流出文本保留（chatStore 兜底 finalize 由编排层 finally 做）
     deps.on.finalize()
 
     const toolCalls = assembleAssistantToolCalls(stream.acc)

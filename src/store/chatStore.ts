@@ -28,12 +28,16 @@ interface ChatState {
   blockedPulse: boolean
   /** 当前选中节点（上下文 chip + 用户指代；EditorView onActiveChange 时写入） */
   contextNode: { uid: string; text: string } | null
+  /** 全局停止句柄（终审 I3）：回合中 ai-close 卸载面板再重开，新组件实例的 ref 归零，
+   *  停止句柄若只存组件内则 no-op（孤儿回合失控）——挂 store 才能跨实例停掉进行中回合 */
+  stopRequest: (() => void) | null
   pushUser: (text: string) => void
   appendStreamDelta: (text: string) => void
   finalizeStream: () => void
   pushCard: (c: ToolCardData) => void
   pushError: (text: string) => void
   setPhase: (p: ChatPhase) => void
+  setStopRequest: (fn: (() => void) | null) => void
   notifyBlocked: () => void
   setContextNode: (n: { uid: string; text: string } | null) => void
   reset: () => void
@@ -44,6 +48,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   phase: 'idle',
   blockedPulse: false,
   contextNode: null,
+  stopRequest: null,
   pushUser: (text) =>
     set((s) => ({
       messages: [...s.messages, { id: nextId(), role: 'user', text }, { id: nextId(), role: 'assistant', text: '' }],
@@ -83,6 +88,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
   pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
   setPhase: (p) => set({ phase: p }),
+  setStopRequest: (fn) => set({ stopRequest: fn }),
   notifyBlocked: () => {
     set({ blockedPulse: true })
     // 定时回调无抛错面；仍守"异步回调自己兜"惯例，出错也不静默
@@ -95,5 +101,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
   setContextNode: (n) => set({ contextNode: n }),
-  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null }),
+  // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂
+  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null }),
 }))

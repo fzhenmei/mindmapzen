@@ -1,5 +1,5 @@
 // src/components/ChatPanel.test.tsx —— 面板渲染与编排接线（Task 11，spec §7）
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import ChatPanel from './ChatPanel'
@@ -14,10 +14,10 @@ vi.mock('./MarkdownPreview', () => ({
 
 const fakeMm = { execCommand: vi.fn(), renderer: { findNodeByUid: () => null, renderTree: null } }
 
-function mount() {
+function mount(mm: unknown = fakeMm) {
   return render(
     <ChatPanel
-      mmRef={{ current: fakeMm as never }}
+      mmRef={{ current: mm as never }}
       selection={null}
       width={320}
       onResize={() => {}}
@@ -80,4 +80,51 @@ test('卡片渲染：失败红字；成功 ✓ 图标绿、正文保持 muted（
   expect(okCard).toHaveTextContent(/新增/) // 成功正文仍走词典文案（muted 正文）
   expect(okCard).toHaveClass('text-muted-foreground') // 正文档位不变
   expect(okCard.querySelector('span')).toHaveClass('text-emerald-600') // 仅 ✓ 图标着绿
+})
+
+/** 停摆流 transport：不发任何 delta、start 永挂，abort 以 'aborted' 主动收尾
+ *  （对齐 Task 8 真实 transport 契约）——终审 I2 的模型停摆场景 */
+function stallTransport(): { abortCalls: () => number } {
+  let aborts = 0
+  let resolveStart: ((o: { endedWith: string }) => void) | null = null
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: () =>
+      new Promise<{ endedWith: string }>((resolve) => {
+        resolveStart = resolve
+      }),
+    abort: () => {
+      aborts++
+      resolveStart?.({ endedWith: 'aborted' })
+    },
+  })
+  return { abortCalls: () => aborts }
+}
+
+test('终审 I2：模型停摆时点停止——主动 abort 传输，回合收尾无错误卡', async () => {
+  const stall = stallTransport()
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '停摆')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-stop') // phase=streaming：停止钮出现（start 已挂起）
+  await userEvent.click(screen.getByTestId('ai-stop'))
+  // stop.request 之外主动掐流：不等 Rust 空闲超时 120s 才被动收尾
+  expect(stall.abortCalls()).toBe(1)
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  expect(screen.queryByTestId('ai-msg-error')).not.toBeInTheDocument() // 停止 ≠ 错误
+  expect(useChatStore.getState().stopRequest).toBeNull() // 回合收尾即摘除全局句柄
+})
+
+test('终审 I3：回合中 ai-close 卸载重开——停止钮仍可停掉进行中回合', async () => {
+  const stall = stallTransport()
+  const view = mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '卸载重开')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-stop')
+  view.unmount() // 回合中收起面板（旧实现：组件 stopRef 随实例销毁）
+  mount() // 重开：新组件实例，停止句柄只能来自全局 store
+  await screen.findByTestId('ai-stop')
+  await userEvent.click(screen.getByTestId('ai-stop'))
+  expect(stall.abortCalls()).toBe(1) // 孤儿回合不再失控：重开面板仍可停止+掐流
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  expect(screen.queryByTestId('ai-msg-error')).not.toBeInTheDocument()
 })

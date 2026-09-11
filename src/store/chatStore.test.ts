@@ -37,6 +37,20 @@ test('notifyBlocked 脉冲 1.6s 自动回落', () => {
   expect(useChatStore.getState().blockedPulse).toBe(false)
 })
 
+test('setStopRequest：全局停止句柄可调可摘，reset 清空防陈旧悬挂（终审 I3）', () => {
+  let stopped = false
+  useChatStore.getState().setStopRequest(() => {
+    stopped = true
+  })
+  useChatStore.getState().stopRequest?.()
+  expect(stopped).toBe(true)
+  useChatStore.getState().setStopRequest(null)
+  expect(useChatStore.getState().stopRequest).toBeNull()
+  useChatStore.getState().setStopRequest(() => {})
+  useChatStore.getState().reset()
+  expect(useChatStore.getState().stopRequest).toBeNull()
+})
+
 test('reset 清空', () => {
   useChatStore.getState().pushUser('x')
   useChatStore.getState().reset()
