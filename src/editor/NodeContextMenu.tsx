@@ -21,6 +21,9 @@ interface Props {
   /** 右键的节点是根:插入同级/删除置灰——引擎对根 insertNode 静默跳过(Render.js:819-821)、
    *  removeNode 会清光根的子节点(:1425-1428),菜单不给此入口(键盘路径维持引擎原生不变) */
   isRoot: boolean
+  /** AI 回合锁(Task 12,spec §6):回合期间全部写操作置灰(MindMapCanvas 传
+   *  phase !== 'idle')——命令级拦截在 execCommand 包装,此处 UI 前置不给入口 */
+  disabled?: boolean
   onInsertChild(): void
   onInsertSibling(): void
   onEditText(): void
@@ -33,6 +36,7 @@ export default function NodeContextMenu({
   x,
   y,
   isRoot,
+  disabled,
   onInsertChild,
   onInsertSibling,
   onEditText,
@@ -52,19 +56,19 @@ export default function NodeContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" onCloseAutoFocus={(e) => e.preventDefault()} aria-label={t('editor.nodeMenu.label')}>
-        <DropdownMenuItem data-testid="ctx-node-child" onClick={onInsertChild}>
+        <DropdownMenuItem data-testid="ctx-node-child" disabled={disabled} onClick={onInsertChild}>
           {t('editor.nodeMenu.insertChild')}
           <DropdownMenuShortcut>Tab</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem
           data-testid="ctx-node-sibling"
-          disabled={isRoot}
+          disabled={disabled || isRoot}
           onClick={() => { if (!isRoot) onInsertSibling() }}
         >
           {t('editor.nodeMenu.insertSibling')}
           <DropdownMenuShortcut>Enter</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem data-testid="ctx-node-edit" onClick={onEditText}>
+        <DropdownMenuItem data-testid="ctx-node-edit" disabled={disabled} onClick={onEditText}>
           {t('editor.nodeMenu.editText')}
           <DropdownMenuShortcut>F2</DropdownMenuShortcut>
         </DropdownMenuItem>
@@ -72,7 +76,7 @@ export default function NodeContextMenu({
         <DropdownMenuItem
           data-testid="ctx-node-delete"
           variant="destructive"
-          disabled={isRoot}
+          disabled={disabled || isRoot}
           onClick={() => { if (!isRoot) onDelete() }}
         >
           {t('editor.nodeMenu.delete')}

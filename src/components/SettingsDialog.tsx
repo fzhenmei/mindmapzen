@@ -5,6 +5,7 @@ import { i18n } from '../i18n'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { Label } from './ui/label'
 import type { BackupOutcome } from '../services/gitBackup'
 
 interface SettingsDialogProps {
@@ -58,6 +59,13 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   // Ruling 6：手动备份经 gitRun 端口可 reject（如 git 超时）——不捕则无任何显示；
   // 捕后以 settings.git.backupFailed 包住已本地化的抛错消息（与 fatal 分支同键同位）
   const [backupError, setBackupError] = useState<string | null>(null)
+  // AI 对话配置（2026-09 AI Agent v1）：受控草稿 + 显式保存（与 git 分区 onBlur 即存不同，
+  // key 三项一次整包提交，保存后短暂提示"已保存"）
+  const aiConfig = useAppStore((s) => s.aiConfig)
+  const setAiConfig = useAppStore((s) => s.setAiConfig)
+  const [aiDraft, setAiDraft] = useState(aiConfig)
+  const [aiSaved, setAiSaved] = useState(false)
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null)
   const { t } = useTranslation()
   const languagePref = useAppStore((s) => s.languagePref)
   const setLanguagePref = useAppStore((s) => s.setLanguagePref)
@@ -66,6 +74,21 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   useEffect(() => {
     void useAppStore.getState().refreshGitStatus()
   }, [])
+
+  async function handleAiSave(): Promise<void> {
+    setAiSaveError(null)
+    try {
+      const trimmed = { baseUrl: aiDraft.baseUrl.trim(), apiKey: aiDraft.apiKey.trim(), model: aiDraft.model.trim() }
+      await setAiConfig(trimmed)
+      setAiDraft(trimmed) // 成功回写草稿，输入框与 store 对齐
+      setAiSaved(true)
+      window.setTimeout(() => setAiSaved(false), 1600)
+    } catch (e) {
+      // fs 端口可拒绝（工作区丢失/权限）——保存失败必须显式出口（吞异常禁令）
+      console.error('AI 配置保存失败', e)
+      setAiSaveError(i18n.t('errors.saveFailed', { reason: String(e) }))
+    }
+  }
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent data-testid="settings-dialog" aria-label={title}>
@@ -134,6 +157,56 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                 )}
               </>
             )}
+          </div>
+          {/* AI 对话（2026-09 AI Agent v1，spec §1 BYOK）：三项全填并保存后，编辑视图出现 AI 面板入口 */}
+          <div className="flex flex-col gap-2" data-testid="settings-ai-section">
+            <h3 className="text-sm font-medium">{t('ai.settings.title')}</h3>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="set-ai-baseurl">{t('ai.settings.baseUrl')}</Label>
+              <Input
+                id="set-ai-baseurl"
+                data-testid="set-ai-baseurl"
+                value={aiDraft.baseUrl}
+                onChange={(e) => setAiDraft({ ...aiDraft, baseUrl: e.target.value })}
+                placeholder={t('ai.settings.baseUrlHint')}
+                className="text-xs"
+              />
+              <p className="text-xs text-muted-foreground">{t('ai.settings.baseUrlHint')}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="set-ai-key">{t('ai.settings.apiKey')}</Label>
+              <Input
+                id="set-ai-key"
+                data-testid="set-ai-key"
+                type="password"
+                value={aiDraft.apiKey}
+                onChange={(e) => setAiDraft({ ...aiDraft, apiKey: e.target.value })}
+                className="text-xs"
+              />
+              <p className="text-xs text-muted-foreground">{t('ai.settings.apiKeyHint')}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="set-ai-model">{t('ai.settings.model')}</Label>
+              <Input
+                id="set-ai-model"
+                data-testid="set-ai-model"
+                value={aiDraft.model}
+                onChange={(e) => setAiDraft({ ...aiDraft, model: e.target.value })}
+                placeholder={t('ai.settings.modelHint')}
+                className="text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" data-testid="set-ai-save" onClick={() => void handleAiSave()}>
+                {t('ai.settings.save')}
+              </Button>
+              {aiSaved && <span className="text-xs text-muted-foreground">{t('ai.settings.saved')}</span>}
+              {aiSaveError !== null && (
+                <p data-testid="set-ai-error" role="alert" className="text-xs text-destructive">
+                  {aiSaveError}
+                </p>
+              )}
+            </div>
           </div>
           {/* 语言三态(2026-09 i18n)：默认跟随系统；显式选择即时生效并持久化 */}
           <div className="flex items-center justify-between gap-2" data-testid="lang-section">

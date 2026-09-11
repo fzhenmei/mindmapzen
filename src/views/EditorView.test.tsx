@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, vi } from 'vitest'
 import Vditor from 'vditor'
 import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
+import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
@@ -2046,6 +2047,28 @@ describe('快速切换（v2.5）', () => {
     fireEvent.click(screen.getAllByTestId('switch-item')[1]) // b：立即切换
     await waitFor(() => expect(useAppStore.getState().currentMdPath).toBe('/ws/b.md'))
   })
+
+  // AI 回合锁（Task 12 fix，spec §6 禁切导图）：快速切换全拦——Ctrl+P/Ctrl+Tab 呼不出
+  // 浮层（open/cycleStep 入口即拦，commit 路径自然封死）；浮层开着进入回合时回车 commit
+  // （onPick）也不 openMap；拦截以 blockedPulse 脉冲提示。回合中切图会卸载 EditorView，
+  // 异步回合循环写旧 mm 引用（孤儿回合），故键盘三条通路与鼠标路径同口径
+  test('AI 回合中快速切换全拦：浮层呼不出、开着也 commit 不动，脉冲提示', async () => {
+    await renderForSwitch()
+    useChatStore.getState().setPhase('streaming')
+    // 呼出通路：Ctrl+P 搜索浮层 / Ctrl+Tab 轮换浮层均不开
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(screen.queryByTestId('switch-input')).not.toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true })
+    expect(screen.queryByTestId('switch-list')).not.toBeInTheDocument()
+    expect(useChatStore.getState().blockedPulse).toBe(true) // notifyBlocked 生效（状态签脉冲）
+    // commit 通路：idle 下呼出浮层后进入回合，回车选择（onPick）不切图
+    useChatStore.getState().setPhase('idle')
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(screen.getByTestId('switch-input')).toBeInTheDocument()
+    useChatStore.getState().setPhase('streaming')
+    fireEvent.keyDown(screen.getByTestId('switch-input'), { key: 'Enter' })
+    expect(useAppStore.getState().currentMdPath).toBe('/ws/a.md') // quick.switchTo 被拦，未 openMap
+  })
 })
 
 // ---- 顶部导图胶囊条（2026-09 鼠标流切换）：mapTabs 稳定序平铺、当前图高亮、点选走安全链 ----
@@ -2692,4 +2715,90 @@ test('Shift+F2 无目标（悬停/选中皆空）→ 盖警告签不开弹窗；
   expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不弹无关联空态弹窗
   expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签劝导（2026-09-09 无目标反馈）
   expect(handle.execCommand).not.toHaveBeenCalled()
+})
+
+// ── AI 对话面板挂载（2026-09 AI Agent v1 Task 11）：入口显隐（未配置隐藏）、面板开合、
+//    选中节点上行 chatStore.contextNode、卸载 reset 会话内存态（切图经 App key 重挂同点）──
+describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset()
+    useAppStore.setState({ aiChatWidth: null })
+  })
+
+  const renderEditor = () =>
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+
+  test('未配置：入口隐藏；配置后：入口可见，点击开面板，面板关闭钮收起回入口', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' } } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    expect(screen.queryByTestId('ai-toggle')).not.toBeInTheDocument()
+    cleanup()
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    renderEditor()
+    fireEvent.click(await screen.findByTestId('ai-toggle'))
+    expect(screen.getByTestId('ai-panel')).toBeInTheDocument() // 面板开
+    expect(screen.queryByTestId('ai-toggle')).not.toBeInTheDocument() // 入口让位
+    fireEvent.click(screen.getByTestId('ai-close'))
+    expect(screen.queryByTestId('ai-panel')).not.toBeInTheDocument() // 面板关
+    expect(screen.getByTestId('ai-toggle')).toBeInTheDocument() // 入口回归
+  })
+
+  test('选中节点上行 contextNode：单选写 uid/文本，清选置空', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    act(() => {
+      ;(globalThis as unknown as { __emitActive: (uid: string | null) => void }).__emitActive('child-uid')
+    })
+    expect(useChatStore.getState().contextNode).toEqual({ uid: 'child-uid', text: '新分支' })
+    act(() => {
+      ;(globalThis as unknown as { __emitActive: (uid: string | null) => void }).__emitActive(null)
+    })
+    expect(useChatStore.getState().contextNode).toBeNull()
+  })
+
+  test('卸载清空 AI 会话内存态（切图/关闭同点覆盖）', async () => {
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      useChatStore.getState().pushUser('历史消息')
+    })
+    cleanup()
+    expect(useChatStore.getState().messages).toEqual([])
+  })
+
+  test('面板开合触发画布补偿 resize；容器 0×0 时被门禁跳过（webview2 污染链路复刻）', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    const el = document.createElement('div')
+    let rect = { width: 400, height: 300 } as DOMRect
+    el.getBoundingClientRect = () => rect
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    act(() => {
+      ;(fakeHandle as { el: HTMLElement | null }).el = el
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    const resize = vi.mocked(fakeHandle.resize)
+    fireEvent.click(screen.getByTestId('ai-toggle'))
+    expect(resize).toHaveBeenCalled() // 正常 rect：开面板即补偿一次
+    resize.mockClear()
+    rect = { width: 0, height: 0 } as DOMRect // 窄窗口下面板挤压画布至 0×0
+    fireEvent.click(screen.getByTestId('ai-close'))
+    expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
+  })
 })

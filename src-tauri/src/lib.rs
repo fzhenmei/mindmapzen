@@ -1,3 +1,8 @@
+mod ai_stream;
+mod sse;
+
+use ai_stream::{ai_chat_abort, ai_chat_start};
+
 #[tauri::command]
 fn trash_delete(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
@@ -151,7 +156,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             trash_delete,
             git_exec,
-            set_titlebar_colors
+            set_titlebar_colors,
+            ai_chat_start,
+            ai_chat_abort
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

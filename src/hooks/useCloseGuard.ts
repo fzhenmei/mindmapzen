@@ -19,6 +19,11 @@ export interface CloseGuardOpts {
    *  引擎并返回 true——SET_NODE_DATA 的 data_change 置脏经引擎节流异步到达，守卫不能
    *  依赖冲刷后同步读 dirtyRef，返回 true 即按脏处理走三态 */
   flushPending?: () => boolean
+  /** AI 回合关窗锁（Task 12，spec §6）：true 时 preventClose 并回调 onBlocked（状态签
+   *  脉冲提示），不走三态框——回合中「保存并关闭」语义复杂，主出路是先点 AI 面板的停止 */
+  blockClose?: () => boolean
+  /** blockClose 命中时的提示回调（EditorView 注入 chatStore.notifyBlocked） */
+  onBlocked?: () => void
 }
 
 export interface CloseGuard {
@@ -38,6 +43,13 @@ export function useCloseGuard(opts: CloseGuardOpts): CloseGuard {
   // （data_change 节流异步），flushPending 返回 true 即按脏走三态，草稿不随窗口蒸发
   useEffect(() => {
     const unregister = registerCloseGuard((e) => {
+      // AI 回合期间阻止关窗（spec §6）：preventClose + 状态签脉冲提示，不弹三态框
+      //（回合中"保存并关闭"语义复杂，主出路是先点 AI 面板的停止）
+      if (opts.blockClose?.()) {
+        e.preventClose()
+        opts.onBlocked?.()
+        return
+      }
       const flushed = flushPending?.() ?? false
       if (!dirtyRef.current && !flushed) return
       e.preventClose()

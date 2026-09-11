@@ -13,9 +13,12 @@ interface Props {
   count: number
   /** 删除全部所选节点（含子树）；引擎 REMOVE_NODE 无参即删 activeNodeList，一条撤销记录 */
   onDelete(): void
+  /** AI 回合锁（Task 12，spec §6）：回合期间删除置灰（命令级拦截在 execCommand 包装，
+   *  此处 UI 前置不给入口；EditorView 传 phase !== 'idle'） */
+  deleteDisabled?: boolean
 }
 
-export default function MultiSelectBar({ count, onDelete }: Readonly<Props>) {
+export default function MultiSelectBar({ count, onDelete, deleteDisabled }: Readonly<Props>) {
   const { t } = useTranslation()
   return (
     <div
@@ -31,6 +34,7 @@ export default function MultiSelectBar({ count, onDelete }: Readonly<Props>) {
             size="sm"
             data-testid="multi-select-delete"
             aria-label={t('editor.multiSelect.deleteSelected', { count })}
+            disabled={deleteDisabled}
             onClick={onDelete}
           >
             <IconTrash />

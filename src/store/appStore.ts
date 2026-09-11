@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -51,6 +51,11 @@ interface AppState {
   sidebarWidth: number | null
   /** 预览大纲面板像素宽（2026-09 分区拖拽）：null = 默认 14rem；提交语义同 sidebarWidth */
   outlineWidth: number | null
+  /** AI 对话配置（2026-09 AI Agent v1）：init 自配置，setAiConfig 合并持久化；
+   *  三项全非空 = 已配置（AI 入口显隐依据，Task 11 消费） */
+  aiConfig: AiConfig
+  /** AI 面板像素宽（2026-09 AI Agent v1）：null = 默认 320；提交语义同 sidebarWidth */
+  aiChatWidth: number | null
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
   /** 界面语言三态偏好(auto = 跟随系统) */
@@ -112,6 +117,10 @@ interface AppState {
   /** 分区宽度提交（2026-09 拖拽）：null = 恢复默认宽（双击手柄路径） */
   setSidebarWidth: (w: number | null) => Promise<void>
   setOutlineWidth: (w: number | null) => Promise<void>
+  /** AI 配置变更（2026-09 AI Agent v1）：部分字段合并，load-merge-save 持久化 */
+  setAiConfig: (patch: Partial<AiConfig>) => Promise<void>
+  /** AI 面板宽度提交（2026-09 拖拽）：null = 恢复默认宽 */
+  setAiChatWidth: (w: number | null) => Promise<void>
   setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
   /** 版本管理配置变更（M20）：即时生效 + load-merge-save 持久化 */
   setGitConfig: (patch: Partial<GitConfig>) => Promise<void>
@@ -163,6 +172,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   librarySort: 'modified',
   sidebarWidth: null,
   outlineWidth: null,
+  aiConfig: DEFAULT_AI_CONFIG,
+  aiChatWidth: null,
   resolvedTheme: 'light',
   resolvedLanguage: 'zh-CN',
   titlebarBg: '--background',
@@ -187,7 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -338,6 +349,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ outlineWidth: w })
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, outlineWidth: w })
+  },
+
+  /** AI 配置变更（2026-09 AI Agent v1）：patch 部分合并（设置页逐字段保存，不覆盖未提字段），
+   *  load-merge-save 持久化 */
+  setAiConfig: async (patch) => {
+    const { adapter, configPath, aiConfig } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    const ai = { ...aiConfig, ...patch }
+    await saveConfig(adapter, configPath, { ...cfg, ai })
+    set({ aiConfig: ai })
+  },
+  /** AI 面板宽度提交：即时生效 + load-merge-save 持久化；null = 恢复默认宽 */
+  setAiChatWidth: async (w) => {
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, aiChatWidth: w })
+    set({ aiChatWidth: w })
   },
 
   /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */
