@@ -7,8 +7,9 @@ import library from './locales/en/library'
 import editor from './locales/en/editor'
 import welcome from './locales/en/welcome'
 import tour from './locales/en/tour'
+import ai from './locales/en/ai'
 
-const en: Dict = { common, settings, errors, library, editor, welcome, tour }
+const en: Dict = { common, settings, errors, library, editor, welcome, tour, ai }
 export default en
 /** 契约类型再出口:en 侧子模块(locales/en/*)统一从此处取 Dict,免深层路径耦合 */
 export type { Dict }
