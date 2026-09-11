@@ -47,6 +47,7 @@ import CopyStamp from '../components/CopyStamp'
 import WarnStamp from '../components/WarnStamp'
 import ZenBar from '../components/ZenBar'
 import ChatPanel, { AI_PANEL_DEFAULT_PX } from '../components/ChatPanel'
+import AiTurnBadge from '../components/AiTurnBadge'
 interface Props {
   mdPath: string
   openInEditor: (path: string) => void
@@ -75,6 +76,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // AI 面板（2026-09 AI Agent v1）：配置订阅（入口显隐）+ 落盘宽（默认 null = 320）
   const aiConfig = useAppStore((s) => s.aiConfig)
   const aiChatWidth = useAppStore((s) => s.aiChatWidth)
+  // AI 回合锁定（Task 12，spec §6）：回合期间（非 idle）切图拦截/状态签/编辑菜单禁用
+  const aiPhase = useChatStore((s) => s.phase)
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
@@ -249,6 +252,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 快速切换（v2.5）：浮层候选/切换链/ping-pong（含返回案头共用的安全链 leaveTo）
   const quick = useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave })
 
+  /** AI 回合期间拦截切图/新建（spec §6）：状态签脉冲提示，主出路是面板停止钮 */
+  const guardAiTurn = (next: () => void): void => {
+    if (useChatStore.getState().phase !== 'idle') {
+      useChatStore.getState().notifyBlocked()
+      return
+    }
+    next()
+  }
+
   // 顶部条取色令牌（v2.5）：编辑器全屏画布顶部是 --background，挂载即声明（TitleBar 换底色）
   useEffect(() => useAppStore.setState({ titlebarBg: '--background' }), [])
 
@@ -260,8 +272,18 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return true
   }
 
-  // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图
-  const guard = useCloseGuard({ registerCloseGuard, exitApp, dirtyRef, explicitSave, clearDirty, flushPending })
+  // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图。
+  // AI 回合关窗锁（Task 12，spec §6）：回合期间 preventClose + 状态签脉冲，不走三态框
+  const guard = useCloseGuard({
+    registerCloseGuard,
+    exitApp,
+    dirtyRef,
+    explicitSave,
+    clearDirty,
+    flushPending,
+    blockClose: () => useChatStore.getState().phase !== 'idle',
+    onBlocked: () => useChatStore.getState().notifyBlocked(),
+  })
 
   // 打开文档加载链（2026-09 拆至 useOpenDocument，行数护栏）：读 md → parse → sidecar →
   // 忽略块/弯曲记忆上报 → 布局三处同步 → 插图元数据 → 引擎树落 state。
@@ -371,7 +393,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           mdPath={mdPath}
           openInEditor={openInEditor}
           onBack={() => void quick.leaveTo(backToLibrary)}
-          onSwitch={quick.open}
+          onSwitch={() => guardAiTurn(quick.open)}
           engineTree={engineTree}
           registry={registry}
           initialLayout={initialLayout}
@@ -399,6 +421,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           // 快捷键对调：Control+Shift+c 画布内复制节点成功 → 贴选中节点盖「已复制为节点」墨青印
           onNodeCopy={() => flashCopy('copied-node')}
         />
+        {/* AI 处理中状态签（Task 12，spec §7）：canvas-host（absolute 定位）直接子级——
+            落画布区右上角、不随引擎缩放平移；面板开时 canvas-host 右缘内收，签同步让位不被遮 */}
+        <AiTurnBadge />
       </div>
       {/* AI 对话面板入口（2026-09 AI Agent v1，spec §1）：未配置隐藏；面板开时让位（关闭钮在面板头）。
           贴窗口右缘竖条，上下居中；fixed 定位不占布局 */}
@@ -437,7 +462,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       )}
       {/* 顶部导图胶囊条（2026-09 鼠标流切换）：最近打开常驻平铺，点选走安全链；仅一张时
           组件内不渲染。悬浮顶部居中（悬浮停泊同 ZenBar——canvas-host 恒满屏，引擎零配合） */}
-      <MapTabs tabs={quick.mapTabCandidates} currentMdPath={mdPath} onPick={(p) => void quick.switchTo(p)} />
+      <MapTabs tabs={quick.mapTabCandidates} currentMdPath={mdPath} onPick={(p) => guardAiTurn(() => void quick.switchTo(p))} />
       {/* 空图引导（2026-09 UI 评审 P2-2）：仅根节点时的建节点快捷键提示，条件与动机见组件注释 */}
       {docReady && <CanvasHint tree={engineTree} nodeCount={stats.nodeCount} />}
       {/* 选中节点浮动条（验收轮）：正文笔 + 连线箭头等，免记快捷键；对话框开时隐藏，建线态由 hook 内避让 */}
@@ -465,7 +490,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           （REMOVE_NODE 删全部激活节点及子树，一条撤销记录）。单选时 activeUid 退化为 null，
           上方 NodeActions 已隐藏，两者互斥不并现 */}
       {selection.activeCount > 1 && !anyDialog && (
-        <MultiSelectBar count={selection.activeCount} onDelete={() => mmRef.current?.execCommand('REMOVE_NODE')} />
+        <MultiSelectBar count={selection.activeCount} onDelete={() => mmRef.current?.execCommand('REMOVE_NODE')} deleteDisabled={aiPhase !== 'idle'} />
       )}
       {/* 浮动砚栏（M5a 拆分至 ZenBar）。仅就绪态渲染（2026-09）：错误/加载态引擎未建，按钮无意义 */}
       {docReady && (
@@ -565,9 +590,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
                 onCancel: () => setNewMapOpen(false),
                 onConfirm: (name, templateContent) => {
                   setNewMapOpen(false)
-                  void quick
-                    .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent))
-                    .catch((e) => setError(t('errors.createMapFailed', { reason: e instanceof Error ? e.message : String(e) })))
+                  // AI 回合拦截（Task 12，spec §6）：leaveTo 会先保存再切图，整链包进
+                  // guardAiTurn——回合期间不保存不切图，状态签脉冲提示（主出路：面板停止钮）
+                  guardAiTurn(() => {
+                    void quick
+                      .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent))
+                      .catch((e) => setError(t('errors.createMapFailed', { reason: e instanceof Error ? e.message : String(e) })))
+                  })
                 },
               }
             : null

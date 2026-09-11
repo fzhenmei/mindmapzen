@@ -15,6 +15,7 @@ import type { ResolvedLink } from '../services/links'
 import { stripMarkers } from '../services/linkMarkers'
 import { sanitizeExecArgs } from '../services/multiline'
 import { isUserCommandBlocked } from '../services/ai/lock'
+import { useChatStore } from '../store/chatStore'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
 import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
@@ -301,6 +302,9 @@ export default function MindMapCanvas({
   // 节点右键菜单态（2026-09 纯鼠标操作）：node_contextmenu 坐标 + 节点实例（编辑文本动作
   // 需传实例给 textEdit.show）；null = 关闭（onClose 卸载）。菜单动作全经 activeNodeList 生效
   const [nodeMenu, setNodeMenu] = useState<{ x: number; y: number; isRoot: boolean; node: unknown } | null>(null)
+  // AI 回合锁（Task 12，spec §6）：回合期间右键菜单写操作置灰（命令级拦截在 execCommand
+  // 包装，此处 UI 前置不给入口；回合切换低频，订阅重渲染无负担）
+  const aiPhase = useChatStore((s) => s.phase)
   // 始终持最新回调：挂载 effect 只订阅一次，避免闭包停留在首帧 props（Task 5 遗留加固）
   const cbRef = useRef({ onReady, onDataChange, onActiveChange, onNoteHover, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry })
   cbRef.current = { onReady, onDataChange, onActiveChange, onNoteHover, onEditorPaste, onCanvasImagePaste, onCanvasPasteText, onNodeCopy, registry }
@@ -636,6 +640,7 @@ export default function MindMapCanvas({
           x={nodeMenu.x}
           y={nodeMenu.y}
           isRoot={nodeMenu.isRoot}
+          disabled={aiPhase !== 'idle'}
           onInsertChild={() => mmRef.current?.execCommand('INSERT_CHILD_NODE')}
           onInsertSibling={() => mmRef.current?.execCommand('INSERT_NODE')}
           onEditText={() => {
