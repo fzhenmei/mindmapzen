@@ -128,3 +128,49 @@ test('终审 I3：回合中 ai-close 卸载重开——停止钮仍可停掉进�
   await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
   expect(screen.queryByTestId('ai-msg-error')).not.toBeInTheDocument()
 })
+
+test('终审三叉#2：引擎未就绪发送——错误卡片出现（无声失败消除）', async () => {
+  mount(null) // mmRef.current=null：画布引擎尚未挂载（加载态）
+  await userEvent.type(screen.getByTestId('ai-input'), 'hi')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  expect(screen.getByTestId('ai-msg-error')).toHaveTextContent('画布引擎未就绪')
+  expect(useChatStore.getState().phase).toBe('idle') // 未进回合，无锁悬挂
+})
+
+test('终审 M3：工具轮第二轮 streaming 退回纯文本+光标分支，定稿再挂 md', async () => {
+  const getMindmap =
+    '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"get_mindmap","arguments":"{}"}}]}}]}'
+  const finishToolCalls = '{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}'
+  let round = 0
+  let releaseRound2: (() => void) | null = null
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: (_p: unknown, onDelta: (d: string) => void) => {
+      round++
+      if (round === 1) {
+        onDelta(getMindmap)
+        onDelta(finishToolCalls)
+        return Promise.resolve({ endedWith: 'done' as const })
+      }
+      // 第二轮吐一个文本 delta 后挂起：窗口内断言"已定稿消息退回流式分支"
+      onDelta('{"choices":[{"delta":{"content":"好的"}}]}')
+      return new Promise<{ endedWith: 'done' }>((resolve) => {
+        releaseRound2 = () => resolve({ endedWith: 'done' })
+      })
+    },
+    abort: () => {},
+  })
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '读图')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await waitFor(() => expect(releaseRound2).not.toBeNull()) // round-1 定稿+工具已执行，round-2 已挂起
+  expect(useChatStore.getState().phase).toBe('streaming')
+  const mid = useChatStore.getState().messages
+  expect(mid[mid.length - 1]!.rendered).toBe(false) // M3 核心：round-2 streaming 时 rendered 回 false
+  expect(screen.getByTestId('ai-msg-streaming')).toBeInTheDocument() // 纯文本+光标回归（不再全量 lute 重渲染）
+  releaseRound2!()
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  const fin = useChatStore.getState().messages
+  expect(fin[fin.length - 1]!.rendered).toBe(true) // 定稿再挂 md
+  expect(screen.getByTestId('md-preview')).toHaveTextContent('好的')
+  expect(screen.queryByTestId('ai-msg-streaming')).not.toBeInTheDocument()
+})

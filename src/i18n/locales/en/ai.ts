@@ -23,6 +23,7 @@ export default {
     roundLimit: 'AI exceeded the 12-round tool-call limit; turn stopped (applied edits kept, undoable)',
     toolFailStreak: 'AI tools failed 3 times in a row; turn stopped',
     transportUnavailable: 'AI network calls are unavailable in this environment (desktop app only)',
+    engineNotReady: 'Canvas engine not ready: the map is still loading, try again shortly',
   },
   error: {
     network: 'AI request failed: {{message}}',

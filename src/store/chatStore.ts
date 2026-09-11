@@ -34,6 +34,10 @@ interface ChatState {
   pushUser: (text: string) => void
   appendStreamDelta: (text: string) => void
   finalizeStream: () => void
+  /** 把最后一条 assistant 退回流式分支（rendered=false）——工具轮 round-2 streaming 时
+   *  调用（终审 M3/Ruling 7）：delta 继续走纯文本+光标追加，不再每 delta 一次全量
+   *  lute 重渲染（亦是 I1 渲染竞态的生产暴露路径），定稿再挂 md */
+  unrenderLastAssistant: () => void
   pushCard: (c: ToolCardData) => void
   pushError: (text: string) => void
   setPhase: (p: ChatPhase) => void
@@ -70,6 +74,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       for (let i = msgs.length - 1; i >= 0; i--) {
         if (msgs[i]!.role === 'assistant') {
           msgs[i] = { ...msgs[i]!, rendered: true }
+          break
+        }
+      }
+      return { messages: msgs }
+    }),
+  // M3：仅 rendered=true 时克隆置回（已流式态幂等，不白拷消息数组扰动订阅）
+  unrenderLastAssistant: () =>
+    set((s) => {
+      const msgs = [...s.messages]
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i]!.role === 'assistant') {
+          if (msgs[i]!.rendered) msgs[i] = { ...msgs[i]!, rendered: false }
           break
         }
       }

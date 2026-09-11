@@ -37,6 +37,20 @@ test('notifyBlocked 脉冲 1.6s 自动回落', () => {
   expect(useChatStore.getState().blockedPulse).toBe(false)
 })
 
+test('unrenderLastAssistant：定稿退回流式分支，重复调用幂等，无 assistant 时安全 no-op', () => {
+  const s = useChatStore.getState()
+  s.pushUser('x')
+  s.finalizeStream() // round-1 工具轮定稿：rendered=true（挂 md）
+  expect(useChatStore.getState().messages[1]!.rendered).toBe(true)
+  useChatStore.getState().unrenderLastAssistant() // round-2 streaming：退回纯文本+光标
+  expect(useChatStore.getState().messages[1]!.rendered).toBe(false)
+  useChatStore.getState().unrenderLastAssistant() // 已流式态再调不炸、值不变
+  expect(useChatStore.getState().messages[1]!.rendered).toBe(false)
+  useChatStore.getState().reset()
+  useChatStore.getState().unrenderLastAssistant() // 空消息表：无 assistant 可退，no-op
+  expect(useChatStore.getState().messages).toEqual([])
+})
+
 test('setStopRequest：全局停止句柄可调可摘，reset 清空防陈旧悬挂（终审 I3）', () => {
   let stopped = false
   useChatStore.getState().setStopRequest(() => {

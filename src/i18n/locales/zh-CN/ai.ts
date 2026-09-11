@@ -23,6 +23,7 @@ export default {
     roundLimit: 'AI 工具调用超过 12 轮上限，已终止本回合（已做的修改保留，可撤销）',
     toolFailStreak: 'AI 连续 3 次工具执行失败，已终止本回合',
     transportUnavailable: '当前环境不支持 AI 网络调用（需在桌面应用内使用）',
+    engineNotReady: '画布引擎未就绪：导图仍在加载，请稍候重试',
   },
   error: {
     network: 'AI 请求失败：{{message}}',

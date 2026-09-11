@@ -45,7 +45,11 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       return
     }
     const mm = mmRef.current
-    if (!mm) return
+    if (!mm) {
+      // 引擎未就绪不再无声失败（终审三叉#2）：return 前给显式出口——错误卡指引重试
+      chat.pushError(i18n.t('ai.turn.engineNotReady'))
+      return
+    }
     setInput('')
     // 对话历史只回传 user/assistant 文本（工具明细不回传，省 token；卡片留在 UI）；
     // 先取历史再 pushUser——runUserTurn 自会追加本轮 userText，取晚一步会把当前消息重复上送
@@ -84,7 +88,13 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
             await useAppStore.getState().backupNow()
           },
           on: {
-            phase: (p) => useChatStore.getState().setPhase(p),
+            phase: (p) => {
+              const chat = useChatStore.getState()
+              chat.setPhase(p)
+              // 工具轮 round-2 回到 streaming 时把已定稿消息退回流式分支（终审 M3）：
+              // delta 继续纯文本+光标追加，不再每 delta 一次全量 lute 重渲染，定稿再挂 md
+              if (p === 'streaming') chat.unrenderLastAssistant()
+            },
             delta: (d) => useChatStore.getState().appendStreamDelta(d),
             finalize: () => useChatStore.getState().finalizeStream(),
             card: (c) => useChatStore.getState().pushCard(c),
