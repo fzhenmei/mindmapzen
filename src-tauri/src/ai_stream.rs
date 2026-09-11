@@ -113,6 +113,10 @@ pub async fn run_chat_stream(
     }
     let mut parser = SseParser::new();
     let mut stream = resp.bytes_stream();
+    // 跨块 UTF-8 重组缓冲：TCP/h2 块边界任意切，中文字符可能跨两块——逐块 lossy
+    // 解码会把半个字符替换成 U+FFFD 且不可逆（delta 仍是合法 JSON、前端照常解析
+    // → 节点文本静默乱码），故先攒 carry、每块只解码完整的 UTF-8 前缀
+    let mut carry: Vec<u8> = Vec::new();
     loop {
         let chunk = tokio::time::timeout(Duration::from_secs(120), stream.next())
             .await
@@ -122,7 +126,27 @@ pub async fn run_chat_stream(
             .transpose()
             .map_err(|e| format!("AI_STREAM_FAILED: {e}"))?;
         let Some(bytes) = chunk else { break };
-        for data in parser.feed(&String::from_utf8_lossy(&bytes)) {
+        carry.extend_from_slice(&bytes);
+        // 只解码完整的 UTF-8 前缀；不完整的多字节尾部留到下一块（跨块拆分无损的关键）
+        let text = match std::str::from_utf8(&carry) {
+            Ok(s) => {
+                let owned = s.to_string();
+                carry.clear();
+                owned
+            }
+            Err(e) => {
+                let valid = e.valid_up_to();
+                let owned = String::from_utf8_lossy(&carry[..valid]).into_owned();
+                if e.error_len().is_some() {
+                    // 真非法字节（非截断）：丢弃缓冲防死循环——decode 失败位置永远停在同一处
+                    carry.clear();
+                } else {
+                    carry.drain(..valid);
+                }
+                owned
+            }
+        };
+        for data in parser.feed(&text) {
             if data == "[DONE]" {
                 sink.send(serde_json::json!({ "type": "done" }));
                 sink.send(serde_json::json!({ "type": "end" }));
@@ -164,6 +188,13 @@ mod tests {
     }
 
     async fn serve_once(response: &'static str) -> String {
+        serve_chunks(vec![response.as_bytes().to_vec()]).await
+    }
+
+    /// 分块写响应的 mock server：chunks 依次 write_all，块间小睡保证客户端分次读到
+    /// （模拟 TCP/h2 把字节流任意切分的现实，跨块 UTF-8 重组依赖此形态才能测到；
+    ///  收字节块而非 &str——切点要能落在多字节字符中间，str 切片会先 panic）
+    async fn serve_chunks(chunks: Vec<Vec<u8>>) -> String {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
@@ -171,7 +202,10 @@ mod tests {
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut buf = [0u8; 4096];
             let _n = sock.read(&mut buf).await.unwrap(); // 读掉请求头（含 body 足够）
-            let _ = sock.write_all(response.as_bytes()).await;
+            for c in &chunks {
+                let _ = sock.write_all(c).await;
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
         });
         format!("http://{addr}/v1/chat/completions")
     }
@@ -229,6 +263,31 @@ mod tests {
         let got = sink.0.lock().unwrap();
         assert_eq!(got.last().unwrap()["type"], "end");
         assert!(got.iter().any(|v| v["type"] == "error"));
+    }
+
+    #[tokio::test]
+    async fn 中文跨块拆分无损转发() {
+        // 一条完整事件从多字节字符中间切开分两块送达——逐块 lossy 解码会在此产生 U+FFFD
+        let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n\
+             data: {\"choices\":[{\"delta\":{\"content\":\"";
+        let payload = "{\"choices\":[{\"delta\":{\"content\":\"你好世界\"}}]}";
+        let event = format!("{head}你好世界\"}}}}]}}\n\ndata: [DONE]\n\n");
+        // 切点选 '你'（E4 BD A0）的第二字节：head 末尾 + 1，必落在多字节字符内部；
+        // 按 as_bytes 切——str 切片切在字符中间会先 panic，测不到目标缺陷
+        let split = head.len() + 1;
+        let bytes = event.as_bytes();
+        let url = serve_chunks(vec![bytes[..split].to_vec(), bytes[split..].to_vec()]).await;
+        let sink = VecSink::default();
+        run_chat_stream(sink.clone(), url, "k".into(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let got = sink.0.lock().unwrap();
+        assert_eq!(got[0]["type"], "delta");
+        let data = got[0]["data"].as_str().unwrap();
+        assert!(!data.contains('\u{FFFD}'), "跨块中文被替换成 U+FFFD: {data}");
+        assert_eq!(data, payload); // 完整无损，与原串逐字节相等
+        assert_eq!(got[1]["type"], "done"); // 本流仅一条 delta 事件
+        assert_eq!(got[2]["type"], "end");
     }
 
     #[test]
