@@ -166,11 +166,17 @@ const editor: Dict['editor'] = {
     menu: {
       toStatus: 'Set status',
       toPlain: 'Convert to plain node',
+      // Locate on map (2026-09 acceptance change: moved from card click into the menu —
+      // portal click bubbling caused false triggers and accidental view switches)
+      locate: 'Locate on map',
+      copyCard: 'Copy card',
       delete: 'Delete',
       deleteConfirm: 'Delete?',
     },
     bodyHint: 'Body',
-    locate: 'Click to locate on the map; double-click to rename',
+    // Sub-item badge (2026-09 subtree cards): {{n}} = statusless descendants in card scope
+    children: '{{n}} sub-items',
+    cardHint: 'Double-click to rename',
   },
 }
 export default editor

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { RefObject } from 'react'
 import KanbanView, { type KanbanViewProps } from './KanbanView'
 import type { MindMapHandle } from '../types/engine'
+import { TooltipProvider } from '../components/ui/tooltip'
 
 // 看板模式浮层三件套装配（Task 6）：KanbanView 是 mm 命令的编排层——五列投影自
 // buildKanbanCards，每个编辑操作 = 恰一条引擎命令 + onDataChanged（useIconPicker.apply
@@ -19,11 +20,17 @@ interface FakeNode {
 function makeMm() {
   const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
   // 卡片节点带状态徽章（kebab 形态）+ 用户图标 flag + 正文——转普通/落列/body 断言共用。
-  // setIcon 实写 data.icon：nodeStatusOf 同态短路（读数据树）与 data_change 重放的
-  // 刷新用例都依赖「命令落进了数据」的替身语义
+  // 子孙两层（子 t1c1/t1c2、孙 t1c2a，均无状态）：子树卡片徽标计数/浮层大纲断言共用
+  // （2026-09 子树卡片）。setIcon 实写 data.icon：nodeStatusOf 同态短路（读数据树）与
+  // data_change 重放的刷新用例都依赖「命令落进了数据」的替身语义
   const t1: FakeNode = {
     data: { text: '修滚动条', uid: 't1', icon: ['zen_status-doing', 'zen_flag'], body: '正文内容' },
-    children: [],
+    children: [
+      { data: { text: '先查溢出', uid: 't1c1' }, children: [] },
+      { data: { text: '方案对比', uid: 't1c2' }, children: [
+        { data: { text: '浮层走 portal', uid: 't1c2a' }, children: [] },
+      ] },
+    ],
     setText: vi.fn(),
     setIcon: vi.fn((icons: string[]) => {
       t1.data.icon = icons
@@ -65,9 +72,15 @@ function renderKanban(mm: MindMapHandle): { props: KanbanViewProps; unmount: () 
     onEditIcons: vi.fn(),
     onEditTags: vi.fn(),
     onLocate: vi.fn(),
+    onCopyCard: vi.fn(),
     onClose: vi.fn(),
   }
-  const { unmount } = render(<KanbanView {...props} />)
+  // 渲染脚手架：EditorView 根有 TooltipProvider（卡片子孙浮层依赖其上下文），此处同构包裹
+  const { unmount } = render(
+    <TooltipProvider>
+      <KanbanView {...props} />
+    </TooltipProvider>,
+  )
   return { props, unmount }
 }
 
@@ -220,47 +233,96 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(props.onDataChanged).toHaveBeenCalled()
   })
 
-  test('body 指示点击 onOpenBody（不触发定位）；卡片主体单击延迟定位 onLocate（双击编辑不打扰）', async () => {
+  test('body 指示点击 onOpenBody；卡片主体单击无动作（定位走菜单，2026-09 验收变更）', async () => {
     const { mm } = makeMm()
     const { props } = renderKanban(mm)
     fireEvent.click(screen.getByTestId('kanban-body-t1'))
     expect(props.onOpenBody).toHaveBeenCalledWith('t1')
-    expect(props.onLocate).not.toHaveBeenCalled()
-    // 单击 → 500ms 双击判定窗后定位（fireEvent.doubleClick 不派生 click，双击路径无定时器）
+    // 单击卡片主体不再定位（原 500ms 判定窗已删）：无定时器无视图切换
     fireEvent.click(screen.getByTestId('kanban-card-t1'))
-    await waitFor(() => expect(props.onLocate).toHaveBeenCalledWith('t1'), { timeout: 2000 })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 600))
+    })
+    expect(props.onLocate).not.toHaveBeenCalled()
   })
 
-  test('卡片内按钮上的键盘 Enter 不触发定位（target 守卫）；li 自身 Enter 仍定位', () => {
-    // 终审 Important-1：键盘激活卡片内按钮（body 钮）时 keyDown 冒泡到 li，
-    // 守卫缺失则 preventDefault 抑制按钮原生激活 + 误触发卡片定位
+  test('单击后紧跟双击：照常进编辑（单击无定时器副作用）', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    fireEvent.click(screen.getByTestId('kanban-card-t1'))
+    fireEvent.doubleClick(screen.getByText('修滚动条'))
+    expect(screen.getByTestId('kanban-edit-t1')).toBeInTheDocument()
+  })
+
+  test('子树卡片：子孙徽标计数 + hover 浮层显示缩进大纲（portal 渲染，列容器不裁剪）', async () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    // 子孙徽标：两子 + 一孙 = 3（2026-09 子树卡片）
+    expect(screen.getByTestId('kanban-children-t1')).toHaveTextContent('3 子节点')
+    // hover 整卡弹浮层：大纲逐行 li（直接子节点顶格、孙辈按 depth 缩进——padding 表层级）
+    fireEvent.pointerMove(screen.getByTestId('kanban-card-t1'))
+    const tip = await screen.findByTestId('kanban-tip-t1')
+    const lines = within(tip).getAllByRole('listitem')
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toHaveTextContent('先查溢出')
+    expect(lines[1]).toHaveTextContent('方案对比')
+    expect(lines[2]).toHaveTextContent('浮层走 portal')
+    expect((lines[0] as HTMLElement).style.paddingLeft).toBe('0px')
+    expect((lines[2] as HTMLElement).style.paddingLeft).toBe('14px')
+  })
+
+  test('子树卡片：编辑中 hover 不弹浮层（open 受控守卫）', async () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    fireEvent.doubleClick(screen.getByText('修滚动条'))
+    await waitFor(() => expect(screen.getByTestId('kanban-edit-t1')).toBeInTheDocument())
+    fireEvent.pointerMove(screen.getByTestId('kanban-card-t1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(screen.queryByTestId('kanban-tip-t1')).not.toBeInTheDocument()
+  })
+
+  test('子树卡片：无子孙卡片无徽标、hover 不弹浮层', async () => {
+    const t5: FakeNode = { data: { text: '独卡', uid: 't5', icon: ['zen_status-todo'] }, children: [] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t5] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: { findNodeByUid: (): null => null },
+      execCommand: vi.fn(),
+    }
+    renderKanban(mm as unknown as MindMapHandle)
+    expect(screen.queryByTestId('kanban-children-t5')).not.toBeInTheDocument()
+    fireEvent.pointerMove(screen.getByTestId('kanban-card-t5'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(screen.queryByTestId('kanban-tip-t5')).not.toBeInTheDocument()
+  })
+
+  test('卡片菜单复制：菜单项触发 onCopyCard（uid 显式上行，管线在宿主 EditorView）', async () => {
     const { mm } = makeMm()
     const { props } = renderKanban(mm)
-    // fireEvent.keyDown 冒泡到 li，处理器视角 target=按钮 ≠ currentTarget=li
-    fireEvent.keyDown(screen.getByTestId('kanban-body-t1'), { key: 'Enter' })
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-t1'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-copy-t1'))
+    expect(props.onCopyCard).toHaveBeenCalledWith('t1')
+    // 回归钉（2026-09 验收 bug）：菜单项 click 沿 React 树从 portal 跨边界冒泡回卡片 li
+    // （KanbanView 头注释同款机制），旧版 li onClick=scheduleLocate 会吃到此 click——
+    // 复制后 500ms 判定窗到期切回导图画布。定位挪菜单后 li 无单击动作，冒泡无副作用
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 600))
+    })
     expect(props.onLocate).not.toHaveBeenCalled()
-    // 守卫不误伤键盘可达路径：li 自身 keyDown（target=currentTarget）仍立即定位
-    fireEvent.keyDown(screen.getByTestId('kanban-card-t1'), { key: 'Enter' })
-    expect(props.onLocate).toHaveBeenCalledWith('t1')
   })
 
-  test('慢双击（300ms > 旧 220 判定窗）：第二击落在 500ms 窗内，走编辑不触发定位', () => {
-    // 终审 Important-2 回归钉：旧窗 220ms 时 advanceTimersByTime(300) 已触发定位
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    try {
-      const { mm } = makeMm()
-      const { props } = renderKanban(mm)
-      fireEvent.click(screen.getByTestId('kanban-card-t1'))
-      vi.advanceTimersByTime(300) // 旧 220 窗已过、新 500 窗未到
-      expect(props.onLocate).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByTestId('kanban-card-t1')) // 第二击重置定时器
-      fireEvent.doubleClick(screen.getByText('修滚动条')) // dblclick → beginEdit 取消定时器
-      vi.advanceTimersByTime(1000)
-      expect(props.onLocate).not.toHaveBeenCalled()
-      expect(screen.getByTestId('kanban-edit-t1')).toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
+  test('卡片菜单「回导图定位」：菜单项触发 onLocate（2026-09 验收变更：定位自卡片单击移入菜单）', async () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-t1'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-locate-t1'))
+    expect(props.onLocate).toHaveBeenCalledWith('t1')
   })
 
   test('data_change 订阅：挂载注册、重放即刷新（卡片迁列）、卸载退订同引用', async () => {

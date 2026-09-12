@@ -164,10 +164,15 @@ export default {
     menu: {
       toStatus: '改状态',
       toPlain: '转为普通节点',
+      // 回导图定位（2026-09 验收变更：原卡片单击定位移入菜单——portal 冒泡误触 + 误点切走）
+      locate: '回导图定位',
+      copyCard: '复制卡片',
       delete: '删除',
       deleteConfirm: '确认删除？',
     },
     bodyHint: '正文',
-    locate: '单击回到导图定位，双击编辑任务名',
+    // 子孙徽标（2026-09 子树卡片）：{{n}} = 截断范围内无状态后代数
+    children: '{{n}} 子节点',
+    cardHint: '双击编辑任务名',
   },
 }

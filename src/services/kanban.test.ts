@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildKanbanCards } from './kanban'
+import { buildKanbanCards, truncateCardSubtree } from './kanban'
 import type { ZenNode } from '../types/tree'
 
 describe('buildKanbanCards（树 → 卡片集）', () => {
@@ -49,5 +49,77 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     const cards = buildKanbanCards(root4 as unknown as ZenNode)
     expect(cards[0]).toMatchObject({ uid: 't9', path: ['A', 'B'], tags: [], hasBody: false })
     expect(cards[1]).toMatchObject({ uid: 't10', path: ['A', 'B'], tags: [], hasBody: false })
+  })
+
+  // ---- 子树整体（2026-09 卡片携带子树）：childCount/outline 走截断口径 ----
+
+  test('卡片携带无状态后代：childCount 计数、outline 为带层级的大纲行', () => {
+    const root5 = {
+      text: '根', uid: 'r', children: [
+        { text: '任务A', uid: 'a', status: 'doing', children: [
+          { text: '说明1', uid: 'a1', children: [
+            { text: '深层', uid: 'a1a', children: [] },
+          ] },
+          { text: '说明2', uid: 'a2', children: [] },
+        ] },
+      ],
+    }
+    const card = buildKanbanCards(root5 as unknown as ZenNode)[0]
+    expect(card.childCount).toBe(3)
+    expect(card.outline).toEqual([
+      { uid: 'a1', text: '说明1', depth: 0 }, { uid: 'a1a', text: '深层', depth: 1 }, { uid: 'a2', text: '说明2', depth: 0 },
+    ])
+  })
+
+  test('无子孙卡片：childCount=0、outline 空数组', () => {
+    const root6 = {
+      text: '根', uid: 'r', children: [
+        { text: '独卡', uid: 't', status: 'todo', children: [] },
+      ],
+    }
+    const card = buildKanbanCards(root6 as unknown as ZenNode)[0]
+    expect(card.childCount).toBe(0)
+    expect(card.outline).toEqual([])
+  })
+
+  test('截断：带状态后代不入父卡（其后代同不入），自身独立成卡', () => {
+    // 树：根 > 任务A(doing) > [子任务B(todo) > B1, 说明C]
+    const root7 = {
+      text: '根', uid: 'r', children: [
+        { text: '任务A', uid: 'a', status: 'doing', children: [
+          { text: '子任务B', uid: 'b', status: 'todo', children: [
+            { text: 'B1', uid: 'b1', children: [] },
+          ] },
+          { text: '说明C', uid: 'c', children: [] },
+        ] },
+      ],
+    }
+    const cards = buildKanbanCards(root7 as unknown as ZenNode)
+    expect(cards).toHaveLength(2)
+    // 父卡截断在子任务B处：只含说明C；B1 属 B 卡范围，同不入 A
+    const [a, b] = cards
+    expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: [{ uid: 'c', text: '说明C', depth: 0 }] })
+    // 子任务B独立成卡，其无状态后代入 B 卡
+    expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: [{ uid: 'b1', text: 'B1', depth: 0 }] })
+  })
+})
+
+describe('truncateCardSubtree（卡片复制范围剪枝）', () => {
+  test('带 status 后代连同其后代整枝剪掉，返回原引用便于链式；无状态层全保留', () => {
+    const tree = {
+      text: '任务A', uid: 'a', status: 'doing', children: [
+        { text: '子任务B', uid: 'b', status: 'todo', children: [
+          { text: 'B1', uid: 'b1', children: [] },
+        ] },
+        { text: '说明C', uid: 'c', children: [
+          { text: '深层', uid: 'c1', children: [] },
+        ] },
+      ],
+    }
+    const out = truncateCardSubtree(tree as unknown as ZenNode)
+    expect(out).toBe(tree) // 原地剪枝返回原引用（fresh 树零拷贝）
+    expect(out.children).toEqual([
+      { text: '说明C', uid: 'c', children: [{ text: '深层', uid: 'c1', children: [] }] },
+    ])
   })
 })

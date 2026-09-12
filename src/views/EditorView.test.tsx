@@ -2914,11 +2914,12 @@ describe('看板模式（2026-09 Task 7）', () => {
     expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_status-todo', 'zen_flag'])
   })
 
-  test('卡片单击回导图定位：切视图 + 展开收起祖先 + 渲染完成回调后居中', async () => {
+  test('卡片菜单「回导图定位」：切视图 + 展开收起祖先 + 渲染完成回调后居中（2026-09 验收变更：定位自单击移入菜单）', async () => {
     // 根收起（expand=false）：定位须先沿数据树展开（渲染树寻址前置），再等渲染完成居中
     const handle = await renderKanbanReady(kanbanTree(false))
     expect(fakeTree.data.expand).toBe(false)
-    fireEvent.click(screen.getByTestId('kanban-card-child-uid'))
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-child-uid'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-locate-child-uid'))
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'), { timeout: 2000 })
     expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
     expect(fakeTree.data.expand).toBe(true) // 祖先直写展开（视图导航豁免，不进 undo）
@@ -2929,5 +2930,51 @@ describe('看板模式（2026-09 Task 7）', () => {
       ;(globalThis as unknown as Record<string, () => void>).__emitRenderEnd!()
     })
     expect(center).toHaveBeenCalledWith(fakeChildNode)
+  })
+
+  test('看板卡片复制（2026-09 子树卡片）：菜单复制该卡追踪范围的子树 md，嵌套状态截断不入', async () => {
+    // 树：根 > 任务A(doing) > [子任务B(todo) > B1, 说明C]——A 卡复制截断在 B（B 是独立
+    // 卡片），md 只含 A + 说明C；对齐 doCopy 同源管线（settings/印记全沿用）
+    const writes: string[] = []
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [{
+        data: { text: '任务A', expand: true, uid: 'a-uid', icon: ['zen_status-doing'] },
+        children: [
+          { data: { text: '子任务B', expand: true, uid: 'b-uid', icon: ['zen_status-todo'] }, children: [
+            { data: { text: 'B1', expand: true, uid: 'b1-uid' }, children: [] },
+          ] },
+          { data: { text: '说明C', expand: true, uid: 'c-uid' }, children: [] },
+        ],
+      }],
+    }
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={async (t) => {
+          writes.push(t)
+        }}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    act(() => {
+      useAppStore.getState().setViewMode('kanban')
+    })
+    expect(await screen.findByTestId('kanban-card-a-uid')).toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-a-uid'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-copy-a-uid'))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toContain('# 任务A @doing')
+    expect(writes[0]).toContain('说明C')
+    // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
+    expect(writes[0]).not.toContain('子任务B')
+    expect(writes[0]).not.toContain('B1')
   })
 })

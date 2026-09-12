@@ -3,10 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
-import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
+import { useSubtreeCopy } from '../hooks/useSubtreeCopy'
 import { applyMultilinePaste } from '../services/multiline'
-import { applyCopySettings, stripTreeBody } from '../services/copyFilter'
-import { absolutizeImagePaths } from '../services/aiImagePaths'
 import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
@@ -264,35 +262,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     )
   }
 
-  /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图；陈旧 uid（未命中渲染树，
-   *  如撤销删除）清选中回退整图。正文按 settings 树层剥除（终审 C1，先于序列化——md 层正则
-   *  剥 `> ` 行会误伤正文代码块/引用行）；md 层后处理仅剩双链括号（getState 取实时值）。
-   *  尾段图片引用相对→绝对（2026-09）：须在剥正文之后——头注引用行不能被一并剥掉。序列化同步段
-   *  try 兜底（2026-09-07 回归：Word 粘贴携 \r\n 致 assert 抛错曾无声失败），异步段 then 同口径 */
-  const doCopy = (): void => {
-    const mm = mmRef.current
-    if (!mm) return
-    let md: string
-    try {
-      const full = mm.getData()
-      selection.clearStaleIfMissing(full)
-      const uid = selection.activeUidRef.current
-      const active = uid ? findSubtreeByUid(full, uid) : null
-      const settings = useAppStore.getState().settings
-      let zen = engineTreeToZen(active ?? full).tree
-      if (!settings.copyIncludeBody) zen = stripTreeBody(zen)
-      md = applyCopySettings(serialize(zen, registry.byUid), settings)
-    } catch (e) {
-      setError(t('errors.copyMdFailed', { reason: e instanceof Error ? e.message : String(e) }))
-      return
-    }
-    const wsDir = useAppStore.getState().workspaceDir
-    if (wsDir !== null) md = absolutizeImagePaths(md, wsDir)
-    void writeClipboard(md).then(
-      () => flashCopy('copied-md'),
-      (e) => setError(t('errors.copyMdFailed', { reason: String(e) })),
-    )
-  }
+  /** 复制 md 管线（2026-09 子树卡片拆至 useSubtreeCopy，行数护栏同 useExportFlow 动因）：
+   *  整图/选中子树的 doCopy + 看板卡片的 copyKanbanCard 共用「子树→md→剪贴板」公共管线
+   *  （剥正文/双链括号后处理/图片绝对化/失败横幅/印记，语义注释见该 hook） */
+  const { doCopy, copyKanbanCard } = useSubtreeCopy({
+    mmRef, writeClipboard, registry, selection, flashCopy, setError,
+  })
 
   /** 落盘 + 成功印记（Task 7）：此前有脏内容且落盘成功才盖「已存」；干净状态下保存是 no-op，不印记 */
   const saveAndStamp = async (): Promise<boolean> => {
@@ -508,6 +483,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             onEditIcons={(c) => iconPick.openPicker(c.text, c.icons, c.uid)}
             onEditTags={(c) => tagPick.openPicker(c.text, c.tags, usedTagsOf(mmRef.current), c.uid)}
             onLocate={locateNode}
+            onCopyCard={copyKanbanCard}
             onClose={() => switchView('mindmap')}
           />
         )}
