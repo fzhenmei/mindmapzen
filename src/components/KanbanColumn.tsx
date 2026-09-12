@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import type { TaskStatus } from '../services/statusMarkers'
 import KanbanCard, { type KanbanCardProps } from './KanbanCard'
+import { IconChevronRight } from './icons'
 
 /** 五态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
  *  StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态选择器与列头视觉同源） */
@@ -28,9 +29,11 @@ interface Props extends Omit<KanbanCardProps, 'card'> {
   onAdd(text: string): void
   /** 过滤激活态（2026-09 看板治理）：空列占位文案切换——过滤后空 = 「无匹配」 */
   filterActive?: boolean
+  /** 归档列收起（2026-09 看板治理）：仅归档列传入——列头收起钮回落看板收起条 */
+  onCollapse?(): void
 }
 
-export default function KanbanColumn({ status, cards, onAdd, filterActive = false, ...cardCallbacks }: Readonly<Props>) {
+export default function KanbanColumn({ status, cards, onAdd, filterActive = false, onCollapse, ...cardCallbacks }: Readonly<Props>) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -110,6 +113,18 @@ export default function KanbanColumn({ status, cards, onAdd, filterActive = fals
         >
           {t(`editor.kanban.status.${status}`)}
         </h3>
+        {onCollapse !== undefined && (
+          <button
+            type="button"
+            data-testid="btn-kanban-archive-collapse"
+            title={t('editor.kanban.collapseArchive')}
+            aria-label={t('editor.kanban.collapseArchive')}
+            onClick={onCollapse}
+            className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <IconChevronRight size={12} />
+          </button>
+        )}
         <span className="ml-auto rounded-full bg-secondary px-1.5 text-[10px] leading-4 text-secondary-foreground">
           {cards.length}
         </span>

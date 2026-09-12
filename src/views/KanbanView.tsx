@@ -13,13 +13,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RefObject } from 'react'
 import type { MindMapHandle } from '../types/engine'
-import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
+import { BOARD_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { buildKanbanCards, type KanbanCard as KanbanCardData } from '../services/kanban'
 import { engineTreeToZen } from '../services/mdTree'
 import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
-import { IconWinClose } from '../components/icons'
+import { IconArchive, IconWinClose } from '../components/icons'
 
 /** 过滤匹配（2026-09 看板治理 spec §4）：标题 / 路径段 / 标签，大小写不敏感；
  *  空过滤恒真（过滤关闭态）——纯视图态，不进 undo */
@@ -57,6 +57,11 @@ export default function KanbanView({
   const [cards, setCards] = useState<KanbanCardData[]>([])
   const [filterText, setFilterText] = useState('')
   const filterActive = filterText.trim() !== ''
+  // 归档列展开态（2026-09 看板治理 spec §2.3/§4）：用户手动开 || 过滤强制——
+  // 过滤清空回落用户态（archiveOpen 不被过滤清空改写，spec §4「清空后保持当前展开态」
+  // 的实现形态：强制项消失即回落）
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const archiveExpanded = archiveOpen || filterActive
   const rootRef = useRef<HTMLDialogElement>(null)
 
   /** 全量重投影：engineTreeToZen 透传 uid（卡片寻址靠 uid）；构建失败留 console 线索 */
@@ -224,7 +229,7 @@ export default function KanbanView({
       </header>
       {/* 五列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
       <div className="flex flex-1 items-start gap-3 overflow-x-auto p-4">
-        {TASK_STATUSES.map((s) => (
+        {BOARD_STATUSES.map((s) => (
           <KanbanColumn
             key={s}
             status={s}
@@ -241,6 +246,37 @@ export default function KanbanView({
             onAdd={(text) => addCard(s, text)}
           />
         ))}
+        {archiveExpanded ? (
+          <KanbanColumn
+            status="archived"
+            cards={cards.filter((c) => c.status === 'archived' && matchesFilter(c, filterText))}
+            filterActive={filterActive}
+            onCollapse={() => setArchiveOpen(false)}
+            onStatusChange={changeStatus}
+            onTextChange={changeText}
+            onDelete={deleteCard}
+            onOpenBody={onOpenBody}
+            onEditIcons={onEditIcons}
+            onEditTags={(card) => onEditTags({ ...card, used: usedTags })}
+            onLocate={onLocate}
+            onCopyCard={onCopyCard}
+            onAdd={(text) => addCard('archived', text)}
+          />
+        ) : (
+          // 收起条（默认态）：列头同款视觉（色点省略——IconArchive 即语义），计数即入口
+          <button
+            type="button"
+            data-testid="kanban-archive-collapsed"
+            onClick={() => setArchiveOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-muted/40 p-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <IconArchive size={14} />
+            <span>{t('editor.kanban.status.archived')}</span>
+            <span className="rounded-full bg-secondary px-1.5 text-[10px] leading-4 text-secondary-foreground">
+              {cards.filter((c) => c.status === 'archived').length}
+            </span>
+          </button>
+        )}
       </div>
     </dialog>
   )

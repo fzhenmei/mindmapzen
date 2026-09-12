@@ -344,6 +344,20 @@ export const IconKanbanSquare = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 归档（2026-09 看板治理 · 归档列收起条/批量归档钮）：纸盒——顶盖横条 + 箱体 +
+ *  正面锁扣线（lucide archive 语义缩至 16 网格） */
+export const IconArchive = ({ size }: IconProps) =>
+  base(
+    <>
+      <rect x="2" y="2.5" width="12" height="3" rx="1" />
+      <path d="M3.5 5.5v7A1.5 1.5 0 0 0 5 14h6a1.5 1.5 0 0 0 1.5-1.5v-7" />
+      <path d="M6.7 9h2.6" />
+    </>,
+    size,
+  )
+/** 右向箭头（2026-09 看板治理 · 归档列收起钮）：IconChevronDown 的右向镜像
+ *  （收起 = 向板缘收纳） */
+export const IconChevronRight = ({ size }: IconProps) => base(<path d="M6 4l4 4-4 4" />, size)
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */

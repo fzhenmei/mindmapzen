@@ -36,7 +36,15 @@ function makeMm() {
       t1.data.icon = icons
     }),
   }
-  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1] }
+  // 归档卡（2026-09 看板治理）：archived 不进五列、收起条计数/展开/恢复拖拽断言共用
+  const ta: FakeNode = {
+    data: { text: '翻篇任务', uid: 'ta', icon: ['zen_status-archived'] },
+    children: [],
+    setIcon: vi.fn((icons: string[]) => {
+      ta.data.icon = icons
+    }),
+  }
+  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, ta] }
   const mm = {
     getData: () => root,
     on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
@@ -46,7 +54,7 @@ function makeMm() {
       listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
     }),
     renderer: {
-      findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : null),
+      findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : uid === 'ta' ? ta : null),
     },
     execCommand: vi.fn(),
   }
@@ -54,6 +62,7 @@ function makeMm() {
     mm: mm as unknown as MindMapHandle,
     root,
     t1,
+    ta,
     // mock 引用单出：mm 已断言成 MindMapHandle，接口类型下 .mock 不可达
     onMock: mm.on,
     offMock: mm.off,
@@ -525,5 +534,46 @@ describe('KanbanView（看板模式浮层）', () => {
     // 已空：不再 stopPropagation，冒泡到看板根走关板（与列底新增同款分层协议）
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('归档卡不进五列：收起条在场带计数，未展开不可见（2026-09 看板治理）', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    expect(screen.getByTestId('kanban-archive-collapsed')).toHaveTextContent('1')
+    // 五列内无归档卡（列循环走 BOARD_STATUSES）
+    expect(screen.queryByText('翻篇任务')).not.toBeInTheDocument()
+  })
+
+  test('归档列展开/收起：点收起条展开成标准列，列头收起钮回落收起条', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    expect(screen.getByText('翻篇任务')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-collapse'))
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+    expect(screen.getByTestId('kanban-archive-collapsed')).toBeInTheDocument()
+  })
+
+  test('归档列拖出到 todo 列恢复：changeStatus 管线复用（徽章合成 + onDataChanged）', () => {
+    const { mm, ta } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 'ta' : '') }
+    fireEvent.dragStart(screen.getByTestId('kanban-card-ta'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('kanban-col-todo'), { dataTransfer: dt })
+    expect(ta.setIcon).toHaveBeenCalledWith(['zen_status-todo'])
+    expect(props.onDataChanged).toHaveBeenCalled()
+  })
+
+  test('过滤联动归档列：过滤非空强制展开（未手动开）；清空回落收起（spec §4）', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '翻篇' } })
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    expect(screen.getByText('翻篇任务')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '' } })
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
   })
 })
