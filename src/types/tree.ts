@@ -12,7 +12,8 @@ export interface ZenNode {
    *  parse 提取、序列化注入；空数组不设 */
   tags?: string[]
   /** 任务状态（看板模式）：五态互斥（md 句尾 @todo/@doing/@blocked/@done/@dropped 标记 ⇄ 此字段，
-   *  与 ::icon/#tag 同构）；引擎侧经 data.icon 内部保留名 zen_status_<s> 承载徽章；
+   *  与 ::icon/#tag 同构）；引擎侧经 data.icon 内部保留名 zen_status-<s>（kebab，引擎
+   *  split('_') 协议）承载徽章；
    *  parse 提取、序列化注入；无状态不设字段（= 非任务，不进看板） */
   status?: TaskStatus
   /** 节点插图（M19）：md 行尾 ![alt](src) 标记 ⇄ 此字段；src 相对工作区路径，

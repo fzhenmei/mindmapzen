@@ -297,7 +297,8 @@ export interface ImageMetaEntry {
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
  *  body（非空串）透传进 data.body 并同值镜像 data.note（2026-09-06 备注合并：
  *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源；zen_body 图标通道已退役）；
- *  status（看板）→ data.icon 首项内部保留名 zen_status_<s>（iconList 静态注册承载，Task 3）；
+ *  status（看板）→ data.icon 首项内部保留名 zen_status-<s>（iconList 静态注册承载，Task 3；
+ *  kebab 而非下划线——引擎 getNodeIconListIcon 按 split('_') 取 arr[1] 为 name，下划线形态永不命中）；
  *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
  *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
  *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
@@ -317,11 +318,12 @@ export function zenToEngineTree(
   }
   // 图标组装（M18）：用户 icons 直 map（'zen_'+name）。2026-09-06 备注合并后「有正文」
   // 角标/悬停由镜像 data.note 驱动引擎原生通道，不再借道 data.icon。
-  // 状态徽章（看板模式）：status 借道 data.icon 内部保留名 zen_status_<s>，置首项、
-  // 用户图标排后（engineTreeToZen 侧按前缀排除+白名单还原，roundtrip 互逆）
+  // 状态徽章（看板模式）：status 借道 data.icon 内部保留名 zen_status-<s>（kebab，引擎
+  // split('_') 协议），置首项、用户图标排后（engineTreeToZen 侧按前缀排除+白名单还原，
+  // roundtrip 互逆）
   const icons =
     tree.status !== undefined
-      ? [`zen_status_${tree.status}`, ...(tree.icons ?? []).map((n) => `zen_${n}`)]
+      ? [`zen_status-${tree.status}`, ...(tree.icons ?? []).map((n) => `zen_${n}`)]
       : (tree.icons ?? []).map((n) => `zen_${n}`)
   return {
     data: {
@@ -346,12 +348,12 @@ export function zenToEngineTree(
 }
 
 /** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名；排除内部保留名
- *  zen_status_（看板状态徽章由 engineTreeToZen 独立提取还原 status，不混入用户图标）；
+ *  zen_status-（看板状态徽章由 engineTreeToZen 独立提取还原 status，不混入用户图标）；
  *  非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
 function collectIcons(icon: unknown): string[] {
   if (!Array.isArray(icon)) return []
   return icon
-    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_') && !n.startsWith('zen_status_'))
+    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_') && !n.startsWith('zen_status-'))
     .map((n) => n.slice(4))
 }
 
@@ -373,7 +375,7 @@ export function collectTags(tag: unknown): string[] {
  *  data.body（非空字符串）收进 ZenNode.body；data.note 为宿主镜像（2026-09-06 合并），
  *  不收集——事实源是 data.body；
  *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md）；
- *  data.icon 内部保留名 zen_status_<s>（看板）还原 ZenNode.status（白名单外宽容丢弃） */
+ *  data.icon 内部保留名 zen_status-<s>（看板）还原 ZenNode.status（白名单外宽容丢弃） */
 export function engineTreeToZen(
   root: EngineNode,
   parentPath = '',
@@ -383,12 +385,12 @@ export function engineTreeToZen(
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const body = typeof root.data.body === 'string' && root.data.body !== '' ? root.data.body : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
-  // 状态徽章提取（看板模式）：zen_status_<s> 首个白名单命中还原 status；非白名单宽容丢弃
+  // 状态徽章提取（看板模式）：zen_status-<s> 首个白名单命中还原 status；非白名单宽容丢弃
   const rawIcons = Array.isArray(root.data.icon) ? root.data.icon : []
-  const statusBadge = rawIcons.find((i): i is string => typeof i === 'string' && i.startsWith('zen_status_'))
-  const statusVal = statusBadge !== undefined ? statusBadge.slice('zen_status_'.length) : undefined
+  const statusBadge = rawIcons.find((i): i is string => typeof i === 'string' && i.startsWith('zen_status-'))
+  const statusVal = statusBadge !== undefined ? statusBadge.slice('zen_status-'.length) : undefined
   const status = TASK_STATUSES.includes(statusVal as TaskStatus) ? (statusVal as TaskStatus) : undefined
-  // 图标收集（M18）：仅收 'zen_' 前缀项（zen_status_ 内部保留名已排除）
+  // 图标收集（M18）：仅收 'zen_' 前缀项（zen_status- 内部保留名已排除）
   const icons = collectIcons(root.data.icon)
   // 标签收集：字符串与 {text} 对象两形态宽容收文本
   const tags = collectTags(root.data.tag)

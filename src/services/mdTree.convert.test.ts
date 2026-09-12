@@ -86,19 +86,34 @@ describe('zen ⇄ engine 转换', () => {
 })
 
 describe('状态徽章承载（看板模式）', () => {
-  test('zenToEngineTree：status → data.icon 首项 zen_status_<s>，用户图标排后', () => {
+  test('zenToEngineTree：status → data.icon 首项 zen_status-<s>，用户图标排后', () => {
     const eng = zenToEngineTree({ text: 'A', children: [], icons: ['flag'], status: 'doing' })
-    expect(eng.data.icon).toEqual(['zen_status_doing', 'zen_flag'])
+    expect(eng.data.icon).toEqual(['zen_status-doing', 'zen_flag'])
   })
   test('engineTreeToZen：徽章还原 status 字段，collectIcons 排除保留名', () => {
-    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status_done', 'zen_star'] }, children: [] })
+    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status-done', 'zen_star'] }, children: [] })
     expect(back.tree.status).toBe('done')
     expect(back.tree.icons).toEqual(['star'])
   })
-  test('非白名单徽章（zen_status_foo）宽容丢弃；无徽章不设 status', () => {
-    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status_foo'] }, children: [] })
+  test('非白名单徽章（zen_status-foo）宽容丢弃；无徽章不设 status', () => {
+    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status-foo'] }, children: [] })
     expect(back.tree.status).toBeUndefined()
     // 排除保留名后无用户图标 → 空集合不设键（项目既有不变量，与 body/tags/status 同口径）
+    expect(back.tree.icons).toBeUndefined()
+  })
+  test('非白名单徽章与用户图标共存：zen_status-foo 丢弃、zen_star 保留、status 不设', () => {
+    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status-foo', 'zen_star'] }, children: [] })
+    expect(back.tree.status).toBeUndefined()
+    expect(back.tree.icons).toEqual(['star'])
+  })
+  test('已知副作用锁定：手写 ::status-doing（合法 icon 名）经引擎树宽容归一为 @doing', () => {
+    // parse 侧 ::status-doing 是普通用户图标 → icons=['status-doing']、status 未设
+    const eng = zenToEngineTree({ text: 'A', children: [], icons: ['status-doing'] })
+    expect(eng.data.icon).toEqual(['zen_status-doing'])
+    // 回读被当状态徽章收走 → status 置位、icons 不设；下次保存序列化为 ' @doing'
+    // （与连线手写标记「会话内保留、下一次打开归一」同哲学，Critical-1 修复裁定可接受）
+    const back = engineTreeToZen(eng)
+    expect(back.tree.status).toBe('doing')
     expect(back.tree.icons).toBeUndefined()
   })
 })

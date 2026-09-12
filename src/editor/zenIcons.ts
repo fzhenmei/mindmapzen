@@ -79,7 +79,7 @@ import zap from 'lucide-static/icons/zap.svg?raw'
  *  `<!-- @license -->` 头注释，不剥则被当图片 URL 加载显示为碎图（M18 验收实案） */
 const normalizeSvg = (raw: string): string => raw.replace(/^\s*<!--[\s\S]*?-->\s*/, '')
 
-/** 精选集原始表（64，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
+/** 精选集原始表（69，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
 const RAW_CURATED: Readonly<Record<string, string>> = {
   flag, star, 'alert-triangle': alertTriangle, check, x, clock, flame, flask: flaskConical, heart, bookmark, pin,
   tag, lightbulb, target, rocket, bug, lock, key, eye, search, calendar,
@@ -97,8 +97,10 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
   Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
 )
 
-/** 状态徽章映射（看板模式）：status → 精选图标名。引擎 iconList 按 type_name 查找，
- *  data.icon 元素 'zen_status_<s>' = type 'zen' + name 'status_<s>'，下方静态注册五项 */
+/** 状态徽章映射（看板模式）：status → 精选图标名。引擎 getNodeIconListIcon（svg/icons.js:288）
+ *  按 name.split('_') 取 arr[0]=type、arr[1]=name 查找——保留名必须 kebab（'zen_status-doing'
+ *  恰拆 ['zen','status-doing'] 两段；下划线形态 'zen_status_doing' 会拆出 name='status' 永不命中），
+ *  data.icon 元素 'zen_status-<s>'，下方静态注册五项 name 'status-<s>' */
 export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
   todo: 'circle', doing: 'clock', blocked: 'alert-triangle', done: 'check', dropped: 'x',
 }
@@ -106,14 +108,14 @@ export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
 /** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。
  *  2026-09-06 备注合并：zen_body 内部保留名退役（「有正文」角标由镜像 data.note 驱动
  *  引擎原生通道，不再借道 iconList 静态注册）；2026-09 看板模式：追加五态状态徽章
- *  静态项（name status_<s>，data.icon 'zen_status_<s>' 命中），与用户精选图标同列 */
+ *  静态项（name status-<s>，data.icon 'zen_status-<s>' 命中），与用户精选图标同列 */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
   return [
     {
       type: 'zen',
       list: [
         ...Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })),
-        ...TASK_STATUSES.map((s) => ({ name: `status_${s}`, icon: CURATED_ICONS[STATUS_BADGE_ICON[s]] })),
+        ...TASK_STATUSES.map((s) => ({ name: `status-${s}`, icon: CURATED_ICONS[STATUS_BADGE_ICON[s]] })),
       ],
     },
   ]
