@@ -2,7 +2,7 @@
 // 映射、编排链(渲染走 mock 注入代表性 DOM,jsdom 不跑 vditor)
 import { describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, stripMermaid } from './wechatCopy'
+import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, stripExternalLinks, stripMermaid } from './wechatCopy'
 
 describe('stripMermaid:mermaid 围栏改 zen-mermaid 标记(vditor 无此适配器不触其成图,成图由 mermaidImage 管线接管)', () => {
   test('```mermaid 围栏改标 ```zen-mermaid,其余围栏不动', () => {
@@ -109,6 +109,62 @@ describe('applyWechatStyles:逐元素内联样式(公众号只认元素 style)',
     const root = styled('<img src="x.png"><hr>')
     expect(root.querySelector<HTMLElement>('img')!.style.maxWidth).toBe('100%')
     expect(root.querySelector('hr')!.style.borderTopWidth).not.toBe('')
+  })
+})
+
+describe('stripExternalLinks:非 mp.weixin.qq.com 链接剥成链接色纯文字(微信保存外链拦截,2026-09-12)', () => {
+  test('外链 a 换 span:文字与子结构保留,带链接色,href 不存在', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<p><a href="https://example.com/a?b=1">参考<strong>文档</strong></a></p>'
+    stripExternalLinks(root)
+    const span = root.querySelector('span')!
+    expect(root.querySelector('a')).toBeNull()
+    expect(span.textContent).toBe('参考文档')
+    expect(span.querySelector('strong')!.textContent).toBe('文档')
+    expect(span.style.color).toBe('rgb(87, 107, 149)') // #576b95 微信链接色
+  })
+
+  test('mp.weixin.qq.com 互链保留可点(http/https 等价)', () => {
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<p><a href="https://mp.weixin.qq.com/s/abc">上文</a><a href="http://mp.weixin.qq.com/s/xyz">下文</a></p>'
+    stripExternalLinks(root)
+    const [a1, a2] = [...root.querySelectorAll('a')]
+    expect(a1!.getAttribute('href')).toBe('https://mp.weixin.qq.com/s/abc')
+    expect(a2!.getAttribute('href')).toBe('http://mp.weixin.qq.com/s/abc'.replace('abc', 'xyz'))
+  })
+
+  test('仿冒域名/大写协议混合只认精确 hostname;无 href 的裸 a 也剥', () => {
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<p><a href="https://mp.weixin.qq.com.evil.com/s">仿冒</a><a href="HTTPS://MP.WEIXIN.QQ.COM/s/ok">真链</a><a>裸链</a></p>'
+    stripExternalLinks(root)
+    const links = [...root.querySelectorAll('a')]
+    expect(links).toHaveLength(1) // 仅大写真链保留(URL hostname 小写化后命中)
+    expect(links[0]!.getAttribute('href')).toBe('HTTPS://MP.WEIXIN.QQ.COM/s/ok')
+    expect(root.textContent).toContain('仿冒')
+    expect(root.textContent).toContain('裸链')
+  })
+
+  test('相对路径与锚点链接无域名,同样剥成文字', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<p><a href="assets/doc.md">附件</a><a href="#section">跳转</a></p>'
+    stripExternalLinks(root)
+    expect(root.querySelector('a')).toBeNull()
+    expect(root.textContent).toContain('附件')
+    expect(root.textContent).toContain('跳转')
+  })
+
+  test('buildWechatHtml 全链出参:外链已剥,互链保留且带内联样式', () => {
+    const rendered = document.createElement('div')
+    rendered.innerHTML =
+      '<div class="vditor-reset"><p><a href="https://example.com">外链</a><a href="https://mp.weixin.qq.com/s/1">互链</a></p></div>'
+    const html = buildWechatHtml(rendered)
+    const sink = document.createElement('div')
+    sink.innerHTML = html
+    expect(sink.querySelector('a')!.getAttribute('href')).toBe('https://mp.weixin.qq.com/s/1')
+    expect(sink.querySelector('a')!.style.color).not.toBe('')
+    expect(sink.textContent).toContain('外链')
   })
 })
 
