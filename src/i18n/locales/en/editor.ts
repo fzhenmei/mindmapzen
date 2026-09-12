@@ -134,5 +134,30 @@ const editor: Dict['editor'] = {
   noteTooltip: {
     more: 'Open the editor dialog (Shift+F2)',
   },
+  // Kanban mode (2026-09 Task 6): KanbanView overlay trio; the five status
+  // names map one-to-one to the statusMarkers whitelist; the menu icon/tag
+  // entries reuse nodeActions.icon/tag
+  kanban: {
+    viewName: 'Kanban',
+    close: 'Close the kanban and return to the map',
+    status: {
+      todo: 'To do',
+      doing: 'In progress',
+      blocked: 'Blocked',
+      done: 'Done',
+      dropped: 'Dropped',
+    },
+    ungrouped: 'Ungrouped',
+    emptyColumn: 'No tasks yet',
+    addPlaceholder: 'Type a task name and press Enter',
+    menu: {
+      toStatus: 'Set status',
+      toPlain: 'Convert to plain node',
+      delete: 'Delete',
+      deleteConfirm: 'Delete?',
+    },
+    bodyHint: 'Body',
+    locate: 'Click to locate on the map; double-click to rename',
+  },
 }
 export default editor

@@ -134,4 +134,28 @@ export default {
   noteTooltip: {
     more: '打开弹窗编辑正文(Shift+F2)',
   },
+  // 看板模式（2026-09 Task 6）：KanbanView 浮层三件套；五态名与 statusMarkers
+  // 白名单一一对应；菜单「图标/标签」两项复用 nodeActions.icon/tag
+  kanban: {
+    viewName: '看板',
+    close: '关闭看板，返回导图',
+    status: {
+      todo: '待办',
+      doing: '进行中',
+      blocked: '受阻',
+      done: '完成',
+      dropped: '放弃',
+    },
+    ungrouped: '未分组',
+    emptyColumn: '暂无任务',
+    addPlaceholder: '输入任务名，回车添加',
+    menu: {
+      toStatus: '改状态',
+      toPlain: '转为普通节点',
+      delete: '删除',
+      deleteConfirm: '确认删除？',
+    },
+    bodyHint: '正文',
+    locate: '单击回到导图定位，双击编辑任务名',
+  },
 }
