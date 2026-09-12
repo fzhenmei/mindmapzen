@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { CURATED_ICONS } from '../editor/zenIcons'
@@ -34,16 +35,25 @@ const DELETE_CONFIRM_MS = 3000
 const hasBadges = (card: KanbanCardData): boolean =>
   card.icons.length > 0 || card.tags.length > 0 || card.hasBody
 
-/** 编辑输入框键盘处理（S3776 拆出：组件聚合复杂度已满，分支按函数单独计量）。
- *  stopPropagation：Esc 不冒泡到看板根触发关板——编辑取消只退编辑态（Esc 分层） */
+/** 卡片父链小字文本：有父链则 ' / ' 连接；根下直挂 = 未分组。
+ *  拆出同因 S3776：组件聚合复杂度已满 */
+const cardPathText = (card: KanbanCardData, t: TFunction): string =>
+  card.path.length > 0 ? card.path.join(' / ') : t('editor.kanban.ungrouped')
+
+/** 编辑框键盘处理（S3776 拆出：组件聚合复杂度已满，分支按函数单独计量）。
+ *  stopPropagation：Esc 不冒泡到看板根触发关板——编辑取消只退编辑态（Esc 分层）。
+ *  Enter preventDefault：textarea 里 Enter 默认插入换行，而引擎节点文本是单行
+ *  模型（\r\n 入节点会让 serialize 断言抛错），换行键只用于提交 */
 function handleEditInputKey(
-  e: KeyboardEvent<HTMLInputElement>,
+  e: KeyboardEvent<HTMLTextAreaElement>,
   commit: () => void,
   cancel: () => void,
 ): void {
   e.stopPropagation()
-  if (e.key === 'Enter') commit()
-  else if (e.key === 'Escape') cancel()
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    commit()
+  } else if (e.key === 'Escape') cancel()
 }
 
 /** 键盘定位判定（li 自身 Enter/Space）：target 守卫——冒泡自内部按钮/输入框的
@@ -178,26 +188,31 @@ export default function KanbanCard({
         dragging ? 'opacity-50' : ''
       }`}
     >
-      {/* 父链（根下直挂 = 未分组）：卡片同名任务的归属线索 */}
-      <p className="truncate text-[10px] leading-tight text-muted-foreground">
-        {card.path.length > 0 ? card.path.join(' / ') : t('editor.kanban.ungrouped')}
+      {/* 父链小字同正文放开截断（信息完整优先，长路径换行也接受） */}
+      <p className="break-words text-[10px] leading-tight text-muted-foreground">
+        {cardPathText(card, t)}
       </p>
       <div className="mt-0.5 flex items-start gap-1">
         <div className="min-w-0 flex-1" onDoubleClick={editing ? undefined : beginEdit}>
           {editing ? (
-            <input
+            <textarea
               data-testid={`kanban-edit-${card.uid}`}
               value={draft}
+              rows={1}
               autoFocus
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) =>
+                // 引擎节点文本是单行模型（\r\n 入节点 → serialize 断言抛错 → 复制/保存无声失败），
+                // 粘贴多行文本时把换行折叠为空格（输入法/键入的换行已被 Enter=提交挡住）
+                setDraft(e.target.value.replace(/\r?\n/g, ' '))
+              }
               onKeyDown={(e) => handleEditInputKey(e, commitEdit, cancelEditAndRefocus)}
               onBlur={commitEdit}
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => e.stopPropagation()}
-              className="w-full rounded border bg-background px-1 py-0.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="w-full field-sizing-content resize-none rounded border bg-background px-1 py-0.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           ) : (
-            <p className="truncate font-medium leading-snug">{card.text}</p>
+            <p className="break-words font-medium leading-snug">{card.text}</p>
           )}
         </div>
         <DropdownMenu>
