@@ -3,6 +3,7 @@
 // '<type>_<name>'，经 opt.iconList 的 { type, list:[{name, icon}] } 解析出 svg 字符串；
 // /^<svg/ 前缀走 SVG 渲染。我们的 type 固定 'zen'：'zen_flag' ↔ md 标记 '::flag'。
 import type { EngineNode } from '../types/engine'
+import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import alertTriangle from 'lucide-static/icons/alert-triangle.svg?raw'
 import arrowDown from 'lucide-static/icons/arrow-down.svg?raw'
 import arrowRight from 'lucide-static/icons/arrow-right.svg?raw'
@@ -96,11 +97,26 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
   Object.entries(RAW_CURATED).map(([name, svg]) => [name, normalizeSvg(svg)]),
 )
 
+/** 状态徽章映射（看板模式）：status → 精选图标名。引擎 iconList 按 type_name 查找，
+ *  data.icon 元素 'zen_status_<s>' = type 'zen' + name 'status_<s>'，下方静态注册五项 */
+export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
+  todo: 'circle', doing: 'clock', blocked: 'alert-triangle', done: 'check', dropped: 'x',
+}
+
 /** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。
- *  2026-09-06 备注合并：zen_body 内部保留名退役，iconList 恢复纯精选集（「有正文」
- *  角标由镜像 data.note 驱动引擎原生通道，不再借道 iconList 静态注册） */
+ *  2026-09-06 备注合并：zen_body 内部保留名退役（「有正文」角标由镜像 data.note 驱动
+ *  引擎原生通道，不再借道 iconList 静态注册）；2026-09 看板模式：追加五态状态徽章
+ *  静态项（name status_<s>，data.icon 'zen_status_<s>' 命中），与用户精选图标同列 */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
-  return [{ type: 'zen', list: Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })) }]
+  return [
+    {
+      type: 'zen',
+      list: [
+        ...Object.entries(CURATED_ICONS).map(([name, icon]) => ({ name, icon })),
+        ...TASK_STATUSES.map((s) => ({ name: `status_${s}`, icon: CURATED_ICONS[STATUS_BADGE_ICON[s]] })),
+      ],
+    },
+  ]
 }
 
 /** lucide 节点结构（icon-nodes.json：[tag, attrs, children?] 三元组递归） */

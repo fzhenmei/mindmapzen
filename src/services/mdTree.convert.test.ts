@@ -84,3 +84,21 @@ describe('zen ⇄ engine 转换', () => {
     expect('note' in engineTreeToZen(weird).tree).toBe(false)
   })
 })
+
+describe('状态徽章承载（看板模式）', () => {
+  test('zenToEngineTree：status → data.icon 首项 zen_status_<s>，用户图标排后', () => {
+    const eng = zenToEngineTree({ text: 'A', children: [], icons: ['flag'], status: 'doing' })
+    expect(eng.data.icon).toEqual(['zen_status_doing', 'zen_flag'])
+  })
+  test('engineTreeToZen：徽章还原 status 字段，collectIcons 排除保留名', () => {
+    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status_done', 'zen_star'] }, children: [] })
+    expect(back.tree.status).toBe('done')
+    expect(back.tree.icons).toEqual(['star'])
+  })
+  test('非白名单徽章（zen_status_foo）宽容丢弃；无徽章不设 status', () => {
+    const back = engineTreeToZen({ data: { text: 'A', icon: ['zen_status_foo'] }, children: [] })
+    expect(back.tree.status).toBeUndefined()
+    // 排除保留名后无用户图标 → 空集合不设键（项目既有不变量，与 body/tags/status 同口径）
+    expect(back.tree.icons).toBeUndefined()
+  })
+})
