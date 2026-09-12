@@ -308,13 +308,14 @@ export default function KanbanCard({
       {/* 子孙速览浮层（2026-09 子树卡片）：portal 渲染不被列容器 overflow 裁剪；纯展示
           不可交互（指针移出卡片即关）——细看/编辑回导图（点卡片定位）。每行独立 li 按
           depth 打缩进留白（2026-09 验收微调：pre-wrap 拼接无行距层级，内容糊作一团），
-          行距 gap-1 分行；限高 + 滚动作超长护栏（slimScrollbar 对 overflow 容器自动生效）；
+          行距 gap-2 分行（2026-09 二轮验收：gap-1 行距仍不够清晰）；限高 + 滚动作超长
+          护栏（slimScrollbar 对 overflow 容器自动生效）；
           底色 bg-foreground 不透明 */}
       <TooltipContent
         data-testid={`kanban-tip-${card.uid}`}
         className="max-h-64 w-80 max-w-[80vw] overflow-y-auto"
       >
-        <ul className="flex list-none flex-col gap-1">
+        <ul className="flex list-none flex-col gap-2">
           {card.outline.map((line) => (
             <li
               key={line.uid}
