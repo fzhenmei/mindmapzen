@@ -16,6 +16,7 @@ import IconPickerDialog from './IconPickerDialog'
 import ImageDialog from './ImageDialog'
 import NewMapDialog from './NewMapDialog'
 import QuickSwitchDialog from './QuickSwitchDialog'
+import StatusPickerDialog from './StatusPickerDialog'
 import TagPickerDialog from './TagPickerDialog'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
@@ -36,6 +37,8 @@ interface EditorDialogsProps {
   iconPicker: ComponentProps<typeof IconPickerDialog> | null
   /** 标签选择器（feature/node-tags）：同上 */
   tagPicker: ComponentProps<typeof TagPickerDialog> | null
+  /** 状态选择器（2026-09 看板模式 Task 8）：同上（五态单选 + 转普通） */
+  statusPicker: ComponentProps<typeof StatusPickerDialog> | null
   /** 插图（M19，2026-09 迁入）：同上 */
   imageEdit: ComponentProps<typeof ImageDialog> | null
   /** 快速切换浮层（v2.5，2026-09 迁入）：搜索/轮换两形态共用；同上 */
@@ -57,6 +60,7 @@ export default function EditorDialogs({
   exportActions,
   iconPicker,
   tagPicker,
+  statusPicker,
   imageEdit,
   quickSwitch,
   newMap,
@@ -85,6 +89,7 @@ export default function EditorDialogs({
       {exportActions !== null && <ExportDialog actions={exportActions} />}
       {iconPicker !== null && <IconPickerDialog {...iconPicker} />}
       {tagPicker !== null && <TagPickerDialog {...tagPicker} />}
+      {statusPicker !== null && <StatusPickerDialog {...statusPicker} />}
       {imageEdit !== null && <ImageDialog {...imageEdit} />}
       {quickSwitch !== null && <QuickSwitchDialog {...quickSwitch} />}
       {newMap !== null && <NewMapDialog {...newMap} />}

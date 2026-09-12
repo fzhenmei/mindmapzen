@@ -66,6 +66,8 @@ const editor: Dict['editor'] = {
     body: 'Write body text for the selected node',
     icon: 'Node icon',
     tag: 'Node tags',
+    // Task status (2026-09 kanban mode Task 8): floating-bar button, opens StatusPickerDialog
+    status: 'Node status',
     image: 'Node image',
     link: 'Create link: click, then click the target node',
   },
@@ -106,6 +108,11 @@ const editor: Dict['editor'] = {
     title: 'Node tags',
     removeTag: 'Remove {{name}}',
     inputPlaceholder: 'Type a new tag and press Enter',
+  },
+  // Status picker (2026-09 kanban mode Task 8): five status labels and the
+  // clear entry reuse the kanban domain (same source as the column headers)
+  statusPicker: {
+    title: 'Node status',
   },
   imageDialog: {
     title: 'Node image',

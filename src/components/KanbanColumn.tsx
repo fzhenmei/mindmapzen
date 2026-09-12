@@ -8,8 +8,9 @@ import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import type { TaskStatus } from '../services/statusMarkers'
 import KanbanCard, { type KanbanCardProps } from './KanbanCard'
 
-/** 五态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义） */
-const DOT: Record<TaskStatus, string> = {
+/** 五态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
+ *  StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态选择器与列头视觉同源） */
+export const STATUS_DOT: Record<TaskStatus, string> = {
   todo: 'bg-muted-foreground/70',
   doing: 'bg-blue-500',
   blocked: 'bg-amber-500',
@@ -53,7 +54,7 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
       className="flex max-h-full w-64 shrink-0 flex-col gap-2 self-start rounded-lg bg-muted/40 p-2"
     >
       <header className="flex items-center gap-1.5 px-1">
-        <span className={`size-2 shrink-0 rounded-full ${DOT[status]}`} />
+        <span className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
         <h3
           className={`text-xs font-medium ${
             status === 'dropped' ? 'text-muted-foreground line-through' : ''

@@ -64,6 +64,8 @@ export default {
     body: '编写选中节点的正文',
     icon: '节点图标',
     tag: '节点标签',
+    // 任务状态（2026-09 看板模式 Task 8）：浮条状态钮，开 StatusPickerDialog
+    status: '节点状态',
     image: '节点插图',
     link: '创建连线：点此钮后再点目标节点',
   },
@@ -104,6 +106,10 @@ export default {
     title: '节点标签',
     removeTag: '移除 {{name}}',
     inputPlaceholder: '输入新标签，回车添加',
+  },
+  // 状态选择器（2026-09 看板模式 Task 8）：五态文案/清除项复用 kanban 域（与看板列头同源）
+  statusPicker: {
+    title: '节点状态',
   },
   imageDialog: {
     title: '节点插图',

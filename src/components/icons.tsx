@@ -324,6 +324,16 @@ export const IconNetwork = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 任务状态（2026-09 看板模式 · 浮条状态钮）：圆环 + 中心实点（lucide circle-dot 语义，
+ *  外环同 IconSmile r6.2 口径，中心点 r1.2 实心同 IconMore 点径） */
+export const IconCircleDot = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none" />
+    </>,
+    size,
+  )
 /** 看板视图（2026-09 看板模式 · 砚栏视图组）：板框 + 两竖列（第二列短——列内卡片
  *  参差），24→16 缩放（÷1.5）自 lucide square-kanban 图形 */
 export const IconKanbanSquare = ({ size }: IconProps) =>

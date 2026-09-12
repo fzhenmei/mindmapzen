@@ -2634,6 +2634,37 @@ test('标签选择器：已选/已用来自整树 data.tag，确认走 execComma
   }
 })
 
+// ── 状态选择器（2026-09 看板模式 Task 8）：浮条状态钮 → 对话框 → setIcon 徽章互保链路 ──
+
+test('状态选择器：浮条钮开框载入现态，确认经渲染节点 setIcon 落徽章互保', async () => {
+  // 预置当前节点带状态徽章 + 用户图标（nodeStatusOf 读现态 / currentIcon 合成均走数据树 data.icon）
+  fakeTree.children![0]!.data.icon = ['zen_status-doing', 'zen_flag']
+  // fakeChildNode 临时挂 setIcon（渲染节点命令落点；实写数据树，替身语义同 KanbanView 测试）
+  const setIcon = vi.fn((icons: string[]) => {
+    fakeTree.children![0]!.data.icon = icons
+  })
+  Object.assign(fakeChildNode, { setIcon })
+  const restore = withGeometry()
+  try {
+    await renderReadySelected()
+    const btn = screen.getByTestId('node-action-status')
+    expect(btn).toHaveAttribute('aria-label', '节点状态')
+    fireEvent.click(btn)
+    expect(screen.getByTestId('status-dialog')).toBeInTheDocument()
+    // 开框载入现态：doing 高亮（快照来自 nodeStatusOf）
+    expect(screen.getByTestId('status-option-doing')).toHaveClass('ring-2')
+    // 选 done 确认：生产链路 execOnRenderNode → node.setIcon（SET_NODE_ICON 单命令可撤销）→
+    // 徽章互保（新徽章置首、旧徽章滤除、用户图标 zen_flag 保留）
+    fireEvent.click(screen.getByTestId('status-option-done'))
+    fireEvent.click(screen.getByTestId('status-save'))
+    expect(setIcon).toHaveBeenCalledWith(['zen_status-done', 'zen_flag'])
+  } finally {
+    delete fakeTree.children![0]!.data.icon
+    delete (fakeChildNode as { setIcon?: unknown }).setIcon
+    restore()
+  }
+})
+
 // ── 入口合并（2026-09-06 备注合并）：浮条/快捷键改指正文弹窗；btn-note/note-dialog 退役 ──
 
 test('浮条 node-action-body 开正文弹窗（aria-label 指正文）；btn-note 不复存在', async () => {

@@ -29,13 +29,14 @@ import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
 import CanvasHint from '../components/CanvasHint'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
-import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import { useIconPicker, findByUid, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useTagPicker, nodeTagsOf, usedTagsOf } from '../hooks/useTagPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
-import { expandToUid } from '../services/statusOps'
+import type { TaskStatus } from '../services/statusMarkers'
+import { expandToUid, execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -98,6 +99,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [warnStamp, setWarnStamp] = useState<{ seq: number } | null>(null) // 警告印记（2026-09-09）：无目标正文编辑 1.2s 居中劝导（seq 重挂载语义同上）
   const warnSeqRef = useRef(0)
   const [newMapOpen, setNewMapOpen] = useState(false) // 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog，确认走 leaveTo 安全链
+  // 状态选择器目标快照（2026-09 看板模式 Task 8）：开框瞬间的 uid/文本/现态；null = 关
+  const [statusPick, setStatusPick] = useState<{ uid: string; text: string; current: TaskStatus | null } | null>(null)
   const [aiOpen, setAiOpen] = useState(false) // AI 对话面板开合（2026-09 AI Agent v1）：右栏常驻槽
   const [aiDragPx, setAiDragPx] = useState<number | null>(null) // AI 面板拖拽暂存宽；null = 未在拖（松手 onCommit 落盘）
 
@@ -209,6 +212,24 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     } catch (e) {
       console.error('看板回导图定位失败', e)
     }
+  }
+
+  /** 应用状态（2026-09 看板模式 Task 8，StatusPickerDialog 确认）：确认即关框；经
+   *  execOnRenderNode 渲染节点寻址落 setIcon（SET_NODE_ICON 单命令可撤销，KanbanView.
+   *  changeStatus 同款链路）。currentIcon 从数据树读（getData 快照含收起隐藏子树，
+   *  收起分支节点照常可改）；onTreeDataChange 在命令真正落地后调用（照 useIconPicker.apply
+   *  修复模式——渲染树 miss 时先展开重试，回调外调用会误置脏）。同态短路：重选当前态
+   *  不产生命令（不占 undo 一步、不置脏，看板侧同款纪律） */
+  const applyStatus = (uid: string, status: TaskStatus | null): void => {
+    const mm = mmRef.current
+    setStatusPick(null)
+    if (mm === null) return
+    if (nodeStatusOf(mm, uid) === status) return
+    const currentIcon = findByUid(mm.getData(), uid)?.data.icon
+    execOnRenderNode(mm, uid, '改状态', (node) => {
+      ;(node as { setIcon?(icons: string[]): void })?.setIcon?.(mergeStatusBadge(currentIcon, status))
+      pipeline.onTreeDataChange()
+    })
   }
 
   /** 盖印记（Task 7）：seq 自增 → key 变化强制重挂载（到期前重置计时 / 到期后再触发也全新挂载） */
@@ -547,6 +568,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
               usedTagsOf(mmRef.current),
             )
           }
+          // 状态选择器（2026-09 看板模式 Task 8）：快照现态开框；确认走 applyStatus
+          onStatusClick={() => {
+            const uid = selection.activeUidRef.current
+            if (uid) {
+              setStatusPick({ uid, text: nodeTextOf(mmRef.current, uid), current: nodeStatusOf(mmRef.current, uid) })
+            }
+          }}
           onImageClick={() =>
             imageEdit.openDialog(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeImageOf(mmRef.current, selection.activeUidRef.current))
           }
@@ -628,6 +656,17 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         tagPicker={
           tagPick.open && !guard.guarding && !flow.confirming
             ? { nodeText: tagPick.nodeText, current: tagPick.tags, used: tagPick.used, onCancel: tagPick.close, onConfirm: tagPick.apply }
+            : null
+        }
+        // 状态选择器（2026-09 看板模式 Task 8）：导图侧状态入口，互斥优先级同上
+        statusPicker={
+          statusPick !== null && !guard.guarding && !flow.confirming
+            ? {
+                nodeText: statusPick.text,
+                current: statusPick.current,
+                onCancel: () => setStatusPick(null),
+                onConfirm: (status) => applyStatus(statusPick.uid, status),
+              }
             : null
         }
         // 插图（M19 + 粘贴截图）：同上
