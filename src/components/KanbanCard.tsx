@@ -108,9 +108,9 @@ export default function KanbanCard({
     [],
   )
 
-  // Esc 退编辑回焦卡片 li（Esc 分层续链）：input 卸载焦点断链回落 body——body keydown
-  // 不进 React 树，二次 Esc 失效。flushSync 先同步提交（input 此刻已卸载）再回焦：
-  // 同步 focus 会触发 input onBlur commitEdit，把「Esc 丢弃草稿」语义变成提交
+  // Esc 退编辑回焦卡片 li（Esc 分层续链）：编辑框卸载焦点断链回落 body——body keydown
+  // 不进 React 树，二次 Esc 失效。flushSync 先同步提交（编辑框此刻已卸载）再回焦：
+  // 同步 focus 会触发编辑框 onBlur commitEdit，把「Esc 丢弃草稿」语义变成提交
   const cardRef = useRef<HTMLLIElement>(null)
 
   /** 立即定位（键盘 Enter/Space 路径——无「双击编辑」歧义，不经判定窗）。
@@ -140,8 +140,8 @@ export default function KanbanCard({
     const text = draft.trim()
     if (text !== '' && text !== card.text) onTextChange(card.uid, text)
   }
-  /** Esc 退编辑并回焦卡片 li（Esc 分层续链）：flushSync 先同步提交（input 此刻已卸载，
-   *  onBlur 不会误提交草稿）再回焦——input 卸载焦点断链回落 body（body keydown 不进
+  /** Esc 退编辑并回焦卡片 li（Esc 分层续链）：flushSync 先同步提交（编辑框此刻已卸载，
+   *  onBlur 不会误提交草稿）再回焦——编辑框卸载焦点断链回落 body（body keydown 不进
    *  React 树）会断二次 Esc */
   const cancelEditAndRefocus = (): void => {
     flushSync(() => setEditing(false))
