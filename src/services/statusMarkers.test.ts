@@ -39,4 +39,19 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
   test('句中 @status 是普通文本：strip 原样返回（防回归，不丢内容红线）', () => {
     expect(stripStatusMarkers('提醒 @todo 下午')).toBe('提醒 @todo 下午')
   })
+
+  test('前置锚定：裸 @status（无前导空白）识别并剥成空串；紧贴词字符的 @ 不构成标记', () => {
+    // 空文本节点序列化产物 `#  @doing` 经标题前缀剥除后恰是裸形态，extract/strip 必须同认
+    expect(extractStatusMarker('@todo')).toBe('todo')
+    expect(stripStatusMarkers('@doing')).toBe('')
+    expect(stripStatusMarkers('@todo')).toBe('')
+    expect(hasStatusMarkers('@done')).toBe(true)
+    // 裸形态多段同样循环剥除、只认最后一个
+    expect(stripStatusMarkers('@todo @done')).toBe('')
+    expect(extractStatusMarker('@todo @done')).toBe('done')
+    // 紧贴词字符的 @（无前置空白/句首）不构成标记（三函数口径一致）
+    expect(hasStatusMarkers('邮箱 x@doing')).toBe(false)
+    expect(extractStatusMarker('邮箱 x@doing')).toBeNull()
+    expect(stripStatusMarkers('邮箱 x@doing')).toBe('邮箱 x@doing')
+  })
 })

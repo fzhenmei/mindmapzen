@@ -15,6 +15,10 @@ import type { ZenNode } from '../types/tree'
 //    GitHub 同款）,文本自带该形态时 parse 收为 tags 字段属合法标记侵入而非漂移;
 //    ::与[[]]双字符标记随机概率≈0天然豁免,# 单字符概率不可忽略故显式排除,
 //    边界行为见下方标签用例（符号词 #$ 不构成标记恒等往返）。
+// 另记（2026-09-12 看板模式）：句尾 ` @status` 形态（空白或句首 + @ + 五态词）不构成排除项——
+//    它是 parse 识别的合法标记（statusMarkers 前置锚定含句首裸 @）,文本/树自带该形态被收为
+//    status 字段属合法标记侵入而非漂移（与 3) 的 #tag 同口径）；随机串自发产出需恰为
+//    5-7 个小写字母、概率≈0,定向覆盖见 status describe 的空文本裸形态钉子与 nodeArb 的 status 候选。
 const textArb = fc
   .string({ minLength: 0, maxLength: 12 })
   .filter(
@@ -48,6 +52,13 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
     // 表格候选（终审 M5）：本仓 remark 未挂 gfm，表格行按段落文本原样还原恒等——
     // 钉住该口径，将来若接 gfm 走真 table 节点，rawBlockText 口径变化在此报警
     body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '> 引用', '论述。\n\n> 引用块', '```js\nconst x = 1\n```', '| a | b |\n| --- | --- |\n| 1 | 2 |'),
+    // 看板模式（2026-09-12）：status 候选——五态 + undefined 加权（weight 7:3 → undefined 概率
+    // 70%：多数节点非任务，30% 让 fuzz 真正覆盖 @status 注入/剥除链；undefined 与
+    // 「无状态不设字段」口径同构；空文本×status 的裸形态恒等由下方 status describe 的钉子保证）
+    status: fc.oneof(
+      { weight: 7, arbitrary: fc.constant(undefined) },
+      { weight: 3, arbitrary: fc.constantFrom(...TASK_STATUSES) },
+    ),
   })
 
 const treeArb = nodeArb(6)
@@ -500,7 +511,7 @@ describe('status 标记（看板模式）', () => {
     expect(r.tree.children[1]!.status).toBeUndefined()
   })
 
-  test('serialize 注入：status 无则不设、有则句尾 @status（icon 内侧 image 外侧）', () => {
+  test('serialize 注入：status 无则不设、有则句尾 @status（icon 外侧、image 内侧）', () => {
     expect(serialize({ text: '根', status: 'todo', children: [] })).toBe('# 根 @todo\n')
     expect(
       serialize({ text: 'A', children: [], icons: ['flag'], status: 'doing', image: { src: 'a.png', alt: '' } }),
@@ -542,5 +553,28 @@ describe('status 标记（看板模式）', () => {
     const md = serialize(tree)
     expect(md).toContain('- item @done\n')
     expect(parse(md)).toEqual({ ok: true, tree, ignoredBlocks: [] })
+  })
+
+  test('空文本+status 裸形态恒等：heading 层与列表层 serialize→parse 全树 toEqual；手写 # @todo 归一', () => {
+    // Important-1 反例钉子：emitHeading 对空文本+status 产出 `#  @doing`（双空格），
+    // headingText 剥 `^#{1,6}\s*` 后成裸 '@doing'——extract/strip 前置锚定统一后才恒等
+    const heading: ZenNode = { text: '', status: 'doing', children: [] }
+    expect(serialize(heading)).toBe('#  @doing\n')
+    expect(parse(serialize(heading))).toEqual({ ok: true, tree: heading, ignoredBlocks: [] })
+    // 列表层（深度 7）：`-  @doing` 经 listItemText 剥 `-` 与缩进/空白后同为裸形态
+    const listLeaf = (leaf: ZenNode): ZenNode => {
+      let node = leaf
+      for (const t of ['f', 'e', 'd', 'c', 'b', 'a', 'r']) node = { text: t, children: [node] }
+      return node
+    }
+    const listTree = listLeaf({ text: '', status: 'doing', children: [] })
+    expect(serialize(listTree)).toContain('-  @doing\n')
+    expect(parse(serialize(listTree))).toEqual({ ok: true, tree: listTree, ignoredBlocks: [] })
+    // 手写裸形态：`# @todo`（标题前缀剥除后成裸 @todo）→ 空文本 + status
+    expect(parse('# @todo\n')).toEqual({
+      ok: true,
+      tree: { text: '', status: 'todo', children: [] },
+      ignoredBlocks: [],
+    })
   })
 })
