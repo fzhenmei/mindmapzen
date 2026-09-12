@@ -8,8 +8,10 @@ import type { TaskStatus } from './statusMarkers'
 import type { ZenNode } from '../types/tree'
 
 /** 子孙速览大纲行：depth 0 = 直接子节点（卡片标题即第 0 级）——层级语义交渲染层表达，
- *  空格前导缩进在中文等宽下不可靠，浮层按 depth 打 padding */
+ *  空格前导缩进在中文等宽下不可靠，浮层按 depth 打 padding；uid 即行 key（行身份 =
+ *  节点身份，引擎侧 uid 恒存在） */
 export interface OutlineLine {
+  uid: string
   text: string
   depth: number
 }
@@ -37,7 +39,7 @@ function collectSubtree(node: ZenNode, depth: number, outline: OutlineLine[]): n
   let count = 0
   for (const c of node.children) {
     if (isCardNode(c)) continue
-    outline.push({ text: c.text, depth })
+    outline.push({ uid: c.uid ?? '', text: c.text, depth })
     count += 1 + collectSubtree(c, depth + 1, outline)
   }
   return count

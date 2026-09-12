@@ -2914,11 +2914,12 @@ describe('看板模式（2026-09 Task 7）', () => {
     expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_status-todo', 'zen_flag'])
   })
 
-  test('卡片单击回导图定位：切视图 + 展开收起祖先 + 渲染完成回调后居中', async () => {
+  test('卡片菜单「回导图定位」：切视图 + 展开收起祖先 + 渲染完成回调后居中（2026-09 验收变更：定位自单击移入菜单）', async () => {
     // 根收起（expand=false）：定位须先沿数据树展开（渲染树寻址前置），再等渲染完成居中
     const handle = await renderKanbanReady(kanbanTree(false))
     expect(fakeTree.data.expand).toBe(false)
-    fireEvent.click(screen.getByTestId('kanban-card-child-uid'))
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-child-uid'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-locate-child-uid'))
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'), { timeout: 2000 })
     expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
     expect(fakeTree.data.expand).toBe(true) // 祖先直写展开（视图导航豁免，不进 undo）

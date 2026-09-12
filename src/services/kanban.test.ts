@@ -67,7 +67,7 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     const card = buildKanbanCards(root5 as unknown as ZenNode)[0]
     expect(card.childCount).toBe(3)
     expect(card.outline).toEqual([
-      { text: '说明1', depth: 0 }, { text: '深层', depth: 1 }, { text: '说明2', depth: 0 },
+      { uid: 'a1', text: '说明1', depth: 0 }, { uid: 'a1a', text: '深层', depth: 1 }, { uid: 'a2', text: '说明2', depth: 0 },
     ])
   })
 
@@ -98,9 +98,9 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     expect(cards).toHaveLength(2)
     // 父卡截断在子任务B处：只含说明C；B1 属 B 卡范围，同不入 A
     const [a, b] = cards
-    expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: [{ text: '说明C', depth: 0 }] })
+    expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: [{ uid: 'c', text: '说明C', depth: 0 }] })
     // 子任务B独立成卡，其无状态后代入 B 卡
-    expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: [{ text: 'B1', depth: 0 }] })
+    expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: [{ uid: 'b1', text: 'B1', depth: 0 }] })
   })
 })
 
