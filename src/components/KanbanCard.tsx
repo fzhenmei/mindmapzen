@@ -20,8 +20,10 @@ import {
 } from './ui/dropdown-menu'
 import { IconMore } from './icons'
 
-/** 单击定位 vs 双击编辑判定窗（ms）：略大于浏览器 click→dblclick 派生间隔 */
-const LOCATE_DELAY_MS = 220
+/** 单击定位 vs 双击编辑判定窗（ms）：须 ≥ OS 双击阈值（Windows 默认 500ms）——
+ *  落在窗内的第二击会取消定时器走 dblclick 编辑；窗过短则「慢双击」第二击
+ *  未到定时器已先触发定位，视图被切走 */
+const LOCATE_DELAY_MS = 500
 /** 删除二次确认回退窗（ms）：3 秒不点恢复普通态（零新组件的确认交互） */
 const DELETE_CONFIRM_MS = 3000
 
@@ -109,6 +111,9 @@ export default function KanbanCard({
         editing
           ? undefined
           : (e) => {
+              // 冒泡自内部按钮/输入框的键盘事件不触发卡片定位——否则键盘激活
+              // 卡片内按钮（菜单/正文钮）时 preventDefault 会抑制按钮原生激活
+              if (e.target !== e.currentTarget) return
               // 键盘激活等价单击定位（Sonar S1082：click 必须有键盘可达路径）
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()

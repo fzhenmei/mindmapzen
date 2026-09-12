@@ -152,9 +152,41 @@ describe('KanbanView（看板模式浮层）', () => {
     fireEvent.click(screen.getByTestId('kanban-body-t1'))
     expect(props.onOpenBody).toHaveBeenCalledWith('t1')
     expect(props.onLocate).not.toHaveBeenCalled()
-    // 单击 → 220ms 双击判定窗后定位（fireEvent.doubleClick 不派生 click，双击路径无定时器）
+    // 单击 → 500ms 双击判定窗后定位（fireEvent.doubleClick 不派生 click，双击路径无定时器）
     fireEvent.click(screen.getByTestId('kanban-card-t1'))
     await waitFor(() => expect(props.onLocate).toHaveBeenCalledWith('t1'), { timeout: 2000 })
+  })
+
+  test('卡片内按钮上的键盘 Enter 不触发定位（target 守卫）；li 自身 Enter 仍定位', () => {
+    // 终审 Important-1：键盘激活卡片内按钮（body 钮）时 keyDown 冒泡到 li，
+    // 守卫缺失则 preventDefault 抑制按钮原生激活 + 误触发卡片定位
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    // fireEvent.keyDown 冒泡到 li，处理器视角 target=按钮 ≠ currentTarget=li
+    fireEvent.keyDown(screen.getByTestId('kanban-body-t1'), { key: 'Enter' })
+    expect(props.onLocate).not.toHaveBeenCalled()
+    // 守卫不误伤键盘可达路径：li 自身 keyDown（target=currentTarget）仍立即定位
+    fireEvent.keyDown(screen.getByTestId('kanban-card-t1'), { key: 'Enter' })
+    expect(props.onLocate).toHaveBeenCalledWith('t1')
+  })
+
+  test('慢双击（300ms > 旧 220 判定窗）：第二击落在 500ms 窗内，走编辑不触发定位', () => {
+    // 终审 Important-2 回归钉：旧窗 220ms 时 advanceTimersByTime(300) 已触发定位
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { mm } = makeMm()
+      const { props } = renderKanban(mm)
+      fireEvent.click(screen.getByTestId('kanban-card-t1'))
+      vi.advanceTimersByTime(300) // 旧 220 窗已过、新 500 窗未到
+      expect(props.onLocate).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByTestId('kanban-card-t1')) // 第二击重置定时器
+      fireEvent.doubleClick(screen.getByText('修滚动条')) // dblclick → beginEdit 取消定时器
+      vi.advanceTimersByTime(1000)
+      expect(props.onLocate).not.toHaveBeenCalled()
+      expect(screen.getByTestId('kanban-edit-t1')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('data_change 订阅：挂载注册、重放即刷新（卡片迁列）、卸载退订同引用', async () => {
