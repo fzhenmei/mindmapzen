@@ -160,7 +160,7 @@ export default function KanbanView({
       tabIndex={-1}
       aria-label={t('editor.kanban.viewName')}
       data-testid="kanban-view"
-      className="absolute inset-0 z-20 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-background p-0 text-foreground outline-none"
+      className="absolute inset-0 z-20 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-background p-0 text-foreground outline-none"
       onKeyDown={(e) => {
         // Esc 分层（2026-09 验收微调）：普通态 Esc 返回导图。
         // ① 卡片编辑/列内新增：子孙输入框 onKeyDown stopPropagation（React 树内真实拦截），

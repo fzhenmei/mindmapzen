@@ -375,7 +375,7 @@ describe('KanbanView（看板模式浮层）', () => {
 
   test('Esc 续链（卡片编辑）：Esc 退编辑回焦卡片 li，再按 Esc（activeElement 冒泡）关板', () => {
     // Minor-1 修复钉：input 卸载焦点断链回落 body（body keydown 不进 React 树）→
-    // 二次 Esc 失效；退编辑经 effect 回焦卡片 li 保住 Esc 链
+    // 二次 Esc 失效；退编辑 flushSync 提交后回焦卡片 li 保住 Esc 链
     const { mm } = makeMm()
     const { props } = renderKanban(mm)
     fireEvent.doubleClick(screen.getByText('修滚动条'))
@@ -388,7 +388,7 @@ describe('KanbanView（看板模式浮层）', () => {
 
   test('Esc 续链（列底新增）：Esc 取消回焦看板根（丢弃草稿不提交），再按 Esc 关板', () => {
     // Minor-1 修复钉：同步回焦会触发 input onBlur commitAdd 把丢弃变提交（误建卡片），
-    // 故经 effect 待卸载后再回焦看板根——二次 Esc 直接关板
+    // 故 flushSync 先提交（卸载 input）再回焦看板根——二次 Esc 直接关板
     const { mm } = makeMm()
     const { props } = renderKanban(mm)
     fireEvent.click(screen.getByTestId('btn-kanban-add-todo'))
