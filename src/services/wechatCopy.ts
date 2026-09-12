@@ -122,6 +122,8 @@ const FONT_MONO = `'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace`
 const ROOT_STYLE = `font-family:${FONT_BODY};font-size:15px;color:#3f3f3f;line-height:1.75;word-break:break-word`
 
 const HEADING_COLOR = 'color:#1f1f1f;line-height:1.4'
+/** 微信链接色:保留的互链与剥成文字的外链共用(视觉与原文一致,只是后者不可点) */
+const A_STYLE = 'color:#576b95;text-decoration:none'
 const TAG_STYLE: Record<string, string> = {
   H1: `margin:28px 0 14px;font-size:20px;font-weight:600;${HEADING_COLOR}`,
   H2: `margin:24px 0 12px;font-size:18px;font-weight:600;${HEADING_COLOR}`,
@@ -132,7 +134,7 @@ const TAG_STYLE: Record<string, string> = {
   P: 'margin:12px 0',
   STRONG: 'font-weight:600;color:#1f1f1f',
   EM: 'font-style:italic',
-  A: 'color:#576b95;text-decoration:none',
+  A: A_STYLE,
   BLOCKQUOTE: 'margin:16px 0;padding:10px 14px;border-left:3px solid #d0d0d0;background-color:#f7f7f7;color:#5f5f5f',
   CODE: `background-color:#f5f5f5;padding:2px 5px;border-radius:4px;font-size:14px;font-family:${FONT_MONO}`,
   // white-space:pre(不折行,超宽由公众号代码组件横向滚动,doocs 同款);text-align:left
@@ -146,6 +148,32 @@ const TAG_STYLE: Record<string, string> = {
   TD: 'border:1px solid #e0e0e0;padding:8px 12px',
   IMG: 'max-width:100%;display:block;margin:16px auto',
   HR: 'border:none;border-top:1px solid #e5e5e5;margin:24px 0',
+}
+
+/** 产物超链接白名单清洗:公众号保存校验只放行 mp.weixin.qq.com 域名互链,其余
+ *  `<a>` 一律剥成带链接色的纯文字 span(2026-09-12 真机:外链保存被拒"请勿插入
+ *  非 mp.weixin.qq.com 域名的链接")。覆盖全部来源:md 显式链接、lute GFM
+ *  autolink 的裸网址、相对路径与锚点(无域名不豁免);URL 解析失败的也剥。
+ *  在 applyWechatStyles 之前跑:保留的互链照常走 TAG_STYLE.A,剥出的 span
+ *  不在选择器内、样式此刻写死 */
+export function stripExternalLinks(root: ParentNode): void {
+  for (const a of Array.from(root.querySelectorAll('a'))) {
+    if (isWechatArticleLink(a.getAttribute('href') ?? '')) continue
+    const span = document.createElement('span')
+    span.style.cssText = A_STYLE
+    span.append(...Array.from(a.childNodes))
+    a.replaceWith(span)
+  }
+}
+
+/** href → 是否公众号文章互链:绝对 URL 且 hostname 精确等于 mp.weixin.qq.com
+ *  (URL 小写化 hostname,协议 http/https 等价;无 base,相对/锚点直接抛错判否) */
+function isWechatArticleLink(href: string): boolean {
+  try {
+    return new URL(href).hostname === 'mp.weixin.qq.com'
+  } catch {
+    return false
+  }
 }
 
 /** 逐元素内联样式:遍历命中标签刷 style(cssText 覆写——渲染产物上的既有内联
@@ -174,9 +202,10 @@ export function extractPublishBody(rendered: HTMLElement): HTMLElement {
   return body
 }
 
-/** 发布正文体 → 可粘贴 HTML 串:刷内联样式,包一层 section 承担基础排版
- *  (公众号粘贴惯例:单 section 根) */
+/** 发布正文体 → 可粘贴 HTML 串:外链剥文字 + 刷内联样式,包一层 section 承担
+ *  基础排版(公众号粘贴惯例:单 section 根) */
 export function wrapPublishHtml(body: HTMLElement): string {
+  stripExternalLinks(body)
   applyWechatStyles(body)
   const section = document.createElement('section')
   section.style.cssText = ROOT_STYLE
