@@ -101,6 +101,69 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(t1.setIcon).toHaveBeenCalledTimes(1)
   })
 
+  test('拖拽悬停高亮：dragEnter 列亮（data-dragover + ring-primary），dragLeave 计数归零熄灭', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    const col = screen.getByTestId('kanban-col-done')
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't1' : '') }
+    expect(col).not.toHaveAttribute('data-dragover')
+    fireEvent.dragEnter(col, { dataTransfer: dt })
+    expect(col).toHaveAttribute('data-dragover')
+    expect(col.className).toContain('ring-primary')
+    // 离开列（计数归零路径）：高亮熄灭、回落 muted 底
+    fireEvent.dragLeave(col, { dataTransfer: dt })
+    expect(col).not.toHaveAttribute('data-dragover')
+    expect(col.className).toContain('bg-muted/40')
+  })
+
+  test('列内子元素穿越不误灭：进卡片（enter 卡片 + leave 列）计数平衡，高亮保持', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    const col = screen.getByTestId('kanban-col-doing')
+    const card = screen.getByTestId('kanban-card-t1')
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't1' : '') }
+    fireEvent.dragEnter(col, { dataTransfer: dt })
+    // 列 → 卡片穿越：dragenter(卡片) 冒泡 +1 与 dragleave(列) -1 成对，净 1 仍高亮
+    fireEvent.dragEnter(card, { dataTransfer: dt })
+    fireEvent.dragLeave(col, { dataTransfer: dt })
+    expect(col).toHaveAttribute('data-dragover')
+    // 从卡片直接拖出列外：dragleave(卡片) 冒泡归零才熄灭
+    fireEvent.dragLeave(card, { dataTransfer: dt })
+    expect(col).not.toHaveAttribute('data-dragover')
+  })
+
+  test('drop 后高亮熄灭且计数清零：再拖入可重新点亮（非负卡死）', () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    const col = screen.getByTestId('kanban-col-done')
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't1' : '') }
+    fireEvent.dragStart(screen.getByTestId('kanban-card-t1'), { dataTransfer: dt })
+    fireEvent.dragEnter(col, { dataTransfer: dt })
+    expect(col).toHaveAttribute('data-dragover')
+    fireEvent.drop(col, { dataTransfer: dt })
+    expect(props.onDataChanged).toHaveBeenCalled()
+    expect(col).not.toHaveAttribute('data-dragover')
+    fireEvent.dragEnter(col, { dataTransfer: dt })
+    expect(col).toHaveAttribute('data-dragover')
+  })
+
+  test('源卡片拖拽半透明 + 起点列 dragover 补记高亮；dragEnd（冒泡到 window）全清', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    const col = screen.getByTestId('kanban-col-doing')
+    const card = screen.getByTestId('kanban-card-t1')
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't1' : '') }
+    fireEvent.dragStart(card, { dataTransfer: dt })
+    expect(card.className).toContain('opacity-50')
+    // 拖拽起点在本列：指针无边界穿越不发 dragenter，首个 dragover 兜底点亮源列
+    fireEvent.dragOver(col, { dataTransfer: dt })
+    expect(col).toHaveAttribute('data-dragover')
+    // 取消拖拽（ESC 等）：dragend 源卡片冒泡到 window——卡片复明 + 列熄灭
+    fireEvent.dragEnd(card)
+    expect(card.className).not.toContain('opacity-50')
+    expect(col).not.toHaveAttribute('data-dragover')
+  })
+
   test('双击卡片文本内联编辑：回车提交 setText + onDataChanged', () => {
     const { mm, t1 } = makeMm()
     const { props } = renderKanban(mm)

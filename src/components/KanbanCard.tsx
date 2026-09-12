@@ -3,7 +3,7 @@
 // onDataChanged）。交互：拖拽（dataTransfer 载荷 text/kanban-uid）、双击文本内联
 // 编辑、DropdownMenu 收纳改状态/转普通/图标/标签/删除；单击主体 = 延迟定位回导图
 // （与双击编辑共存：真实浏览器 click 先于 dblclick 派生，双击在判定窗内清除定时器）。
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
@@ -27,6 +27,27 @@ const LOCATE_DELAY_MS = 500
 /** 删除二次确认回退窗（ms）：3 秒不点恢复普通态（零新组件的确认交互） */
 const DELETE_CONFIRM_MS = 3000
 
+/** 是否有徽标行（图标/标签/正文任一）——拆出守卫：Sonar S3776 认知复杂度 */
+const hasBadges = (card: KanbanCardData): boolean =>
+  card.icons.length > 0 || card.tags.length > 0 || card.hasBody
+
+/** 键盘定位判定（li 自身 Enter/Space）：target 守卫——冒泡自内部按钮/输入框的
+ *  键盘事件不触发卡片定位，否则键盘激活卡片内按钮（菜单/正文钮）时 preventDefault
+ *  会抑制按钮原生激活。拆出判定同因 S3776 */
+const isCardSelfActivateKey = (e: KeyboardEvent<HTMLLIElement>): boolean =>
+  e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')
+
+/** 单个图标徽标：lucide-static 构建期内化的精选 svg 直渲（非运行时输入，无 XSS 面），
+ *  渲染口径同 IconPickerDialog 已选行——拆出同因 S3776 */
+function CardIconBadge({ name }: Readonly<{ name: string }>) {
+  const svg = CURATED_ICONS[name]
+  return svg !== undefined ? (
+    <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} className="text-muted-foreground [&_svg]:size-3" />
+  ) : (
+    <span className="text-[10px] leading-none text-muted-foreground">{name}</span>
+  )
+}
+
 export interface KanbanCardProps {
   card: KanbanCardData
   onStatusChange(uid: string, status: TaskStatus | null): void
@@ -48,6 +69,8 @@ export default function KanbanCard({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [confirmingDel, setConfirmingDel] = useState(false)
+  // 拖拽中源卡片半透明（2026-09 冒烟微调）：增强「拿起」感，dragend/落列重挂载自清
+  const [dragging, setDragging] = useState(false)
   const locateTimerRef = useRef<number>(0)
   const delTimerRef = useRef<number>(0)
 
@@ -105,25 +128,27 @@ export default function KanbanCard({
     <li
       data-testid={`kanban-card-${card.uid}`}
       draggable={!editing}
-      onDragStart={(e) => e.dataTransfer.setData('text/kanban-uid', card.uid)}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/kanban-uid', card.uid)
+        setDragging(true)
+      }}
+      onDragEnd={() => setDragging(false)}
       onClick={editing ? undefined : scheduleLocate}
       onKeyDown={
         editing
           ? undefined
           : (e) => {
-              // 冒泡自内部按钮/输入框的键盘事件不触发卡片定位——否则键盘激活
-              // 卡片内按钮（菜单/正文钮）时 preventDefault 会抑制按钮原生激活
-              if (e.target !== e.currentTarget) return
               // 键盘激活等价单击定位（Sonar S1082：click 必须有键盘可达路径）
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                locateNow()
-              }
+              if (!isCardSelfActivateKey(e)) return
+              e.preventDefault()
+              locateNow()
             }
       }
       title={t('editor.kanban.locate')}
       tabIndex={editing ? -1 : 0}
-      className="list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing"
+      className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing ${
+        dragging ? 'opacity-50' : ''
+      }`}
     >
       {/* 父链（根下直挂 = 未分组）：卡片同名任务的归属线索 */}
       <p className="truncate text-[10px] leading-tight text-muted-foreground">
@@ -203,25 +228,11 @@ export default function KanbanCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {(card.icons.length > 0 || card.tags.length > 0 || card.hasBody) && (
+      {hasBadges(card) && (
         <div className="mt-1 flex flex-wrap items-center gap-1">
-          {card.icons.map((name) => {
-            const svg = CURATED_ICONS[name]
-            return svg !== undefined ? (
-              // svg 源自构建期内化的 lucide-static 精选集（非运行时输入，无 XSS 面），
-              // 渲染口径同 IconPickerDialog 已选行
-              <span
-                key={name}
-                aria-hidden="true"
-                dangerouslySetInnerHTML={{ __html: svg }}
-                className="text-muted-foreground [&_svg]:size-3"
-              />
-            ) : (
-              <span key={name} className="text-[10px] leading-none text-muted-foreground">
-                {name}
-              </span>
-            )
-          })}
+          {card.icons.map((name) => (
+            <CardIconBadge key={name} name={name} />
+          ))}
           {card.tags.map((tg) => (
             <span key={tg} className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground">
               {tg}

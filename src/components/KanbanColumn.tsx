@@ -1,8 +1,9 @@
 // src/components/KanbanColumn.tsx —— 看板列（2026-09 看板模式 Task 6）
 // 单一状态列：列头（色点 + 状态名 + 计数）／列体（卡片 + 空态）／列底（新增内联输入）。
 // 拖拽落点：onDragOver preventDefault 放行 drop，onDrop 取卡片 uid 上行改状态。
+// 悬停反馈：enter/leave 计数器维持 data-dragover 高亮（ring + accent 底），归零熄灭。
 // dropped 列语义 = 放弃：列名删除线 + 淡灰点。
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import type { TaskStatus } from '../services/statusMarkers'
@@ -30,6 +31,32 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
 
+  // 拖拽悬停高亮（2026-09 冒烟微调）：dragenter/dragleave 在列内子元素（卡片）间
+  // 移动时成对触发，直接开关会误灭——enter/leave 计数器抵消子元素穿越，归零才算
+  // 真正离开。dragover 兜底补记：拖拽起点就在本列时不发 dragenter（指针无边界
+  // 穿越），首个 dragover 到达即视作在列内。drop / window dragend（ESC 取消拖拽
+  // 不保证补发 dragleave，且源卡片在别列时 dragend 不冒泡到本列）统一清零。
+  const [dragOver, setDragOver] = useState(false)
+  const dragDepthRef = useRef(0)
+  const markDragOver = useCallback((): void => {
+    dragDepthRef.current += 1
+    setDragOver(true)
+  }, [])
+  const markDragLeave = useCallback((): void => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) setDragOver(false)
+  }, [])
+  const clearDragOver = useCallback((): void => {
+    dragDepthRef.current = 0
+    setDragOver(false)
+  }, [])
+  // 高亮期间挂 window dragend：取消拖拽的收尾清零（监听窗口期 = 恰好高亮期，无泄漏）
+  useEffect(() => {
+    if (!dragOver) return
+    window.addEventListener('dragend', clearDragOver)
+    return () => window.removeEventListener('dragend', clearDragOver)
+  }, [dragOver, clearDragOver])
+
   const cancelAdd = (): void => {
     setAdding(false)
     setDraft('')
@@ -45,13 +72,23 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
   return (
     <section
       data-testid={`kanban-col-${status}`}
-      onDragOver={(e) => e.preventDefault()}
+      data-dragover={dragOver ? '' : undefined}
+      onDragEnter={markDragOver}
+      onDragLeave={markDragLeave}
+      onDragOver={(e) => {
+        e.preventDefault()
+        // 起点在列内（无 dragenter）时首个 dragover 补记，源列悬停同样有反馈
+        if (dragDepthRef.current === 0) markDragOver()
+      }}
       onDrop={(e) => {
         e.preventDefault()
+        clearDragOver()
         const uid = e.dataTransfer.getData('text/kanban-uid')
         if (uid !== '') cardCallbacks.onStatusChange(uid, status)
       }}
-      className="flex max-h-full w-64 shrink-0 flex-col gap-2 self-start rounded-lg bg-muted/40 p-2"
+      className={`flex max-h-full w-64 shrink-0 flex-col gap-2 self-start rounded-lg p-2 ${
+        dragOver ? 'bg-accent ring-2 ring-primary/60' : 'bg-muted/40'
+      }`}
     >
       <header className="flex items-center gap-1.5 px-1">
         <span className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
