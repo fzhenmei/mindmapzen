@@ -7,6 +7,13 @@
 import type { TaskStatus } from './statusMarkers'
 import type { ZenNode } from '../types/tree'
 
+/** 子孙速览大纲行：depth 0 = 直接子节点（卡片标题即第 0 级）——层级语义交渲染层表达，
+ *  空格前导缩进在中文等宽下不可靠，浮层按 depth 打 padding */
+export interface OutlineLine {
+  text: string
+  depth: number
+}
+
 export interface KanbanCard {
   uid: string
   text: string
@@ -18,19 +25,19 @@ export interface KanbanCard {
   hasBody: boolean
   /** 截断范围内无状态后代数（带状态后代是独立卡片，不计不入）；无子孙为 0 */
   childCount: number
-  /** 子孙速览大纲：缩进文本行（两空格一级，直接子节点顶格——卡片标题即第 0 级），截断口径同 childCount */
-  outline: string[]
+  /** 子孙速览大纲（树序），截断口径同 childCount */
+  outline: OutlineLine[]
 }
 
 /** 是否为卡片边界（出卡判定 = 父卡截断判定，两侧共用一个口径：出卡的节点就是别的卡的剪断线） */
 const isCardNode = (n: ZenNode): boolean => n.status !== undefined && n.uid !== undefined
 
 /** 收集卡片子树（截断口径）：无状态后代进大纲并计数，带状态后代整枝剪掉（独立成卡） */
-function collectSubtree(node: ZenNode, depth: number, outline: string[]): number {
+function collectSubtree(node: ZenNode, depth: number, outline: OutlineLine[]): number {
   let count = 0
   for (const c of node.children) {
     if (isCardNode(c)) continue
-    outline.push(`${'  '.repeat(depth)}${c.text}`)
+    outline.push({ text: c.text, depth })
     count += 1 + collectSubtree(c, depth + 1, outline)
   }
   return count
@@ -40,7 +47,7 @@ export function buildKanbanCards(root: ZenNode): KanbanCard[] {
   const out: KanbanCard[] = []
   const walk = (node: ZenNode, path: string[]): void => {
     if (isCardNode(node)) {
-      const outline: string[] = []
+      const outline: OutlineLine[] = []
       out.push({
         uid: node.uid as string, text: node.text, status: node.status as TaskStatus, path,
         icons: node.icons ?? [], tags: node.tags ?? [], hasBody: node.body !== undefined && node.body !== '',

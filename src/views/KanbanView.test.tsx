@@ -249,10 +249,16 @@ describe('KanbanView（看板模式浮层）', () => {
     renderKanban(mm)
     // 子孙徽标：两子 + 一孙 = 3（2026-09 子树卡片）
     expect(screen.getByTestId('kanban-children-t1')).toHaveTextContent('3 子节点')
-    // hover 整卡弹浮层：大纲为缩进文本（直接子节点顶格、孙辈两空格一级）
+    // hover 整卡弹浮层：大纲逐行 li（直接子节点顶格、孙辈按 depth 缩进——padding 表层级）
     fireEvent.pointerMove(screen.getByTestId('kanban-card-t1'))
     const tip = await screen.findByTestId('kanban-tip-t1')
-    expect(tip.textContent).toBe('先查溢出\n方案对比\n  浮层走 portal')
+    const lines = within(tip).getAllByRole('listitem')
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toHaveTextContent('先查溢出')
+    expect(lines[1]).toHaveTextContent('方案对比')
+    expect(lines[2]).toHaveTextContent('浮层走 portal')
+    expect((lines[0] as HTMLElement).style.paddingLeft).toBe('0px')
+    expect((lines[2] as HTMLElement).style.paddingLeft).toBe('14px')
   })
 
   test('子树卡片：编辑中 hover 不弹浮层（open 受控守卫）', async () => {

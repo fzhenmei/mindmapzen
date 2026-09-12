@@ -53,7 +53,7 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
 
   // ---- 子树整体（2026-09 卡片携带子树）：childCount/outline 走截断口径 ----
 
-  test('卡片携带无状态后代：childCount 计数、outline 为缩进文本大纲', () => {
+  test('卡片携带无状态后代：childCount 计数、outline 为带层级的大纲行', () => {
     const root5 = {
       text: '根', uid: 'r', children: [
         { text: '任务A', uid: 'a', status: 'doing', children: [
@@ -66,7 +66,9 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     }
     const card = buildKanbanCards(root5 as unknown as ZenNode)[0]
     expect(card.childCount).toBe(3)
-    expect(card.outline).toEqual(['说明1', '  深层', '说明2'])
+    expect(card.outline).toEqual([
+      { text: '说明1', depth: 0 }, { text: '深层', depth: 1 }, { text: '说明2', depth: 0 },
+    ])
   })
 
   test('无子孙卡片：childCount=0、outline 空数组', () => {
@@ -96,9 +98,9 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     expect(cards).toHaveLength(2)
     // 父卡截断在子任务B处：只含说明C；B1 属 B 卡范围，同不入 A
     const [a, b] = cards
-    expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: ['说明C'] })
+    expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: [{ text: '说明C', depth: 0 }] })
     // 子任务B独立成卡，其无状态后代入 B 卡
-    expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: ['B1'] })
+    expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: [{ text: 'B1', depth: 0 }] })
   })
 })
 
