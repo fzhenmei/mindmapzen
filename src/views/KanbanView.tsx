@@ -24,9 +24,10 @@ export interface KanbanViewProps {
   onDataChanged(): void
   /** 打开正文弹窗（bodyDialog.toggle(uid)） */
   onOpenBody(uid: string): void
-  /** 打开图标/标签选择器（iconPick/tagPick.openPicker 同款入参） */
-  onEditIcons(card: { text: string; icons: string[] }): void
-  onEditTags(card: { text: string; tags: string[]; used: string[] }): void
+  /** 打开图标/标签选择器（iconPick/tagPick.openPicker 同款入参 + 显式卡片 uid——
+   *  看板卡片不是画布选中节点，宿主桥接 picker 必须经 uid 显式寻址） */
+  onEditIcons(card: { uid: string; text: string; icons: string[] }): void
+  onEditTags(card: { uid: string; text: string; tags: string[]; used: string[] }): void
   /** 回导图定位（EditorView 组合：切 viewMode + 展开路径 + moveNodeToCenter） */
   onLocate(uid: string): void
   onClose(): void

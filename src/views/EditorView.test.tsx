@@ -144,6 +144,8 @@ vi.mock('../editor/MindMapCanvas', async () => {
         textEdit: { show: vi.fn(), hideEditTextBox: vi.fn() },
         // 备注保存后的按需重渲（M5b 核验 13：裸 SET_NODE_DATA 不重渲染）
         reRenderNodeCheckChange: vi.fn(),
+        // 节点居中（看板回导图定位 onLocate 的落点断言，引擎 Render.js:2008）
+        moveNodeToCenter: vi.fn(),
         // 复制选中节点（对调后 Control+Shift+c 路径，EditorView 不经此，桩满足 EngineRenderer）
         copy: vi.fn(),
       },
@@ -152,6 +154,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     // v1.1 撤销/重做：向 back_forward 订阅者广播历史态（引擎 Command.js addHistory/back/forward 同款载荷）
     ;(globalThis as unknown as Record<string, unknown>).__emitHistory = (index: number, length: number) =>
       (listeners.get('back_forward') ?? []).forEach((cb) => cb(index, length))
+    // 渲染完成事件镜像（看板定位用）：向 node_tree_render_end 订阅者广播
+    ;(globalThis as unknown as Record<string, unknown>).__emitRenderEnd = () =>
+      (listeners.get('node_tree_render_end') ?? []).forEach((cb) => cb())
     ;(globalThis as unknown as Record<string, unknown>).__emitChange = () => onDataChange()
     // 圈选多选镜像（2026-09）：桩对外仍收单 uid/null，转发时包装为 uid 数组（新契约，空数组 = 无选中）
     ;(globalThis as unknown as Record<string, unknown>).__emitActive = (uid: string | null) =>
@@ -2800,5 +2805,98 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     rect = { width: 0, height: 0 } as DOMRect // 窄窗口下面板挤压画布至 0×0
     fireEvent.click(screen.getByTestId('ai-close'))
     expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
+  })
+})
+
+// ── 看板模式（2026-09 Task 7）：viewMode 浮层挂载（不卸载引擎画布）+ ZenBar/快捷键
+//    切换 + 回导图展开居中定位 + picker 显式 uid 桥接 ──────────────────────────────
+
+/** 看板样例树：child 带 zen_status-todo 徽章（engineTreeToZen 映射 status → 进板成卡片） */
+const kanbanTree = (rootExpand = true): EngineNode => ({
+  data: { text: '根', expand: rootExpand, uid: 'root-uid' },
+  children: [{ data: { text: '任务', expand: true, uid: 'child-uid', icon: ['zen_status-todo'] }, children: [] }],
+})
+
+describe('看板模式（2026-09 Task 7）', () => {
+  beforeEach(() => {
+    useAppStore.setState({ viewMode: 'mindmap' })
+  })
+
+  /** 渲染 → ready → 切看板；返回 ready 时刻锁定实例（后续重渲工厂重赋 fakeHandle，
+   *  mmRef 只在 ready 收一次——同 renderReadySelected 的同源约定） */
+  const renderKanbanReady = async (tree?: EngineNode): Promise<MindMapHandle> => {
+    if (tree !== undefined) fakeTree = tree
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    const handle = fakeHandle
+    act(() => {
+      useAppStore.getState().setViewMode('kanban')
+    })
+    expect(await screen.findByTestId('kanban-view')).toBeInTheDocument()
+    return handle
+  }
+
+  test('viewMode=kanban：看板浮层在场且引擎画布不卸载；切回导图浮层卸载', async () => {
+    await renderKanbanReady(kanbanTree())
+    expect(screen.getByTestId('fake-canvas')).toBeInTheDocument() // 画布未卸载（浮层不卸引擎策略）
+    expect(screen.getByTestId('btn-view-kanban')).toHaveAttribute('data-state', 'on') // 砚栏视图组点亮
+    act(() => {
+      useAppStore.getState().setViewMode('mindmap')
+    })
+    expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
+    expect(screen.getByTestId('fake-canvas')).toBeInTheDocument() // 切回画布仍在（从未卸载）
+  })
+
+  test('Ctrl+Shift+K 切换视图；对话框开着也切（视图切换不进 anyDialog 互斥）', async () => {
+    await renderKanbanReady(kanbanTree())
+    expect(useAppStore.getState().viewMode).toBe('kanban')
+    // 对话框开着（导出框）依旧可切——Esc 归对话框、Ctrl+Shift+K 归视图切换
+    fireEvent.click(screen.getByTestId('btn-export'))
+    expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'))
+    expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
+    expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
+  })
+
+  test('看板卡片菜单「节点图标」桥接 picker：显式卡片 uid 落命令（Task 6 审查预警 A 回归钉）', async () => {
+    // 画布无选中（selection.activeUidRef=null）：若桥接缺显式 uid，apply 将取 null 直接丢弃
+    const handle = await renderKanbanReady(kanbanTree())
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-child-uid'), { button: 0 })
+    fireEvent.click(await screen.findByText('节点图标'))
+    expect(screen.getByTestId('icon-dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('icon-item-flag'))
+    fireEvent.click(screen.getByTestId('icon-save'))
+    // 命令落卡片节点（child-uid）且徽章互保（zen_status-todo 置首）
+    expect(handle.execCommandIcon).toHaveBeenCalledWith('child-uid', ['zen_status-todo', 'zen_flag'])
+  })
+
+  test('卡片单击回导图定位：切视图 + 展开收起祖先 + 渲染完成回调后居中', async () => {
+    // 根收起（expand=false）：定位须先沿数据树展开（渲染树寻址前置），再等渲染完成居中
+    const handle = await renderKanbanReady(kanbanTree(false))
+    expect(fakeTree.data.expand).toBe(false)
+    fireEvent.click(screen.getByTestId('kanban-card-child-uid'))
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'), { timeout: 2000 })
+    expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
+    expect(fakeTree.data.expand).toBe(true) // 祖先直写展开（视图导航豁免，不进 undo）
+    const center = handle.renderer?.moveNodeToCenter as ReturnType<typeof vi.fn>
+    expect(center).not.toHaveBeenCalled() // 展开重渲完成前不居中（等渲染树重建后寻址）
+    // 渲染完成事件（引擎 node_tree_render_end）后在新渲染树上寻址居中
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitRenderEnd!()
+    })
+    expect(center).toHaveBeenCalledWith(fakeChildNode)
   })
 })

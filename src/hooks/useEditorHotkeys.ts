@@ -1,5 +1,6 @@
 // src/hooks/useEditorHotkeys.ts —— 编辑器全局快捷键（验收轮拆自 EditorView，行数护栏）：
 // Ctrl+C 复制 / Ctrl+S 保存 / Ctrl+P 快速切换浮层 / Ctrl+Tab 切上一张（v2.5）/
+// Ctrl+Shift+K 视图切换 导图⇄看板（2026-09 看板模式，经 getState 读现值无陈旧闭包）/
 // 正文面板开关 Shift+F2（2026-09-06 备注合并：原备注对话框快捷键改指面板，toggle 语义；
 // 同入口 = 砚栏 btn-body 与浮条 node-action-body）。监听只绑一次（闭包取首渲染值），各入口
 // 均走 refs（anyDialogRef）或稳定引用，无需重绑（M5a 收敛裁定）。
@@ -22,9 +23,11 @@ interface Params {
   openQuickSwitch(): void
   /** Ctrl+Tab 步进（v2.5：呼出轮换浮层/循环移动高亮，Shift 反向；落定在 keyup Ctrl，见 useQuickSwitch） */
   cycleStep(reverse: boolean): void
+  /** 视图模式切换（2026-09 看板模式）：Ctrl+Shift+K 导图 ⇄ 看板浮层（EditorView 组合，读 store 现值翻转） */
+  toggleViewMode(): void
 }
 
-export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep }: Params): void {
+export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep, toggleViewMode }: Params): void {
   useEffect(() => {
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
@@ -51,6 +54,13 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
       }
       if (k === 'p' && !anyDialogRef.current) {
         openQuickSwitch()
+        return true
+      }
+      // 看板视图切换（2026-09）：Ctrl+Shift+K。刻意不进 anyDialog 互斥——视图模式不是
+      // 对话框（看板浮层自带关闭钮），其上开的对话框（正文/图标/标签）Esc 即关；
+      // 从看板一键回导图是高频出路，任何时刻都应可达
+      if (k === 'k' && e.shiftKey) {
+        toggleViewMode()
         return true
       }
       return false

@@ -37,6 +37,12 @@ export default {
       timeline: '时间轴',
       fishbone: '鱼骨图',
     },
+    // 视图切换组（2026-09 看板模式）：导图 ⇄ 看板浮层（Ctrl+Shift+K 同效）
+    viewToggle: '视图切换（Ctrl+Shift+K）',
+    views: {
+      mindmap: '导图',
+      kanban: '看板',
+    },
   },
   canvas: {
     loading: '正在打开…',

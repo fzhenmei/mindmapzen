@@ -310,6 +310,30 @@ export const IconFileText = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 导图视图（2026-09 看板模式 · 砚栏视图组）：中枢辐网——中心节点四向连接角点
+ *  （lucide network 语义缩至 16 网格；同族语言 r1.2 节点圆，辐线止于圆缘不穿越） */
+export const IconNetwork = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="2.8" cy="3" r="1.2" />
+      <circle cx="13.2" cy="3" r="1.2" />
+      <circle cx="2.8" cy="13" r="1.2" />
+      <circle cx="13.2" cy="13" r="1.2" />
+      <path d="M7.01 7.01 3.65 3.85M8.99 7.01l3.36-3.16M7.01 8.99L3.65 12.15M8.99 8.99l3.36 3.16" />
+    </>,
+    size,
+  )
+/** 看板视图（2026-09 看板模式 · 砚栏视图组）：板框 + 两竖列（第二列短——列内卡片
+ *  参差），24→16 缩放（÷1.5）自 lucide square-kanban 图形 */
+export const IconKanbanSquare = ({ size }: IconProps) =>
+  base(
+    <>
+      <rect x="2" y="2" width="12" height="12" rx="1.5" />
+      <path d="M5.33 4.67v6.66M8 4.67v3.93" />
+    </>,
+    size,
+  )
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */

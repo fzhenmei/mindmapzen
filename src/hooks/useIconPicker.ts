@@ -43,7 +43,9 @@ export interface IconPickerState {
   /** 当前节点文本（对话框标题）与现有图标 */
   nodeText: string
   icons: string[]
-  openPicker(text: string, icons: string[]): void
+  /** targetUid（2026-09 看板桥接）：显式指定应用目标（看板卡片非画布选中节点）；
+   *  缺省取画布当前选中（uidRef）——画布浮条入口零变化 */
+  openPicker(text: string, icons: string[], targetUid?: string): void
   close(): void
   /** 确认应用：注册 extras → SET_NODE_ICON → 保存链 */
   apply(names: readonly string[], extras: ReadonlyArray<{ name: string; icon: string }>): void
@@ -57,11 +59,11 @@ export function useIconPicker(
   const [open, setOpen] = useState(false)
   const [nodeText, setNodeText] = useState('')
   const [icons, setIcons] = useState<string[]>([])
-  // uidRef 打开瞬间的快照：确认时选中可能已变（防御，快照语义）
+  // 打开瞬间的目标快照：显式 targetUid（看板卡片）或画布选中 uidRef（确认时选中可能已变，防御）
   const targetUidRef = useRef<string | null>(null)
 
-  const openPicker = useCallback((text: string, current: string[]) => {
-    targetUidRef.current = uidRef.current
+  const openPicker = useCallback((text: string, current: string[], targetUid?: string) => {
+    targetUidRef.current = targetUid ?? uidRef.current
     setNodeText(text)
     setIcons(current)
     setOpen(true)

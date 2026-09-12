@@ -31,7 +31,9 @@ export interface TagPickerState {
   nodeText: string
   tags: string[]
   used: string[]
-  openPicker(text: string, current: string[], used: string[]): void
+  /** targetUid（2026-09 看板桥接）：显式指定应用目标（看板卡片非画布选中节点）；
+   *  缺省取画布当前选中（uidRef）——画布浮条入口零变化 */
+  openPicker(text: string, current: string[], used: string[], targetUid?: string): void
   close(): void
   /** 确认应用：SET_NODE_TAG 整组覆写 → 保存链 */
   apply(tags: readonly string[]): void
@@ -46,11 +48,11 @@ export function useTagPicker(
   const [nodeText, setNodeText] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [used, setUsed] = useState<string[]>([])
-  // uidRef 打开瞬间的快照：确认时选中可能已变（防御，快照语义）
+  // 打开瞬间的目标快照：显式 targetUid（看板卡片）或画布选中 uidRef（确认时选中可能已变，防御）
   const targetUidRef = useRef<string | null>(null)
 
-  const openPicker = useCallback((text: string, current: string[], usedNow: string[]) => {
-    targetUidRef.current = uidRef.current
+  const openPicker = useCallback((text: string, current: string[], usedNow: string[], targetUid?: string) => {
+    targetUidRef.current = targetUid ?? uidRef.current
     setNodeText(text)
     setTags(current)
     setUsed(usedNow)

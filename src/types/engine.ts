@@ -33,6 +33,9 @@ export interface EngineRenderer {
   /** 改节点数据后按需重渲（引擎 Render.js:1997）：node.reRender() 重建内容，尺寸变化时全图重排。
    *  裸 SET_NODE_DATA 不重渲染（M5b 核验 13），备注角标增删后须补调 */
   reRenderNodeCheckChange(node: unknown, notRender?: boolean): void
+  /** 节点居中（引擎 Render.js:2008）：平移视图使节点居中；resetScale 省略时按引擎
+   *  opt.resetScaleOnMoveNodeToCenter 决定是否复位缩放——看板回导图定位用 */
+  moveNodeToCenter?(node: unknown, resetScale?: boolean): void
   /** 渲染树根节点实例（Render.js:601）；未渲染时为 null */
   root?: NodeBox | null
   /** 数据树（Render.js:81 构造数据 / :749 撤销恢复）：与渲染实例共享 data 本体，**含收起隐藏子树**

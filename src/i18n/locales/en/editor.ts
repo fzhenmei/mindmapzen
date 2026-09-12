@@ -39,6 +39,12 @@ const editor: Dict['editor'] = {
       timeline: 'Timeline',
       fishbone: 'Fishbone',
     },
+    // View toggle group (2026-09 kanban mode): map <-> kanban overlay (Ctrl+Shift+K equivalent)
+    viewToggle: 'View (Ctrl+Shift+K)',
+    views: {
+      mindmap: 'Map',
+      kanban: 'Kanban',
+    },
   },
   canvas: {
     loading: 'Opening…',

@@ -31,10 +31,11 @@ export interface KanbanCardProps {
   onTextChange(uid: string, text: string): void
   onDelete(uid: string): void
   onOpenBody(uid: string): void
-  /** 打开图标选择器（iconPick.openPicker 同款入参） */
-  onEditIcons(card: { text: string; icons: string[] }): void
+  /** 打开图标/标签选择器（iconPick/tagPick.openPicker 同款入参 + 显式卡片 uid——
+   *  看板卡片不是画布选中节点，宿主桥接 picker 必须经 uid 显式寻址） */
+  onEditIcons(card: { uid: string; text: string; icons: string[] }): void
   /** 打开标签选择器（used 全集由 KanbanView 补齐后上行） */
-  onEditTags(card: { text: string; tags: string[] }): void
+  onEditTags(card: { uid: string; text: string; tags: string[] }): void
   onLocate(uid: string): void
 }
 
@@ -176,10 +177,10 @@ export default function KanbanCard({
             >
               {t('editor.kanban.menu.toPlain')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEditIcons({ text: card.text, icons: card.icons })}>
+            <DropdownMenuItem onSelect={() => onEditIcons({ uid: card.uid, text: card.text, icons: card.icons })}>
               {t('editor.nodeActions.icon')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEditTags({ text: card.text, tags: card.tags })}>
+            <DropdownMenuItem onSelect={() => onEditTags({ uid: card.uid, text: card.text, tags: card.tags })}>
               {t('editor.nodeActions.tag')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />

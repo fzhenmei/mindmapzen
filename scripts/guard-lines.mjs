@@ -41,10 +41,14 @@
 // 切图三处包装 + 关窗 blockClose/onBlocked 注入 + 状态签 AiTurnBadge 挂载 + aiPhase 订阅 +
 // 多选浮条 deleteDisabled，实测 627 + 23 行余量；状态签本体在 AiTurnBadge.tsx、锁判定
 // 在 chatStore（均无护栏）——功能性增长，非腐化）。
+// 2026-09（看板模式 Task 7）：650→700（KanbanView 浮层挂载 + picker 显式 uid 桥接 +
+// switchView/locateNode 组合（展开逻辑复用 statusOps.expandToUid，不重复实现）+ 砚栏
+// 视图组两 props + 快捷键 toggleViewMode 接线，实测 697 + 3 行余量；浮层本体在
+// KanbanView.tsx、视图态在 appStore、展开纯函数在 statusOps.ts（均无护栏）——功能性增长，非腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 650 },
+  { path: '../src/views/EditorView.tsx', limit: 700 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
 ]
 

@@ -32,6 +32,12 @@ interface AppState {
   /** 编辑器重挂载序号（外部变更冲突 reload 用）：App 层 EditorView key 拼接此值，
    *  递增即强制重挂载当前图（丢弃内存编辑、从磁盘重载）——同路径 openMap 不变 key 无法重开 */
   editorSeq: number
+  /** 视图模式（2026-09 看板模式）：导图 ⇄ 看板浮层。内存态不落盘——重启恒回导图
+   *  （导图是规划期默认形态，看板是会话内临时视角，符合生命周期心智）；切换是视图
+   *  导航非内容编辑，不置脏不触发保存链 */
+  viewMode: 'mindmap' | 'kanban'
+  /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
+  setViewMode: (v: 'mindmap' | 'kanban') => void
   dirty: boolean
   error: string | null
   configPath: string
@@ -160,6 +166,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedDir: '',
   currentMdPath: null,
   editorSeq: 0,
+  viewMode: 'mindmap',
   dirty: false,
   error: null,
   configPath: '/cfg.json',
@@ -447,6 +454,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearDirty: () => set({ dirty: false }),
 
   reopenEditor: () => set((s) => ({ editorSeq: s.editorSeq + 1 })),
+
+  // 看板视图切换（2026-09）：纯内存态（见字段注释——不落盘，重启恒回导图）
+  setViewMode: (v) => set({ viewMode: v }),
 
   backToLibrary: async () => {
     set({ currentMdPath: null, dirty: false, route: 'library' })

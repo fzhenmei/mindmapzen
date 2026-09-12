@@ -18,7 +18,7 @@ const noop = (): void => {}
 // bind 属引擎挂载钩（ZenBar 不触达），桩里补 no-op 只为满足 UndoRedo 形状
 const undoRedoStub: UndoRedo = { canUndo: false, canRedo: false, onUndo: noop, onRedo: noop, bind: noop }
 
-/** 全 props 桩（纯展示组件）：复制组三项与布局组两项由用例覆盖注入，其余状态无关项全 no-op */
+/** 全 props 桩（纯展示组件）：复制组三项、布局组两项与视图组由用例覆盖注入，其余状态无关项全 no-op */
 function renderBar(overrides: {
   copySettings?: typeof DEFAULT_COPY_SETTINGS
   onToggleCopySetting?: (key: CopySettingKey) => void
@@ -26,6 +26,8 @@ function renderBar(overrides: {
   onSwitchLayout?: (kind: LayoutKind) => void
   bodyActive?: boolean
   onBodyClick?: () => void
+  viewMode?: 'mindmap' | 'kanban'
+  onSwitchView?: (v: 'mindmap' | 'kanban') => void
 } = {}): void {
   render(
     <TooltipProvider>
@@ -49,6 +51,8 @@ function renderBar(overrides: {
         onFit={noop}
         layout={overrides.layout ?? ('mindmap' satisfies LayoutKind)}
         onSwitchLayout={overrides.onSwitchLayout ?? noop}
+        viewMode={overrides.viewMode ?? 'mindmap'}
+        onSwitchView={overrides.onSwitchView ?? noop}
       />
     </TooltipProvider>,
   )
@@ -151,6 +155,30 @@ describe('ZenBar 更多布局下拉', () => {
     const more = screen.getByTestId('btn-layout-more')
     expect(more).not.toHaveAttribute('data-active')
     expect(more).toHaveAttribute('aria-label', '更多布局')
+  })
+})
+
+// ---- 视图切换组（2026-09 看板模式）：导图/看板两钮（布局组同款 ToggleGroup 语言）----
+
+describe('ZenBar 视图切换组', () => {
+  afterEach(cleanup)
+
+  test('两 testid 常驻：导图态导图钮点亮；点击看板钮回调 onSwitchView("kanban")', () => {
+    const onSwitchView = vi.fn()
+    renderBar({ viewMode: 'mindmap', onSwitchView })
+    expect(screen.getByTestId('btn-view-mindmap')).toHaveAttribute('data-state', 'on')
+    expect(screen.getByTestId('btn-view-kanban')).toHaveAttribute('data-state', 'off')
+    fireEvent.click(screen.getByTestId('btn-view-kanban'))
+    expect(onSwitchView).toHaveBeenCalledWith('kanban')
+  })
+
+  test('看板态：看板钮点亮、导图钮常态；点导图钮回调 onSwitchView("mindmap")', () => {
+    const onSwitchView = vi.fn()
+    renderBar({ viewMode: 'kanban', onSwitchView })
+    expect(screen.getByTestId('btn-view-kanban')).toHaveAttribute('data-state', 'on')
+    expect(screen.getByTestId('btn-view-mindmap')).toHaveAttribute('data-state', 'off')
+    fireEvent.click(screen.getByTestId('btn-view-mindmap'))
+    expect(onSwitchView).toHaveBeenCalledWith('mindmap')
   })
 })
 

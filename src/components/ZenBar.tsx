@@ -31,12 +31,14 @@ import {
   IconFileText,
   IconFrame,
   IconImage,
+  IconKanbanSquare,
   IconLayoutBoth,
   IconLayoutDown,
   IconLayoutFishbone,
   IconLayoutRight,
   IconLayoutTimeline,
   IconMinus,
+  IconNetwork,
   IconPlus,
   IconRedo,
   IconRoute,
@@ -84,6 +86,10 @@ interface Props {
   layout: LayoutKind
   /** 布局切换（引擎即时重排 + 偏好落盘，逻辑在 EditorView） */
   onSwitchLayout(kind: LayoutKind): void
+  /** 视图模式（2026-09 看板模式）：导图 ⇄ 看板浮层（内存态，逻辑在 EditorView/appStore） */
+  viewMode: 'mindmap' | 'kanban'
+  /** 视图切换（同值 no-op 在 EditorView 的 switchView；快捷键 Ctrl+Shift+K 同效） */
+  onSwitchView(v: 'mindmap' | 'kanban'): void
 }
 
 /** 浮签包装（本文件局部）：ui Tooltip 组合的简写——14 枚图标钮同构，
@@ -133,6 +139,8 @@ export default function ZenBar({
   onFit,
   layout,
   onSwitchLayout,
+  viewMode,
+  onSwitchView,
 }: Readonly<Props>) {
   const { t } = useTranslation()
   const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
@@ -369,6 +377,35 @@ export default function ZenBar({
           <IconFrame />
         </Button>
       </Tip>
+      <Separator orientation="vertical" className="mx-1" />
+      {/* 视图组（2026-09 看板模式）：导图 ⇄ 看板浮层，同布局组 ToggleGroup（single）语言
+       *  （激活项 data-state=on、点已激活项 no-op）；项不加 ui Tooltip、用原生 title——
+       *  同布局组的 TooltipTrigger(asChild) data-state 遮蔽 Radix Toggle on/off 冲突家族 */}
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(v) => {
+          if (v) onSwitchView(v as 'mindmap' | 'kanban')
+        }}
+        aria-label={t('editor.zenbar.viewToggle')}
+      >
+        <ToggleGroupItem
+          value="mindmap"
+          data-testid="btn-view-mindmap"
+          aria-label={t('editor.zenbar.views.mindmap')}
+          title={t('editor.zenbar.views.mindmap')}
+        >
+          <IconNetwork />
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="kanban"
+          data-testid="btn-view-kanban"
+          aria-label={t('editor.zenbar.views.kanban')}
+          title={t('editor.zenbar.views.kanban')}
+        >
+          <IconKanbanSquare />
+        </ToggleGroupItem>
+      </ToggleGroup>
       <Separator orientation="vertical" className="mx-1" />
       {/* 布局组 = ui ToggleGroup（single）：激活项 data-state=on 官方点亮态；点已激活项为 no-op。
        *  项不加 ui Tooltip：TooltipTrigger(asChild) 会把自身 data-state(open/closed) 混入 item props，
