@@ -25,12 +25,15 @@ export function nodeTextOf(mm: MindMapHandle | null, uid: string | null): string
 }
 
 /** 选中节点现有图标（data.icon 的 zen_ 前缀剥还原 kebab 名，纯用户图标——2026-09-06
- *  备注合并后无内部保留名；无返回空数组） */
+ *  备注合并后无内部保留名；状态徽章 zen_status- 为看板保留名，排除不混入；无返回空数组） */
 export function nodeIconsOf(mm: MindMapHandle | null, uid: string | null): string[] {
   const node = mm !== null ? findByUid(mm.getData(), uid) : null
   return Array.isArray(node?.data.icon)
     ? node.data.icon
-        .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_'))
+        .filter(
+          (i): i is string =>
+            typeof i === 'string' && i.startsWith('zen_') && !i.startsWith('zen_status-'),
+        )
         .map((i) => i.slice(4))
     : []
 }
@@ -80,9 +83,16 @@ export function useIconPicker(
           if (!known.has(e.name)) list[0].list.push(e)
         }
       }
-      // SET_NODE_ICON 是整组覆写：落下数组即用户所选（纯用户图标，2026-09-06 备注合并后
-      // 无内部保留名掺入，「有正文」角标由镜像 data.note 承担，不受图标覆写影响）
-      const icons = names.map((n) => `zen_${n}`)
+      // SET_NODE_ICON 是整组覆写。徽章互保（看板模式）：覆写用户图标前保留现有状态徽章
+      // （zen_status-* 原样置前，状态不受图标覆写影响），用户图标整组替换为本次所选
+      // （「有正文」角标由镜像 data.note 承担，不在 icon 通道，不受覆写影响）
+      const node = findByUid(mm.getData(), uid)
+      const badges = Array.isArray(node?.data.icon)
+        ? node.data.icon.filter(
+            (i): i is string => typeof i === 'string' && i.startsWith('zen_status-'),
+          )
+        : []
+      const icons = [...badges, ...names.map((n) => `zen_${n}`)]
       mm.execCommandIcon?.(uid, icons)
       onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
     },
