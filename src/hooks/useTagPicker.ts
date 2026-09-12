@@ -5,6 +5,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import { collectTags } from '../services/mdTree'
+import { execOnRenderNode } from '../services/statusOps'
 import { findByUid } from './useIconPicker'
 
 /** 选中节点现有标签（data.tag 两形态宽容收集；无返回空数组） */
@@ -31,7 +32,9 @@ export interface TagPickerState {
   nodeText: string
   tags: string[]
   used: string[]
-  openPicker(text: string, current: string[], used: string[]): void
+  /** targetUid（2026-09 看板桥接）：显式指定应用目标（看板卡片非画布选中节点）；
+   *  缺省取画布当前选中（uidRef）——画布浮条入口零变化 */
+  openPicker(text: string, current: string[], used: string[], targetUid?: string): void
   close(): void
   /** 确认应用：SET_NODE_TAG 整组覆写 → 保存链 */
   apply(tags: readonly string[]): void
@@ -46,11 +49,11 @@ export function useTagPicker(
   const [nodeText, setNodeText] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [used, setUsed] = useState<string[]>([])
-  // uidRef 打开瞬间的快照：确认时选中可能已变（防御，快照语义）
+  // 打开瞬间的目标快照：显式 targetUid（看板卡片）或画布选中 uidRef（确认时选中可能已变，防御）
   const targetUidRef = useRef<string | null>(null)
 
-  const openPicker = useCallback((text: string, current: string[], usedNow: string[]) => {
-    targetUidRef.current = uidRef.current
+  const openPicker = useCallback((text: string, current: string[], usedNow: string[], targetUid?: string) => {
+    targetUidRef.current = targetUid ?? uidRef.current
     setNodeText(text)
     setTags(current)
     setUsed(usedNow)
@@ -65,9 +68,13 @@ export function useTagPicker(
       const uid = targetUidRef.current
       setOpen(false)
       if (mm === null || uid === null) return
-      // SET_NODE_TAG 整组覆写：空数组即移除全部标签
-      mm.execCommandTag?.(uid, [...next])
-      onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      // SET_NODE_TAG 整组覆写：空数组即移除全部标签。落命令经渲染节点寻址
+      // （2026-09 审查 Important-2）：收起分支卡片渲染树 miss 时 execCommandTag 内部
+      // 寻址落空即静默 no-op，且 onDataChanged 会误置脏——先展开再于渲染完成回调落命令
+      execOnRenderNode(mm, uid, '改标签', () => {
+        mm.execCommandTag?.(uid, [...next])
+        onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      })
     },
     [mmRef, onDataChanged],
   )

@@ -16,6 +16,7 @@ import { stripMarkers } from '../services/linkMarkers'
 import { sanitizeExecArgs } from '../services/multiline'
 import { isUserCommandBlocked } from '../services/ai/lock'
 import { useChatStore } from '../store/chatStore'
+import { useAppStore } from '../store/appStore'
 import { createNoteTooltip, type NoteTooltip } from './noteTooltip'
 import { createImgTooltip, engineImgMapGet } from './imgTooltip'
 import { collectUncuratedIcons, registerIconsInto, toEngineIconList, safeReRender, type ReRenderTarget } from './zenIcons'
@@ -26,7 +27,7 @@ import {
   type LinkAdjust,
 } from '../services/linkAdjust'
 import { harvestRegistry, registryToLinks, stripTreeTexts, type LinkRegistry } from './linkRegistry'
-import { handleEngineKeyDown } from './engineKeyboard'
+import { handleCanvasFallbackKey } from './engineKeyboard'
 import { registerZenThemes } from './engineThemes'
 import { bridgeLinkToRegistry } from './linkBridge'
 import { seedUndoBaseline } from './undoSeed'
@@ -512,25 +513,25 @@ export default function MindMapCanvas({
     // 引擎编辑框（contenteditable）与按钮等交互元素内不拦截，保证正常输入与 Tab 导航
     // defaultPrevented 守卫：引擎 KeyCommand 已在 window 上原生注册 Tab/Enter/Del 快捷键
     // （注册先于本监听，命中即 preventDefault），此处仅作其未响应场景（如焦点落在非 body
-    // 元素）的兜底，否则同一次按键会双份 execCommand（Tab 插两个子节点，E2E 复制用例发现）
+    // 元素）的兜底，否则同一次按键会双份 execCommand（Tab 插两个子节点，E2E 复制用例发现）。
+    // 键译决策（输入框守卫/撤销兜底/看板门禁/译件）在 engineKeyboard.handleCanvasFallbackKey
+    // （2026-09 看板审查 Important-1 提升为纯函数可测）；此处只采集 DOM 焦点域与看板态注入。
+    // 看板门禁：看板浮层在场时 Tab/Enter/Delete 兜底译件短路（引擎层已被夺焦失活，放行会
+    // 打进被浮层遮住的画布）；撤销兜底（Ctrl+Z/y）在纯函数内不受门禁——看板内撤销靠它
     const onKeydown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
-      const t = e.target
-      // 文本编辑框（input/textarea/contenteditable）内不拦截：框内原生撤销与正常输入优先于撤销重做兜底
-      if (t instanceof Element && t.closest('input, textarea, [contenteditable="true"]')) return
-      // 撤销/重做兜底（v1.1）：引擎原生 Control+z/y 只认 body 焦点（KeyCommand defaultEnableCheck），
-      // 焦点落在砚栏按钮等交互元素时不响应——此处直发命令补位；body 焦点时引擎已 preventDefault 不双发；
-      // 对话框开着时不补位（Radix 陷阱困住焦点，引擎本就不响应，维持框下不撤销）。Ctrl+Shift+z 同译
-      // FORWARD（编辑类软件惯例；引擎未注册此组合，v1.1 核验）
-      const k = e.key.toLowerCase()
-      const inDialog = t instanceof Element && t.closest('[role="dialog"]') !== null
-      if (!inDialog && (e.ctrlKey || e.metaKey) && !e.altKey && (k === 'z' || k === 'y')) {
-        mmRef.current?.execCommand(k === 'y' || e.shiftKey ? 'FORWARD' : 'BACK')
-        e.preventDefault()
-        return
-      }
-      if (t instanceof Element && t.closest('select, button, a')) return
-      const handled = handleEngineKeyDown((cmd) => mmRef.current?.execCommand(cmd), null, e.key)
+      const el = e.target instanceof Element ? e.target : null
+      const handled = handleCanvasFallbackKey((cmd) => mmRef.current?.execCommand(cmd), {
+        key: e.key,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        altKey: e.altKey,
+        shiftKey: e.shiftKey,
+        inTextInput: el !== null && el.closest('input, textarea, [contenteditable="true"]') !== null,
+        inDialog: el !== null && el.closest('[role="dialog"]') !== null,
+        inInteractive: el !== null && el.closest('select, button, a') !== null,
+        kanban: useAppStore.getState().viewMode === 'kanban',
+      })
       if (handled) e.preventDefault()
     }
     window.addEventListener('keydown', onKeydown)

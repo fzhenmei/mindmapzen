@@ -68,7 +68,27 @@ describe('精选集健全性（用例前提）', () => {
     expect(list).toHaveLength(1)
     expect(list[0]!.type).toBe('zen')
     expect(list[0]!.list.some((i) => i.name === 'body')).toBe(false) // zen_body 退役，无静态在册
-    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length) // 仅精选，不再并入内部表
+    expect(list[0]!.list).toHaveLength(Object.keys(CURATED_ICONS).length + 5) // 精选 + 五态徽章
+  })
+
+  it('五态状态徽章静态在册（看板模式）：name status-<s>（kebab，引擎 split(_) 协议）、svg 取自 STATUS_BADGE_ICON 精选名', () => {
+    const list = toEngineIconList()[0]!.list
+    expect(list.filter((i) => i.name.startsWith('status-')).map((i) => i.name)).toEqual([
+      'status-todo', 'status-doing', 'status-blocked', 'status-done', 'status-dropped',
+    ])
+    // 硬编码期望表：锁定 STATUS_BADGE_ICON 映射与精选名存在性（被改坏即测出）
+    const expected: Record<string, string> = {
+      'status-todo': 'circle',
+      'status-doing': 'clock',
+      'status-blocked': 'alert-triangle',
+      'status-done': 'check',
+      'status-dropped': 'x',
+    }
+    for (const [name, curated] of Object.entries(expected)) {
+      const item = list.find((i) => i.name === name)
+      expect(item?.icon).toBe(CURATED_ICONS[curated])
+      expect(item?.icon.startsWith('<svg')).toBe(true)
+    }
   })
 })
 

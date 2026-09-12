@@ -29,11 +29,14 @@ import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
 import CanvasHint from '../components/CanvasHint'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
-import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import { useIconPicker, findByUid, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
 import { useTagPicker, nodeTagsOf, usedTagsOf } from '../hooks/useTagPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
+import KanbanView from './KanbanView'
+import type { TaskStatus } from '../services/statusMarkers'
+import { expandToUid, execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -71,6 +74,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
+  // 视图模式（2026-09 看板模式）：导图 ⇄ 看板浮层（内存态在 appStore，重启恒回导图）
+  const viewMode = useAppStore((s) => s.viewMode)
   // 复制选项（2026-09 自设置面板移入砚栏复制钮下拉）：订阅驱动勾选态；doCopy 路径仍 getState 实时取
   const copySettings = useAppStore((s) => s.settings)
   // AI 面板（2026-09 AI Agent v1）：配置订阅（入口显隐）+ 落盘宽（默认 null = 320）
@@ -94,6 +99,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [warnStamp, setWarnStamp] = useState<{ seq: number } | null>(null) // 警告印记（2026-09-09）：无目标正文编辑 1.2s 居中劝导（seq 重挂载语义同上）
   const warnSeqRef = useRef(0)
   const [newMapOpen, setNewMapOpen] = useState(false) // 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog，确认走 leaveTo 安全链
+  // 状态选择器目标快照（2026-09 看板模式 Task 8）：开框瞬间的 uid/文本/现态；null = 关
+  const [statusPick, setStatusPick] = useState<{ uid: string; text: string; current: TaskStatus | null } | null>(null)
   const [aiOpen, setAiOpen] = useState(false) // AI 对话面板开合（2026-09 AI Agent v1）：右栏常驻槽
   const [aiDragPx, setAiDragPx] = useState<number | null>(null) // AI 面板拖拽暂存宽；null = 未在拖（松手 onCommit 落盘）
 
@@ -168,6 +175,62 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 选中节点浮动操作条锚点（验收轮）：备注/连线两钮免记快捷键；定位/刷新逻辑在 hook（行数护栏）
   const nodePos = useNodeActions(mmRef, selection.activeUid)
   const undoRedo = useUndoRedo() // 回退/重做（v1.1）：back_forward 历史态驱动按钮禁用，命令走引擎 BACK/FORWARD
+
+  /** 视图切换（2026-09 看板模式）：同值 no-op——砚栏视图组、快捷键翻转与看板关闭钮共用 */
+  const switchView = (v: 'mindmap' | 'kanban'): void => {
+    if (v === viewMode) return
+    useAppStore.getState().setViewMode(v)
+  }
+
+  /** 回导图定位（看板 → 导图）：切视图 + 展开收起祖先 + 居中聚焦。引擎 findNodeByUid 查
+   *  渲染树，收起子树的节点不在其中——展开复用 statusOps.expandToUid（expand 直写不进
+   *  undo：视图导航豁免，非内容编辑），展开后经 node_tree_render_end 一次性回调在新树上
+   *  寻址居中（回调内自兜 try/catch：引擎事件异常运行时只静默吞）；定位是非关键路径，
+   *  异常 console.error 显式出口，不阻塞看板使用 */
+  const locateNode = (uid: string): void => {
+    switchView('mindmap')
+    const mm = mmRef.current
+    if (mm === null) return
+    const apply = (): void => {
+      const node = mm.renderer?.findNodeByUid(uid)
+      if (node !== null && node !== undefined) mm.renderer?.moveNodeToCenter?.(node as never)
+      else console.warn('看板定位未命中渲染节点，跳过居中', uid)
+    }
+    try {
+      if (expandToUid(mm, uid)) {
+        mm.on('node_tree_render_end', function onEnd() {
+          mm.off('node_tree_render_end', onEnd)
+          try {
+            apply()
+          } catch (e) {
+            console.error('看板定位回调失败', e)
+          }
+        })
+      } else {
+        apply() // 路径已全展开：渲染树可即时寻址
+      }
+    } catch (e) {
+      console.error('看板回导图定位失败', e)
+    }
+  }
+
+  /** 应用状态（2026-09 看板模式 Task 8，StatusPickerDialog 确认）：确认即关框；经
+   *  execOnRenderNode 渲染节点寻址落 setIcon（SET_NODE_ICON 单命令可撤销，KanbanView.
+   *  changeStatus 同款链路）。currentIcon 从数据树读（getData 快照含收起隐藏子树，
+   *  收起分支节点照常可改）；onTreeDataChange 在命令真正落地后调用（照 useIconPicker.apply
+   *  修复模式——渲染树 miss 时先展开重试，回调外调用会误置脏）。同态短路：重选当前态
+   *  不产生命令（不占 undo 一步、不置脏，看板侧同款纪律） */
+  const applyStatus = (uid: string, status: TaskStatus | null): void => {
+    const mm = mmRef.current
+    setStatusPick(null)
+    if (mm === null) return
+    if (nodeStatusOf(mm, uid) === status) return
+    const currentIcon = findByUid(mm.getData(), uid)?.data.icon
+    execOnRenderNode(mm, uid, '改状态', (node) => {
+      ;(node as { setIcon?(icons: string[]): void })?.setIcon?.(mergeStatusBadge(currentIcon, status))
+      pipeline.onTreeDataChange()
+    })
+  }
 
   /** 盖印记（Task 7）：seq 自增 → key 变化强制重挂载（到期前重置计时 / 到期后再触发也全新挂载） */
   const flashStamp = (kind: StampKind): void => {
@@ -333,6 +396,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // 均不开——open 即被拦，commit 路径自然封死（无需改 useQuickSwitch 内部）
     openQuickSwitch: () => guardAiTurn(quick.open),
     cycleStep: (reverse: boolean) => guardAiTurn(() => quick.cycleStep(reverse)),
+    // 视图切换（2026-09 看板模式）：getState 读现值翻转——监听只绑一次（首渲染闭包），
+    // 订阅值会陈旧，getState 恒新；看板不涉 AI 回合锁（不切图不写盘，纯视图态）
+    toggleViewMode: () => {
+      const v = useAppStore.getState().viewMode
+      useAppStore.getState().setViewMode(v === 'kanban' ? 'mindmap' : 'kanban')
+    },
   })
 
   useEffect(() => {
@@ -426,6 +495,22 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         {/* AI 处理中状态签（Task 12，spec §7）：canvas-host（absolute 定位）直接子级——
             落画布区右上角、不随引擎缩放平移；面板开时 canvas-host 右缘内收，签同步让位不被遮 */}
         <AiTurnBadge />
+        {/* 看板浮层（2026-09 看板模式）：不卸载引擎画布（防 0×0 resize 污染 + 保 undo 栈 +
+            免重挂净化链），不透明浮层盖满 canvas-host；关闭即卸载浮层本体。挂载门含 docReady
+            ——引擎未就绪时 mmRef 为 null，卡片读写无处落 */}
+        {docReady && viewMode === 'kanban' && (
+          <KanbanView
+            mmRef={mmRef}
+            onDataChanged={() => pipeline.onTreeDataChange()}
+            onOpenBody={(uid) => bodyDialog.toggle(uid)}
+            // picker 桥接（Task 6 审查预警 A）：看板卡片非画布选中节点，openPicker 显式
+            // 传卡片 uid；used 取全图已用标签（usedTagsOf 全量口径，与画布入口一致）
+            onEditIcons={(c) => iconPick.openPicker(c.text, c.icons, c.uid)}
+            onEditTags={(c) => tagPick.openPicker(c.text, c.tags, usedTagsOf(mmRef.current), c.uid)}
+            onLocate={locateNode}
+            onClose={() => switchView('mindmap')}
+          />
+        )}
       </div>
       {/* AI 对话面板入口（2026-09 AI Agent v1，spec §1）：未配置隐藏；面板开时让位（关闭钮在面板头）。
           贴窗口右缘竖条，上下居中；fixed 定位不占布局 */}
@@ -483,6 +568,13 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
               usedTagsOf(mmRef.current),
             )
           }
+          // 状态选择器（2026-09 看板模式 Task 8）：快照现态开框；确认走 applyStatus
+          onStatusClick={() => {
+            const uid = selection.activeUidRef.current
+            if (uid) {
+              setStatusPick({ uid, text: nodeTextOf(mmRef.current, uid), current: nodeStatusOf(mmRef.current, uid) })
+            }
+          }}
           onImageClick={() =>
             imageEdit.openDialog(nodeTextOf(mmRef.current, selection.activeUidRef.current), nodeImageOf(mmRef.current, selection.activeUidRef.current))
           }
@@ -516,6 +608,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onFit={() => mmRef.current && fitView(mmRef.current)}
         layout={layout}
         onSwitchLayout={switchLayout}
+        viewMode={viewMode}
+        onSwitchView={switchView}
       />
       )}
       {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；
@@ -562,6 +656,17 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         tagPicker={
           tagPick.open && !guard.guarding && !flow.confirming
             ? { nodeText: tagPick.nodeText, current: tagPick.tags, used: tagPick.used, onCancel: tagPick.close, onConfirm: tagPick.apply }
+            : null
+        }
+        // 状态选择器（2026-09 看板模式 Task 8）：导图侧状态入口，互斥优先级同上
+        statusPicker={
+          statusPick !== null && !guard.guarding && !flow.confirming
+            ? {
+                nodeText: statusPick.text,
+                current: statusPick.current,
+                onCancel: () => setStatusPick(null),
+                onConfirm: (status) => applyStatus(statusPick.uid, status),
+              }
             : null
         }
         // 插图（M19 + 粘贴截图）：同上

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import type { NodeActionPos } from '../hooks/useNodeActions'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
-import { IconFileText, IconImage, IconLink, IconSmile, IconTag } from './icons'
+import { IconCircleDot, IconFileText, IconImage, IconLink, IconSmile, IconTag } from './icons'
 
 interface Props {
   /** 锚点（useNodeActions 产出；仅在有值时由父级渲染本组件） */
@@ -22,9 +22,11 @@ interface Props {
   onImageClick(): void
   /** 标签选择器（节点标签的唯一增删 UI 通道） */
   onTagClick(): void
+  /** 状态选择器（2026-09 看板模式 Task 8：导图侧任务状态入口，五态单选 + 转普通） */
+  onStatusClick(): void
 }
 
-export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick, onImageClick, onTagClick }: Readonly<Props>) {
+export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick, onImageClick, onTagClick, onStatusClick }: Readonly<Props>) {
   const { t } = useTranslation()
   return (
     <div
@@ -76,6 +78,21 @@ export default function NodeActions({ pos, onBodyClick, onLinkClick, onIconClick
           </Button>
         </TooltipTrigger>
         <TooltipContent>{t('editor.nodeActions.tag')}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="node-action-status"
+            aria-label={t('editor.nodeActions.status')}
+            onClick={onStatusClick}
+          >
+            <IconCircleDot />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t('editor.nodeActions.status')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>

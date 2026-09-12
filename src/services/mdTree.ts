@@ -5,6 +5,8 @@ import { extractTargets, injectMarkers } from './linkMarkers'
 import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
 import { extractTagMarkers, injectTagMarkers, stripTagMarkers } from './tagMarkers'
 import { extractImageMarker, injectImageMarker, stripImageMarker } from './imageMarkers'
+import { extractStatusMarker, injectStatusMarker, stripStatusMarkers, TASK_STATUSES } from './statusMarkers'
+import type { TaskStatus } from './statusMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -43,9 +45,10 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   const lines: string[] = []
 
   /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
-   *  标签（#tag）、图标（M18 ::name）与插图（M19 ![alt](src)）同口径句尾注入，行尾固定
-   *  顺序 `文本 [[链接]] #tag ::icon ![alt](src)`（图片最尾；tag 在 icon 内侧——剥除序
-   *  image → icon → tag 与注入序严格互逆） */
+   *  标签（#tag）、图标（M18 ::name）、状态（看板 @status）与插图（M19 ![alt](src)）同口径
+   *  句尾注入，行尾固定顺序 `文本 [[链接]] #tag ::icon @status ![alt](src)`（图片最尾；
+   *  tag 在 icon 内侧、status 在 icon 外侧 image 内侧——剥除序 image → status → icon → tag
+   *  与注入序严格互逆） */
   function textOf(node: ZenNode): string {
     const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
     let text = node.text
@@ -55,7 +58,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
       if (missing.length > 0) text = injectMarkers(text, missing)
     }
     return injectImageMarker(
-      injectIconMarkers(injectTagMarkers(text, node.tags ?? []), node.icons ?? []),
+      injectStatusMarker(injectIconMarkers(injectTagMarkers(text, node.tags ?? []), node.icons ?? []), node.status ?? null),
       node.image ?? null,
     )
   }
@@ -140,17 +143,21 @@ function listItemText(md: string, item: MNode): string {
   )
 }
 
-/** 建节点（M18 图标 / M19 插图 / 标签）：行尾标记提取进结构化字段（文本剥离、序列化注入
- *  互逆）；行尾约定顺序：`文本 #tag ::icon ![alt](src)`（图片最尾）；无标记快速路径零开销 */
+/** 建节点（M18 图标 / M19 插图 / 标签 / 看板状态）：行尾标记提取进结构化字段（文本剥离、
+ *  序列化注入互逆）；行尾约定顺序：`文本 #tag ::icon @status ![alt](src)`（图片最尾）；
+ *  剥除链 image → status → icon → tag 与注入序严格互逆；无标记快速路径零开销 */
 function makeNode(raw: string): ZenNode {
   const image = extractImageMarker(raw)
   const stripped = stripImageMarker(raw)
-  const icons = extractIconMarkers(stripped)
-  const noIcons = stripIconMarkers(stripped)
+  const status = extractStatusMarker(stripped)
+  const noStatus = stripStatusMarkers(stripped)
+  const icons = extractIconMarkers(noStatus)
+  const noIcons = stripIconMarkers(noStatus)
   const tags = extractTagMarkers(noIcons)
   const node: ZenNode = { text: stripTagMarkers(noIcons), children: [] }
   if (icons.length > 0) node.icons = icons
   if (tags.length > 0) node.tags = tags
+  if (status !== null) node.status = status
   if (image !== null) node.image = image
   return node
 }
@@ -289,8 +296,9 @@ export interface ImageMetaEntry {
 
 /** zen → engine 树：折叠路径集（根为 '/'+text，子为父路径+'/'+text，字面拼接）内的节点 expand=false；
  *  body（非空串）透传进 data.body 并同值镜像 data.note（2026-09-06 备注合并：
- *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源；zen_body 图标通道已退役，
- *  data.icon 恢复纯用户图标，无内部保留名）；
+ *  复用引擎「有 note→挂角标+悬停」原生通道，body 是事实源；zen_body 图标通道已退役）；
+ *  status（看板）→ data.icon 首项内部保留名 zen_status-<s>（iconList 静态注册承载，Task 3；
+ *  kebab 而非下划线——引擎 getNodeIconListIcon 按 split('_') 取 arr[1] 为 name，下划线形态永不命中）；
  *  icons → data.icon（'zen_'+name，引擎 iconList 通道约定，M18）；
  *  image → data.image（src 键）+ imageSize（custom:false 由主题上限等比缩放），根 data.imgMap
  *  携 src→dataURL（引擎 getImageUrl 查表，nodeCreateContents.js:41-44——md 存相对路径、
@@ -308,9 +316,15 @@ export function zenToEngineTree(
   if (parentPath === '' && imgMeta !== undefined && imgMeta.size > 0) {
     for (const [src, e] of imgMeta) rootImgMap[src] = e.dataUrl
   }
-  // 图标组装（M18）：用户 icons 直 map（'zen_'+name）。2026-09-06 备注合并后无内部
-  // 保留名——「有正文」角标/悬停由镜像 data.note 驱动引擎原生通道，不再借道 data.icon
-  const icons = (tree.icons ?? []).map((n) => `zen_${n}`)
+  // 图标组装（M18）：用户 icons 直 map（'zen_'+name）。2026-09-06 备注合并后「有正文」
+  // 角标/悬停由镜像 data.note 驱动引擎原生通道，不再借道 data.icon。
+  // 状态徽章（看板模式）：status 借道 data.icon 内部保留名 zen_status-<s>（kebab，引擎
+  // split('_') 协议），置首项、用户图标排后（engineTreeToZen 侧按前缀排除+白名单还原，
+  // roundtrip 互逆）
+  const icons =
+    tree.status !== undefined
+      ? [`zen_status-${tree.status}`, ...(tree.icons ?? []).map((n) => `zen_${n}`)]
+      : (tree.icons ?? []).map((n) => `zen_${n}`)
   return {
     data: {
       text: tree.text,
@@ -333,12 +347,13 @@ export function zenToEngineTree(
   }
 }
 
-/** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名（纯用户图标，2026-09-06
- *  备注合并后无内部保留名，全收不剥）；非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
+/** data.icon 收集（M18）：仅收 'zen_' 前缀项并剥前缀还原 kebab 名；排除内部保留名
+ *  zen_status-（看板状态徽章由 engineTreeToZen 独立提取还原 status，不混入用户图标）；
+ *  非数组/非字符串宽容忽略（引擎其他图标源不受影响） */
 function collectIcons(icon: unknown): string[] {
   if (!Array.isArray(icon)) return []
   return icon
-    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_'))
+    .filter((n): n is string => typeof n === 'string' && n.startsWith('zen_') && !n.startsWith('zen_status-'))
     .map((n) => n.slice(4))
 }
 
@@ -359,7 +374,8 @@ export function collectTags(tag: unknown): string[] {
 /** engine → zen 树：还原纯文本树并收集折叠路径（data.expand === false 视为折叠）；
  *  data.body（非空字符串）收进 ZenNode.body；data.note 为宿主镜像（2026-09-06 合并），
  *  不收集——事实源是 data.body；
- *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md） */
+ *  data.uid（仅字符串）透传进 ZenNode——M5d Task 2 序列化注入按 uid 查连线注册表（不进 md）；
+ *  data.icon 内部保留名 zen_status-<s>（看板）还原 ZenNode.status（白名单外宽容丢弃） */
 export function engineTreeToZen(
   root: EngineNode,
   parentPath = '',
@@ -369,7 +385,12 @@ export function engineTreeToZen(
   const subs = (root.children ?? []).map((c) => engineTreeToZen(c, path))
   const body = typeof root.data.body === 'string' && root.data.body !== '' ? root.data.body : undefined
   const uid = typeof root.data.uid === 'string' ? root.data.uid : undefined
-  // 图标收集（M18）：仅收 'zen_' 前缀项（纯用户图标，无内部保留名）
+  // 状态徽章提取（看板模式）：zen_status-<s> 首个白名单命中还原 status；非白名单宽容丢弃
+  const rawIcons = Array.isArray(root.data.icon) ? root.data.icon : []
+  const statusBadge = rawIcons.find((i): i is string => typeof i === 'string' && i.startsWith('zen_status-'))
+  const statusVal = statusBadge !== undefined ? statusBadge.slice('zen_status-'.length) : undefined
+  const status = TASK_STATUSES.includes(statusVal as TaskStatus) ? (statusVal as TaskStatus) : undefined
+  // 图标收集（M18）：仅收 'zen_' 前缀项（zen_status- 内部保留名已排除）
   const icons = collectIcons(root.data.icon)
   // 标签收集：字符串与 {text} 对象两形态宽容收文本
   const tags = collectTags(root.data.tag)
@@ -383,6 +404,7 @@ export function engineTreeToZen(
       text: root.data.text,
       ...(uid !== undefined ? { uid } : {}),
       ...(body !== undefined ? { body } : {}),
+      ...(status !== undefined ? { status } : {}),
       ...(icons.length > 0 ? { icons } : {}),
       ...(tags.length > 0 ? { tags } : {}),
       ...(image !== undefined ? { image } : {}),

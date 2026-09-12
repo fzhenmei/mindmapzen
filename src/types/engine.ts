@@ -20,6 +20,10 @@ export interface NodeBox {
 export interface EngineRenderer {
   /** 按节点 uid 查渲染树节点实例（引擎 Render.js:2094）；未命中返回 null/undefined */
   findNodeByUid(uid: string): unknown
+  /** 渲染进行中标志（Render.js 构造置 false；doLayout 经 asyncRun 跨宏任务，期间为
+   *  true）——渲染中 reRender 重入是双树错乱根因，宿主重渲一律走 safeReRender
+   *  （zenIcons，ReRenderTarget.renderer 按此字段判定），引擎包类型未声明故可选 */
+  isRendering?: boolean
   /** 引擎文本编辑框：show 打开指定节点的编辑框（引擎 F2/双击同款路径，TextEdit.js:49/93）；
    *  hideEditTextBox 关闭并提交框内当前内容（TextEdit.js:475），未打开时为无害空操作 */
   textEdit: {
@@ -29,6 +33,9 @@ export interface EngineRenderer {
   /** 改节点数据后按需重渲（引擎 Render.js:1997）：node.reRender() 重建内容，尺寸变化时全图重排。
    *  裸 SET_NODE_DATA 不重渲染（M5b 核验 13），备注角标增删后须补调 */
   reRenderNodeCheckChange(node: unknown, notRender?: boolean): void
+  /** 节点居中（引擎 Render.js:2008）：平移视图使节点居中；resetScale 省略时按引擎
+   *  opt.resetScaleOnMoveNodeToCenter 决定是否复位缩放——看板回导图定位用 */
+  moveNodeToCenter?(node: unknown, resetScale?: boolean): void
   /** 渲染树根节点实例（Render.js:601）；未渲染时为 null */
   root?: NodeBox | null
   /** 数据树（Render.js:81 构造数据 / :749 撤销恢复）：与渲染实例共享 data 本体，**含收起隐藏子树**

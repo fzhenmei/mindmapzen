@@ -39,6 +39,12 @@ const editor: Dict['editor'] = {
       timeline: 'Timeline',
       fishbone: 'Fishbone',
     },
+    // View toggle group (2026-09 kanban mode): map <-> kanban overlay (Ctrl+Shift+K equivalent)
+    viewToggle: 'View (Ctrl+Shift+K)',
+    views: {
+      mindmap: 'Map',
+      kanban: 'Kanban',
+    },
   },
   canvas: {
     loading: 'Opening…',
@@ -60,6 +66,8 @@ const editor: Dict['editor'] = {
     body: 'Write body text for the selected node',
     icon: 'Node icon',
     tag: 'Node tags',
+    // Task status (2026-09 kanban mode Task 8): floating-bar button, opens StatusPickerDialog
+    status: 'Node status',
     image: 'Node image',
     link: 'Create link: click, then click the target node',
   },
@@ -101,6 +109,11 @@ const editor: Dict['editor'] = {
     removeTag: 'Remove {{name}}',
     inputPlaceholder: 'Type a new tag and press Enter',
   },
+  // Status picker (2026-09 kanban mode Task 8): five status labels and the
+  // clear entry reuse the kanban domain (same source as the column headers)
+  statusPicker: {
+    title: 'Node status',
+  },
   imageDialog: {
     title: 'Node image',
     missing: 'Image file unreadable: {{path}}',
@@ -133,6 +146,31 @@ const editor: Dict['editor'] = {
   },
   noteTooltip: {
     more: 'Open the editor dialog (Shift+F2)',
+  },
+  // Kanban mode (2026-09 Task 6): KanbanView overlay trio; the five status
+  // names map one-to-one to the statusMarkers whitelist; the menu icon/tag
+  // entries reuse nodeActions.icon/tag
+  kanban: {
+    viewName: 'Kanban',
+    close: 'Close the kanban and return to the map',
+    status: {
+      todo: 'To do',
+      doing: 'In progress',
+      blocked: 'Blocked',
+      done: 'Done',
+      dropped: 'Dropped',
+    },
+    ungrouped: 'Ungrouped',
+    emptyColumn: 'No tasks yet',
+    addPlaceholder: 'Type a task name and press Enter',
+    menu: {
+      toStatus: 'Set status',
+      toPlain: 'Convert to plain node',
+      delete: 'Delete',
+      deleteConfirm: 'Delete?',
+    },
+    bodyHint: 'Body',
+    locate: 'Click to locate on the map; double-click to rename',
   },
 }
 export default editor

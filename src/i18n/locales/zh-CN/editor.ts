@@ -37,6 +37,12 @@ export default {
       timeline: '时间轴',
       fishbone: '鱼骨图',
     },
+    // 视图切换组（2026-09 看板模式）：导图 ⇄ 看板浮层（Ctrl+Shift+K 同效）
+    viewToggle: '视图切换（Ctrl+Shift+K）',
+    views: {
+      mindmap: '导图',
+      kanban: '看板',
+    },
   },
   canvas: {
     loading: '正在打开…',
@@ -58,6 +64,8 @@ export default {
     body: '编写选中节点的正文',
     icon: '节点图标',
     tag: '节点标签',
+    // 任务状态（2026-09 看板模式 Task 8）：浮条状态钮，开 StatusPickerDialog
+    status: '节点状态',
     image: '节点插图',
     link: '创建连线：点此钮后再点目标节点',
   },
@@ -99,6 +107,10 @@ export default {
     removeTag: '移除 {{name}}',
     inputPlaceholder: '输入新标签，回车添加',
   },
+  // 状态选择器（2026-09 看板模式 Task 8）：五态文案/清除项复用 kanban 域（与看板列头同源）
+  statusPicker: {
+    title: '节点状态',
+  },
   imageDialog: {
     title: '节点插图',
     missing: '图片文件不可读：{{path}}',
@@ -133,5 +145,29 @@ export default {
   },
   noteTooltip: {
     more: '打开弹窗编辑正文(Shift+F2)',
+  },
+  // 看板模式（2026-09 Task 6）：KanbanView 浮层三件套；五态名与 statusMarkers
+  // 白名单一一对应；菜单「图标/标签」两项复用 nodeActions.icon/tag
+  kanban: {
+    viewName: '看板',
+    close: '关闭看板，返回导图',
+    status: {
+      todo: '待办',
+      doing: '进行中',
+      blocked: '受阻',
+      done: '完成',
+      dropped: '放弃',
+    },
+    ungrouped: '未分组',
+    emptyColumn: '暂无任务',
+    addPlaceholder: '输入任务名，回车添加',
+    menu: {
+      toStatus: '改状态',
+      toPlain: '转为普通节点',
+      delete: '删除',
+      deleteConfirm: '确认删除？',
+    },
+    bodyHint: '正文',
+    locate: '单击回到导图定位，双击编辑任务名',
   },
 }
