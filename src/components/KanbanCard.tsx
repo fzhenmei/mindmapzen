@@ -3,7 +3,10 @@
 // onDataChanged）。交互：拖拽（dataTransfer 载荷 text/kanban-uid）、双击文本内联
 // 编辑、DropdownMenu 收纳改状态/转普通/图标/标签/删除；单击主体 = 延迟定位回导图
 // （与双击编辑共存：真实浏览器 click 先于 dblclick 派生，双击在判定窗内清除定时器）。
+// 键盘 Esc 分层：普通态沿 li 冒泡到看板根关板；编辑中只退编辑态并回焦卡片 li 保住二次
+// Esc 续链（2026-09 验收微调，见 handleEditInputKey / cancelEditAndRefocus）。
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
@@ -30,6 +33,18 @@ const DELETE_CONFIRM_MS = 3000
 /** 是否有徽标行（图标/标签/正文任一）——拆出守卫：Sonar S3776 认知复杂度 */
 const hasBadges = (card: KanbanCardData): boolean =>
   card.icons.length > 0 || card.tags.length > 0 || card.hasBody
+
+/** 编辑输入框键盘处理（S3776 拆出：组件聚合复杂度已满，分支按函数单独计量）。
+ *  stopPropagation：Esc 不冒泡到看板根触发关板——编辑取消只退编辑态（Esc 分层） */
+function handleEditInputKey(
+  e: KeyboardEvent<HTMLInputElement>,
+  commit: () => void,
+  cancel: () => void,
+): void {
+  e.stopPropagation()
+  if (e.key === 'Enter') commit()
+  else if (e.key === 'Escape') cancel()
+}
 
 /** 键盘定位判定（li 自身 Enter/Space）：target 守卫——冒泡自内部按钮/输入框的
  *  键盘事件不触发卡片定位，否则键盘激活卡片内按钮（菜单/正文钮）时 preventDefault
@@ -83,6 +98,11 @@ export default function KanbanCard({
     [],
   )
 
+  // Esc 退编辑回焦卡片 li（Esc 分层续链）：input 卸载焦点断链回落 body——body keydown
+  // 不进 React 树，二次 Esc 失效。flushSync 先同步提交（input 此刻已卸载）再回焦：
+  // 同步 focus 会触发 input onBlur commitEdit，把「Esc 丢弃草稿」语义变成提交
+  const cardRef = useRef<HTMLLIElement>(null)
+
   /** 立即定位（键盘 Enter/Space 路径——无「双击编辑」歧义，不经判定窗）。
    *  setTimeout/键盘回调的异常运行时静默吞（无框架兜底），自兜留痕 */
   const locateNow = (): void => {
@@ -110,6 +130,13 @@ export default function KanbanCard({
     const text = draft.trim()
     if (text !== '' && text !== card.text) onTextChange(card.uid, text)
   }
+  /** Esc 退编辑并回焦卡片 li（Esc 分层续链）：flushSync 先同步提交（input 此刻已卸载，
+   *  onBlur 不会误提交草稿）再回焦——input 卸载焦点断链回落 body（body keydown 不进
+   *  React 树）会断二次 Esc */
+  const cancelEditAndRefocus = (): void => {
+    flushSync(() => setEditing(false))
+    cardRef.current?.focus()
+  }
 
   /** 删除二次确认：首点武装（3 秒回退，回退窗回调纯 setState——React 18 对已卸载组件
    *  为无害 no-op，无异常可吞），再点执行——零新组件 */
@@ -126,6 +153,7 @@ export default function KanbanCard({
 
   return (
     <li
+      ref={cardRef}
       data-testid={`kanban-card-${card.uid}`}
       draggable={!editing}
       onDragStart={(e) => {
@@ -162,12 +190,7 @@ export default function KanbanCard({
               value={draft}
               autoFocus
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                // stopPropagation：Esc 不冒泡到看板根触发关板——编辑取消只退编辑态（Esc 分层）
-                e.stopPropagation()
-                if (e.key === 'Enter') commitEdit()
-                else if (e.key === 'Escape') setEditing(false)
-              }}
+              onKeyDown={(e) => handleEditInputKey(e, commitEdit, cancelEditAndRefocus)}
               onBlur={commitEdit}
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => e.stopPropagation()}

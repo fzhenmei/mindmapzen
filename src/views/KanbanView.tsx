@@ -7,7 +7,8 @@
 // 覆盖，挂载即夺 body 焦点使引擎快捷键层失活（keyCommand.defaultEnableCheck 只认
 // body 焦点）。宿主 window 兜底层（MindMapCanvas.onKeydown）按 viewMode 门禁：看板态
 // Tab/Enter/Delete 译件短路（不放行打进被遮画布），撤销兜底（Ctrl+Z/y）除外——看板内
-// 撤销靠它（engineKeyboard.handleCanvasFallbackKey）。
+// 撤销靠它（engineKeyboard.handleCanvasFallbackKey）。浮层根用原生 <dialog open>（非模态，
+// 无原生 Esc/focus 陷阱副作用；Sonar S6819 对 role="dialog" 的规则终点即原生元素）。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RefObject } from 'react'
@@ -40,7 +41,7 @@ export default function KanbanView({
 }: Readonly<KanbanViewProps>) {
   const { t } = useTranslation()
   const [cards, setCards] = useState<KanbanCardData[]>([])
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDialogElement>(null)
 
   /** 全量重投影：engineTreeToZen 透传 uid（卡片寻址靠 uid）；构建失败留 console 线索 */
   const refresh = useCallback(() => {
@@ -153,19 +154,30 @@ export default function KanbanView({
   const usedTags = useMemo(() => [...new Set(cards.flatMap((c) => c.tags))], [cards])
 
   return (
-    <div
+    <dialog
       ref={rootRef}
+      open
       tabIndex={-1}
+      aria-label={t('editor.kanban.viewName')}
       data-testid="kanban-view"
-      className="absolute inset-0 z-20 flex flex-col bg-background outline-none"
+      className="absolute inset-0 z-20 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-background p-0 text-foreground outline-none"
       onKeyDown={(e) => {
-        // Esc 分层（2026-09 验收微调）：普通态 Esc 返回导图。卡片编辑/列内新增的 Esc
-        // 在子孙输入框层拦截（stopPropagation），不会冒泡至此误关；Radix 对话框
-        // （下拉菜单/图标标签选择器）走 Portal 不在 DOM 子树内，天然不冒泡到看板根；
-        // defaultPrevented 守卫尊重下游已消费的事件
+        // Esc 分层（2026-09 验收微调）：普通态 Esc 返回导图。
+        // ① 卡片编辑/列内新增：子孙输入框 onKeyDown stopPropagation（React 树内真实拦截），
+        //    不冒泡至此。
+        // ② Radix 浮层（卡片下拉菜单/图标标签选择器）：portal 内容的事件沿 React 树跨边界
+        //    冒泡（React 官方行为），合成事件仍会到达这里——实际不误关靠 Radix
+        //    DismissableLayer 在 ownerDocument capture 阶段监听 keydown（其 dist 源码：
+        //    addEventListener('keydown', handleKeyDown, { capture: true })）对 Escape 调
+        //    原生 preventDefault()，事件到达本处理器时 defaultPrevented 已为 true。
+        // 故 !defaultPrevented 守卫是承重结构勿删：放行普通态关板、吞掉 Radix 已消费的 Esc
         if (e.key === 'Escape' && !e.defaultPrevented) onClose()
       }}
     >
+      {/* 原生 dialog（Sonar S6819：role="dialog" 的规则终点即原生元素）。非模态 open
+          属性不引原生 Esc 拦截（cancel 事件仅 showModal 触发），Esc 语义仍归 onKeyDown；
+          UA 默认样式（margin auto / fit-content 尺寸 / max 钳制 / border / padding /
+          CanvasText 前景色）用工具类压平，保持原 div 覆盖盒不变 */}
       <header className="flex items-center justify-between border-b px-4 py-2">
         <h2 className="text-sm font-medium">{t('editor.kanban.viewName')}</h2>
         <button
@@ -197,6 +209,6 @@ export default function KanbanView({
           />
         ))}
       </div>
-    </div>
+    </dialog>
   )
 }

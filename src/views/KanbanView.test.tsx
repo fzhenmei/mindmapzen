@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { RefObject } from 'react'
 import KanbanView, { type KanbanViewProps } from './KanbanView'
 import type { MindMapHandle } from '../types/engine'
@@ -355,5 +355,57 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(screen.getByTestId('btn-kanban-add-todo')).toBeInTheDocument()
     expect(mm.execCommand).not.toHaveBeenCalled()
     expect(props.onClose).not.toHaveBeenCalled()
+  })
+
+  test('卡片下拉菜单/选择器开着按 Esc：Radix capture 层已 preventDefault → 守卫拦住不关板', () => {
+    // Important-1 回归钉：portal 事件沿 React 树跨边界冒泡（React 官方行为），菜单的
+    // Esc 合成事件会到达看板根 onKeyDown——不误关的真实机制是 Radix DismissableLayer
+    // 在 ownerDocument capture 阶段对 Escape 调原生 preventDefault()（其 dist 源码：
+    // addEventListener('keydown', handleKeyDown, { capture: true })）。此处构造
+    // defaultPrevented=true 的 keyDown 派发到看板根，模拟 Radix capture 层的最终效果；
+    // !defaultPrevented 守卫承重，误删则本用例转红
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    const root = screen.getByTestId('kanban-view')
+    const event = createEvent.keyDown(root, { key: 'Escape' })
+    Object.defineProperty(event, 'defaultPrevented', { value: true })
+    fireEvent(root, event)
+    expect(props.onClose).not.toHaveBeenCalled()
+  })
+
+  test('Esc 续链（卡片编辑）：Esc 退编辑回焦卡片 li，再按 Esc（activeElement 冒泡）关板', () => {
+    // Minor-1 修复钉：input 卸载焦点断链回落 body（body keydown 不进 React 树）→
+    // 二次 Esc 失效；退编辑经 effect 回焦卡片 li 保住 Esc 链
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.doubleClick(screen.getByText('修滚动条'))
+    fireEvent.keyDown(screen.getByTestId('kanban-edit-t1'), { key: 'Escape' })
+    expect(screen.queryByTestId('kanban-edit-t1')).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('kanban-card-t1'))
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('Esc 续链（列底新增）：Esc 取消回焦看板根（丢弃草稿不提交），再按 Esc 关板', () => {
+    // Minor-1 修复钉：同步回焦会触发 input onBlur commitAdd 把丢弃变提交（误建卡片），
+    // 故经 effect 待卸载后再回焦看板根——二次 Esc 直接关板
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('btn-kanban-add-todo'))
+    fireEvent.change(screen.getByTestId('kanban-add-input-todo'), { target: { value: '草稿' } })
+    fireEvent.keyDown(screen.getByTestId('kanban-add-input-todo'), { key: 'Escape' })
+    expect(screen.queryByTestId('kanban-add-input-todo')).not.toBeInTheDocument()
+    expect(mm.execCommand).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByTestId('kanban-view'))
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('焦点在卡片 li 上 Esc（冒泡路径）：关板返回导图', () => {
+    // Nit-1a 补钉：普通态焦点落在卡片 li（Tab 序列 / 退编辑回焦）时 Esc 沿 li → 看板根
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.keyDown(screen.getByTestId('kanban-card-t1'), { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
   })
 })

@@ -4,6 +4,7 @@
 // 悬停反馈：enter/leave 计数器维持 data-dragover 高亮（ring + accent 底），归零熄灭。
 // dropped 列语义 = 放弃：列名删除线 + 淡灰点。
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import type { TaskStatus } from '../services/statusMarkers'
@@ -57,6 +58,12 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
     return () => window.removeEventListener('dragend', clearDragOver)
   }, [dragOver, clearDragOver])
 
+  // Esc 取消新增回焦看板根（Esc 分层续链）：input 卸载焦点断链回落 body——body keydown
+  // 不进 React 树，二次 Esc 失效。flushSync 先同步提交（input 此刻已卸载）再回焦：同步
+  // focus 会触发 input onBlur commitAdd，把「Esc 丢弃草稿」变成提交新卡片。回焦看板根
+  // （closest 向上找 testid，组件内可达不引全局查询），再次 Esc 直接关板返回导图
+  const colRef = useRef<HTMLElement>(null)
+
   const cancelAdd = (): void => {
     setAdding(false)
     setDraft('')
@@ -71,6 +78,7 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
 
   return (
     <section
+      ref={colRef}
       data-testid={`kanban-col-${status}`}
       data-dragover={dragOver ? '' : undefined}
       onDragEnter={markDragOver}
@@ -125,10 +133,15 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
             autoFocus
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              // stopPropagation：Esc 不冒泡到看板根触发关板——取消新增只收起输入框（Esc 分层）
+              // stopPropagation：Esc 不冒泡到看板根触发关板——取消新增只收起输入框（Esc
+              // 分层）；取消后回焦看板根保住二次 Esc（见 colRef 注释）
               e.stopPropagation()
               if (e.key === 'Enter') commitAdd()
-              else if (e.key === 'Escape') cancelAdd()
+              else if (e.key === 'Escape') {
+                // 先同步提交收起输入框再回焦（input 已卸载，onBlur commitAdd 不会误建卡片）
+                flushSync(cancelAdd)
+                colRef.current?.closest<HTMLElement>('[data-testid="kanban-view"]')?.focus()
+              }
             }}
             onBlur={commitAdd}
             placeholder={t('editor.kanban.addPlaceholder')}
