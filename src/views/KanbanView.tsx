@@ -158,6 +158,13 @@ export default function KanbanView({
       tabIndex={-1}
       data-testid="kanban-view"
       className="absolute inset-0 z-20 flex flex-col bg-background outline-none"
+      onKeyDown={(e) => {
+        // Esc 分层（2026-09 验收微调）：普通态 Esc 返回导图。卡片编辑/列内新增的 Esc
+        // 在子孙输入框层拦截（stopPropagation），不会冒泡至此误关；Radix 对话框
+        // （下拉菜单/图标标签选择器）走 Portal 不在 DOM 子树内，天然不冒泡到看板根；
+        // defaultPrevented 守卫尊重下游已消费的事件
+        if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+      }}
     >
       <header className="flex items-center justify-between border-b px-4 py-2">
         <h2 className="text-sm font-medium">{t('editor.kanban.viewName')}</h2>

@@ -325,4 +325,35 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(t2.setIcon).toHaveBeenCalledWith(['zen_status-done'])
     expect(props.onDataChanged).toHaveBeenCalled()
   })
+
+  test('Esc 返回导图：普通态（无编辑/新增）看板根上 Esc 触发 onClose', () => {
+    // 2026-09 验收微调：看板缺 Esc 返回导图（Ctrl+Shift+K 之外补 Esc 语义分层）
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.keyDown(screen.getByTestId('kanban-view'), { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('Esc 分层：卡片编辑中 Esc 只退编辑态（编辑框消失），不冒泡关板', () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.doubleClick(screen.getByText('修滚动条'))
+    const input = screen.getByTestId('kanban-edit-t1')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByTestId('kanban-edit-t1')).not.toBeInTheDocument()
+    expect(screen.getByText('修滚动条')).toBeInTheDocument()
+    expect(props.onClose).not.toHaveBeenCalled()
+  })
+
+  test('Esc 分层：列底新增中 Esc 只取消新增（输入框收起回落按钮），不冒泡关板不落命令', () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('btn-kanban-add-todo'))
+    const input = screen.getByTestId('kanban-add-input-todo')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByTestId('kanban-add-input-todo')).not.toBeInTheDocument()
+    expect(screen.getByTestId('btn-kanban-add-todo')).toBeInTheDocument()
+    expect(mm.execCommand).not.toHaveBeenCalled()
+    expect(props.onClose).not.toHaveBeenCalled()
+  })
 })

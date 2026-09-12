@@ -125,6 +125,8 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
             autoFocus
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
+              // stopPropagation：Esc 不冒泡到看板根触发关板——取消新增只收起输入框（Esc 分层）
+              e.stopPropagation()
               if (e.key === 'Enter') commitAdd()
               else if (e.key === 'Escape') cancelAdd()
             }}

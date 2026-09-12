@@ -163,6 +163,7 @@ export default function KanbanCard({
               autoFocus
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
+                // stopPropagation：Esc 不冒泡到看板根触发关板——编辑取消只退编辑态（Esc 分层）
                 e.stopPropagation()
                 if (e.key === 'Enter') commitEdit()
                 else if (e.key === 'Escape') setEditing(false)
