@@ -11,7 +11,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 // 全刷新回路；jsdom 无 DragEvent.dataTransfer，拖拽事件以 stub 注入。
 
 interface FakeNode {
-  data: { text: string; uid: string; icon?: string[]; body?: string; expand?: boolean }
+  data: { text: string; uid: string; icon?: string[]; body?: string; expand?: boolean; tag?: unknown[] }
   children: FakeNode[]
   setText?: ReturnType<typeof vi.fn>
   setIcon?: ReturnType<typeof vi.fn>
@@ -479,6 +479,51 @@ describe('KanbanView（看板模式浮层）', () => {
     const { mm } = makeMm()
     const { props } = renderKanban(mm)
     fireEvent.keyDown(screen.getByTestId('kanban-card-t1'), { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('过滤：匹配标题保留、非匹配列空显示「无匹配任务」；清空恢复「暂无任务」', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    const input = screen.getByTestId('kanban-filter')
+    fireEvent.change(input, { target: { value: '滚动' } })
+    expect(screen.getByText('修滚动条')).toBeInTheDocument()
+    // doing 列命中非空；其余四列全空 → 过滤占位（区别于「暂无任务」）
+    expect(within(screen.getByTestId('kanban-col-todo')).getByText('无匹配任务')).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '' } })
+    expect(within(screen.getByTestId('kanban-col-todo')).getByText('暂无任务')).toBeInTheDocument()
+  })
+
+  test('过滤命中路径与标签（大小写不敏感）：父链名/标签文本均可命中', () => {
+    // 标签走引擎 data.tag（字符串数组形态，collectTags 收文本）——卡片.tags 由
+    // engineTreeToZen 还原；「zen」小写搜大写标签命中
+    const t9: FakeNode = { data: { text: '发布检查', uid: 't9', icon: ['zen_status-doing'], tag: ['Release'] }, children: [] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t9] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: { findNodeByUid: (): null => null },
+      execCommand: vi.fn(),
+    }
+    renderKanban(mm as unknown as MindMapHandle)
+    // 路径：t9 根下直挂无父链，先给标签命中断言
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: 'release' } })
+    expect(screen.getByText('发布检查')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '不存在词' } })
+    expect(screen.queryByText('发布检查')).not.toBeInTheDocument()
+  })
+
+  test('Esc 分层（过滤框）：非空 Esc 只清空不冒泡关板；已空 Esc 冒泡关板', () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    const input = screen.getByTestId('kanban-filter')
+    fireEvent.change(input, { target: { value: 'x' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input).toHaveValue('')
+    expect(props.onClose).not.toHaveBeenCalled()
+    // 已空：不再 stopPropagation，冒泡到看板根走关板（与列底新增同款分层协议）
+    fireEvent.keyDown(input, { key: 'Escape' })
     expect(props.onClose).toHaveBeenCalledTimes(1)
   })
 })

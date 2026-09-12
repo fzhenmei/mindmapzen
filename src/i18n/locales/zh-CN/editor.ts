@@ -161,6 +161,8 @@ export default {
     },
     ungrouped: '未分组',
     emptyColumn: '暂无任务',
+    filterPlaceholder: '过滤任务（标题 / 路径 / 标签）',
+    filterEmpty: '无匹配任务',
     addPlaceholder: '输入任务名，回车添加',
     menu: {
       toStatus: '改状态',

@@ -21,6 +21,18 @@ import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
 import { IconWinClose } from '../components/icons'
 
+/** 过滤匹配（2026-09 看板治理 spec §4）：标题 / 路径段 / 标签，大小写不敏感；
+ *  空过滤恒真（过滤关闭态）——纯视图态，不进 undo */
+const matchesFilter = (c: KanbanCardData, filterText: string): boolean => {
+  const q = filterText.trim().toLowerCase()
+  if (q === '') return true
+  return (
+    c.text.toLowerCase().includes(q) ||
+    c.path.some((p) => p.toLowerCase().includes(q)) ||
+    c.tags.some((tg) => tg.toLowerCase().includes(q))
+  )
+}
+
 export interface KanbanViewProps {
   mmRef: RefObject<MindMapHandle | null>
   /** 编辑上报（保存链置脏）：所有引擎命令后调用（照 useIconPicker.apply 模式） */
@@ -43,6 +55,8 @@ export default function KanbanView({
 }: Readonly<KanbanViewProps>) {
   const { t } = useTranslation()
   const [cards, setCards] = useState<KanbanCardData[]>([])
+  const [filterText, setFilterText] = useState('')
+  const filterActive = filterText.trim() !== ''
   const rootRef = useRef<HTMLDialogElement>(null)
 
   /** 全量重投影：engineTreeToZen 透传 uid（卡片寻址靠 uid）；构建失败留 console 线索 */
@@ -180,15 +194,30 @@ export default function KanbanView({
           属性不引原生 Esc 拦截（cancel 事件仅 showModal 触发），Esc 语义仍归 onKeyDown；
           UA 默认样式（margin auto / fit-content 尺寸 / max 钳制 / border / padding /
           CanvasText 前景色）用工具类压平，保持原 div 覆盖盒不变 */}
-      <header className="flex items-center justify-between border-b px-4 py-2">
-        <h2 className="text-sm font-medium">{t('editor.kanban.viewName')}</h2>
+      <header className="flex items-center gap-2 border-b px-4 py-2">
+        <h2 className="shrink-0 text-sm font-medium">{t('editor.kanban.viewName')}</h2>
+        <input
+          data-testid="kanban-filter"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          onKeyDown={(e) => {
+            // Esc 分层（协议同列底新增输入框）：非空只清空不冒泡；已空冒泡走关板——
+            // 看板根 !defaultPrevented 守卫承重链不受影响（普通合成事件未被 prevent）
+            if (e.key === 'Escape' && filterText !== '') {
+              e.stopPropagation()
+              setFilterText('')
+            }
+          }}
+          placeholder={t('editor.kanban.filterPlaceholder')}
+          className="ml-auto w-56 shrink-0 rounded-md border bg-background px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
         <button
           type="button"
           data-testid="kanban-close"
           aria-label={t('editor.kanban.close')}
           title={t('editor.kanban.close')}
           onClick={onClose}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <IconWinClose size={14} />
         </button>
@@ -199,7 +228,8 @@ export default function KanbanView({
           <KanbanColumn
             key={s}
             status={s}
-            cards={cards.filter((c) => c.status === s)}
+            cards={cards.filter((c) => c.status === s && matchesFilter(c, filterText))}
+            filterActive={filterActive}
             onStatusChange={changeStatus}
             onTextChange={changeText}
             onDelete={deleteCard}

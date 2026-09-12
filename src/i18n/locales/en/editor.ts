@@ -163,6 +163,8 @@ const editor: Dict['editor'] = {
     },
     ungrouped: 'Ungrouped',
     emptyColumn: 'No tasks yet',
+    filterPlaceholder: 'Filter tasks (title / path / tag)',
+    filterEmpty: 'No matching tasks',
     addPlaceholder: 'Type a task name and press Enter',
     menu: {
       toStatus: 'Set status',

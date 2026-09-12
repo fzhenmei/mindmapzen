@@ -26,9 +26,11 @@ interface Props extends Omit<KanbanCardProps, 'card'> {
   cards: KanbanCardData[]
   /** 列底新增（回车提交；落列状态由本列 status 定义，挂根在 KanbanView） */
   onAdd(text: string): void
+  /** 过滤激活态（2026-09 看板治理）：空列占位文案切换——过滤后空 = 「无匹配」 */
+  filterActive?: boolean
 }
 
-export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }: Readonly<Props>) {
+export default function KanbanColumn({ status, cards, onAdd, filterActive = false, ...cardCallbacks }: Readonly<Props>) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -122,7 +124,7 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
             data-testid={`kanban-empty-${status}`}
             className="list-none rounded-md border border-dashed p-2 text-center text-xs text-muted-foreground"
           >
-            {t('editor.kanban.emptyColumn')}
+            {t(filterActive ? 'editor.kanban.filterEmpty' : 'editor.kanban.emptyColumn')}
           </li>
         )}
       </ul>
