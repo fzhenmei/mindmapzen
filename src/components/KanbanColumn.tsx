@@ -18,6 +18,7 @@ export const STATUS_DOT: Record<TaskStatus, string> = {
   blocked: 'bg-amber-500',
   done: 'bg-green-600',
   dropped: 'bg-muted-foreground/40',
+  archived: 'bg-muted-foreground/30',
 }
 
 interface Props extends Omit<KanbanCardProps, 'card'> {

@@ -3,11 +3,15 @@ import { stripImageMarker } from './imageMarkers'
 import { extractStatusMarker, hasStatusMarkers, injectStatusMarker, stripStatusMarkers, TASK_STATUSES } from './statusMarkers'
 
 describe('statusMarkers（句尾 @status 白名单标记）', () => {
-  test('五态白名单：todo/doing/blocked/done/dropped', () => {
-    expect([...TASK_STATUSES]).toEqual(['todo', 'doing', 'blocked', 'done', 'dropped'])
+  test('六态白名单：todo/doing/blocked/done/dropped/archived', () => {
+    expect([...TASK_STATUSES]).toEqual(['todo', 'doing', 'blocked', 'done', 'dropped', 'archived'])
     expect(extractStatusMarker('修滚动条 @doing')).toBe('doing')
     expect(extractStatusMarker('窗口状态记忆 @todo')).toBe('todo')
     expect(extractStatusMarker('已完成 @done')).toBe('done')
+    // 第六状态（2026-09 看板治理）：归档 = 生命周期终态「翻篇」，与五态同管线
+    expect(extractStatusMarker('翻篇了 @archived')).toBe('archived')
+    expect(stripStatusMarkers('翻篇了 @archived')).toBe('翻篇了')
+    expect(injectStatusMarker('翻篇了', 'archived')).toBe('翻篇了 @archived')
   })
 
   test('未知 @xxx 视为普通文本：不提取、不剥除、roundtrip 恒等', () => {

@@ -157,6 +157,7 @@ export default {
       blocked: '受阻',
       done: '完成',
       dropped: '放弃',
+      archived: '归档',
     },
     ungrouped: '未分组',
     emptyColumn: '暂无任务',

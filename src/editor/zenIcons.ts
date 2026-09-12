@@ -5,6 +5,7 @@
 import type { EngineNode } from '../types/engine'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import alertTriangle from 'lucide-static/icons/alert-triangle.svg?raw'
+import archive from 'lucide-static/icons/archive.svg?raw'
 import arrowDown from 'lucide-static/icons/arrow-down.svg?raw'
 import arrowRight from 'lucide-static/icons/arrow-right.svg?raw'
 import arrowUp from 'lucide-static/icons/arrow-up.svg?raw'
@@ -79,9 +80,9 @@ import zap from 'lucide-static/icons/zap.svg?raw'
  *  `<!-- @license -->` 头注释，不剥则被当图片 URL 加载显示为碎图（M18 验收实案） */
 const normalizeSvg = (raw: string): string => raw.replace(/^\s*<!--[\s\S]*?-->\s*/, '')
 
-/** 精选集原始表（69，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
+/** 精选集原始表（70，图标管理器默认网格 + 引擎 iconList 静态项；kebab 名即 md 标记名） */
 const RAW_CURATED: Readonly<Record<string, string>> = {
-  flag, star, 'alert-triangle': alertTriangle, check, x, clock, flame, flask: flaskConical, heart, bookmark, pin,
+  flag, star, 'alert-triangle': alertTriangle, archive, check, x, clock, flame, flask: flaskConical, heart, bookmark, pin,
   tag, lightbulb, target, rocket, bug, lock, key, eye, search, calendar,
   'message-circle': messageCircle, paperclip, 'trash-2': trash2, pencil, copy, save, download,
   upload, settings, user, users, home, folder, 'file-text': fileText, image, link,
@@ -103,6 +104,7 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
  *  data.icon 元素 'zen_status-<s>'，下方静态注册五项 name 'status-<s>' */
 export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
   todo: 'circle', doing: 'clock', blocked: 'alert-triangle', done: 'check', dropped: 'x',
+  archived: 'archive',
 }
 
 /** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。

@@ -159,6 +159,7 @@ const editor: Dict['editor'] = {
       blocked: 'Blocked',
       done: 'Done',
       dropped: 'Dropped',
+      archived: 'Archived',
     },
     ungrouped: 'Ungrouped',
     emptyColumn: 'No tasks yet',
