@@ -2930,4 +2930,50 @@ describe('看板模式（2026-09 Task 7）', () => {
     })
     expect(center).toHaveBeenCalledWith(fakeChildNode)
   })
+
+  test('看板卡片复制（2026-09 子树卡片）：菜单复制该卡追踪范围的子树 md，嵌套状态截断不入', async () => {
+    // 树：根 > 任务A(doing) > [子任务B(todo) > B1, 说明C]——A 卡复制截断在 B（B 是独立
+    // 卡片），md 只含 A + 说明C；对齐 doCopy 同源管线（settings/印记全沿用）
+    const writes: string[] = []
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [{
+        data: { text: '任务A', expand: true, uid: 'a-uid', icon: ['zen_status-doing'] },
+        children: [
+          { data: { text: '子任务B', expand: true, uid: 'b-uid', icon: ['zen_status-todo'] }, children: [
+            { data: { text: 'B1', expand: true, uid: 'b1-uid' }, children: [] },
+          ] },
+          { data: { text: '说明C', expand: true, uid: 'c-uid' }, children: [] },
+        ],
+      }],
+    }
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={async (t) => {
+          writes.push(t)
+        }}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    act(() => {
+      useAppStore.getState().setViewMode('kanban')
+    })
+    expect(await screen.findByTestId('kanban-card-a-uid')).toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByTestId('kanban-menu-a-uid'), { button: 0 })
+    fireEvent.click(await screen.findByTestId('kanban-copy-a-uid'))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toContain('# 任务A @doing')
+    expect(writes[0]).toContain('说明C')
+    // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
+    expect(writes[0]).not.toContain('子任务B')
+    expect(writes[0]).not.toContain('B1')
+  })
 })

@@ -33,11 +33,13 @@ export interface KanbanViewProps {
   onEditTags(card: { uid: string; text: string; tags: string[]; used: string[] }): void
   /** 回导图定位（EditorView 组合：切 viewMode + 展开路径 + moveNodeToCenter） */
   onLocate(uid: string): void
+  /** 复制卡片子树 md（2026-09 子树卡片）：管线在宿主 EditorView（doCopy 同源） */
+  onCopyCard(uid: string): void
   onClose(): void
 }
 
 export default function KanbanView({
-  mmRef, onDataChanged, onOpenBody, onEditIcons, onEditTags, onLocate, onClose,
+  mmRef, onDataChanged, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard, onClose,
 }: Readonly<KanbanViewProps>) {
   const { t } = useTranslation()
   const [cards, setCards] = useState<KanbanCardData[]>([])
@@ -205,6 +207,7 @@ export default function KanbanView({
             onEditIcons={onEditIcons}
             onEditTags={(card) => onEditTags({ ...card, used: usedTags })}
             onLocate={onLocate}
+            onCopyCard={onCopyCard}
             onAdd={(text) => addCard(s, text)}
           />
         ))}

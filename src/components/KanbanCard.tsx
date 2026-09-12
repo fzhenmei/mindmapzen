@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { IconMore } from './icons'
 
 /** 单击定位 vs 双击编辑判定窗（ms）：须 ≥ OS 双击阈值（Windows 默认 500ms）——
@@ -31,9 +32,9 @@ const LOCATE_DELAY_MS = 500
 /** 删除二次确认回退窗（ms）：3 秒不点恢复普通态（零新组件的确认交互） */
 const DELETE_CONFIRM_MS = 3000
 
-/** 是否有徽标行（图标/标签/正文任一）——拆出守卫：Sonar S3776 认知复杂度 */
+/** 是否有徽标行（子孙/图标/标签/正文任一）——拆出守卫：Sonar S3776 认知复杂度 */
 const hasBadges = (card: KanbanCardData): boolean =>
-  card.icons.length > 0 || card.tags.length > 0 || card.hasBody
+  card.icons.length > 0 || card.tags.length > 0 || card.hasBody || card.childCount > 0
 
 /** 卡片父链小字文本：有父链则 ' / ' 连接；根下直挂 = 未分组。
  *  拆出同因 S3776：组件聚合复杂度已满 */
@@ -85,10 +86,12 @@ export interface KanbanCardProps {
   /** 打开标签选择器（used 全集由 KanbanView 补齐后上行） */
   onEditTags(card: { uid: string; text: string; tags: string[] }): void
   onLocate(uid: string): void
+  /** 复制卡片（2026-09 子树卡片）：子树 md 管线在宿主 EditorView（doCopy 同源） */
+  onCopyCard(uid: string): void
 }
 
 export default function KanbanCard({
-  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate,
+  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard,
 }: Readonly<KanbanCardProps>) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -96,6 +99,9 @@ export default function KanbanCard({
   const [confirmingDel, setConfirmingDel] = useState(false)
   // 拖拽中源卡片半透明（2026-09 冒烟微调）：增强「拿起」感，dragend/落列重挂载自清
   const [dragging, setDragging] = useState(false)
+  // 子孙浮层开关（2026-09 子树卡片）：受控——Tooltip 的 open 由 hover 态与
+  // 「有子孙且非编辑/拖拽」守卫合成，编辑中悬停同卡不弹、退编辑鼠标仍在卡上自然复弹
+  const [tipOpen, setTipOpen] = useState(false)
   const locateTimerRef = useRef<number>(0)
   const delTimerRef = useRef<number>(0)
 
@@ -162,138 +168,176 @@ export default function KanbanCard({
   }
 
   return (
-    <li
-      ref={cardRef}
-      data-testid={`kanban-card-${card.uid}`}
-      draggable={!editing}
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/kanban-uid', card.uid)
-        setDragging(true)
-      }}
-      onDragEnd={() => setDragging(false)}
-      onClick={editing ? undefined : scheduleLocate}
-      onKeyDown={
-        editing
-          ? undefined
-          : (e) => {
-              // 键盘激活等价单击定位（Sonar S1082：click 必须有键盘可达路径）
-              if (!isCardSelfActivateKey(e)) return
-              e.preventDefault()
-              locateNow()
-            }
-      }
-      title={t('editor.kanban.locate')}
-      tabIndex={editing ? -1 : 0}
-      className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing ${
-        dragging ? 'opacity-50' : ''
-      }`}
-    >
-      {/* 父链小字同正文放开截断（信息完整优先，长路径换行也接受） */}
-      <p className="break-words text-[10px] leading-tight text-muted-foreground">
-        {cardPathText(card, t)}
-      </p>
-      <div className="mt-0.5 flex items-start gap-1">
-        <div className="min-w-0 flex-1" onDoubleClick={editing ? undefined : beginEdit}>
-          {editing ? (
-            <textarea
-              data-testid={`kanban-edit-${card.uid}`}
-              value={draft}
-              rows={1}
-              autoFocus
-              onChange={(e) =>
-                // 引擎节点文本是单行模型（\r\n 入节点 → serialize 断言抛错 → 复制/保存无声失败），
-                // 粘贴多行文本时把换行折叠为空格（输入法/键入的换行已被 Enter=提交挡住）
-                setDraft(e.target.value.replace(/\r?\n/g, ' '))
-              }
-              onKeyDown={(e) => handleEditInputKey(e, commitEdit, cancelEditAndRefocus)}
-              onBlur={commitEdit}
-              onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
-              className="w-full field-sizing-content resize-none rounded border bg-background px-1 py-0.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          ) : (
-            <p className="break-words font-medium leading-snug">{card.text}</p>
-          )}
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              data-testid={`kanban-menu-${card.uid}`}
-              aria-label={t('editor.nodeMenu.label')}
-              onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              <IconMore size={14} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{t('editor.kanban.menu.toStatus')}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={card.status}
-              onValueChange={(v) => onStatusChange(card.uid, v as TaskStatus)}
-            >
-              {TASK_STATUSES.map((s) => (
-                <DropdownMenuRadioItem key={s} value={s}>
-                  {t(`editor.kanban.status.${s}`)}
-                </DropdownMenuRadioItem>
+    <Tooltip open={tipOpen && card.childCount > 0 && !editing && !dragging} onOpenChange={setTipOpen}>
+      {/* TooltipTrigger asChild：Radix 把 pointer/focus 进出与 aria-describedby 合到 li
+          （Slot 拼接语义；键盘焦点落卡同样弹浮层——hover 语义的键盘可达路径）。
+          Provider 由 EditorView 根提供（KanbanView 挂其内，shadcn 默认 delayDuration=0） */}
+      <TooltipTrigger asChild>
+        <li
+          ref={cardRef}
+          data-testid={`kanban-card-${card.uid}`}
+          draggable={!editing}
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/kanban-uid', card.uid)
+            setDragging(true)
+          }}
+          onDragEnd={() => setDragging(false)}
+          // 拦 Radix Trigger 的 focus 开浮层：preventDefault 短路其 context.onOpen
+          // （composeEventHandlers 尊重 defaultPrevented——focus 事件不可取消，标志位无
+          // 副作用）。不拦则破坏两条既有行为：单击定位/退编辑回焦会闪弹浮层；浮层开着时
+          // Esc 被 TooltipContent 的 DismissableLayer 在 capture 阶段吃掉（退编辑→Esc 关板
+          // 的两击链变三击）。子孙速览只认鼠标 hover（需求原文），键盘侧信息经徽标计数 +
+          // 复制卡片可达
+          onFocus={(e) => e.preventDefault()}
+          onClick={editing ? undefined : scheduleLocate}
+          onKeyDown={
+            editing
+              ? undefined
+              : (e) => {
+                  // 键盘激活等价单击定位（Sonar S1082：click 必须有键盘可达路径）
+                  if (!isCardSelfActivateKey(e)) return
+                  e.preventDefault()
+                  locateNow()
+                }
+          }
+          title={t('editor.kanban.locate')}
+          tabIndex={editing ? -1 : 0}
+          className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing ${
+            dragging ? 'opacity-50' : ''
+          }`}
+        >
+          {/* 父链小字同正文放开截断（信息完整优先，长路径换行也接受） */}
+          <p className="break-words text-[10px] leading-tight text-muted-foreground">
+            {cardPathText(card, t)}
+          </p>
+          <div className="mt-0.5 flex items-start gap-1">
+            <div className="min-w-0 flex-1" onDoubleClick={editing ? undefined : beginEdit}>
+              {editing ? (
+                <textarea
+                  data-testid={`kanban-edit-${card.uid}`}
+                  value={draft}
+                  rows={1}
+                  autoFocus
+                  onChange={(e) =>
+                    // 引擎节点文本是单行模型（\r\n 入节点 → serialize 断言抛错 → 复制/保存无声失败），
+                    // 粘贴多行文本时把换行折叠为空格（输入法/键入的换行已被 Enter=提交挡住）
+                    setDraft(e.target.value.replace(/\r?\n/g, ' '))
+                  }
+                  onKeyDown={(e) => handleEditInputKey(e, commitEdit, cancelEditAndRefocus)}
+                  onBlur={commitEdit}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  className="w-full field-sizing-content resize-none rounded border bg-background px-1 py-0.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              ) : (
+                <p className="break-words font-medium leading-snug">{card.text}</p>
+              )}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid={`kanban-menu-${card.uid}`}
+                  aria-label={t('editor.nodeMenu.label')}
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <IconMore size={14} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{t('editor.kanban.menu.toStatus')}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={card.status}
+                  onValueChange={(v) => onStatusChange(card.uid, v as TaskStatus)}
+                >
+                  {TASK_STATUSES.map((s) => (
+                    <DropdownMenuRadioItem key={s} value={s}>
+                      {t(`editor.kanban.status.${s}`)}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  data-testid={`kanban-toplain-${card.uid}`}
+                  onSelect={() => onStatusChange(card.uid, null)}
+                >
+                  {t('editor.kanban.menu.toPlain')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onEditIcons({ uid: card.uid, text: card.text, icons: card.icons })}>
+                  {t('editor.nodeActions.icon')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onEditTags({ uid: card.uid, text: card.text, tags: card.tags })}>
+                  {t('editor.nodeActions.tag')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid={`kanban-copy-${card.uid}`}
+                  onSelect={() => onCopyCard(card.uid)}
+                >
+                  {t('editor.kanban.menu.copyCard')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {/* preventDefault 保持菜单开着——确认点击落在同一菜单项上 */}
+                <DropdownMenuItem
+                  data-testid={`kanban-delete-${card.uid}`}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    requestDelete()
+                  }}
+                  className={confirmingDel ? 'text-destructive focus:text-destructive' : undefined}
+                >
+                  {confirmingDel ? t('editor.kanban.menu.deleteConfirm') : t('editor.kanban.menu.delete')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {hasBadges(card) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {/* 子孙徽标（2026-09 子树卡片）：卡片体量指示——hover 整卡可速览大纲 */}
+              {card.childCount > 0 && (
+                <span
+                  data-testid={`kanban-children-${card.uid}`}
+                  className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground"
+                >
+                  {t('editor.kanban.children', { n: card.childCount })}
+                </span>
+              )}
+              {card.icons.map((name) => (
+                <CardIconBadge key={name} name={name} />
               ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              data-testid={`kanban-toplain-${card.uid}`}
-              onSelect={() => onStatusChange(card.uid, null)}
-            >
-              {t('editor.kanban.menu.toPlain')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEditIcons({ uid: card.uid, text: card.text, icons: card.icons })}>
-              {t('editor.nodeActions.icon')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onEditTags({ uid: card.uid, text: card.text, tags: card.tags })}>
-              {t('editor.nodeActions.tag')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {/* preventDefault 保持菜单开着——确认点击落在同一菜单项上 */}
-            <DropdownMenuItem
-              data-testid={`kanban-delete-${card.uid}`}
-              onSelect={(e) => {
-                e.preventDefault()
-                requestDelete()
-              }}
-              className={confirmingDel ? 'text-destructive focus:text-destructive' : undefined}
-            >
-              {confirmingDel ? t('editor.kanban.menu.deleteConfirm') : t('editor.kanban.menu.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {hasBadges(card) && (
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-          {card.icons.map((name) => (
-            <CardIconBadge key={name} name={name} />
-          ))}
-          {card.tags.map((tg) => (
-            <span key={tg} className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground">
-              {tg}
-            </span>
-          ))}
-          {card.hasBody && (
-            <button
-              type="button"
-              data-testid={`kanban-body-${card.uid}`}
-              title={t('editor.kanban.bodyHint')}
-              aria-label={t('editor.kanban.bodyHint')}
-              onClick={(e) => {
-                e.stopPropagation()
-                onOpenBody(card.uid)
-              }}
-              className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground hover:bg-accent"
-            >
-              {t('editor.kanban.bodyHint')}
-            </button>
+              {card.tags.map((tg) => (
+                <span key={tg} className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground">
+                  {tg}
+                </span>
+              ))}
+              {card.hasBody && (
+                <button
+                  type="button"
+                  data-testid={`kanban-body-${card.uid}`}
+                  title={t('editor.kanban.bodyHint')}
+                  aria-label={t('editor.kanban.bodyHint')}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenBody(card.uid)
+                  }}
+                  className="rounded bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground hover:bg-accent"
+                >
+                  {t('editor.kanban.bodyHint')}
+                </button>
+              )}
+            </div>
           )}
-        </div>
-      )}
-    </li>
+        </li>
+      </TooltipTrigger>
+      {/* 子孙速览浮层（2026-09 子树卡片）：portal 渲染不被列容器 overflow 裁剪；纯展示
+          不可交互（指针移出卡片即关）——细看/编辑回导图（点卡片定位）。限高 + 滚动作
+          超长护栏（slimScrollbar 对 overflow 容器自动生效）；底色 bg-foreground 不透明 */}
+      <TooltipContent
+        data-testid={`kanban-tip-${card.uid}`}
+        className="max-h-64 w-80 max-w-[80vw] overflow-y-auto"
+      >
+        <p className="whitespace-pre-wrap break-words">{card.outline.join('\n')}</p>
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -164,10 +164,13 @@ export default {
     menu: {
       toStatus: '改状态',
       toPlain: '转为普通节点',
+      copyCard: '复制卡片',
       delete: '删除',
       deleteConfirm: '确认删除？',
     },
     bodyHint: '正文',
+    // 子孙徽标（2026-09 子树卡片）：{{n}} = 截断范围内无状态后代数
+    children: '{{n}} 子节点',
     locate: '单击回到导图定位，双击编辑任务名',
   },
 }

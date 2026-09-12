@@ -166,10 +166,13 @@ const editor: Dict['editor'] = {
     menu: {
       toStatus: 'Set status',
       toPlain: 'Convert to plain node',
+      copyCard: 'Copy card',
       delete: 'Delete',
       deleteConfirm: 'Delete?',
     },
     bodyHint: 'Body',
+    // Sub-item badge (2026-09 subtree cards): {{n}} = statusless descendants in card scope
+    children: '{{n}} sub-items',
     locate: 'Click to locate on the map; double-click to rename',
   },
 }
