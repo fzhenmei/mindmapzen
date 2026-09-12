@@ -612,4 +612,54 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(t1.setIcon).not.toHaveBeenCalled()
     expect(props.onDataChanged).not.toHaveBeenCalled()
   })
+
+  test('批量归档收起分支回归钉：同分支两张 done 卡都落命令（2026-09 遗留卡 bug）', () => {
+    // 树：root > grp(expand=false) > d1/d2（done）。渲染树：grp 收起时两卡 miss，
+    // renderDone 翻转后才可寻址——批量 forEach 同步连发，第二张在重渲完成前寻址
+    // miss 且祖先已被第一张展开，旧实现误判垃圾 uid 丢弃（statusOps 单测同根因）
+    const d1: FakeNode = {
+      data: { text: '完成甲', uid: 'd1', icon: ['zen_status-done'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const d2: FakeNode = {
+      data: { text: '完成乙', uid: 'd2', icon: ['zen_status-done'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const grp: FakeNode = { data: { text: '分组', uid: 'g', expand: false }, children: [d1, d2] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [grp] }
+    const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
+    let renderDone = false
+    const mm = {
+      getData: () => root,
+      on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
+      }),
+      off: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
+      }),
+      renderer: {
+        findNodeByUid: (uid: string): FakeNode | null => {
+          if (uid === 'r') return root
+          if (uid === 'g') return grp
+          if (renderDone && uid === 'd1') return d1
+          if (renderDone && uid === 'd2') return d2
+          return null
+        },
+      },
+      execCommand: vi.fn(),
+    }
+    const { props } = renderKanban(mm as unknown as MindMapHandle)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    // 同步阶段：两卡都不落命令（渲染未完成），第一张已触发祖先直写展开
+    expect(grp.data.expand).toBe(true)
+    expect(d1.setIcon).not.toHaveBeenCalled()
+    // 渲染完成 → 两张挂起回调都落命令（回归钉：旧实现 d2 被误判丢弃遗留）
+    renderDone = true
+    for (const cb of [...(listeners.get('node_tree_render_end') ?? [])]) cb()
+    expect(d1.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(d2.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(props.onDataChanged).toHaveBeenCalledTimes(2)
+  })
 })

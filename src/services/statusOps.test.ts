@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { expandToUid, mergeStatusBadge, nodeStatusOf } from './statusOps'
+import { execOnRenderNode, expandToUid, mergeStatusBadge, nodeStatusOf } from './statusOps'
 import type { MindMapHandle } from '../types/engine'
 
 describe('statusOps（徽章互保协议）', () => {
@@ -52,5 +52,62 @@ describe('statusOps（徽章互保协议）', () => {
     expect(expandToUid(mm, 'x1')).toBe(false)
     expect(expandToUid(mm, 'ghost')).toBe(false)
     expect(reRender).not.toHaveBeenCalled()
+  })
+
+  test('execOnRenderNode：同收起分支同步两连操作——第二张等待渲染而非误判垃圾 uid（2026-09 批量归档遗留卡回归）', () => {
+    // 树：root > g(expand=false) > d1,d2；渲染树随 renderDone 翻转（重渲完成才可寻址）
+    const apply1 = vi.fn()
+    const apply2 = vi.fn()
+    const d1 = { data: { uid: 'd1' }, children: [] }
+    const d2 = { data: { uid: 'd2' }, children: [] }
+    const g = { data: { uid: 'g', expand: false }, children: [d1, d2] }
+    const root = { data: { uid: 'r' }, children: [g] }
+    const listeners = new Map<string, Array<() => void>>()
+    let renderDone = false
+    const mm = {
+      getData: () => root,
+      on: vi.fn((ev: string, cb: () => void) => {
+        listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
+      }),
+      off: vi.fn((ev: string, cb: () => void) => {
+        listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
+      }),
+      renderer: {
+        findNodeByUid: (uid: string) => {
+          if (uid === 'r') return root
+          if (uid === 'g') return g
+          if (renderDone && uid === 'd1') return d1
+          if (renderDone && uid === 'd2') return d2
+          return null
+        },
+      },
+    } as unknown as MindMapHandle
+    // 批量同步两连（archiveAllDone 的 forEach 形态）：d1 触发展开挂回调；d2 祖先已被
+    // d1 展开、重渲未完成——须同样挂回调等待，不得按垃圾 uid 丢弃命令
+    execOnRenderNode(mm, 'd1', '改状态', apply1)
+    execOnRenderNode(mm, 'd2', '改状态', apply2)
+    expect(g.data.expand).toBe(true)
+    expect(apply1).not.toHaveBeenCalled()
+    expect(apply2).not.toHaveBeenCalled()
+    renderDone = true
+    for (const cb of [...(listeners.get('node_tree_render_end') ?? [])]) cb()
+    expect(apply1).toHaveBeenCalledWith(d1)
+    expect(apply2).toHaveBeenCalledWith(d2)
+  })
+
+  test('execOnRenderNode：数据树无此节点仍报错丢弃（垃圾 uid 出口不回归）', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const apply = vi.fn()
+    const root = { data: { uid: 'r' }, children: [] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: { findNodeByUid: () => null },
+    } as unknown as MindMapHandle
+    execOnRenderNode(mm, 'ghost', '改状态', apply)
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('数据树中无此节点'), 'ghost')
+    expect(apply).not.toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 })

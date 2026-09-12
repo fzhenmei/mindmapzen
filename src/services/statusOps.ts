@@ -91,9 +91,15 @@ export function execOnRenderNode(
     apply(found)
     return
   }
+  // expandToUid 的 false 双语义分流（2026-09 批量归档遗留卡修复）：数据树无此节点
+  // （真垃圾 uid）报错丢弃；路径已全展开但渲染树未跟上（前序操作刚展开、重渲未完成
+  // ——批量归档同收起分支第二张起的形态）转入下方渲染完成回调等待，不丢命令。
+  // 台账「三分返回值」的消费侧等价实现：不动 expandToUid 签名与其余调用点
   if (!expandToUid(mm, uid)) {
-    console.error(`${label}失败：数据树中无此节点`, uid)
-    return
+    if (findByUid(mm.getData(), uid) === null) {
+      console.error(`${label}失败：数据树中无此节点`, uid)
+      return
+    }
   }
   let tries = 0
   const onEnd = (): void => {
