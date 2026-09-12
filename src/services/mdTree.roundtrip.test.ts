@@ -1,7 +1,8 @@
 import fc from 'fast-check'
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { parse, serialize } from './mdTree'
 import { extractTargets, injectMarkers, stripMarkers } from './linkMarkers'
+import { TASK_STATUSES } from './statusMarkers'
 import type { ZenNode } from '../types/tree'
 
 // 文本不含换行（标题/列表行内不可能有），其余字符不做限制以暴露边界。
@@ -485,4 +486,61 @@ test('zen→engine：tags 装配 data.tag；engine→zen 宽容回收（字符�
   // 非法形态宽容忽略（引擎其他 tag 源不受影响）
   const badForm = engineTreeToZen({ data: { text: 'n', tag: [1, 2] }, children: [] })
   expect(badForm.tree.tags).toBeUndefined()
+})
+
+// —— 看板模式：句尾 @status 标记（与 ::icon/#tag 同构）——parse 提取、serialize 注入、
+//    五态共存顺序 `文本 #tag ::icon @status ![alt](src)`、未知 @foo 保留为文本 ——
+describe('status 标记（看板模式）', () => {
+  test('parse 提取 @status 进字段、文本剥除', () => {
+    const r = parse('# 根\n## 任务A @doing\n## 任务B\n')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.tree.children[0]!.status).toBe('doing')
+    expect(r.tree.children[0]!.text).toBe('任务A')
+    expect(r.tree.children[1]!.status).toBeUndefined()
+  })
+
+  test('serialize 注入：status 无则不设、有则句尾 @status（icon 内侧 image 外侧）', () => {
+    expect(serialize({ text: '根', status: 'todo', children: [] })).toBe('# 根 @todo\n')
+    expect(
+      serialize({ text: 'A', children: [], icons: ['flag'], status: 'doing', image: { src: 'a.png', alt: '' } }),
+    ).toBe('# A ::flag @doing ![](a.png)\n')
+  })
+
+  test('roundtrip 恒等：五态 status 与 tag/icon/image 共存，序列化→parse 往返字段不丢', () => {
+    for (const status of TASK_STATUSES) {
+      const tree: ZenNode = {
+        text: '节点',
+        tags: ['采购'],
+        icons: ['flag'],
+        status,
+        image: { src: 'assets/x.png', alt: '配图' },
+        children: [],
+      }
+      const md = serialize(tree)
+      expect(md).toBe(`# 节点 #采购 ::flag @${status} ![配图](assets/x.png)\n`)
+      expect(parse(md)).toEqual({ ok: true, tree, ignoredBlocks: [] })
+    }
+  })
+
+  test('未知 @foo 保留为文本（roundtrip 恒等）', () => {
+    const r = parse('# 根 @foo\n')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.tree.text).toBe('根 @foo')
+    const tree: ZenNode = { text: '根 @foo', children: [] }
+    expect(parse(serialize(tree))).toEqual({ ok: true, tree, ignoredBlocks: [] })
+  })
+
+  test('列表层（深度≥7）status 标记 roundtrip 恒等', () => {
+    const deepLeaf = (status: string): ZenNode => {
+      let node: ZenNode = { text: 'item', status: status as ZenNode['status'], children: [] }
+      for (const t of ['f', 'e', 'd', 'c', 'b', 'a', 'r']) node = { text: t, children: [node] }
+      return node
+    }
+    const tree = deepLeaf('done')
+    const md = serialize(tree)
+    expect(md).toContain('- item @done\n')
+    expect(parse(md)).toEqual({ ok: true, tree, ignoredBlocks: [] })
+  })
 })

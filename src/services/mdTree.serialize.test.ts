@@ -79,3 +79,18 @@ describe('serialize linksByUid（M5d Task 2：序列化注入）', () => {
     expect(serialize(tree, new Map([['other', ['B']]]))).toBe('# 根\n\n## A\n')
   })
 })
+
+describe('serialize status（看板模式：句尾 @status 注入）', () => {
+  test('status 与 tag 共存：行尾固定顺序 `#tag @status`（tag 内侧 status 外侧）', () => {
+    const tree: ZenNode = { text: '买牛奶', tags: ['采购'], status: 'doing', children: [] }
+    expect(serialize(tree)).toBe('# 买牛奶 #采购 @doing\n')
+  })
+
+  test('列表项同样注入；status 与连线标记共存时 @status 在 [[..]] 外侧', () => {
+    const deep = n('根', [n('a', [n('b', [n('c', [n('d', [n('e', [n('f', [n('item')])])])])])])])
+    const item = deep.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!.children[0]!
+    item.status = 'blocked'
+    item.uid = 'u9'
+    expect(serialize(deep, new Map([['u9', ['X']]]))).toContain('  - item [[X]] @blocked\n')
+  })
+})

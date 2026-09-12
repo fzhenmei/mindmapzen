@@ -143,4 +143,35 @@ describe('parse', () => {
     expect(r.ignoredBlocks).toEqual([{ type: 'paragraph', excerpt: '前置段落' }])
     expect(r.tree.body).toBe('| a | b |\n| --- | --- |\n| 1 | 2 |')
   })
+
+  // ---- 看板模式:句尾 @status 标记提取(与 ::icon/#tag 同构) ----
+  test('状态标记:句尾 @status 提取进 status 字段,文本剥除(标题与列表项同口径)', () => {
+    const r = parse('# 根 @todo\n\n## 任务A @doing\n\n- 项 @blocked\n')
+    expect(r.ok && r.tree.status).toBe('todo')
+    expect(r.ok && r.tree.text).toBe('根')
+    expect(r.ok && r.tree.children[0].status).toBe('doing')
+    expect(r.ok && r.tree.children[0].text).toBe('任务A')
+    expect(r.ok && r.tree.children[0].children![0].status).toBe('blocked')
+    expect(r.ok && r.tree.children[0].children![0].text).toBe('项')
+  })
+
+  test('状态标记:五态白名单全覆盖,无状态字段不设', () => {
+    const r = parse('# 根\n\n- a @todo\n- b @doing\n- c @blocked\n- d @done\n- e @dropped\n- f\n')
+    expect(r.ok && r.tree.children.map((c) => c.status)).toEqual([
+      'todo',
+      'doing',
+      'blocked',
+      'done',
+      'dropped',
+      undefined,
+    ])
+  })
+
+  test('状态标记:句中 @ 不受影响,仅行尾白名单词构成标记;未知 @foo 保留为文本', () => {
+    const r = parse('# 提 @doing 问 @todo\n\n## 备注 @foo\n')
+    expect(r.ok && r.tree.status).toBe('todo') // 多个只认最后一个
+    expect(r.ok && r.tree.text).toBe('提 @doing 问')
+    expect(r.ok && r.tree.children[0].status).toBeUndefined()
+    expect(r.ok && r.tree.children[0].text).toBe('备注 @foo')
+  })
 })

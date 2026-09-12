@@ -5,6 +5,7 @@ import { extractTargets, injectMarkers } from './linkMarkers'
 import { extractIconMarkers, injectIconMarkers, stripIconMarkers } from './iconMarkers'
 import { extractTagMarkers, injectTagMarkers, stripTagMarkers } from './tagMarkers'
 import { extractImageMarker, injectImageMarker, stripImageMarker } from './imageMarkers'
+import { extractStatusMarker, injectStatusMarker, stripStatusMarkers } from './statusMarkers'
 import type { IgnoredBlock, ParseResult, ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -43,9 +44,10 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   const lines: string[] = []
 
   /** 序列化文本：查注册表注入句尾连线标记（显示层剥离的净化语义下，md 仍是连线唯一事实源）；
-   *  标签（#tag）、图标（M18 ::name）与插图（M19 ![alt](src)）同口径句尾注入，行尾固定
-   *  顺序 `文本 [[链接]] #tag ::icon ![alt](src)`（图片最尾；tag 在 icon 内侧——剥除序
-   *  image → icon → tag 与注入序严格互逆） */
+   *  标签（#tag）、图标（M18 ::name）、状态（看板 @status）与插图（M19 ![alt](src)）同口径
+   *  句尾注入，行尾固定顺序 `文本 [[链接]] #tag ::icon @status ![alt](src)`（图片最尾；
+   *  tag 在 icon 内侧、status 在 icon 外侧 image 内侧——剥除序 image → status → icon → tag
+   *  与注入序严格互逆） */
   function textOf(node: ZenNode): string {
     const targets = node.uid !== undefined ? linksByUid?.get(node.uid) : undefined
     let text = node.text
@@ -55,7 +57,7 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
       if (missing.length > 0) text = injectMarkers(text, missing)
     }
     return injectImageMarker(
-      injectIconMarkers(injectTagMarkers(text, node.tags ?? []), node.icons ?? []),
+      injectStatusMarker(injectIconMarkers(injectTagMarkers(text, node.tags ?? []), node.icons ?? []), node.status ?? null),
       node.image ?? null,
     )
   }
@@ -140,17 +142,21 @@ function listItemText(md: string, item: MNode): string {
   )
 }
 
-/** 建节点（M18 图标 / M19 插图 / 标签）：行尾标记提取进结构化字段（文本剥离、序列化注入
- *  互逆）；行尾约定顺序：`文本 #tag ::icon ![alt](src)`（图片最尾）；无标记快速路径零开销 */
+/** 建节点（M18 图标 / M19 插图 / 标签 / 看板状态）：行尾标记提取进结构化字段（文本剥离、
+ *  序列化注入互逆）；行尾约定顺序：`文本 #tag ::icon @status ![alt](src)`（图片最尾）；
+ *  剥除链 image → status → icon → tag 与注入序严格互逆；无标记快速路径零开销 */
 function makeNode(raw: string): ZenNode {
   const image = extractImageMarker(raw)
   const stripped = stripImageMarker(raw)
-  const icons = extractIconMarkers(stripped)
-  const noIcons = stripIconMarkers(stripped)
+  const status = extractStatusMarker(stripped)
+  const noStatus = stripStatusMarkers(stripped)
+  const icons = extractIconMarkers(noStatus)
+  const noIcons = stripIconMarkers(noStatus)
   const tags = extractTagMarkers(noIcons)
   const node: ZenNode = { text: stripTagMarkers(noIcons), children: [] }
   if (icons.length > 0) node.icons = icons
   if (tags.length > 0) node.tags = tags
+  if (status !== null) node.status = status
   if (image !== null) node.image = image
   return node
 }
