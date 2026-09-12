@@ -65,3 +65,55 @@ export function expandToUid(mm: MindMapHandle, uid: string): boolean {
   if (expanded) safeReRender(mm)
   return expanded
 }
+
+/** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
+ *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环） */
+const RENDER_RETRY_MAX = 3
+
+/** 渲染节点寻址落命令（2026-09 审查 Important-2 自 KanbanView.withRenderNode 提升，
+ *  KanbanView 三操作与 useIconPicker/useTagPicker 桥接同用）：渲染树命中即同步落命令；
+ *  miss 时先 expandToUid 展开数据树上的收起祖先（expand 直写不进 undo——视图导航
+ *  豁免，见 expandToUid 注释），经 node_tree_render_end 回调在新树上重试。重试有限次：
+ *  safeReRender 在「引擎渲染中」场景会先排一轮重渲（其回调先于本回调执行），首轮事件
+ *  时新树可能未建，miss 则重挂等待下一轮。数据树也无此 uid（垃圾 uid）时 console.error
+ *  显式出口。回调内自兜 try/catch：引擎事件回调的异常运行时只静默吞（无框架兜底）。
+ *  模块依赖注：本模块 import findByUid（hooks/useIconPicker），useIconPicker/useTagPicker
+ *  反向 import 本函数——ESM 循环但两侧顶层互不取值（均为函数体内调用），安全 */
+export function execOnRenderNode(
+  mm: MindMapHandle | null,
+  uid: string,
+  label: string,
+  apply: (node: unknown) => void,
+): void {
+  if (mm === null) return
+  const found = mm.renderer?.findNodeByUid(uid)
+  if (found !== null && found !== undefined) {
+    apply(found)
+    return
+  }
+  if (!expandToUid(mm, uid)) {
+    console.error(`${label}失败：数据树中无此节点`, uid)
+    return
+  }
+  let tries = 0
+  const onEnd = (): void => {
+    mm.off('node_tree_render_end', onEnd)
+    try {
+      const node = mm.renderer?.findNodeByUid(uid)
+      if (node === null || node === undefined) {
+        if (tries < RENDER_RETRY_MAX) {
+          tries += 1
+          mm.on('node_tree_render_end', onEnd)
+          return
+        }
+        console.error(`${label}失败：展开重渲后仍未找到渲染节点`, uid)
+        return
+      }
+      apply(node)
+    } catch (e) {
+      // 引擎事件回调内的异常运行时只静默吞（无框架兜底），自兜留痕
+      console.error(`${label}回调失败`, e)
+    }
+  }
+  mm.on('node_tree_render_end', onEnd)
+}

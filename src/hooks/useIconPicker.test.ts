@@ -16,6 +16,8 @@ test('useIconPicker.apply：覆写用户图标保留现有状态徽章（徽章�
   const execCommandIcon = vi.fn()
   const mm = {
     getData: () => ({ data: { text: 'n', uid: 'u1', icon: ['zen_status-doing', 'zen_flag'] }, children: [] }),
+    // apply 落命令走渲染节点寻址（审查 Important-2）：渲染树命中即同步落
+    renderer: { findNodeByUid: () => ({}) },
     execCommandIcon,
   } as unknown as MindMapHandle
   const mmRef = { current: mm } as RefObject<MindMapHandle | null>
@@ -34,6 +36,7 @@ test('useIconPicker.apply：无徽章节点覆写为纯用户图标（既有行�
   const execCommandIcon = vi.fn()
   const mm = {
     getData: () => ({ data: { text: 'n', uid: 'u1', icon: ['zen_flag'] }, children: [] }),
+    renderer: { findNodeByUid: () => ({}) },
     execCommandIcon,
   } as unknown as MindMapHandle
   const mmRef = { current: mm } as RefObject<MindMapHandle | null>
@@ -52,6 +55,7 @@ test('useIconPicker.openPicker 显式 uid（看板桥接）：apply 落卡片节
   const mm = {
     // 徽章读取路径的数据树（无 icon → 无徽章，断言只看落点 uid）
     getData: () => ({ data: { text: '根', uid: 'root' }, children: [] }),
+    renderer: { findNodeByUid: () => ({}) },
     execCommandIcon,
   } as unknown as MindMapHandle
   const mmRef = { current: mm } as RefObject<MindMapHandle | null>
@@ -65,4 +69,38 @@ test('useIconPicker.openPicker 显式 uid（看板桥接）：apply 落卡片节
   act(() => result.current.openPicker('画布选中', [])) // 缺省路径：快照画布选中 uid
   act(() => result.current.apply(['flag'], []))
   expect(execCommandIcon).toHaveBeenCalledWith('u1', ['zen_flag'])
+})
+
+test('useIconPicker.apply：收起分支卡片渲染树 miss → 展开祖先 + 渲染完成回调后落命令（审查 Important-2）', () => {
+  // 树：root > grp(expand=false) > card(u2)。grp 收起时 card 不在渲染树——旧实现直接
+  // execCommandIcon（内部 findNodeByUid 落空）静默 no-op 且误置脏；修复后先展开再落
+  const card = { data: { text: '卡片', uid: 'u2', icon: ['zen_status-todo'] }, children: [] }
+  const grp = { data: { text: '分组', uid: 'g', expand: false }, children: [card] }
+  const root = { data: { text: '根', uid: 'r' }, children: [grp] }
+  const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
+  const execCommandIcon = vi.fn()
+  const mm = {
+    getData: () => root,
+    on: (ev: string, cb: (...a: unknown[]) => void) => {
+      listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
+    },
+    off: vi.fn(),
+    // grp 收起时渲染树不含 u2；展开（重渲完成）后可寻址
+    renderer: { findNodeByUid: (uid: string): unknown => (uid === 'u2' && grp.data.expand !== false ? {} : null) },
+    execCommandIcon,
+  } as unknown as MindMapHandle
+  const mmRef = { current: mm } as RefObject<MindMapHandle | null>
+  const uidRef = { current: null } as RefObject<string | null> // 画布无选中：纯桥接路径
+  const onDataChanged = vi.fn()
+
+  const { result } = renderHook(() => useIconPicker(mmRef, uidRef, onDataChanged))
+  act(() => result.current.openPicker('卡片', [], 'u2'))
+  act(() => result.current.apply(['star'], []))
+  expect(grp.data.expand).toBe(true) // 祖先直写展开（视图导航豁免，不进 undo）
+  expect(execCommandIcon).not.toHaveBeenCalled() // 命令不即刻落：等渲染完成回调
+  expect(onDataChanged).not.toHaveBeenCalled() // 未落命令不置脏
+  for (const cb of listeners.get('node_tree_render_end') ?? []) cb()
+  // 徽章互保在延迟路径同样成立：zen_status-todo 置前 + 新选用户图标
+  expect(execCommandIcon).toHaveBeenCalledWith('u2', ['zen_status-todo', 'zen_star'])
+  expect(onDataChanged).toHaveBeenCalledTimes(1)
 })

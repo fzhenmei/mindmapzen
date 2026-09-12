@@ -4,8 +4,10 @@
 // 纪律：命令入 undo 历史、回调触发保存链置脏）；卡片集经 data_change 订阅全量
 // 重投影（自身命令也触发，幂等无碍）。
 // 浮层期画布不卸载不 resize（WebView2 0×0 污染防护）：absolute inset-0 z-20 不透明
-// 覆盖，挂载即夺 body 焦点使引擎快捷键失活（keyCommand.defaultEnableCheck 只认
-// body 焦点，画布键盘被看板接管）。
+// 覆盖，挂载即夺 body 焦点使引擎快捷键层失活（keyCommand.defaultEnableCheck 只认
+// body 焦点）。宿主 window 兜底层（MindMapCanvas.onKeydown）按 viewMode 门禁：看板态
+// Tab/Enter/Delete 译件短路（不放行打进被遮画布），撤销兜底（Ctrl+Z/y）除外——看板内
+// 撤销靠它（engineKeyboard.handleCanvasFallbackKey）。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RefObject } from 'react'
@@ -13,7 +15,7 @@ import type { MindMapHandle } from '../types/engine'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { buildKanbanCards, type KanbanCard as KanbanCardData } from '../services/kanban'
 import { engineTreeToZen } from '../services/mdTree'
-import { expandToUid, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
 import { IconWinClose } from '../components/icons'
@@ -32,10 +34,6 @@ export interface KanbanViewProps {
   onLocate(uid: string): void
   onClose(): void
 }
-
-/** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
- *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环） */
-const RENDER_RETRY_MAX = 3
 
 export default function KanbanView({
   mmRef, onDataChanged, onOpenBody, onEditIcons, onEditTags, onLocate, onClose,
@@ -70,46 +68,12 @@ export default function KanbanView({
     rootRef.current?.focus()
   }, [])
 
-  /** 渲染节点寻址（收起分支任务的常规可达路径）：渲染树命中即同步应用；miss 时先
-   *  expandToUid 展开数据树上的收起祖先（expand 直写不进 undo——视图导航豁免，见
-   *  statusOps.expandToUid 注释），经 node_tree_render_end 回调在新树上重试。重试
-   *  有限次：safeReRender 在「引擎渲染中」场景会先排一轮重渲（其回调先于本回调执行），
-   *  首轮事件时新树可能未建，miss 则重挂等待下一轮。数据树也无此 uid（垃圾 uid）
-   *  时 console.error 显式出口。 */
+  /** 渲染节点寻址（收起分支任务的常规可达路径）：共享实现在 statusOps.execOnRenderNode
+   *  （2026-09 审查 Important-2 提升——useIconPicker/useTagPicker 桥接同款路径），此处
+   *  薄包 mmRef；语义注释（展开豁免/有限重试/显式出口）见该函数 */
   const withRenderNode = useCallback(
     (uid: string, label: string, apply: (node: unknown) => void): void => {
-      const mm = mmRef.current
-      if (mm === null) return
-      const found = mm.renderer?.findNodeByUid(uid)
-      if (found !== null && found !== undefined) {
-        apply(found)
-        return
-      }
-      if (!expandToUid(mm, uid)) {
-        console.error(`看板${label}失败：数据树中无此节点`, uid)
-        return
-      }
-      let tries = 0
-      const onEnd = (): void => {
-        mm.off('node_tree_render_end', onEnd)
-        try {
-          const node = mm.renderer?.findNodeByUid(uid)
-          if (node === null || node === undefined) {
-            if (tries < RENDER_RETRY_MAX) {
-              tries += 1
-              mm.on('node_tree_render_end', onEnd)
-              return
-            }
-            console.error(`看板${label}失败：展开重渲后仍未找到渲染节点`, uid)
-            return
-          }
-          apply(node)
-        } catch (e) {
-          // 引擎事件回调内的异常运行时只静默吞（无框架兜底），自兜留痕
-          console.error(`看板${label}回调失败`, e)
-        }
-      }
-      mm.on('node_tree_render_end', onEnd)
+      execOnRenderNode(mmRef.current, uid, label, apply)
     },
     [mmRef],
   )

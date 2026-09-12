@@ -5,6 +5,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import { collectTags } from '../services/mdTree'
+import { execOnRenderNode } from '../services/statusOps'
 import { findByUid } from './useIconPicker'
 
 /** 选中节点现有标签（data.tag 两形态宽容收集；无返回空数组） */
@@ -67,9 +68,13 @@ export function useTagPicker(
       const uid = targetUidRef.current
       setOpen(false)
       if (mm === null || uid === null) return
-      // SET_NODE_TAG 整组覆写：空数组即移除全部标签
-      mm.execCommandTag?.(uid, [...next])
-      onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      // SET_NODE_TAG 整组覆写：空数组即移除全部标签。落命令经渲染节点寻址
+      // （2026-09 审查 Important-2）：收起分支卡片渲染树 miss 时 execCommandTag 内部
+      // 寻址落空即静默 no-op，且 onDataChanged 会误置脏——先展开再于渲染完成回调落命令
+      execOnRenderNode(mm, uid, '改标签', () => {
+        mm.execCommandTag?.(uid, [...next])
+        onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      })
     },
     [mmRef, onDataChanged],
   )

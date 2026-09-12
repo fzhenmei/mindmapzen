@@ -5,6 +5,7 @@
 // 无载荷 onDataChanged 触发保存链（与连线桥接同款：md 句尾 ::name 是唯一事实源）
 import { useCallback, useRef, useState } from 'react'
 import type { EngineNode, MindMapHandle } from '../types/engine'
+import { execOnRenderNode } from '../services/statusOps'
 
 /** 按引擎整树深找 uid 命中节点（getData 快照 DFS；uid 唯一，首中即返）——
  *  导出供 useTagPicker 等同构选择器复用 */
@@ -95,8 +96,14 @@ export function useIconPicker(
           )
         : []
       const icons = [...badges, ...names.map((n) => `zen_${n}`)]
-      mm.execCommandIcon?.(uid, icons)
-      onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      // 落命令经渲染节点寻址（2026-09 审查 Important-2）：收起分支卡片渲染树 miss 时
+      // execCommandIcon 内部寻址落空即静默 no-op，且 onDataChanged 会误置脏——先展开
+      // （expand 直写不进 undo，视图导航豁免）经渲染完成回调再落命令；onDataChanged
+      // 只在命令真正落的分支调用
+      execOnRenderNode(mm, uid, '改图标', () => {
+        mm.execCommandIcon?.(uid, icons)
+        onDataChanged() // 无载荷=必有变化：置脏 + 自动保存链
+      })
     },
     [mmRef, onDataChanged],
   )
