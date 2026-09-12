@@ -119,6 +119,14 @@ export default function KanbanView({
     [mmRef, withRenderNode, onDataChanged],
   )
 
+  /** 批量归档 done 列（2026-09 看板治理 spec §2.3）：逐卡走 changeStatus——每卡恰一条
+   *  SET_NODE_ICON 命令，undo 逐卡回退（spec §2.4 兜底口径：引擎命令历史按条入栈无
+   *  分组事务，不自造合并管线）；空列天然 no-op。收起分支卡的展开豁免与挂起窗限制
+   *  同单卡路径（台账：同分支第二卡或丢可重试） */
+  const archiveAllDone = useCallback(() => {
+    cards.filter((c) => c.status === 'done').forEach((c) => changeStatus(c.uid, 'archived'))
+  }, [cards, changeStatus])
+
   /** 改文本：渲染节点 setText（SET_NODE_TEXT 命令，入历史）；收起分支经展开后落命令 */
   const changeText = useCallback(
     (uid: string, text: string) => {
@@ -235,6 +243,7 @@ export default function KanbanView({
             status={s}
             cards={cards.filter((c) => c.status === s && matchesFilter(c, filterText))}
             filterActive={filterActive}
+            onArchiveAll={s === 'done' ? archiveAllDone : undefined}
             onStatusChange={changeStatus}
             onTextChange={changeText}
             onDelete={deleteCard}

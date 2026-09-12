@@ -164,6 +164,7 @@ export default {
     filterPlaceholder: '过滤任务（标题 / 路径 / 标签）',
     filterEmpty: '无匹配任务',
     collapseArchive: '收起归档列',
+    archiveAll: '归档全部完成',
     addPlaceholder: '输入任务名，回车添加',
     menu: {
       toStatus: '改状态',

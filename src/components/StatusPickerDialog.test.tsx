@@ -19,7 +19,7 @@ describe('StatusPickerDialog（节点状态选择器）', () => {
     expect(screen.getByTestId('status-dialog')).toBeInTheDocument()
     expect(screen.getByText('修滚动条')).toBeInTheDocument()
     // 五态文案来自 kanban.status.* 词典（与看板列头同源）
-    for (const label of ['待办', '进行中', '受阻', '完成', '放弃']) {
+    for (const label of ['待办', '进行中', '受阻', '完成', '放弃', '归档']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
     // 当前态 doing 高亮（选中态环），未选项无

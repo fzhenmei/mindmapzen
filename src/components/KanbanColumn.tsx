@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import type { KanbanCard as KanbanCardData } from '../services/kanban'
 import type { TaskStatus } from '../services/statusMarkers'
 import KanbanCard, { type KanbanCardProps } from './KanbanCard'
-import { IconChevronRight } from './icons'
+import { IconArchive, IconChevronRight } from './icons'
 
 /** 五态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
  *  StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态选择器与列头视觉同源） */
@@ -31,9 +31,11 @@ interface Props extends Omit<KanbanCardProps, 'card'> {
   filterActive?: boolean
   /** 归档列收起（2026-09 看板治理）：仅归档列传入——列头收起钮回落看板收起条 */
   onCollapse?(): void
+  /** done 列批量归档（2026-09 看板治理 spec §2.3）：仅 done 列传入 */
+  onArchiveAll?(): void
 }
 
-export default function KanbanColumn({ status, cards, onAdd, filterActive = false, onCollapse, ...cardCallbacks }: Readonly<Props>) {
+export default function KanbanColumn({ status, cards, onAdd, filterActive = false, onCollapse, onArchiveAll, ...cardCallbacks }: Readonly<Props>) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -113,6 +115,18 @@ export default function KanbanColumn({ status, cards, onAdd, filterActive = fals
         >
           {t(`editor.kanban.status.${status}`)}
         </h3>
+        {onArchiveAll !== undefined && (
+          <button
+            type="button"
+            data-testid="btn-kanban-archive-all"
+            title={t('editor.kanban.archiveAll')}
+            aria-label={t('editor.kanban.archiveAll')}
+            onClick={onArchiveAll}
+            className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <IconArchive size={12} />
+          </button>
+        )}
         {onCollapse !== undefined && (
           <button
             type="button"

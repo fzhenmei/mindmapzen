@@ -576,4 +576,40 @@ describe('KanbanView（看板模式浮层）', () => {
     fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '' } })
     expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
   })
+
+  test('批量归档：done 列头按钮逐卡合成 archived 徽章（用户图标保留）、非 done 卡不动', () => {
+    const d1: FakeNode = {
+      data: { text: '完成甲', uid: 'd1', icon: ['zen_status-done', 'zen_flag'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const d2: FakeNode = { data: { text: '完成乙', uid: 'd2', icon: ['zen_status-done'] }, children: [], setIcon: vi.fn() }
+    const t1: FakeNode = { data: { text: '进行中', uid: 't1', icon: ['zen_status-doing'] }, children: [], setIcon: vi.fn() }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, d1, d2] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: {
+        findNodeByUid: (uid: string): FakeNode | null =>
+          uid === 'r' ? root : uid === 't1' ? t1 : uid === 'd1' ? d1 : uid === 'd2' ? d2 : null,
+      },
+      execCommand: vi.fn(),
+    }
+    const { props } = renderKanban(mm as unknown as MindMapHandle)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    // 逐卡恰一条命令（spec §2.4：undo 逐卡回退的已知取舍）；徽章互保合成（用户图标保留）
+    expect(d1.setIcon).toHaveBeenCalledWith(['zen_status-archived', 'zen_flag'])
+    expect(d2.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(t1.setIcon).not.toHaveBeenCalled()
+    expect(props.onDataChanged).toHaveBeenCalledTimes(2)
+  })
+
+  test('批量归档空列 no-op：无 done 卡时不产生命令不置脏', () => {
+    const { mm, t1 } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    expect(t1.setIcon).not.toHaveBeenCalled()
+    expect(props.onDataChanged).not.toHaveBeenCalled()
+  })
 })
