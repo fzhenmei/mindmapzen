@@ -3,7 +3,7 @@ import { buildKanbanCards, truncateCardSubtree } from './kanban'
 import type { ZenNode } from '../types/tree'
 
 describe('buildKanbanCards（树 → 卡片集）', () => {
-  test('有 status 才进看板；树序输出；path 是父链（不含根与自身）', () => {
+  test('有 status 才进看板；未分组置顶、分支卡树序在后；path 是父链（不含根与自身）', () => {
     const root = {
       text: '项目', uid: 'r', children: [
         { text: '引擎', uid: 'e', children: [
@@ -15,8 +15,9 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     }
     const cards = buildKanbanCards(root as unknown as ZenNode)
     expect(cards).toHaveLength(2)
-    expect(cards[0]).toMatchObject({ uid: 't1', text: '修滚动条', status: 'doing', path: ['引擎'] })
-    expect(cards[1]).toMatchObject({ uid: 't3', text: '根下直挂', status: 'todo', path: [] })
+    // 2026-09 看板治理 spec §3：未分组（收件箱）卡提前——列底新增挂根下不再沉底
+    expect(cards[0]).toMatchObject({ uid: 't3', text: '根下直挂', status: 'todo', path: [] })
+    expect(cards[1]).toMatchObject({ uid: 't1', text: '修滚动条', status: 'doing', path: ['引擎'] })
   })
 
   test('卡片携带 icons/tags/hasBody；根节点自身带 status 也进（中心主题可为任务）', () => {
@@ -101,6 +102,25 @@ describe('buildKanbanCards（树 → 卡片集）', () => {
     expect(a).toMatchObject({ uid: 'a', childCount: 1, outline: [{ uid: 'c', text: '说明C', depth: 0 }] })
     // 子任务B独立成卡，其无状态后代入 B 卡
     expect(b).toMatchObject({ uid: 'b', status: 'todo', childCount: 1, outline: [{ uid: 'b1', text: 'B1', depth: 0 }] })
+  })
+
+  test('未分组置顶（2026-09 看板治理）：收件箱卡列内最前，分支卡按树序聚集其后', () => {
+    const root = {
+      text: '项目', uid: 'r', children: [
+        { text: '分支甲', uid: 'b1', children: [
+          { text: '甲任务1', uid: 'bt1', status: 'done', children: [] },
+          { text: '甲任务2', uid: 'bt2', status: 'done', children: [] },
+        ] },
+        { text: '收件箱老任务', uid: 'inbox1', status: 'done', children: [] },
+        { text: '分支乙', uid: 'b2', children: [
+          { text: '乙任务', uid: 'bt3', status: 'done', children: [] },
+        ] },
+        { text: '收件箱新任务', uid: 'inbox2', status: 'done', children: [] },
+      ],
+    }
+    const cards = buildKanbanCards(root as unknown as ZenNode)
+    // 全部 done 同列：收件箱两张置前（树序），分支卡按 DFS 树序在后（同分支聚集）
+    expect(cards.map((c) => c.uid)).toEqual(['inbox1', 'inbox2', 'bt1', 'bt2', 'bt3'])
   })
 })
 

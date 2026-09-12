@@ -60,7 +60,12 @@ export function buildKanbanCards(root: ZenNode): KanbanCard[] {
     for (const c of node.children) walk(c, childPath)
   }
   walk(root, [])
-  return out
+  // 未分组置顶（2026-09 看板治理 spec §3）：列底新增挂根下、树序垫底不可见——收件箱卡
+  // （path 空）stable 提前，其余保树序（同分支聚集）；列 filter 保序 → 各列「未分组
+  // 在最前」。outline/childCount 与复制剪枝不消费输出序，此处重排零外溢
+  const ungrouped = out.filter((c) => c.path.length === 0)
+  if (ungrouped.length === 0) return out
+  return [...ungrouped, ...out.filter((c) => c.path.length > 0)]
 }
 
 /** 卡片复制范围剪枝（就地、返回原引用便于链式）：带 status 的后代连同其后代整枝剪掉
