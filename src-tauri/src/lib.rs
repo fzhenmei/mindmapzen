@@ -137,6 +137,17 @@ pub fn run() {
                 let _ = win.set_focus();
             }
         }))
+        // 窗口状态记忆：自动保存/恢复位置、尺寸、最大化状态（见 Cargo.toml 注释）。
+        // state_flags 去掉 VISIBLE：窗口以 visible:false 创建，插件不抢跑 show，
+        // 由 setup 在状态恢复 / 首次最大化后统一显示（防 800×600→最大化闪变）
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
@@ -150,6 +161,24 @@ pub fn run() {
                 let _ = win.set_icon(img); // 失败不阻断启动（图标缺失仅视觉）
                 // 任务栏预览小窗的图标+标题依赖窗口属性（无边框自定义标题栏后系统标题栏
                 // 不存在，logo/品名由前端 TitleBar 呈现，此处的窗口图标/标题专供任务栏）
+
+                // 首次启动（插件无状态文件）：默认最大化。此后每次启动由插件恢复上次
+                // 关闭时的位置/尺寸/最大化态。路径与插件内部读写的 app_config_dir 一致，
+                // 判断失败（目录不可得）宁可放弃最大化也不阻断启动
+                let first_run = app
+                    .path()
+                    .app_config_dir()
+                    .map(|d| {
+                        !d.join(tauri_plugin_window_state::DEFAULT_FILENAME)
+                            .exists()
+                    })
+                    .unwrap_or(false);
+                if first_run {
+                    let _ = win.maximize();
+                }
+                // 此刻插件已恢复完状态（on_window_ready 早于 setup），统一显示+聚焦
+                let _ = win.show();
+                let _ = win.set_focus();
             }
             Ok(())
         })
