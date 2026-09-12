@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { stripImageMarker } from './imageMarkers'
 import { extractStatusMarker, hasStatusMarkers, injectStatusMarker, stripStatusMarkers, TASK_STATUSES } from './statusMarkers'
 
 describe('statusMarkers（句尾 @status 白名单标记）', () => {
@@ -11,7 +12,7 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
 
   test('未知 @xxx 视为普通文本：不提取、不剥除、roundtrip 恒等', () => {
     expect(hasStatusMarkers('邮箱 x@foo')).toBe(false)
-    expect(extractStatusMarker('自定义 @foo')).toBe(null)
+    expect(extractStatusMarker('自定义 @foo')).toBeNull()
     expect(stripStatusMarkers('自定义 @foo')).toBe('自定义 @foo')
   })
 
@@ -30,7 +31,12 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
     expect(injectStatusMarker('任务', null)).toBe('任务')
   })
 
-  test('与其他标记共存：@status 在 ::icon 之后、![alt](src) 之前被剥除', () => {
-    expect(stripStatusMarkers('任务 ::flag @doing ![x](a.png)')).toBe('任务 ::flag ![x](a.png)')
+  test('剥除顺序：image 先剥后 @status 到行尾可剥（makeNode 管道语义；::icon/tag 剥除是后续步骤）', () => {
+    expect(stripImageMarker('任务 ::flag @doing ![x](a.png)')).toBe('任务 ::flag @doing')
+    expect(stripStatusMarkers(stripImageMarker('任务 ::flag @doing ![x](a.png)'))).toBe('任务 ::flag')
+  })
+
+  test('句中 @status 是普通文本：strip 原样返回（防回归，不丢内容红线）', () => {
+    expect(stripStatusMarkers('提醒 @todo 下午')).toBe('提醒 @todo 下午')
   })
 })
