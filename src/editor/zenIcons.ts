@@ -101,7 +101,7 @@ export const CURATED_ICONS: Readonly<Record<string, string>> = Object.fromEntrie
 /** 状态徽章映射（看板模式）：status → 精选图标名。引擎 getNodeIconListIcon（svg/icons.js:288）
  *  按 name.split('_') 取 arr[0]=type、arr[1]=name 查找——保留名必须 kebab（'zen_status-doing'
  *  恰拆 ['zen','status-doing'] 两段；下划线形态 'zen_status_doing' 会拆出 name='status' 永不命中），
- *  data.icon 元素 'zen_status-<s>'，下方静态注册五项 name 'status-<s>' */
+ *  data.icon 元素 'zen_status-<s>'，下方静态注册六项 name 'status-<s>' */
 export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
   todo: 'circle', doing: 'clock', blocked: 'alert-triangle', done: 'check', dropped: 'x',
   archived: 'archive',
@@ -109,7 +109,7 @@ export const STATUS_BADGE_ICON: Readonly<Record<TaskStatus, string>> = {
 
 /** 引擎 iconList 项（构造 opts.iconList 用；运行时新增图标直接 push 同结构项）。
  *  2026-09-06 备注合并：zen_body 内部保留名退役（「有正文」角标由镜像 data.note 驱动
- *  引擎原生通道，不再借道 iconList 静态注册）；2026-09 看板模式：追加五态状态徽章
+ *  引擎原生通道，不再借道 iconList 静态注册）；2026-09 看板模式：追加六态状态徽章
  *  静态项（name status-<s>，data.icon 'zen_status-<s>' 命中），与用户精选图标同列 */
 export function toEngineIconList(): Array<{ type: string; list: Array<{ name: string; icon: string }> }> {
   return [

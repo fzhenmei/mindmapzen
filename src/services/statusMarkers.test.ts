@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { stripImageMarker } from './imageMarkers'
-import { extractStatusMarker, hasStatusMarkers, injectStatusMarker, stripStatusMarkers, TASK_STATUSES } from './statusMarkers'
+import { BOARD_STATUSES, extractStatusMarker, hasStatusMarkers, injectStatusMarker, stripStatusMarkers, TASK_STATUSES } from './statusMarkers'
 
 describe('statusMarkers（句尾 @status 白名单标记）', () => {
   test('六态白名单：todo/doing/blocked/done/dropped/archived', () => {
@@ -12,6 +12,9 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
     expect(extractStatusMarker('翻篇了 @archived')).toBe('archived')
     expect(stripStatusMarkers('翻篇了 @archived')).toBe('翻篇了')
     expect(injectStatusMarker('翻篇了', 'archived')).toBe('翻篇了 @archived')
+    // 派生契约（2026-09 看板治理）：看板五列 = 六态排除 archived——列循环依赖此序，
+    // 漏项/乱序/误含 archived 即测出
+    expect(BOARD_STATUSES).toEqual(['todo', 'doing', 'blocked', 'done', 'dropped'])
   })
 
   test('未知 @xxx 视为普通文本：不提取、不剥除、roundtrip 恒等', () => {

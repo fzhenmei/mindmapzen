@@ -11,7 +11,7 @@ import type { TaskStatus } from '../services/statusMarkers'
 import KanbanCard, { type KanbanCardProps } from './KanbanCard'
 import { IconArchive, IconChevronRight } from './icons'
 
-/** 五态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
+/** 六态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
  *  StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态选择器与列头视觉同源） */
 export const STATUS_DOT: Record<TaskStatus, string> = {
   todo: 'bg-muted-foreground/70',
