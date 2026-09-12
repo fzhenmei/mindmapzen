@@ -65,19 +65,20 @@ export default function KanbanColumn({ status, cards, onAdd, ...cardCallbacks }:
           {cards.length}
         </span>
       </header>
-      <div className="flex flex-col gap-2 overflow-y-auto">
+      {/* 卡片区原生列表语义（Sonar S6819：卡片 li 须挂 ul 下） */}
+      <ul className="flex list-none flex-col gap-2 overflow-y-auto">
         {cards.map((c) => (
           <KanbanCard key={c.uid} card={c} {...cardCallbacks} />
         ))}
         {cards.length === 0 && !adding && (
-          <p
+          <li
             data-testid={`kanban-empty-${status}`}
-            className="rounded-md border border-dashed p-2 text-center text-xs text-muted-foreground"
+            className="list-none rounded-md border border-dashed p-2 text-center text-xs text-muted-foreground"
           >
             {t('editor.kanban.emptyColumn')}
-          </p>
+          </li>
         )}
-      </div>
+      </ul>
       <footer>
         {adding ? (
           <input

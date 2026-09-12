@@ -13,7 +13,7 @@ import type { MindMapHandle } from '../types/engine'
 import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { buildKanbanCards, type KanbanCard as KanbanCardData } from '../services/kanban'
 import { engineTreeToZen } from '../services/mdTree'
-import { mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { expandToUid, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
 import { IconWinClose } from '../components/icons'
@@ -31,6 +31,10 @@ export interface KanbanViewProps {
   onLocate(uid: string): void
   onClose(): void
 }
+
+/** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
+ *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环） */
+const RENDER_RETRY_MAX = 3
 
 export default function KanbanView({
   mmRef, onDataChanged, onOpenBody, onEditIcons, onEditTags, onLocate, onClose,
@@ -65,40 +69,78 @@ export default function KanbanView({
     rootRef.current?.focus()
   }, [])
 
-  /** 改状态/清除：现值读数据树（findByUid 走 getData 快照，含收起隐藏子树——收起
-   *  分支的任务在看板上仍可改态）；写经宿主装配方法 execCommandIcon（按 uid 定位
-   *  渲染节点 → node.setIcon → SET_NODE_ICON 命令，入历史触发重渲），徽章互保合成
-   *  在 mergeStatusBadge（唯一合成点：滤旧徽章、新徽章置首、保留用户图标）。
-   *  同态短路：拖回原列/重选当前态不产生命令（不占 undo 一步、不置脏） */
+  /** 渲染节点寻址（收起分支任务的常规可达路径）：渲染树命中即同步应用；miss 时先
+   *  expandToUid 展开数据树上的收起祖先（expand 直写不进 undo——视图导航豁免，见
+   *  statusOps.expandToUid 注释），经 node_tree_render_end 回调在新树上重试。重试
+   *  有限次：safeReRender 在「引擎渲染中」场景会先排一轮重渲（其回调先于本回调执行），
+   *  首轮事件时新树可能未建，miss 则重挂等待下一轮。数据树也无此 uid（垃圾 uid）
+   *  时 console.error 显式出口。 */
+  const withRenderNode = useCallback(
+    (uid: string, label: string, apply: (node: unknown) => void): void => {
+      const mm = mmRef.current
+      if (mm === null) return
+      const found = mm.renderer?.findNodeByUid(uid)
+      if (found !== null && found !== undefined) {
+        apply(found)
+        return
+      }
+      if (!expandToUid(mm, uid)) {
+        console.error(`看板${label}失败：数据树中无此节点`, uid)
+        return
+      }
+      let tries = 0
+      const onEnd = (): void => {
+        mm.off('node_tree_render_end', onEnd)
+        try {
+          const node = mm.renderer?.findNodeByUid(uid)
+          if (node === null || node === undefined) {
+            if (tries < RENDER_RETRY_MAX) {
+              tries += 1
+              mm.on('node_tree_render_end', onEnd)
+              return
+            }
+            console.error(`看板${label}失败：展开重渲后仍未找到渲染节点`, uid)
+            return
+          }
+          apply(node)
+        } catch (e) {
+          // 引擎事件回调内的异常运行时只静默吞（无框架兜底），自兜留痕
+          console.error(`看板${label}回调失败`, e)
+        }
+      }
+      mm.on('node_tree_render_end', onEnd)
+    },
+    [mmRef],
+  )
+
+  /** 改状态/清除：读侧走数据树（findByUid 的 getData 快照含收起隐藏子树，收起分支
+   *  任务照常进板可读现值）；写侧经渲染节点 setIcon（SET_NODE_ICON 命令，入历史触发
+   *  重渲），徽章互保合成在 mergeStatusBadge（唯一合成点：滤旧徽章、新徽章置首、
+   *  保留用户图标）。收起分支任务经 expandToUid 展开后落命令（expand 直写不进 undo
+   *  是视图态豁免）。同态短路：拖回原列/重选当前态不产生命令（不占 undo 一步、不置脏） */
   const changeStatus = useCallback(
     (uid: string, status: TaskStatus | null) => {
       const mm = mmRef.current
       if (mm === null) return
       if (nodeStatusOf(mm, uid) === status) return
-      const current = findByUid(mm.getData(), uid)?.data.icon
-      mm.execCommandIcon?.(uid, mergeStatusBadge(current, status))
-      onDataChanged()
+      const icons = mergeStatusBadge(findByUid(mm.getData(), uid)?.data.icon, status)
+      withRenderNode(uid, '改状态', (node) => {
+        ;(node as { setIcon(icons: string[]): void }).setIcon(icons)
+        onDataChanged()
+      })
     },
-    [mmRef, onDataChanged],
+    [mmRef, withRenderNode, onDataChanged],
   )
 
-  /** 改文本：渲染节点 setText（SET_NODE_TEXT 命令，入历史） */
+  /** 改文本：渲染节点 setText（SET_NODE_TEXT 命令，入历史）；收起分支经展开后落命令 */
   const changeText = useCallback(
     (uid: string, text: string) => {
-      const mm = mmRef.current
-      if (mm === null) return
-      const node = mm.renderer?.findNodeByUid(uid) as
-        | { setText?(text: string): void }
-        | null
-        | undefined
-      if (node?.setText === undefined) {
-        console.error('看板改文本失败：渲染节点未找到', uid)
-        return
-      }
-      node.setText(text)
-      onDataChanged()
+      withRenderNode(uid, '改文本', (node) => {
+        ;(node as { setText(text: string): void }).setText(text)
+        onDataChanged()
+      })
     },
-    [mmRef, onDataChanged],
+    [withRenderNode, onDataChanged],
   )
 
   /** 列底新增（挂根、落列状态）。根 data.uid 恒存在——引擎 handleData
@@ -129,20 +171,17 @@ export default function KanbanView({
 
   /** 删除：REMOVE_NODE 接受 appointNodes 形参（Render.js:1413 removeNode(appointNodes)，
    *  formatDataToArray；isAppointNodes 分支 removeFromParentNodeData）——渲染节点直删，
-   *  入历史可撤销 */
+   *  入历史可撤销；收起分支经展开后落命令 */
   const deleteCard = useCallback(
     (uid: string) => {
-      const mm = mmRef.current
-      if (mm === null) return
-      const node = mm.renderer?.findNodeByUid(uid)
-      if (node === null || node === undefined) {
-        console.error('看板删除失败：渲染节点未找到', uid)
-        return
-      }
-      mm.execCommand('REMOVE_NODE', [node])
-      onDataChanged()
+      withRenderNode(uid, '删除', (node) => {
+        const mm = mmRef.current
+        if (mm === null) return
+        mm.execCommand('REMOVE_NODE', [node])
+        onDataChanged()
+      })
     },
-    [mmRef, onDataChanged],
+    [mmRef, withRenderNode, onDataChanged],
   )
 
   // 标签全集（used）：选择器候选复用口径——现役卡片标签去重

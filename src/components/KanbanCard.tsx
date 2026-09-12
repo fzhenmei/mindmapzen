@@ -57,9 +57,19 @@ export default function KanbanCard({
     [],
   )
 
+  /** 立即定位（键盘 Enter/Space 路径——无「双击编辑」歧义，不经判定窗）。
+   *  setTimeout/键盘回调的异常运行时静默吞（无框架兜底），自兜留痕 */
+  const locateNow = (): void => {
+    window.clearTimeout(locateTimerRef.current)
+    try {
+      onLocate(card.uid)
+    } catch (e) {
+      console.error('看板定位回调失败', e)
+    }
+  }
   const scheduleLocate = (): void => {
     window.clearTimeout(locateTimerRef.current)
-    locateTimerRef.current = window.setTimeout(() => onLocate(card.uid), LOCATE_DELAY_MS)
+    locateTimerRef.current = window.setTimeout(locateNow, LOCATE_DELAY_MS)
   }
   const cancelLocate = (): void => window.clearTimeout(locateTimerRef.current)
 
@@ -75,7 +85,8 @@ export default function KanbanCard({
     if (text !== '' && text !== card.text) onTextChange(card.uid, text)
   }
 
-  /** 删除二次确认：首点武装（3 秒回退），再点执行——零新组件 */
+  /** 删除二次确认：首点武装（3 秒回退，回退窗回调纯 setState——React 18 对已卸载组件
+   *  为无害 no-op，无异常可吞），再点执行——零新组件 */
   const requestDelete = (): void => {
     if (confirmingDel) {
       window.clearTimeout(delTimerRef.current)
@@ -88,13 +99,25 @@ export default function KanbanCard({
   }
 
   return (
-    <div
+    <li
       data-testid={`kanban-card-${card.uid}`}
       draggable={!editing}
       onDragStart={(e) => e.dataTransfer.setData('text/kanban-uid', card.uid)}
-      onClick={scheduleLocate}
+      onClick={editing ? undefined : scheduleLocate}
+      onKeyDown={
+        editing
+          ? undefined
+          : (e) => {
+              // 键盘激活等价单击定位（Sonar S1082：click 必须有键盘可达路径）
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                locateNow()
+              }
+            }
+      }
       title={t('editor.kanban.locate')}
-      className="cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm active:cursor-grabbing"
+      tabIndex={editing ? -1 : 0}
+      className="list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing"
     >
       {/* 父链（根下直挂 = 未分组）：卡片同名任务的归属线索 */}
       <p className="truncate text-[10px] leading-tight text-muted-foreground">
@@ -109,6 +132,7 @@ export default function KanbanCard({
               autoFocus
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
+                e.stopPropagation()
                 if (e.key === 'Enter') commitEdit()
                 else if (e.key === 'Escape') setEditing(false)
               }}
@@ -214,6 +238,6 @@ export default function KanbanCard({
           )}
         </div>
       )}
-    </div>
+    </li>
   )
 }

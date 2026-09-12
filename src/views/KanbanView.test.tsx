@@ -10,18 +10,24 @@ import type { MindMapHandle } from '../types/engine'
 // 全刷新回路；jsdom 无 DragEvent.dataTransfer，拖拽事件以 stub 注入。
 
 interface FakeNode {
-  data: { text: string; uid: string; icon?: string[]; body?: string }
+  data: { text: string; uid: string; icon?: string[]; body?: string; expand?: boolean }
   children: FakeNode[]
   setText?: ReturnType<typeof vi.fn>
+  setIcon?: ReturnType<typeof vi.fn>
 }
 
 function makeMm() {
   const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
-  // 卡片节点带状态徽章（kebab 形态）+ 用户图标 flag + 正文——转普通/落列/body 断言共用
+  // 卡片节点带状态徽章（kebab 形态）+ 用户图标 flag + 正文——转普通/落列/body 断言共用。
+  // setIcon 实写 data.icon：nodeStatusOf 同态短路（读数据树）与 data_change 重放的
+  // 刷新用例都依赖「命令落进了数据」的替身语义
   const t1: FakeNode = {
     data: { text: '修滚动条', uid: 't1', icon: ['zen_status-doing', 'zen_flag'], body: '正文内容' },
     children: [],
     setText: vi.fn(),
+    setIcon: vi.fn((icons: string[]) => {
+      t1.data.icon = icons
+    }),
   }
   const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1] }
   const mm = {
@@ -36,11 +42,6 @@ function makeMm() {
       findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : null),
     },
     execCommand: vi.fn(),
-    // 实写 data.icon：让 data_change 手动重放的刷新用例观察到状态迁移
-    execCommandIcon: vi.fn((uid: string, icons: string[]) => {
-      const node = uid === 'r' ? root : uid === 't1' ? t1 : null
-      if (node !== null) node.data.icon = icons
-    }),
   }
   return {
     mm: mm as unknown as MindMapHandle,
@@ -86,18 +87,18 @@ describe('KanbanView（看板模式浮层）', () => {
   })
 
   test('拖拽改状态：dragStart 写 uid 载荷，drop 到 done 列重合成徽章置首 + onDataChanged', () => {
-    const { mm } = makeMm()
+    const { mm, t1 } = makeMm()
     const { props } = renderKanban(mm)
     const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't1' : '') }
     fireEvent.dragStart(screen.getByTestId('kanban-card-t1'), { dataTransfer: dt })
     expect(dt.setData).toHaveBeenCalledWith('text/kanban-uid', 't1')
     fireEvent.drop(screen.getByTestId('kanban-col-done'), { dataTransfer: dt })
     // 徽章互保：旧徽章滤除、新徽章置首、用户图标 zen_flag 保留
-    expect(mm.execCommandIcon).toHaveBeenCalledWith('t1', ['zen_status-done', 'zen_flag'])
+    expect(t1.setIcon).toHaveBeenCalledWith(['zen_status-done', 'zen_flag'])
     expect(props.onDataChanged).toHaveBeenCalled()
     // 同态 no-op：stub 已实写 done，再落 done 列不产生第二条命令（不占 undo 一步）
     fireEvent.drop(screen.getByTestId('kanban-col-done'), { dataTransfer: dt })
-    expect(mm.execCommandIcon).toHaveBeenCalledTimes(1)
+    expect(t1.setIcon).toHaveBeenCalledTimes(1)
   })
 
   test('双击卡片文本内联编辑：回车提交 setText + onDataChanged', () => {
@@ -137,11 +138,11 @@ describe('KanbanView（看板模式浮层）', () => {
   })
 
   test('转为普通节点：清状态徽章、保留用户图标', async () => {
-    const { mm } = makeMm()
+    const { mm, t1 } = makeMm()
     const { props } = renderKanban(mm)
     fireEvent.pointerDown(screen.getByTestId('kanban-menu-t1'), { button: 0 })
     fireEvent.click(await screen.findByTestId('kanban-toplain-t1'))
-    expect(mm.execCommandIcon).toHaveBeenCalledWith('t1', ['zen_flag'])
+    expect(t1.setIcon).toHaveBeenCalledWith(['zen_flag'])
     expect(props.onDataChanged).toHaveBeenCalled()
   })
 
@@ -173,5 +174,60 @@ describe('KanbanView（看板模式浮层）', () => {
     unmount()
     const offCall = offMock.mock.calls.find(([ev]) => ev === 'data_change')?.[1]
     expect(offCall).toBe(registered)
+  })
+
+  test('drop 垃圾 uid（数据树无此节点）：console.error 显式出口，不落任何命令不置脏', () => {
+    const { mm, t1 } = makeMm()
+    const { props } = renderKanban(mm)
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 'ghost' : '') }
+    fireEvent.drop(screen.getByTestId('kanban-col-done'), { dataTransfer: dt })
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('数据树中无此节点'), 'ghost')
+    expect(t1.setIcon).not.toHaveBeenCalled()
+    expect(mm.execCommand).not.toHaveBeenCalled()
+    expect(props.onDataChanged).not.toHaveBeenCalled()
+    errSpy.mockRestore()
+  })
+
+  test('收起分支任务改状态：expandToUid 直写祖先 expand=true，渲染完成回调后落 setIcon', () => {
+    // 树：root > grp(expand=false) > t2(todo)。渲染树语义：收起分支子树不在渲染树，
+    // findNodeByUid(t2) 在 grp 展开前 miss——Important-1 修复路径
+    const t2: FakeNode = {
+      data: { text: '收起任务', uid: 't2', icon: ['zen_status-todo'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const grp: FakeNode = { data: { text: '分组', uid: 'g', expand: false }, children: [t2] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [grp] }
+    const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
+    const mm = {
+      getData: () => root,
+      on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
+      }),
+      off: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
+      }),
+      renderer: {
+        // grp 收起时 t2 不在渲染树；expand 直写 true 后（safeReRender 重渲）可寻址
+        findNodeByUid: (uid: string): FakeNode | null => {
+          if (uid === 'r') return root
+          if (uid === 't2') return grp.data.expand === false ? null : t2
+          return null
+        },
+      },
+      execCommand: vi.fn(),
+    }
+    const { props } = renderKanban(mm as unknown as MindMapHandle)
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 't2' : '') }
+    fireEvent.drop(screen.getByTestId('kanban-col-done'), { dataTransfer: dt })
+    // 祖先 expand 已直写 true（视图导航豁免：不进 undo，不产生引擎命令）
+    expect(grp.data.expand).toBe(true)
+    expect(mm.execCommand).not.toHaveBeenCalled()
+    // 命令不即刻落：等渲染完成事件后在新树上寻址
+    expect(t2.setIcon).not.toHaveBeenCalled()
+    for (const cb of listeners.get('node_tree_render_end') ?? []) cb()
+    expect(t2.setIcon).toHaveBeenCalledWith(['zen_status-done'])
+    expect(props.onDataChanged).toHaveBeenCalled()
   })
 })

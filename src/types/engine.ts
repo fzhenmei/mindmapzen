@@ -20,6 +20,10 @@ export interface NodeBox {
 export interface EngineRenderer {
   /** 按节点 uid 查渲染树节点实例（引擎 Render.js:2094）；未命中返回 null/undefined */
   findNodeByUid(uid: string): unknown
+  /** 渲染进行中标志（Render.js 构造置 false；doLayout 经 asyncRun 跨宏任务，期间为
+   *  true）——渲染中 reRender 重入是双树错乱根因，宿主重渲一律走 safeReRender
+   *  （zenIcons，ReRenderTarget.renderer 按此字段判定），引擎包类型未声明故可选 */
+  isRendering?: boolean
   /** 引擎文本编辑框：show 打开指定节点的编辑框（引擎 F2/双击同款路径，TextEdit.js:49/93）；
    *  hideEditTextBox 关闭并提交框内当前内容（TextEdit.js:475），未打开时为无害空操作 */
   textEdit: {
