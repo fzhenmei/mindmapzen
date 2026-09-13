@@ -55,8 +55,9 @@ test('useTagPicker.apply：收起分支卡片渲染树 miss → 展开祖先 + �
       listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
     },
     off: vi.fn(),
-    // grp 收起时渲染树不含 u2；展开（重渲完成）后可寻址
-    renderer: { findNodeByUid: (uid: string): unknown => (uid === 'u2' && grp.data.expand !== false ? {} : null) },
+    // grp 收起时渲染树不含 u2；展开（重渲完成）后可寻址。数据树挂 renderTree
+    // （引擎活树形态——getData 是深拷贝副本，直写不落引擎）
+    renderer: { renderTree: root, findNodeByUid: (uid: string): unknown => (uid === 'u2' && grp.data.expand !== false ? {} : null) },
     execCommandTag,
   } as unknown as MindMapHandle
   const mmRef = { current: mm } as RefObject<MindMapHandle | null>

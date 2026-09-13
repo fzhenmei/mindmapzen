@@ -11,7 +11,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 // 全刷新回路；jsdom 无 DragEvent.dataTransfer，拖拽事件以 stub 注入。
 
 interface FakeNode {
-  data: { text: string; uid: string; icon?: string[]; body?: string; expand?: boolean }
+  data: { text: string; uid: string; icon?: string[]; body?: string; expand?: boolean; tag?: unknown[] }
   children: FakeNode[]
   setText?: ReturnType<typeof vi.fn>
   setIcon?: ReturnType<typeof vi.fn>
@@ -36,7 +36,15 @@ function makeMm() {
       t1.data.icon = icons
     }),
   }
-  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1] }
+  // 归档卡（2026-09 看板治理）：archived 不进五列、收起条计数/展开/恢复拖拽断言共用
+  const ta: FakeNode = {
+    data: { text: '翻篇任务', uid: 'ta', icon: ['zen_status-archived'] },
+    children: [],
+    setIcon: vi.fn((icons: string[]) => {
+      ta.data.icon = icons
+    }),
+  }
+  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, ta] }
   const mm = {
     getData: () => root,
     on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
@@ -46,7 +54,7 @@ function makeMm() {
       listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
     }),
     renderer: {
-      findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : null),
+      findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : uid === 'ta' ? ta : null),
     },
     execCommand: vi.fn(),
   }
@@ -54,6 +62,7 @@ function makeMm() {
     mm: mm as unknown as MindMapHandle,
     root,
     t1,
+    ta,
     // mock 引用单出：mm 已断言成 MindMapHandle，接口类型下 .mock 不可达
     onMock: mm.on,
     offMock: mm.off,
@@ -377,7 +386,9 @@ describe('KanbanView（看板模式浮层）', () => {
         listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
       }),
       renderer: {
+        // 数据树挂 renderTree（引擎活树形态——getData 是深拷贝副本，直写不落引擎）；
         // grp 收起时 t2 不在渲染树；expand 直写 true 后（safeReRender 重渲）可寻址
+        renderTree: root,
         findNodeByUid: (uid: string): FakeNode | null => {
           if (uid === 'r') return root
           if (uid === 't2') return grp.data.expand === false ? null : t2
@@ -480,5 +491,178 @@ describe('KanbanView（看板模式浮层）', () => {
     const { props } = renderKanban(mm)
     fireEvent.keyDown(screen.getByTestId('kanban-card-t1'), { key: 'Escape' })
     expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('过滤：匹配标题保留、非匹配列空显示「无匹配任务」；清空恢复「暂无任务」', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    const input = screen.getByTestId('kanban-filter')
+    fireEvent.change(input, { target: { value: '滚动' } })
+    expect(screen.getByText('修滚动条')).toBeInTheDocument()
+    // doing 列命中非空；其余四列全空 → 过滤占位（区别于「暂无任务」）
+    expect(within(screen.getByTestId('kanban-col-todo')).getByText('无匹配任务')).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '' } })
+    expect(within(screen.getByTestId('kanban-col-todo')).getByText('暂无任务')).toBeInTheDocument()
+  })
+
+  test('过滤命中路径与标签（大小写不敏感）：父链名/标签文本均可命中', () => {
+    // 标签走引擎 data.tag（字符串数组形态，collectTags 收文本）——卡片.tags 由
+    // engineTreeToZen 还原；「zen」小写搜大写标签命中
+    const t9: FakeNode = { data: { text: '发布检查', uid: 't9', icon: ['zen_status-doing'], tag: ['Release'] }, children: [] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t9] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: { findNodeByUid: (): null => null },
+      execCommand: vi.fn(),
+    }
+    renderKanban(mm as unknown as MindMapHandle)
+    // 路径：t9 根下直挂无父链，先给标签命中断言
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: 'release' } })
+    expect(screen.getByText('发布检查')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '不存在词' } })
+    expect(screen.queryByText('发布检查')).not.toBeInTheDocument()
+  })
+
+  test('Esc 分层（过滤框）：非空 Esc 只清空不冒泡关板；已空 Esc 冒泡关板', () => {
+    const { mm } = makeMm()
+    const { props } = renderKanban(mm)
+    const input = screen.getByTestId('kanban-filter')
+    fireEvent.change(input, { target: { value: 'x' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input).toHaveValue('')
+    expect(props.onClose).not.toHaveBeenCalled()
+    // 已空：不再 stopPropagation，冒泡到看板根走关板（与列底新增同款分层协议）
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('归档卡不进五列：收起条在场带计数，未展开不可见（2026-09 看板治理）', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    expect(screen.getByTestId('kanban-archive-collapsed')).toHaveTextContent('1')
+    // 五列内无归档卡（列循环走 BOARD_STATUSES）
+    expect(screen.queryByText('翻篇任务')).not.toBeInTheDocument()
+  })
+
+  test('归档列展开/收起：点收起条展开成标准列，列头收起钮回落收起条', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    expect(screen.getByText('翻篇任务')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-collapse'))
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+    expect(screen.getByTestId('kanban-archive-collapsed')).toBeInTheDocument()
+  })
+
+  test('归档列拖出到 todo 列恢复：changeStatus 管线复用（徽章合成 + onDataChanged）', () => {
+    const { mm, ta } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 'ta' : '') }
+    fireEvent.dragStart(screen.getByTestId('kanban-card-ta'), { dataTransfer: dt })
+    fireEvent.drop(screen.getByTestId('kanban-col-todo'), { dataTransfer: dt })
+    expect(ta.setIcon).toHaveBeenCalledWith(['zen_status-todo'])
+    expect(props.onDataChanged).toHaveBeenCalled()
+  })
+
+  test('过滤联动归档列：过滤非空强制展开（未手动开）；清空回落收起（spec §4）', () => {
+    const { mm } = makeMm()
+    renderKanban(mm)
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '翻篇' } })
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    expect(screen.getByText('翻篇任务')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '' } })
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+  })
+
+  test('批量归档：done 列头按钮逐卡合成 archived 徽章（用户图标保留）、非 done 卡不动', () => {
+    const d1: FakeNode = {
+      data: { text: '完成甲', uid: 'd1', icon: ['zen_status-done', 'zen_flag'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const d2: FakeNode = { data: { text: '完成乙', uid: 'd2', icon: ['zen_status-done'] }, children: [], setIcon: vi.fn() }
+    const t1: FakeNode = { data: { text: '进行中', uid: 't1', icon: ['zen_status-doing'] }, children: [], setIcon: vi.fn() }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, d1, d2] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: {
+        findNodeByUid: (uid: string): FakeNode | null =>
+          uid === 'r' ? root : uid === 't1' ? t1 : uid === 'd1' ? d1 : uid === 'd2' ? d2 : null,
+      },
+      execCommand: vi.fn(),
+    }
+    const { props } = renderKanban(mm as unknown as MindMapHandle)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    // 逐卡恰一条命令（spec §2.4：undo 逐卡回退的已知取舍）；徽章互保合成（用户图标保留）
+    expect(d1.setIcon).toHaveBeenCalledWith(['zen_status-archived', 'zen_flag'])
+    expect(d2.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(t1.setIcon).not.toHaveBeenCalled()
+    expect(props.onDataChanged).toHaveBeenCalledTimes(2)
+  })
+
+  test('批量归档空列 no-op：无 done 卡时不产生命令不置脏', () => {
+    const { mm, t1 } = makeMm()
+    const { props } = renderKanban(mm)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    expect(t1.setIcon).not.toHaveBeenCalled()
+    expect(props.onDataChanged).not.toHaveBeenCalled()
+  })
+
+  test('批量归档收起分支回归钉：同分支两张 done 卡都落命令（2026-09 遗留卡 bug）', () => {
+    // 树：root > grp(expand=false) > d1/d2（done）。渲染树：grp 收起时两卡 miss，
+    // renderDone 翻转后才可寻址——批量 forEach 同步连发，第二张在重渲完成前寻址
+    // miss 且祖先已被第一张展开，旧实现误判垃圾 uid 丢弃（statusOps 单测同根因）
+    const d1: FakeNode = {
+      data: { text: '完成甲', uid: 'd1', icon: ['zen_status-done'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const d2: FakeNode = {
+      data: { text: '完成乙', uid: 'd2', icon: ['zen_status-done'] },
+      children: [],
+      setIcon: vi.fn(),
+    }
+    const grp: FakeNode = { data: { text: '分组', uid: 'g', expand: false }, children: [d1, d2] }
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [grp] }
+    const listeners = new Map<string, Array<(...a: unknown[]) => void>>()
+    let renderDone = false
+    const mm = {
+      getData: () => root,
+      on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, [...(listeners.get(ev) ?? []), cb])
+      }),
+      off: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
+        listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
+      }),
+      renderer: {
+        renderTree: root,
+        findNodeByUid: (uid: string): FakeNode | null => {
+          if (uid === 'r') return root
+          if (uid === 'g') return grp
+          if (renderDone && uid === 'd1') return d1
+          if (renderDone && uid === 'd2') return d2
+          return null
+        },
+      },
+      execCommand: vi.fn(),
+    }
+    const { props } = renderKanban(mm as unknown as MindMapHandle)
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-all'))
+    // 同步阶段：两卡都不落命令（渲染未完成），第一张已触发祖先直写展开
+    expect(grp.data.expand).toBe(true)
+    expect(d1.setIcon).not.toHaveBeenCalled()
+    // 渲染完成 → 两张挂起回调都落命令（回归钉：旧实现 d2 被误判丢弃遗留）
+    renderDone = true
+    for (const cb of [...(listeners.get('node_tree_render_end') ?? [])]) cb()
+    expect(d1.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(d2.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
+    expect(props.onDataChanged).toHaveBeenCalledTimes(2)
   })
 })

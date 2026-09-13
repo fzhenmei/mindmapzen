@@ -13,13 +13,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RefObject } from 'react'
 import type { MindMapHandle } from '../types/engine'
-import { TASK_STATUSES, type TaskStatus } from '../services/statusMarkers'
+import { BOARD_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { buildKanbanCards, type KanbanCard as KanbanCardData } from '../services/kanban'
 import { engineTreeToZen } from '../services/mdTree'
 import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
-import { IconWinClose } from '../components/icons'
+import { IconArchive, IconWinClose } from '../components/icons'
+
+/** 过滤匹配（2026-09 看板治理 spec §4）：标题 / 路径段 / 标签，大小写不敏感；
+ *  空过滤恒真（过滤关闭态）——纯视图态，不进 undo */
+const matchesFilter = (c: KanbanCardData, filterText: string): boolean => {
+  const q = filterText.trim().toLowerCase()
+  if (q === '') return true
+  return (
+    c.text.toLowerCase().includes(q) ||
+    c.path.some((p) => p.toLowerCase().includes(q)) ||
+    c.tags.some((tg) => tg.toLowerCase().includes(q))
+  )
+}
 
 export interface KanbanViewProps {
   mmRef: RefObject<MindMapHandle | null>
@@ -43,6 +55,13 @@ export default function KanbanView({
 }: Readonly<KanbanViewProps>) {
   const { t } = useTranslation()
   const [cards, setCards] = useState<KanbanCardData[]>([])
+  const [filterText, setFilterText] = useState('')
+  const filterActive = filterText.trim() !== ''
+  // 归档列展开态（2026-09 看板治理 spec §2.3/§4）：用户手动开 || 过滤强制——
+  // 过滤清空回落用户态（archiveOpen 不被过滤清空改写，spec §4「清空后保持当前展开态」
+  // 的实现形态：强制项消失即回落）
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const archiveExpanded = archiveOpen || filterActive
   const rootRef = useRef<HTMLDialogElement>(null)
 
   /** 全量重投影：engineTreeToZen 透传 uid（卡片寻址靠 uid）；构建失败留 console 线索 */
@@ -99,6 +118,14 @@ export default function KanbanView({
     },
     [mmRef, withRenderNode, onDataChanged],
   )
+
+  /** 批量归档 done 列（2026-09 看板治理 spec §2.3）：逐卡走 changeStatus——每卡恰一条
+   *  SET_NODE_ICON 命令，undo 逐卡回退（spec §2.4 兜底口径：引擎命令历史按条入栈无
+   *  分组事务，不自造合并管线）；空列天然 no-op。收起分支卡的展开豁免与挂起窗限制
+   *  同单卡路径（台账：同分支第二卡或丢可重试） */
+  const archiveAllDone = useCallback(() => {
+    cards.filter((c) => c.status === 'done').forEach((c) => changeStatus(c.uid, 'archived'))
+  }, [cards, changeStatus])
 
   /** 改文本：渲染节点 setText（SET_NODE_TEXT 命令，入历史）；收起分支经展开后落命令 */
   const changeText = useCallback(
@@ -180,26 +207,43 @@ export default function KanbanView({
           属性不引原生 Esc 拦截（cancel 事件仅 showModal 触发），Esc 语义仍归 onKeyDown；
           UA 默认样式（margin auto / fit-content 尺寸 / max 钳制 / border / padding /
           CanvasText 前景色）用工具类压平，保持原 div 覆盖盒不变 */}
-      <header className="flex items-center justify-between border-b px-4 py-2">
-        <h2 className="text-sm font-medium">{t('editor.kanban.viewName')}</h2>
+      <header className="flex items-center gap-2 border-b px-4 py-2">
+        <h2 className="shrink-0 text-sm font-medium">{t('editor.kanban.viewName')}</h2>
+        <input
+          data-testid="kanban-filter"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          onKeyDown={(e) => {
+            // Esc 分层（协议同列底新增输入框）：非空只清空不冒泡；已空冒泡走关板——
+            // 看板根 !defaultPrevented 守卫承重链不受影响（普通合成事件未被 prevent）
+            if (e.key === 'Escape' && filterText !== '') {
+              e.stopPropagation()
+              setFilterText('')
+            }
+          }}
+          placeholder={t('editor.kanban.filterPlaceholder')}
+          className="ml-auto w-56 shrink-0 rounded-md border bg-background px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
         <button
           type="button"
           data-testid="kanban-close"
           aria-label={t('editor.kanban.close')}
           title={t('editor.kanban.close')}
           onClick={onClose}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <IconWinClose size={14} />
         </button>
       </header>
       {/* 五列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
       <div className="flex flex-1 items-start gap-3 overflow-x-auto p-4">
-        {TASK_STATUSES.map((s) => (
+        {BOARD_STATUSES.map((s) => (
           <KanbanColumn
             key={s}
             status={s}
-            cards={cards.filter((c) => c.status === s)}
+            cards={cards.filter((c) => c.status === s && matchesFilter(c, filterText))}
+            filterActive={filterActive}
+            onArchiveAll={s === 'done' ? archiveAllDone : undefined}
             onStatusChange={changeStatus}
             onTextChange={changeText}
             onDelete={deleteCard}
@@ -211,6 +255,37 @@ export default function KanbanView({
             onAdd={(text) => addCard(s, text)}
           />
         ))}
+        {archiveExpanded ? (
+          <KanbanColumn
+            status="archived"
+            cards={cards.filter((c) => c.status === 'archived' && matchesFilter(c, filterText))}
+            filterActive={filterActive}
+            onCollapse={() => setArchiveOpen(false)}
+            onStatusChange={changeStatus}
+            onTextChange={changeText}
+            onDelete={deleteCard}
+            onOpenBody={onOpenBody}
+            onEditIcons={onEditIcons}
+            onEditTags={(card) => onEditTags({ ...card, used: usedTags })}
+            onLocate={onLocate}
+            onCopyCard={onCopyCard}
+            onAdd={(text) => addCard('archived', text)}
+          />
+        ) : (
+          // 收起条（默认态）：列头同款视觉（色点省略——IconArchive 即语义），计数即入口
+          <button
+            type="button"
+            data-testid="kanban-archive-collapsed"
+            onClick={() => setArchiveOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-muted/40 p-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <IconArchive size={14} />
+            <span>{t('editor.kanban.status.archived')}</span>
+            <span className="rounded-full bg-secondary px-1.5 text-[10px] leading-4 text-secondary-foreground">
+              {cards.filter((c) => c.status === 'archived').length}
+            </span>
+          </button>
+        )}
       </div>
     </dialog>
   )
