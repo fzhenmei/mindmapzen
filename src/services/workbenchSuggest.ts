@@ -8,6 +8,13 @@ export const STALE_MAP_DAYS = 7
 
 export type SuggestionKind = 'finish' | 'blocked' | 'stale-todo' | 'stale-map'
 
+/** 理由词条 key（字面量联合）：消费端 t(reasonKey) 的 key 空间由此收紧（i18next 严格类型） */
+export type SuggestReasonKey =
+  | 'workbench.suggest.finish'
+  | 'workbench.suggest.blocked'
+  | 'workbench.suggest.staleTodo'
+  | 'workbench.suggest.staleMap'
+
 export interface Suggestion {
   kind: SuggestionKind
   /** task 级建议（R1-R3）的跳转目标 */
@@ -15,7 +22,7 @@ export interface Suggestion {
   /** map 级建议（R4）的目标 */
   mapName?: string
   mapPath?: string
-  reasonKey: string
+  reasonKey: SuggestReasonKey
 }
 
 /** R1 doing 取所属图 mtime 最新 1 条（最近在动的先收尾）；R2 blocked 取最旧 1 条
@@ -46,20 +53,31 @@ export function suggestNext(scan: WorkScan, now: number): Suggestion[] {
   return out.slice(0, 5)
 }
 
+/** 任务按图分组（AI 上下文用）：key = 图名，子目录图带目录后缀 */
+function groupTasksByMap(tasks: WorkTask[]): Map<string, WorkTask[]> {
+  const byMap = new Map<string, WorkTask[]>()
+  for (const t of tasks) {
+    const key = t.dirRel === '' ? t.mapName : `${t.mapName}（${t.dirRel}/）`
+    const arr = byMap.get(key)
+    if (arr === undefined) byMap.set(key, [t])
+    else arr.push(t)
+  }
+  return byMap
+}
+
+/** 建议行的 prompt 文本（- 目标 [kind]） */
+function formatSuggestionLine(s: Suggestion): string {
+  const target = s.task !== undefined ? `${s.task.mapName}：${s.task.text}` : `图「${s.mapName}」`
+  return `- ${target} [${s.kind}]`
+}
+
 /** AI 咨询上下文（spec §7）：聚合清单 + 规则建议 → 单条 user prompt。提示词用中文
  *  （模型指令语言与 UI 语言无关，BYOK 主流模型中文指令均可）。 */
 export function buildSuggestPrompt(scan: WorkScan, suggestions: Suggestion[]): string {
   const lines: string[] = [
     '我用思维导图做工作管理。下面是所有任务（按图分组，方括号内是状态）和系统按 GTD 规则选出的建议。请给出 3-5 条「下一步该做什么」的具体建议，每条一两句话、直接可执行，不要泛泛而谈。',
   ]
-  const byMap = new Map<string, WorkTask[]>()
-  for (const t of scan.tasks) {
-    const key = t.dirRel === '' ? t.mapName : `${t.mapName}（${t.dirRel}/）`
-    const arr = byMap.get(key)
-    if (arr === undefined) byMap.set(key, [t])
-    else arr.push(t)
-  }
-  for (const [key, ts] of byMap) {
+  for (const [key, ts] of groupTasksByMap(scan.tasks)) {
     lines.push(`\n图「${key}」的任务：`)
     for (const t of ts) {
       const path = t.path.length > 0 ? `（${t.path.join('/')}）` : ''
@@ -68,10 +86,7 @@ export function buildSuggestPrompt(scan: WorkScan, suggestions: Suggestion[]): s
   }
   if (suggestions.length > 0) {
     lines.push('\n规则建议（供参考）：')
-    for (const s of suggestions) {
-      const target = s.task !== undefined ? `${s.task.mapName}：${s.task.text}` : `图「${s.mapName}」`
-      lines.push(`- ${target} [${s.kind}]`)
-    }
+    for (const s of suggestions) lines.push(formatSuggestionLine(s))
   }
   return lines.join('\n')
 }

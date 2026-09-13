@@ -42,7 +42,7 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     expect(screen.getByTestId('workbench-col-todo').textContent).not.toContain('任务乙')
     expect(screen.getByTestId('workbench-col-doing').textContent).toContain('任务乙')
     expect(screen.getByTestId('workbench-col-blocked').textContent).toContain('任务丙')
-    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置 uid
+    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器（path+text）
     const card = screen.getAllByTestId('workbench-card').find((el) => el.textContent?.includes('任务丙'))!
     await card.click()
     expect(openMap).toHaveBeenCalledWith('/ws/工作/图B.md')
@@ -70,5 +70,31 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     await screen.getByTestId('workbench-empty-create').click()
     // 断言可见文本而非 store 置位：error 唯一渲染出口在 LibraryView，本路由须自渲染
     expect(await screen.findByText('创建工作目录失败')).toBeInTheDocument()
+  })
+
+  test('建议区：规则建议渲染 + task 级点击跳转（spec §6）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 进行中事 @doing\n')
+    const openMap = vi.fn()
+    useAppStore.setState({ openMap: openMap as never, pendingLocate: null })
+    render(<WorkbenchView />)
+    const sug = await screen.findAllByTestId('workbench-suggestion')
+    expect(sug[0]!.textContent).toContain('进行中的事，先收尾')
+    expect(sug[0]!.textContent).toContain('进行中事')
+    await sug[0]!.click()
+    expect(openMap).toHaveBeenCalledWith('/ws/工作/图A.md')
+    expect(useAppStore.getState().pendingLocate).not.toBeNull()
+  })
+
+  test('最近 chip：recentOpened 渲染 + 点击 openMap（不带 pendingLocate，spec §5）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    await fs.writeTextFileAtomic('/ws/昨日图.md', '# 昨\n')
+    const openMap = vi.fn()
+    useAppStore.setState({ openMap: openMap as never, recentOpened: ['/ws/昨日图.md'], pendingLocate: null })
+    render(<WorkbenchView />)
+    const chip = await screen.findByTestId('workbench-recent-chip')
+    expect(chip.textContent).toContain('昨日图')
+    await chip.click()
+    expect(openMap).toHaveBeenCalledWith('/ws/昨日图.md')
+    expect(useAppStore.getState().pendingLocate).toBeNull()
   })
 })
