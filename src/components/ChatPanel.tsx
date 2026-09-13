@@ -1,6 +1,6 @@
 // src/components/ChatPanel.tsx —— AI 对话面板（spec §7）：纯装配 + 回合编排（send/stop）。
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
-import { useState, type RefObject, type SubmitEvent } from 'react'
+import { useEffect, useState, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
@@ -33,6 +33,11 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   const phase = useChatStore((s) => s.phase)
   const contextNode = useChatStore((s) => s.contextNode)
   const [input, setInput] = useState('')
+
+  // v1.1（2026-09-13）：卸载即中止回合——关面板 = 不再需要，防后台孤儿回合继续编辑导图
+  // （用户失去观察入口却不知情）。走全局句柄（终审 I2/I3 架构不废，正是它让卸载 cleanup
+  // 不依赖组件 ref）：idle 时句柄为 null 安全 no-op；切图路径无交集（回合中切图本就被拦）
+  useEffect(() => () => { useChatStore.getState().stopRequest?.() }, [])
 
   async function handleSend(e?: SubmitEvent): Promise<void> {
     e?.preventDefault()
