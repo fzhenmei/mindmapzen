@@ -55,7 +55,10 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+    // 真子进程 spawn 链偶发撞默认 5s：全量首跑冷缓存 + 满载时 Defender 扫描 Temp 新仓库、
+    // git.exe 冷加载可数倍劣化（稳态满载实测 ~1s，单跑必绿故难复现）——同族先例
+    // mdTree.roundtrip 0e51fcb，放宽到 30s 解耦时间预算与环境波动
+  }, 30_000)
 
   test('gitDiffStat：unified=0 行级输出 + 恢复视角语义（HEAD→hash，+行=恢复后回来）', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'zen-git-'))
@@ -84,5 +87,5 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })
