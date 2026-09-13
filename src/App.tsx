@@ -10,7 +10,7 @@ import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
-import type { ExportPorts, GitRun, RegisterCloseGuard } from './types/ports'
+import type { ExportPorts, GitClone, GitRun, RegisterCloseGuard } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
 import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/theme'
 import AppLogo from './components/AppLogo'
@@ -183,6 +183,26 @@ const gitRun: GitRun = E2E
 
 /** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；
  *  E2E web 模式记录到 harness 桩（__zenE2e.savePaths/exportedBytes，固定路径走内存 FS 落盘） */
+/** git 克隆端口（「从 Git 库打开」）：生产走 Tauri git_clone（600s 超时在 Rust 侧）；
+ *  E2E web 模式记录到 harness 桩（__zenE2e.gitCalls，与 gitRun 同账本，恒答成功——
+ *  克隆产物由内存 FS 用例自行预置） */
+const gitClone: GitClone = E2E
+  ? (async (parentDir, url, repoName) => {
+      const z = (window as unknown as Record<string, unknown>).__zenE2e as {
+        gitCalls: string[]
+      }
+      z.gitCalls.push(`${parentDir} $ clone ${url} ${repoName}`)
+      return { ok: true, out: '', err: '' }
+    })
+  : async (parentDir, url, repoName) => {
+      const { invoke } = await import('@tauri-apps/api/core')
+      try {
+        return await invoke<{ ok: boolean; out: string; err: string }>('git_clone', { parentDir, url, repoName })
+      } catch (e) {
+        throw describeBackendError(String(e))
+      }
+    }
+
 const exportPorts: ExportPorts = E2E
   ? {
       async pickSavePath(defaultName) {
@@ -215,7 +235,7 @@ export default function App() {
   // 编辑器重挂序号（冲突裁决 reload）：同路径递增序号强制重挂 EditorView，从磁盘重载当前图
   const editorSeq = useAppStore((s) => s.editorSeq)
   useEffect(() => {
-    useAppStore.setState({ gitRun })
+    useAppStore.setState({ gitRun, gitClone })
     void (async () => {
       try {
         // E2E 模式：跳过 Tauri 适配器/路径注入（harness 已完成），直接初始化

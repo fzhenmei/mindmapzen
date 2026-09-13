@@ -69,5 +69,13 @@ export default {
     reason: { noInit: '未初始化', statusUnreadable: '状态不可读', noChange: '无变更', commitFail: '提交失败', noRemote: '未配置远程' },
     fatal: { init: 'git init 失败：{{detail}}', status: 'git status 失败：{{detail}}', commit: 'git commit 失败：{{detail}}' },
     rollback: { invalidHash: '版本号无效：{{hash}}…', restoreFail: '恢复失败：{{detail}}', commitFail: '提交回滚失败：{{detail}}' },
+    // 「从 Git 库打开」（gitClone 服务层校验与克隆错误）
+    clone: {
+      urlEmpty: '请输入 Git 库地址',
+      nameUnparsable: '无法从地址解析出仓库名',
+      credsPair: '用户名与密码/Token 需成对填写',
+      fail: '克隆失败：{{detail}}',
+      dirExists: '目标目录已存在：{{path}}',
+    },
   },
 }
