@@ -426,8 +426,9 @@ describe('favorites + librarySort（收藏与排序）', () => {
 
 // 工作台路由与启动落点（2026-09 工作台）：route 三态新增 workbench；有工作区启动
 // 落工作台（打开应用先见今天该做什么），e2e 模式维持落案头（全线 spec 假设启动即
-// 案头）；pendingLocate 为文本寻址器 { path, text }——md 不序列化 uid，跨图跳转
-// 只能以路径+文本定位（spec §11 Ruling），EditorView 消费即清
+// 案头）；pendingLocate 为文本寻址器 { mapPath, path, text }——md 不序列化 uid，跨图
+// 跳转只能以路径+文本定位（spec §11 Ruling）；mapPath 绑定目标图（终审 Important-1
+// 错图消费修复），EditorView 消费即清
 describe('工作台路由与启动落点（2026-09 工作台）', () => {
   test('init 有工作区：启动落工作台（产品分支，jsdom URL 无 ?e2e=1）', async () => {
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
@@ -449,7 +450,7 @@ describe('工作台路由与启动落点（2026-09 工作台）', () => {
     expect(useAppStore.getState().route).toBe('workbench')
     expect(useAppStore.getState().currentMdPath).toBeNull()
     expect(useAppStore.getState().dirty).toBe(false)
-    const locate = { path: ['分支'], text: '任务甲' }
+    const locate = { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' }
     useAppStore.getState().setPendingLocate(locate)
     expect(useAppStore.getState().pendingLocate).toEqual(locate)
     useAppStore.getState().setPendingLocate(null)

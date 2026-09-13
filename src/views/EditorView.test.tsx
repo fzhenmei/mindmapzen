@@ -3013,7 +3013,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
     await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      useAppStore.setState({ pendingLocate: { path: ['分支'], text: '任务甲' } })
+      useAppStore.setState({ pendingLocate: { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' } })
       render(
         <EditorView
           mdPath="/ws/a.md"
@@ -3056,7 +3056,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
       ],
     }
     await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
-    useAppStore.setState({ pendingLocate: { path: ['分支'], text: '任务甲' } })
+    useAppStore.setState({ pendingLocate: { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' } })
     render(
       <EditorView
         mdPath="/ws/a.md"
@@ -3089,5 +3089,48 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
       ;(globalThis as unknown as Record<string, () => void>).__emitRenderEnd!()
     })
     expect(center).toHaveBeenCalledWith(fakeChildNode)
+  })
+
+  test('mapPath 不符：弃置寻址器不定位（终审 Important-1 错图消费修复）', async () => {
+    // 触发链：点图 B 任务卡 → openMap(B) 失败（被删/坏档）→ EditorView 停 error 态、
+    // onCanvasReady 不触发 → 寻址器残留 → 用户切到图 A → 图 A 就绪消费前须校验目标：
+    // mapPath 不符即清空弃置 + console.warn 线索，绝不误定位到图 A 的同名节点
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // 寻址器绑定打不开的图 B；当前挂载的是图 A（mdPath=/ws/a.md）——path+text 与图 A
+      // 内容碰巧全同名（复刻最险形态），校验是唯一防线
+      useAppStore.setState({ pendingLocate: { mapPath: '/ws/图B.md', path: ['分支'], text: '任务甲' } })
+      render(
+        <EditorView
+          mdPath="/ws/a.md"
+          openInEditor={openInEditor}
+          writeClipboard={vi.fn(async () => {})}
+          exportPorts={stubExportPorts}
+          registerCloseGuard={noopRegister}
+          pickImageFile={stubPickImage}
+          readClipboardImage={stubReadClipboardImage}
+          exitApp={noopExitApp}
+        />,
+      )
+      await screen.findByTestId('fake-canvas')
+      const handle = fakeHandle
+      act(() => {
+        ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+      })
+      expect(useAppStore.getState().pendingLocate).toBeNull() // 弃置即清（不残留到下一图）
+      expect(handle.renderer?.moveNodeToCenter).not.toHaveBeenCalled() // 同名也不误定位
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('目标图与当前图不符'), expect.objectContaining({ mapPath: '/ws/图B.md' }))
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })

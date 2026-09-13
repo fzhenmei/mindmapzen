@@ -42,11 +42,12 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     expect(screen.getByTestId('workbench-col-todo').textContent).not.toContain('任务乙')
     expect(screen.getByTestId('workbench-col-doing').textContent).toContain('任务乙')
     expect(screen.getByTestId('workbench-col-blocked').textContent).toContain('任务丙')
-    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器（path+text）
+    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
+    // mapPath 绑定目标图（终审 Important-1：错图消费防线的数据源），path+text 寻址
     const card = screen.getAllByTestId('workbench-card').find((el) => el.textContent?.includes('任务丙'))!
     await card.click()
     expect(openMap).toHaveBeenCalledWith('/ws/工作/图B.md')
-    expect(useAppStore.getState().pendingLocate).not.toBeNull()
+    expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图B.md', text: '任务丙' })
   })
 
   test('failed-bar 标点随语言：词条含冒号，en 侧不渗全角正字法', async () => {

@@ -17,5 +17,5 @@ export default {
   suggest: { section: '下一步建议', finish: '进行中的事，先收尾', blocked: '等待中的事，看是否该催', staleTodo: '搁置最久的待办', staleMap: '这张工作图一周没动了', askAi: '问问 AI', itemJoin: '：' },
   board: { section: '工作计划' },
   recent: { section: '最近' },
-  ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败', close: '关闭' },
+  ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败' },
 }

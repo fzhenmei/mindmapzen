@@ -40,10 +40,13 @@ interface AppState {
   /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
   setViewMode: (v: 'mindmap' | 'kanban') => void
   /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器
-   * { path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
-   * EditorView 引擎 onReady 后消费（locateNode 定位）并即刻清空——消费即清，避免切图残留误定位 */
-  pendingLocate: { path: string[]; text: string } | null
-  setPendingLocate: (v: { path: string[]; text: string } | null) => void
+   * { mapPath, path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
+   * mapPath 绑定目标图（终审 Important-1）：openMap 失败（文件被删/坏档）时寻址器残留，
+   * 用户切到别图后 EditorView 消费前须校验目标——mapPath 与当前图不符即弃置（console.warn
+   * 线索），杜绝「错图消费」误定位；EditorView 引擎 onReady 后消费（locateNode 定位）
+   * 并即刻清空——消费即清，避免切图残留误定位 */
+  pendingLocate: { mapPath: string; path: string[]; text: string } | null
+  setPendingLocate: (v: { mapPath: string; path: string[]; text: string } | null) => void
   /** 进入工作台（案头按钮入口）：工作台不持有打开图，清编辑态（dirty/currentMdPath） */
   goWorkbench: () => void
   dirty: boolean

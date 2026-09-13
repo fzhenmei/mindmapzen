@@ -1,7 +1,7 @@
 // src/views/WorkbenchView.tsx —— 工作台（驾驶舱）：跨图任务聚合总览（spec 2026-09-13）。
-// 只读 + 跳转（spec §1）：一切编辑回纸面做，本视图不写任何文件。纵向构图（§4）：
-// 头部 → 聚合看板（Task 5）→ 下一步建议区/最近（Task 6 完整化）→ 问问 AI
-// 浮层（Task 8：无工具纯咨询，聚合上下文一次性问答）。
+// 只读 + 跳转（spec §1）：一切编辑回纸面做，本视图不写任何文件。纵向构图（§4 实际渲染序，
+// 偏离文档顺序系有意裁定见 spec §11）：头部 → 最近 chip 行 → 下一步建议区 → 聚合看板
+// （Task 5）→ 问问 AI 浮层（Task 8：无工具纯咨询，聚合上下文一次性问答）。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
@@ -251,9 +251,10 @@ export default function WorkbenchView() {
 
   /** 跨图跳转（spec §5，文本寻址）：先置 pendingLocate 再 openMap——EditorView onReady
    *  消费定位；寻址器用 path+text（md 不序列化 uid，扫描期 uid 引擎侧必失配，见 spec §11）；
-   *  顺序不可反（openMap 后组件卸载，后续 set 无害但语义上定位先声明） */
+   *  mapPath 绑定目标图（终审 Important-1 错图消费修复）：openMap 失败寻址器残留时，
+   *  切到别图消费前按它校验弃置；顺序不可反（openMap 后组件卸载，后续 set 无害但语义上定位先声明） */
   const openTask = (task: WorkTask): void => {
-    useAppStore.getState().setPendingLocate({ path: task.path, text: task.text })
+    useAppStore.getState().setPendingLocate({ mapPath: task.mapPath, path: task.path, text: task.text })
     void useAppStore.getState().openMap(task.mapPath)
   }
 

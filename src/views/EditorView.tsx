@@ -474,10 +474,17 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             // expandToUid 活树 + 居中，内部全链 try/catch）。miss（图被外部改动）console.warn
             // 线索、静默进图不清屏。落点裁定：挂引擎就绪回调而非 useOpenDocument.onReady
             // ——后者触发时 state 方置 'ready'、画布尚未挂载（EditorCanvasArea 以其为渲染
-            // 门），mmRef 必为 null，消费将清而不定位
+            // 门），mmRef 必为 null，消费将清而不定位。
+            // 目标图绑定（终审 Important-1 错图消费）：openMap 失败（被删/坏档）时寻址器
+            // 残留，用户经错误面板/Ctrl+Tab 切到别图——mapPath 与当前图不符即弃置不定位
+            // （console.warn 留线索，不吞），杜绝 path+text 碰巧同名时误定位到错图节点
             const locate = useAppStore.getState().pendingLocate
             if (locate !== null) {
               useAppStore.getState().setPendingLocate(null)
+              if (locate.mapPath !== mdPath) {
+                console.warn('工作台定位目标图与当前图不符，弃置寻址器（目标图打开失败后切图）', locate)
+                return
+              }
               try {
                 const uid = findUidByPathText(mm.getData(), locate.path, locate.text)
                 if (uid !== null) locateNode(uid)
