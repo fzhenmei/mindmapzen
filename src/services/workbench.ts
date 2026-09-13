@@ -10,9 +10,10 @@ import { joinPath } from './workspace'
 
 /** parse 产物不带 uid（uid 由引擎打开图时 uuidv4 现发、不落 .md），而 buildKanbanCards
  *  的出卡判定 isCardNode 要求 uid——扫描期无引擎，按树内序就地补确定性临时 uid：
- *  同图内容不变则 uid 不变（重聚合时卡片 React 键稳定）。引擎打开图会另发随机 uid，
- *  跨图按 uid 定位的失配兜底在消费侧（console.warn + 静默进图）。入参为 parse 新鲜
- *  产物，就地赋值无共享变异风险 */
+ *  同图内容不变则 uid 不变（重聚合时卡片 React 键稳定）。该 uid 仅图内唯一、仅作
+ *  React 行 key 与出卡判定，不可用于跨图寻址——跨图定位已改文本协议（path+text，
+ *  spec §5/§11）；跨图列表 uid 会重复，Task 5/6 的 key 必须拼 mapPath。入参为
+ *  parse 新鲜产物，就地赋值无共享变异风险 */
 function assignUids(root: ZenNode): ZenNode {
   let seq = 0
   const walk = (n: ZenNode): void => {
