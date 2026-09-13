@@ -109,8 +109,8 @@ const editor: Dict['editor'] = {
     removeTag: 'Remove {{name}}',
     inputPlaceholder: 'Type a new tag and press Enter',
   },
-  // Status picker (2026-09 kanban mode Task 8): five status labels and the
-  // clear entry reuse the kanban domain (same source as the column headers)
+  // Status picker (2026-09 kanban mode Task 8): six status labels and the
+  // clear entry reuse the kanban domain (one status vocabulary across views)
   statusPicker: {
     title: 'Node status',
   },
@@ -147,7 +147,7 @@ const editor: Dict['editor'] = {
   noteTooltip: {
     more: 'Open the editor dialog (Shift+F2)',
   },
-  // Kanban mode (2026-09 Task 6): KanbanView overlay trio; the five status
+  // Kanban mode (2026-09 Task 6): KanbanView overlay trio; the six status
   // names map one-to-one to the statusMarkers whitelist; the menu icon/tag
   // entries reuse nodeActions.icon/tag
   kanban: {

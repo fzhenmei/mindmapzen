@@ -22,7 +22,7 @@ interface Props {
   onImageClick(): void
   /** 标签选择器（节点标签的唯一增删 UI 通道） */
   onTagClick(): void
-  /** 状态选择器（2026-09 看板模式 Task 8：导图侧任务状态入口，五态单选 + 转普通） */
+  /** 状态选择器（2026-09 看板模式 Task 8：导图侧任务状态入口，六态单选 + 转普通） */
   onStatusClick(): void
 }
 

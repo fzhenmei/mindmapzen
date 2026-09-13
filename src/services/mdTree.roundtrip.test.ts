@@ -15,10 +15,10 @@ import type { ZenNode } from '../types/tree'
 //    GitHub 同款）,文本自带该形态时 parse 收为 tags 字段属合法标记侵入而非漂移;
 //    ::与[[]]双字符标记随机概率≈0天然豁免,# 单字符概率不可忽略故显式排除,
 //    边界行为见下方标签用例（符号词 #$ 不构成标记恒等往返）。
-// 另记（2026-09-12 看板模式）：句尾 ` @status` 形态（空白或句首 + @ + 五态词）不构成排除项——
+// 另记（2026-09-12 看板模式）：句尾 ` @status` 形态（空白或句首 + @ + 白名单状态词）不构成排除项——
 //    它是 parse 识别的合法标记（statusMarkers 前置锚定含句首裸 @）,文本/树自带该形态被收为
 //    status 字段属合法标记侵入而非漂移（与 3) 的 #tag 同口径）；随机串自发产出需恰为
-//    5-7 个小写字母、概率≈0,定向覆盖见 status describe 的空文本裸形态钉子与 nodeArb 的 status 候选。
+//    4-8 个小写字母、概率≈0,定向覆盖见 status describe 的空文本裸形态钉子与 nodeArb 的 status 候选。
 const textArb = fc
   .string({ minLength: 0, maxLength: 12 })
   .filter(
@@ -52,7 +52,7 @@ const nodeArb = (maxDepth: number): fc.Arbitrary<ZenNode> =>
     // 表格候选（终审 M5）：本仓 remark 未挂 gfm，表格行按段落文本原样还原恒等——
     // 钉住该口径，将来若接 gfm 走真 table 节点，rawBlockText 口径变化在此报警
     body: fc.constantFrom('', '论述段落。', '第一段。\n\n第二段。', '> 引用', '论述。\n\n> 引用块', '```js\nconst x = 1\n```', '| a | b |\n| --- | --- |\n| 1 | 2 |'),
-    // 看板模式（2026-09-12）：status 候选——五态 + undefined 加权（weight 7:3 → undefined 概率
+    // 看板模式（2026-09-12）：status 候选——六态 + undefined 加权（weight 7:3 → undefined 概率
     // 70%：多数节点非任务，30% 让 fuzz 真正覆盖 @status 注入/剥除链；undefined 与
     // 「无状态不设字段」口径同构；空文本×status 的裸形态恒等由下方 status describe 的钉子保证）
     status: fc.oneof(
@@ -500,7 +500,7 @@ test('zen→engine：tags 装配 data.tag；engine→zen 宽容回收（字符�
 })
 
 // —— 看板模式：句尾 @status 标记（与 ::icon/#tag 同构）——parse 提取、serialize 注入、
-//    五态共存顺序 `文本 #tag ::icon @status ![alt](src)`、未知 @foo 保留为文本 ——
+//    六态共存顺序 `文本 #tag ::icon @status ![alt](src)`、未知 @foo 保留为文本 ——
 describe('status 标记（看板模式）', () => {
   test('parse 提取 @status 进字段、文本剥除', () => {
     const r = parse('# 根\n## 任务A @doing\n## 任务B\n')
@@ -518,7 +518,7 @@ describe('status 标记（看板模式）', () => {
     ).toBe('# A ::flag @doing ![](a.png)\n')
   })
 
-  test('roundtrip 恒等：五态 status 与 tag/icon/image 共存，序列化→parse 往返字段不丢', () => {
+  test('roundtrip 恒等：六态 status 与 tag/icon/image 共存，序列化→parse 往返字段不丢', () => {
     for (const status of TASK_STATUSES) {
       const tree: ZenNode = {
         text: '节点',

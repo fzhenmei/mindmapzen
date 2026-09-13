@@ -8,7 +8,7 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
     expect(extractStatusMarker('修滚动条 @doing')).toBe('doing')
     expect(extractStatusMarker('窗口状态记忆 @todo')).toBe('todo')
     expect(extractStatusMarker('已完成 @done')).toBe('done')
-    // 第六状态（2026-09 看板治理）：归档 = 生命周期终态「翻篇」，与五态同管线
+    // 第六状态（2026-09 看板治理）：归档 = 生命周期终态「翻篇」，与其余五态同管线
     expect(extractStatusMarker('翻篇了 @archived')).toBe('archived')
     expect(stripStatusMarkers('翻篇了 @archived')).toBe('翻篇了')
     expect(injectStatusMarker('翻篇了', 'archived')).toBe('翻篇了 @archived')

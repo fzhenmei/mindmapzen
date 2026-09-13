@@ -1,8 +1,8 @@
 // src/components/StatusPickerDialog.tsx —— 节点状态选择器（2026-09 看板模式 Task 8）
-// 导图侧状态入口（NodeActions 状态钮 → EditorView.statusPick）：五态单选 +
+// 导图侧状态入口（NodeActions 状态钮 → EditorView.statusPick）：六态单选 +
 // 「转为普通节点」清除项（current 非 null 才显示）。确认走 EditorView.applyStatus
 // （渲染节点 setIcon 重合成徽章 = SET_NODE_ICON 单命令可撤销，KanbanView.changeStatus
-// 同款链路）；五态色点/文案与看板列头同源（STATUS_DOT / editor.kanban.status.*），
+// 同款链路）；六态色点/文案与看板同源（STATUS_DOT / editor.kanban.status.*），
 // 清除项复用 kanban.menu.toPlain——跨视图一套状态语言。
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -36,7 +36,7 @@ export default function StatusPickerDialog({ nodeText, current, onCancel, onConf
         <p className="truncate text-xs text-muted-foreground" title={nodeText}>
           {nodeText}
         </p>
-        {/* 五态单选（点选即选、确认才落；当前态高亮环）；dropped 删除线同看板列头「放弃」语义 */}
+        {/* 六态单选（点选即选、确认才落；当前态高亮环）；dropped 删除线即「放弃」语义 */}
         <div data-testid="status-options" className="flex flex-col gap-1">
           {TASK_STATUSES.map((s) => (
             <button
