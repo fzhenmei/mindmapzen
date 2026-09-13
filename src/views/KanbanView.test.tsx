@@ -386,7 +386,9 @@ describe('KanbanView（看板模式浮层）', () => {
         listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
       }),
       renderer: {
+        // 数据树挂 renderTree（引擎活树形态——getData 是深拷贝副本，直写不落引擎）；
         // grp 收起时 t2 不在渲染树；expand 直写 true 后（safeReRender 重渲）可寻址
+        renderTree: root,
         findNodeByUid: (uid: string): FakeNode | null => {
           if (uid === 'r') return root
           if (uid === 't2') return grp.data.expand === false ? null : t2
@@ -640,6 +642,7 @@ describe('KanbanView（看板模式浮层）', () => {
         listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
       }),
       renderer: {
+        renderTree: root,
         findNodeByUid: (uid: string): FakeNode | null => {
           if (uid === 'r') return root
           if (uid === 'g') return grp

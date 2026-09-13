@@ -30,13 +30,14 @@ describe('statusOps（徽章互保协议）', () => {
   })
 
   test('expandToUid：收起祖先链直写展开并触发 safeReRender；目标自身 expand 不动', () => {
-    // 树：root > a(expand=false) > b(展开) > t；a 收起、b 与 t 均展开
+    // 树：root > a(expand=false) > b(展开) > t；a 收起、b 与 t 均展开。
+    // 数据树挂 renderer.renderTree（引擎活树形态——getData 是深拷贝副本，直写不落引擎）
     const t = { data: { text: 't', uid: 't1', expand: true }, children: [] }
     const b = { data: { text: 'b', uid: 'b1', expand: true }, children: [t] }
     const a = { data: { text: 'a', uid: 'a1', expand: false }, children: [b] }
     const root = { data: { text: 'r', uid: 'r1' }, children: [a] }
     const reRender = vi.fn()
-    const mm = { getData: () => root, reRender, on: vi.fn(), off: vi.fn() } as unknown as MindMapHandle
+    const mm = { getData: () => root, reRender, on: vi.fn(), off: vi.fn(), renderer: { renderTree: root } } as unknown as MindMapHandle
     expect(expandToUid(mm, 't1')).toBe(true)
     expect(a.data.expand).toBe(true)
     // 已展开的祖先与目标自身的 expand 不被触碰（b 仍 true，t 目标无改写需求）
@@ -48,7 +49,7 @@ describe('statusOps（徽章互保协议）', () => {
     const leaf = { data: { text: 'x', uid: 'x1' }, children: [] }
     const root = { data: { text: 'r', uid: 'r1' }, children: [leaf] }
     const reRender = vi.fn()
-    const mm = { getData: () => root, reRender, on: vi.fn(), off: vi.fn() } as unknown as MindMapHandle
+    const mm = { getData: () => root, reRender, on: vi.fn(), off: vi.fn(), renderer: { renderTree: root } } as unknown as MindMapHandle
     expect(expandToUid(mm, 'x1')).toBe(false)
     expect(expandToUid(mm, 'ghost')).toBe(false)
     expect(reRender).not.toHaveBeenCalled()
@@ -73,6 +74,7 @@ describe('statusOps（徽章互保协议）', () => {
         listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
       }),
       renderer: {
+        renderTree: root,
         findNodeByUid: (uid: string) => {
           if (uid === 'r') return root
           if (uid === 'g') return g
@@ -103,7 +105,7 @@ describe('statusOps（徽章互保协议）', () => {
       getData: () => root,
       on: vi.fn(),
       off: vi.fn(),
-      renderer: { findNodeByUid: () => null },
+      renderer: { renderTree: root, findNodeByUid: () => null },
     } as unknown as MindMapHandle
     execOnRenderNode(mm, 'ghost', '改状态', apply)
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('数据树中无此节点'), 'ghost')

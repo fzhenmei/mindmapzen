@@ -132,6 +132,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
         writeFakeTargets(fakeTree, registry)
       },
       renderer: {
+        // 数据树挂 renderTree（引擎活树形态——getData 是深拷贝副本，expandToUid 直写
+        // 须落活树；看板定位「展开收起祖先」用例依赖）
+        renderTree: fakeTree,
         // 引擎 renderer.findNodeByUid（Render.js:2094）：uid → 节点实例，未命中 null
         findNodeByUid: (uid: string) =>
           uid === 'root-uid'
