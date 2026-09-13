@@ -107,7 +107,7 @@ export default {
     removeTag: '移除 {{name}}',
     inputPlaceholder: '输入新标签，回车添加',
   },
-  // 状态选择器（2026-09 看板模式 Task 8）：五态文案/清除项复用 kanban 域（与看板列头同源）
+  // 状态选择器（2026-09 看板模式 Task 8）：六态文案/清除项复用 kanban 域（跨视图一套状态语言）
   statusPicker: {
     title: '节点状态',
   },
@@ -146,7 +146,7 @@ export default {
   noteTooltip: {
     more: '打开弹窗编辑正文(Shift+F2)',
   },
-  // 看板模式（2026-09 Task 6）：KanbanView 浮层三件套；五态名与 statusMarkers
+  // 看板模式（2026-09 Task 6）：KanbanView 浮层三件套；六态名与 statusMarkers
   // 白名单一一对应；菜单「图标/标签」两项复用 nodeActions.icon/tag
   kanban: {
     viewName: '看板',

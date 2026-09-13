@@ -155,14 +155,15 @@ describe('parse', () => {
     expect(r.ok && r.tree.children[0].children![0].text).toBe('项')
   })
 
-  test('状态标记:五态白名单全覆盖,无状态字段不设', () => {
-    const r = parse('# 根\n\n- a @todo\n- b @doing\n- c @blocked\n- d @done\n- e @dropped\n- f\n')
+  test('状态标记:六态白名单全覆盖,无状态字段不设', () => {
+    const r = parse('# 根\n\n- a @todo\n- b @doing\n- c @blocked\n- d @done\n- e @dropped\n- f @archived\n- g\n')
     expect(r.ok && r.tree.children.map((c) => c.status)).toEqual([
       'todo',
       'doing',
       'blocked',
       'done',
       'dropped',
+      'archived',
       undefined,
     ])
   })

@@ -37,7 +37,7 @@ interface EditorDialogsProps {
   iconPicker: ComponentProps<typeof IconPickerDialog> | null
   /** 标签选择器（feature/node-tags）：同上 */
   tagPicker: ComponentProps<typeof TagPickerDialog> | null
-  /** 状态选择器（2026-09 看板模式 Task 8）：同上（五态单选 + 转普通） */
+  /** 状态选择器（2026-09 看板模式 Task 8）：同上（六态单选 + 转普通） */
   statusPicker: ComponentProps<typeof StatusPickerDialog> | null
   /** 插图（M19，2026-09 迁入）：同上 */
   imageEdit: ComponentProps<typeof ImageDialog> | null
