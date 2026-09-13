@@ -27,7 +27,6 @@ export default {
   },
   error: {
     network: 'AI 请求失败：{{message}}',
-    stream: 'AI 连接中断：{{message}}',
     notConfigured: 'AI 未配置：请到 案头 → 设置 → AI 填写 API 地址、密钥与模型名',
   },
   settings: {

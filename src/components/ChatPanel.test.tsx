@@ -114,19 +114,18 @@ test('终审 I2：模型停摆时点停止——主动 abort 传输，回合收�
   expect(useChatStore.getState().stopRequest).toBeNull() // 回合收尾即摘除全局句柄
 })
 
-test('终审 I3：回合中 ai-close 卸载重开——停止钮仍可停掉进行中回合', async () => {
+test('v1.1（原终审 I3 语义升级）：回合中 ai-close 卸载——卸载即中止回合', async () => {
   const stall = stallTransport()
   const view = mount()
-  await userEvent.type(screen.getByTestId('ai-input'), '卸载重开')
+  await userEvent.type(screen.getByTestId('ai-input'), '关面板')
   await userEvent.click(screen.getByTestId('ai-send'))
   await screen.findByTestId('ai-stop')
-  view.unmount() // 回合中收起面板（旧实现：组件 stopRef 随实例销毁）
-  mount() // 重开：新组件实例，停止句柄只能来自全局 store
-  await screen.findByTestId('ai-stop')
-  await userEvent.click(screen.getByTestId('ai-stop'))
-  expect(stall.abortCalls()).toBe(1) // 孤儿回合不再失控：重开面板仍可停止+掐流
+  view.unmount() // 回合中收起面板：v1.1 起卸载 cleanup 走全局句柄立即中止——
+  // 关面板 = 不再需要，防后台孤儿回合继续编辑导图（用户失去观察入口却不知情）
+  expect(stall.abortCalls()).toBe(1) // 卸载即掐流，不等 Rust 空闲超时被动收尾
   await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
-  expect(screen.queryByTestId('ai-msg-error')).not.toBeInTheDocument()
+  expect(useChatStore.getState().stopRequest).toBeNull() // 收尾摘除全局句柄
+  expect(useChatStore.getState().messages.at(-1)?.role).not.toBe('error') // 中止 ≠ 错误卡
 })
 
 test('终审三叉#2：引擎未就绪发送——错误卡片出现（无声失败消除）', async () => {

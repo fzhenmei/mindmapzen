@@ -107,6 +107,9 @@ export function useQuickSwitch({ mdPath, workspaceDir, pipeline, explicitSave }:
     if (idx === null) return
     setCycle(null)
     const target = cycleCandidates[idx]
+    // 裸调用无 AI 回合守卫是刻意的（v1.1 终审裁定）：安全性依赖入口——cycleStep 装配在
+    // EditorView 已包 guardAiTurn，AI 回合中轮换浮层开不了、本行不可达。若将来做非模态
+    // 切换浮层（新入口绕过 cycleStep 守卫），须先在此补 guardAiTurn 同款防御
     if (target !== undefined) void switchTo(target.mdPath)
   }
 

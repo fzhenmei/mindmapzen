@@ -27,7 +27,6 @@ export default {
   },
   error: {
     network: 'AI request failed: {{message}}',
-    stream: 'AI connection lost: {{message}}',
     notConfigured: 'AI not configured: fill API URL, key and model in Library → Settings → AI',
   },
   settings: {
