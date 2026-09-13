@@ -2,7 +2,7 @@
 // 单一状态列：列头（色点 + 状态名 + 计数）／列体（卡片 + 空态）／列底（新增内联输入）。
 // 拖拽落点：onDragOver preventDefault 放行 drop，onDrop 取卡片 uid 上行改状态。
 // 悬停反馈：enter/leave 计数器维持 data-dragover 高亮（ring + accent 底），归零熄灭。
-// dropped 列语义 = 放弃：列名删除线 + 淡灰点。
+// 状态集仅四列 + 归档列（BOARD_STATUSES + archived 展开态；dropped 不进看板，GTD Trash）。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -11,8 +11,8 @@ import type { TaskStatus } from '../services/statusMarkers'
 import KanbanCard, { type KanbanCardProps } from './KanbanCard'
 import { IconArchive, IconChevronRight } from './icons'
 
-/** 六态色点（dropped 淡灰 + 列名删除线共同表达「放弃」语义）；导出供
- *  StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态选择器与列头视觉同源） */
+/** 六态色点；导出供 StatusPickerDialog 复用（2026-09 看板模式 Task 8：导图侧状态
+ *  选择器与列头视觉同源）。dropped 条目仅选择器消费——它已不是看板列（GTD 审视） */
 export const STATUS_DOT: Record<TaskStatus, string> = {
   todo: 'bg-muted-foreground/70',
   doing: 'bg-blue-500',
@@ -108,13 +108,7 @@ export default function KanbanColumn({ status, cards, onAdd, filterActive = fals
     >
       <header className="flex items-center gap-1.5 px-1">
         <span className={`size-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
-        <h3
-          className={`text-xs font-medium ${
-            status === 'dropped' ? 'text-muted-foreground line-through' : ''
-          }`}
-        >
-          {t(`editor.kanban.status.${status}`)}
-        </h3>
+        <h3 className="text-xs font-medium">{t(`editor.kanban.status.${status}`)}</h3>
         {onArchiveAll !== undefined && (
           <button
             type="button"

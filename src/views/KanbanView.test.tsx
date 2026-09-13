@@ -5,7 +5,7 @@ import KanbanView, { type KanbanViewProps } from './KanbanView'
 import type { MindMapHandle } from '../types/engine'
 import { TooltipProvider } from '../components/ui/tooltip'
 
-// 看板模式浮层三件套装配（Task 6）：KanbanView 是 mm 命令的编排层——五列投影自
+// 看板模式浮层三件套装配（Task 6）：KanbanView 是 mm 命令的编排层——四列投影自
 // buildKanbanCards，每个编辑操作 = 恰一条引擎命令 + onDataChanged（useIconPicker.apply
 // 同款纪律）。mm 替身持可变树（icon 覆写实写回 data），可验证 data_change 订阅的
 // 全刷新回路；jsdom 无 DragEvent.dataTransfer，拖拽事件以 stub 注入。
@@ -36,7 +36,7 @@ function makeMm() {
       t1.data.icon = icons
     }),
   }
-  // 归档卡（2026-09 看板治理）：archived 不进五列、收起条计数/展开/恢复拖拽断言共用
+  // 归档卡（2026-09 看板治理）：archived 不进四列、收起条计数/展开/恢复拖拽断言共用
   const ta: FakeNode = {
     data: { text: '翻篇任务', uid: 'ta', icon: ['zen_status-archived'] },
     children: [],
@@ -44,7 +44,15 @@ function makeMm() {
       ta.data.icon = icons
     }),
   }
-  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, ta] }
+  // 放弃卡（2026-09-13 GTD 审视）：dropped 不进看板（无列/无收起条/过滤也不召回）断言用
+  const td: FakeNode = {
+    data: { text: '放弃任务', uid: 'td', icon: ['zen_status-dropped'] },
+    children: [],
+    setIcon: vi.fn((icons: string[]) => {
+      td.data.icon = icons
+    }),
+  }
+  const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [t1, ta, td] }
   const mm = {
     getData: () => root,
     on: vi.fn((ev: string, cb: (...a: unknown[]) => void) => {
@@ -54,7 +62,8 @@ function makeMm() {
       listeners.set(ev, (listeners.get(ev) ?? []).filter((f) => f !== cb))
     }),
     renderer: {
-      findNodeByUid: (uid: string): FakeNode | null => (uid === 'r' ? root : uid === 't1' ? t1 : uid === 'ta' ? ta : null),
+      findNodeByUid: (uid: string): FakeNode | null =>
+        uid === 'r' ? root : uid === 't1' ? t1 : uid === 'ta' ? ta : uid === 'td' ? td : null,
     },
     execCommand: vi.fn(),
   }
@@ -96,12 +105,19 @@ function renderKanban(mm: MindMapHandle): { props: KanbanViewProps; unmount: () 
 describe('KanbanView（看板模式浮层）', () => {
   afterEach(cleanup)
 
-  test('渲染五列、卡片按状态落列、空列态；挂载即夺焦（引擎快捷键失活）', () => {
+  test('渲染四列、卡片按状态落列、空列态；挂载即夺焦（引擎快捷键失活）', () => {
     const { mm } = makeMm()
     renderKanban(mm)
-    for (const s of ['todo', 'doing', 'blocked', 'done', 'dropped']) {
+    for (const s of ['todo', 'doing', 'blocked', 'done']) {
       expect(screen.getByTestId(`kanban-col-${s}`)).toBeInTheDocument()
     }
+    // 放弃卡不进看板（2026-09-13 GTD 审视）：BOARD_STATUSES 排除 dropped——无列、卡不可见
+    expect(screen.queryByTestId('kanban-col-dropped')).not.toBeInTheDocument()
+    expect(screen.queryByText('放弃任务')).not.toBeInTheDocument()
+    // 过滤也不召回（与归档不同：归档过滤强制展开，放弃彻底离场）
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '放弃' } })
+    expect(screen.queryByText('放弃任务')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('kanban-filter'), { target: { value: '' } })
     expect(within(screen.getByTestId('kanban-col-doing')).getByText('修滚动条')).toBeInTheDocument()
     expect(within(screen.getByTestId('kanban-col-todo')).getByText('暂无任务')).toBeInTheDocument()
     // 夺 body 焦点：根 div 挂载即 focus（引擎 keyCommand.defaultEnableCheck 只认 body）
@@ -538,11 +554,11 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1)
   })
 
-  test('归档卡不进五列：收起条在场带计数，未展开不可见（2026-09 看板治理）', () => {
+  test('归档卡不进四列：收起条在场带计数，未展开不可见（2026-09 看板治理）', () => {
     const { mm } = makeMm()
     renderKanban(mm)
     expect(screen.getByTestId('kanban-archive-collapsed')).toHaveTextContent('1')
-    // 五列内无归档卡（列循环走 BOARD_STATUSES）
+    // 四列内无归档卡（列循环走 BOARD_STATUSES）
     expect(screen.queryByText('翻篇任务')).not.toBeInTheDocument()
   })
 

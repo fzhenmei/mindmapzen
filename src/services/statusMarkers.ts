@@ -9,9 +9,11 @@
 // （Sonar S8786 口径，与 tagMarkers 同款模式）。
 export type TaskStatus = 'todo' | 'doing' | 'blocked' | 'done' | 'dropped' | 'archived'
 export const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'doing', 'blocked', 'done', 'dropped', 'archived']
-/** 看板五列（archived 不进常规列循环——它是默认收起的归档列，看板治理 spec §2.3）；
- *  单卡归档入口在卡片改状态子菜单（循环 TASK_STATUSES 自动含 archived） */
-export const BOARD_STATUSES: readonly TaskStatus[] = TASK_STATUSES.filter((s) => s !== 'archived')
+/** 看板四列（2026-09-13 GTD 审视）：archived/dropped 不进常规列循环——归档是默认收起的
+ *  历史列（看板治理 spec §2.3），放弃 = 已决策不做、彻底离开行动视野（GTD Trash：无列、
+ *  无收起条、过滤也不召回）；两态的看板入口都在卡片改状态子菜单（循环 TASK_STATUSES
+ *  自动含），放弃的恢复走导图状态选择器 */
+export const BOARD_STATUSES: readonly TaskStatus[] = TASK_STATUSES.filter((s) => s !== 'archived' && s !== 'dropped')
 
 const ALT = TASK_STATUSES.join('|')
 /** 行尾单段标记：前置锚定 `(?:^|\s+)` + @ + 六态词 + 行尾锚定；全式仅一个量词（\s+），线性无回溯。
