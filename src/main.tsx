@@ -4,6 +4,7 @@ import App from './App'
 import { initI18n } from './i18n'
 import { resolveUiLang, systemUiLanguage } from './i18n/resolve'
 import { disableBrowserContextMenu } from './services/contextMenuGuard'
+import { isE2eMode } from './services/e2eMode'
 import { enableSlimScrollbarHover } from './services/slimScrollbarHover'
 // OFL 开源字体（内嵌分发，替代系统微软字体：发布合规，详见 theme.css 字体双声道注释）
 import '@fontsource-variable/noto-sans-sc'
@@ -22,7 +23,7 @@ enableSlimScrollbarHover()
 initI18n(resolveUiLang('auto', systemUiLanguage()))
 
 // E2E 模式（?e2e=1）：先装内存 FS harness 再挂载应用（index.html 为 module 脚本，顶层 await 可用）
-if (new URLSearchParams(window.location.search).has('e2e')) {
+if (isE2eMode()) {
   const { installE2eHarness } = await import('./test/e2eHarness')
   await installE2eHarness()
 }

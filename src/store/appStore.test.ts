@@ -47,12 +47,14 @@ describe('appStore', () => {
     expect(useAppStore.getState().route).toBe('library')
   })
 
-  // v2.4 验收：启动恒定落案头（不自动回上次导图——上次内容在欢迎页「最近打开」可达）
-  test('init 有 lastOpened 也落案头，booted 置位', async () => {
+  // v2.4 验收：不自动回上次导图（lastOpened 不劫持进编辑器；上次内容在欢迎页「最近打开」可达）。
+  // 2026-09 工作台起启动落点改为：有工作区 → 工作台（原断言 'library' 随产品行为更新，
+  // 核心口径不变——落点仍不是编辑器）
+  test('init 有 lastOpened 也不回编辑器，有工作区落工作台，booted 置位', async () => {
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: '/ws/已有.md' }))
     useAppStore.setState({ configPath: '/cfg.json' })
     await useAppStore.getState().init()
-    expect(useAppStore.getState().route).toBe('library')
+    expect(useAppStore.getState().route).toBe('workbench')
     expect(useAppStore.getState().booted).toBe(true)
   })
 
@@ -419,5 +421,38 @@ describe('favorites + librarySort（收藏与排序）', () => {
     await useAppStore.getState().init()
     expect(useAppStore.getState().favorites).toEqual([])
     expect(useAppStore.getState().librarySort).toBe('modified')
+  })
+})
+
+// 工作台路由与启动落点（2026-09 工作台）：route 三态新增 workbench；有工作区启动
+// 落工作台（打开应用先见今天该做什么），e2e 模式维持落案头（全线 spec 假设启动即
+// 案头）；pendingLocate 为文本寻址器 { path, text }——md 不序列化 uid，跨图跳转
+// 只能以路径+文本定位（spec §11 Ruling），EditorView 消费即清
+describe('工作台路由与启动落点（2026-09 工作台）', () => {
+  test('init 有工作区：启动落工作台（产品分支，jsdom URL 无 ?e2e=1）', async () => {
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    useAppStore.setState({ adapter: fs, workspaceDir: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().route).toBe('workbench')
+  })
+
+  test('init 无工作区：维持落案头（onboarding 不抢）', async () => {
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({}))
+    useAppStore.setState({ adapter: fs, workspaceDir: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().route).toBe('library')
+  })
+
+  test('goWorkbench 清编辑态置路由；setPendingLocate 置/清', () => {
+    useAppStore.setState({ currentMdPath: '/ws/a.md', dirty: true, route: 'editor' })
+    useAppStore.getState().goWorkbench()
+    expect(useAppStore.getState().route).toBe('workbench')
+    expect(useAppStore.getState().currentMdPath).toBeNull()
+    expect(useAppStore.getState().dirty).toBe(false)
+    const locate = { path: ['分支'], text: '任务甲' }
+    useAppStore.getState().setPendingLocate(locate)
+    expect(useAppStore.getState().pendingLocate).toEqual(locate)
+    useAppStore.getState().setPendingLocate(null)
+    expect(useAppStore.getState().pendingLocate).toBeNull()
   })
 })

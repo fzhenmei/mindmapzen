@@ -7,10 +7,11 @@ import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../service
 import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
+import { isE2eMode } from '../services/e2eMode'
 import type { GitClone, GitRun } from '../types/ports'
 
 interface AppState {
-  route: 'library' | 'editor'
+  route: 'library' | 'editor' | 'workbench' // workbench=工作台（2026-09 跨图总览，spec 2026-09-13-workbench §2）
   /** 启动完成标志（v2.4）：init（含磁盘 IO）完成前 App 显示 boot loading，不闪开屏/案头 */
   booted: boolean
   /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
@@ -38,6 +39,13 @@ interface AppState {
   viewMode: 'mindmap' | 'kanban'
   /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
   setViewMode: (v: 'mindmap' | 'kanban') => void
+  /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器
+   * { path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
+   * EditorView 引擎 onReady 后消费（locateNode 定位）并即刻清空——消费即清，避免切图残留误定位 */
+  pendingLocate: { path: string[]; text: string } | null
+  setPendingLocate: (v: { path: string[]; text: string } | null) => void
+  /** 进入工作台（案头按钮入口）：工作台不持有打开图，清编辑态（dirty/currentMdPath） */
+  goWorkbench: () => void
   dirty: boolean
   error: string | null
   configPath: string
@@ -174,6 +182,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentMdPath: null,
   editorSeq: 0,
   viewMode: 'mindmap',
+  pendingLocate: null,
+  setPendingLocate: (v) => set({ pendingLocate: v }),
+  goWorkbench: () => set({ currentMdPath: null, dirty: false, route: 'workbench' }),
   dirty: false,
   error: null,
   configPath: '/cfg.json',
@@ -225,8 +236,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened.slice(0, 5) })
       await get().refreshMaps()
     }
-    // v2.4：不再自动回到上次打开的导图——启动恒定落案头（上次内容在「最近打开」一键可达）
-    set({ route: 'library', booted: true })
+    // 启动落点（2026-09 工作台 spec §2）：有工作区 → 工作台（打开应用先见今天该做什么）；
+    // e2e 模式维持落案头——全线 spec 假设启动即案头（file-node 直接可达），产品分支的
+    // 真实落点由 App.test.tsx 覆盖（jsdom URL 无 ?e2e=1），见 spec §11 回写。
+    // v2.4 口径「不自动回到上次打开的导图」不变——落点不是编辑器，上次内容仍在「最近打开」可达
+    set({ route: get().workspaceDir !== null && !isE2eMode() ? 'workbench' : 'library', booted: true })
   },
 
   setWorkspace: async (dir) => {
