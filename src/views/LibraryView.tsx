@@ -19,7 +19,7 @@ import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
-import { IconImport, IconPlus, IconSettings } from '../components/icons'
+import { IconImport, IconPlus, IconSettings, IconWorkbench } from '../components/icons'
 import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
@@ -383,6 +383,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧） */}
+              {iconBtn(t('workbench.title'), 'btn-workbench', IconWorkbench, () => useAppStore.getState().goWorkbench())}
               {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(''))}
               {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>

@@ -8,6 +8,7 @@ import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import { describeBackendError } from './services/backendError'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
+import WorkbenchView from './views/WorkbenchView'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
 import type { ExportPorts, GitClone, GitRun, RegisterCloseGuard } from './types/ports'
@@ -338,6 +339,12 @@ export default function App() {
         </div>
       </div>,
     )
+  }
+
+  // 工作台（2026-09 跨图总览）：route 为 workbench 时 currentMdPath 必为 null
+  // （goWorkbench 清编辑态、openMap 置 editor），无打开图无守卫需求
+  if (route === 'workbench') {
+    return shell(<WorkbenchView />)
   }
 
   if (route === 'editor' && currentMdPath) {
