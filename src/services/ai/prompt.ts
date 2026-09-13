@@ -32,7 +32,7 @@ export function buildSystemPrompt(tree: EngineNode | null): string {
     outline,
     '',
     '工作纪律：',
-    '1. 修改导图只能用提供的工具（add_node / update_node_text / remove_node / move_node），用 uid 定位节点；',
+    '1. 修改导图只能用提供的工具（add_node / update_node_text / remove_node / move_node / up_node / down_node），用 uid 定位节点；',
     '2. 大改动分多步小改，每步等工具结果确认成功再继续；工具失败会返回错误文本，按提示自纠；',
     '3. 需要重新查看改后的全图时调 get_mindmap；',
     '4. 文本保持简洁（节点是关键词，不是段落）；不改动与用户诉求无关的节点。',
