@@ -63,11 +63,12 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     }
   })
 
-  test('创建工作目录失败：setError 走全局横幅（不吞异常红线）', async () => {
+  test('创建工作目录失败：横幅可见（workbench 路由内渲染 error，不吞异常红线）', async () => {
     render(<WorkbenchView />)
     expect(await screen.findByTestId('workbench-empty-create')).toBeInTheDocument()
     vi.spyOn(fs, 'ensureDir').mockRejectedValue(new Error('disk full'))
     await screen.getByTestId('workbench-empty-create').click()
-    expect(useAppStore.getState().error).toBe('创建工作目录失败')
+    // 断言可见文本而非 store 置位：error 唯一渲染出口在 LibraryView，本路由须自渲染
+    expect(await screen.findByText('创建工作目录失败')).toBeInTheDocument()
   })
 })

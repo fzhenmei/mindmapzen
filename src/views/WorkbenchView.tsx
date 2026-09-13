@@ -14,6 +14,9 @@ export default function WorkbenchView() {
   const adapter = useAppStore((s) => s.adapter)
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const backToLibrary = useAppStore((s) => s.backToLibrary)
+  // error 横幅本路由自渲染：唯一既有出口在 LibraryView，workbench 路由不经过——
+  // 不订阅则 setError 只落 store，用户无声且回案头时以陈旧横幅弹出（审查 Important-1）
+  const error = useAppStore((s) => s.error)
   const [scan, setScan] = useState<WorkScan | null>(null)
   const [scanning, setScanning] = useState(true)
 
@@ -64,6 +67,7 @@ export default function WorkbenchView() {
           {t('workbench.toLibrary')}
         </button>
       </header>
+      {error && <div className="error-banner">{error}</div>}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {scanning && scan === null ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground" data-testid="workbench-loading">
