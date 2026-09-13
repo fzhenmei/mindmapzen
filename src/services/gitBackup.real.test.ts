@@ -8,16 +8,37 @@
 // 与被测代码共享同一错误假设；format 串与真 git 的契约只能用真 git 锁（git 缺失环境 skip）。
 import { describe, expect, test } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitDiffStat, gitHistory } from './gitBackup'
-import type { GitRun } from '../types/ports'
+import { checkAndBackup, gitDiffStat, gitHistory } from './gitBackup'
+import { cloneWorkspace } from './gitClone'
+import type { GitClone, GitRun } from '../types/ports'
+
+/** 真 git 提交身份（机器全局 config 不可依赖——容器/CI 常缺失） */
+const GIT_ENV = {
+  ...process.env,
+  GIT_AUTHOR_NAME: 'zen-test',
+  GIT_AUTHOR_EMAIL: 'zen@test',
+  GIT_COMMITTER_NAME: 'zen-test',
+  GIT_COMMITTER_EMAIL: 'zen@test',
+}
 
 /** 真 git 适配 GitRun：cwd 限定临时仓库；失败时 stdout/stderr 从异常恢复（与 Tauri git_exec 同构） */
 const realRun: GitRun = async (cwd, args) => {
   try {
-    const out = execFileSync('git', args, { cwd, encoding: 'utf8' })
+    const out = execFileSync('git', args, { cwd, encoding: 'utf8', env: GIT_ENV })
+    return { ok: true, out, err: '' }
+  } catch (e) {
+    const err = e as { stdout?: string; stderr?: string }
+    return { ok: false, out: err.stdout ?? '', err: err.stderr ?? '' }
+  }
+}
+
+/** 真 git 适配 GitClone（与 Tauri git_clone 同构：cwd=父目录，clone <url> <name>） */
+const realClone: GitClone = async (parentDir, url, repoName) => {
+  try {
+    const out = execFileSync('git', ['clone', url, repoName], { cwd: parentDir, encoding: 'utf8', env: GIT_ENV })
     return { ok: true, out, err: '' }
   } catch (e) {
     const err = e as { stdout?: string; stderr?: string }
@@ -86,6 +107,49 @@ describe.skipIf(!gitAvailable)('gitHistory × 真 git（format 占位符契约�
       })
     } finally {
       rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
+
+describe.skipIf(!gitAvailable)('cloneWorkspace × 真 git（「从 Git 库打开」全链路）', () => {
+  // 契约缘起：克隆流的桩测试只能锁「命令序列拼装」，锁不住真 git 行为——
+  // 本地路径当 clone 源的合法性、zen-origin 注册后的可推送性、克隆产物形态。
+  // 用本地裸库模拟用户场景「本地自建简单 Git Server」（git daemon / HTTP 裸库的同构形态）
+  test('裸库克隆 → 产物完整 → zen-origin 指向源 → 自动备份经 zen-origin 推回源', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'zen-clone-'))
+    try {
+      const env = GIT_ENV
+      const sh = (cwd: string, args: string[]) => execFileSync('git', args, { cwd, env, stdio: 'ignore' })
+      // 源仓库 A（一段历史）→ 裸库 B =「本地 Git Server」
+      const src = join(root, 'src')
+      const server = join(root, 'server.git')
+      sh(root, ['init', src])
+      writeFileSync(join(src, 'a.md'), '# v1\n')
+      sh(src, ['add', '-A'])
+      sh(src, ['commit', '-m', 'v1'])
+      sh(root, ['clone', '--bare', src, server])
+
+      // 克隆到 parent/server（无凭证——本地 server 场景）；r.dir 由服务层 joinPath 拼出（'/' 连接）
+      const parent = join(root, 'parent')
+      mkdirSync(parent)
+      const r = await cloneWorkspace(parent, server, '', '', realClone, realRun)
+      expect(r.ok).toBe(true)
+      expect(r.dir).toBe(`${parent}/server`)
+      expect(existsSync(join(r.dir, 'a.md'))).toBe(true)
+      // 仓库级 zen-origin 指向克隆源
+      const url = execFileSync('git', ['remote', 'get-url', 'zen-origin'], { cwd: r.dir, env, encoding: 'utf8' }).trim()
+      expect(url).toBe(server)
+
+      // 联动闭环：改文件 → 自动备份（全局未配远程）→ 经 zen-origin 推回源
+      writeFileSync(join(r.dir, 'a.md'), '# v2\n')
+      const outcome = await checkAndBackup(r.dir, { enabled: true, remoteUrl: null, token: null }, realRun)
+      expect(outcome.committed).toBe(true)
+      expect(outcome.push).toEqual({ kind: 'ok' })
+      // 服务端（裸库）收到自动备份提交：历史两条
+      const count = execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: server, env, encoding: 'utf8' }).trim()
+      expect(count).toBe('2')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
   }, 30_000)
 })

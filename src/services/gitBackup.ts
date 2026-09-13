@@ -27,7 +27,8 @@ function remoteWithToken(url: string, token: string | null): string {
   return `https://x-access-token:${encodeURIComponent(token)}@${url.slice('https://'.length)}`
 }
 
-const REMOTE_NAME = 'zen-origin'
+/** 备份远程名（gitClone 侧注册仓库级 zen-origin 时共用——单一来源） */
+export const REMOTE_NAME = 'zen-origin'
 
 /** 幂等检查并备份：init（按需）→ 无变更 no-op → add -A + commit → push（按需） */
 export async function checkAndBackup(
@@ -55,12 +56,14 @@ export async function checkAndBackup(
     return { committed: false, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.commitFail') }, fatal: i18n.t('errors.git.fatal.commit', { detail: commit.err.split('\n')[0] }) }
   }
 
-  // 远程推送（可选）：确保 zen-origin 指向配置 URL，再推送当前分支
-  if (cfg.remoteUrl === null || cfg.remoteUrl === '') {
+  // 远程推送（可选）：优先全局配置 URL；未配置时回退仓库级 zen-origin（「从 Git 库打开」
+  // 克隆时注册的克隆源同 URL）——克隆工作区零额外配置即获得「推回源」能力。两者都无才 skip
+  let url = cfg.remoteUrl !== null && cfg.remoteUrl !== '' ? remoteWithToken(cfg.remoteUrl, cfg.token) : ''
+  const current = await run(wsDir, ['remote', 'get-url', REMOTE_NAME])
+  if (url === '') url = current.ok ? current.out.trim() : ''
+  if (url === '') {
     return { committed: true, message, push: { kind: 'skipped', reason: i18n.t('errors.git.reason.noRemote') }, fatal: null }
   }
-  const url = remoteWithToken(cfg.remoteUrl, cfg.token)
-  const current = await run(wsDir, ['remote', 'get-url', REMOTE_NAME])
   if (current.ok && current.out.trim() !== url) {
     await run(wsDir, ['remote', 'set-url', REMOTE_NAME, url])
   } else if (!current.ok) {

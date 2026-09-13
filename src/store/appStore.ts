@@ -7,7 +7,7 @@ import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../service
 import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
-import type { GitRun } from '../types/ports'
+import type { GitClone, GitRun } from '../types/ports'
 
 interface AppState {
   route: 'library' | 'editor'
@@ -81,6 +81,9 @@ interface AppState {
   markAiBackupNoticeShown: () => void
   /** git 命令端口（M20）：App 装配注入（生产 Tauri git_exec / E2E harness 桩）；null 时备份为 no-op */
   gitRun: GitRun | null
+  /** git 克隆端口（「从 Git 库打开」）：App 装配注入（生产 Tauri git_clone / E2E harness 桩）；
+   *  null 时克隆入口报「未启用版本管理」（与 gitRun 同门） */
+  gitClone: GitClone | null
   /** 最近备份结果原始数据（2026-09 i18n：只存 BackupOutcome 枚举与原始串，人话摘要由
    *  渲染层 SettingsDialog 拼——语言切换即时反映，store 不落拼好文案）；null = 从未执行 */
   lastBackup: BackupOutcome | null
@@ -195,6 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiBackupNoticeShown: false,
   markAiBackupNoticeShown: () => set({ aiBackupNoticeShown: true }),
   gitRun: null,
+  gitClone: null,
   lastBackup: null,
   gitStatus: { lastCommit: null, aheadCount: null },
   gitHistoryList: [],
