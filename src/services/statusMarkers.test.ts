@@ -12,9 +12,9 @@ describe('statusMarkers（句尾 @status 白名单标记）', () => {
     expect(extractStatusMarker('翻篇了 @archived')).toBe('archived')
     expect(stripStatusMarkers('翻篇了 @archived')).toBe('翻篇了')
     expect(injectStatusMarker('翻篇了', 'archived')).toBe('翻篇了 @archived')
-    // 派生契约（2026-09 看板治理）：看板五列 = 六态排除 archived——列循环依赖此序，
-    // 漏项/乱序/误含 archived 即测出
-    expect(BOARD_STATUSES).toEqual(['todo', 'doing', 'blocked', 'done', 'dropped'])
+    // 派生契约（2026-09-13 GTD 审视）：看板四列 = 六态排除 archived/dropped——归档走
+    // 默认收起条、放弃彻底离开行动视野（GTD Trash），列循环依赖此序，漏项/乱序/误含即测出
+    expect(BOARD_STATUSES).toEqual(['todo', 'doing', 'blocked', 'done'])
   })
 
   test('未知 @xxx 视为普通文本：不提取、不剥除、roundtrip 恒等', () => {

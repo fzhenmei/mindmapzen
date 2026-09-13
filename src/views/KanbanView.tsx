@@ -235,7 +235,7 @@ export default function KanbanView({
           <IconWinClose size={14} />
         </button>
       </header>
-      {/* 五列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
+      {/* 四列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
       <div className="flex flex-1 items-start gap-3 overflow-x-auto p-4">
         {BOARD_STATUSES.map((s) => (
           <KanbanColumn
