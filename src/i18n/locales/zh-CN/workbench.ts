@@ -13,7 +13,8 @@ export default {
     create: '创建工作目录',
     noTasks: '工作目录里还没有带状态标记的任务。打开导图给节点选择状态（待办/进行中/…），任务就会出现在这里。',
   },
-  suggest: { section: '下一步建议', finish: '进行中的事，先收尾', blocked: '等待中的事，看是否该催', staleTodo: '搁置最久的待办', staleMap: '这张工作图一周没动了', askAi: '问问 AI' },
+  // itemJoin：建议行理由与目标的分隔符（zh 全角冒号 / en 半角+空格），不硬编码在 JSX
+  suggest: { section: '下一步建议', finish: '进行中的事，先收尾', blocked: '等待中的事，看是否该催', staleTodo: '搁置最久的待办', staleMap: '这张工作图一周没动了', askAi: '问问 AI', itemJoin: '：' },
   board: { section: '工作计划' },
   recent: { section: '最近' },
   ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败', close: '关闭' },

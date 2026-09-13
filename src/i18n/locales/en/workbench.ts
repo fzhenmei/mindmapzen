@@ -14,7 +14,8 @@ const workbench: Dict['workbench'] = {
     create: 'Create work directory',
     noTasks: 'No tasks with status markers in the work directory yet. Open a map and set a node status (todo/doing/…) — tasks will show up here.',
   },
-  suggest: { section: 'Next up', finish: 'Finish what’s in progress', blocked: 'Waiting items — time to nudge?', staleTodo: 'Longest-shelved todos', staleMap: 'This work map has been idle for a week', askAi: 'Ask AI' },
+  // itemJoin：建议行理由与目标的分隔符（en 半角冒号+空格，不渗全角正字法）
+  suggest: { section: 'Next up', finish: 'Finish what’s in progress', blocked: 'Waiting items — time to nudge?', staleTodo: 'Longest-shelved todos', staleMap: 'This work map has been idle for a week', askAi: 'Ask AI', itemJoin: ': ' },
   board: { section: 'Work plan' },
   recent: { section: 'Recent' },
   ai: { title: 'AI suggestions', disabledHint: 'Configure AI first in Settings (base URL / API key / model)', error: 'AI request failed', close: 'Close' },

@@ -1,7 +1,7 @@
 // src/views/WorkbenchView.test.tsx
 // 挂载模式对齐 LibraryView.test.tsx：真实 zustand store setState 预置 + MemoryFsAdapter。
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { useAppStore } from '../store/appStore'
 import { changeUiLanguage } from '../i18n'
@@ -96,5 +96,52 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     await chip.click()
     expect(openMap).toHaveBeenCalledWith('/ws/昨日图.md')
     expect(useAppStore.getState().pendingLocate).toBeNull()
+  })
+})
+
+// fake transport 注入走 window.__AI_TRANSPORT_FACTORY__（ChatPanel.test.tsx 既有口径，
+// getTransport 工厂消费点）——不走 vi.mock，无提升互覆盖问题，两用例同文件各设各的工厂；
+// delta 按真实契约发原始 OpenAI chunk JSON 串（client.ts：onDelta 收到每条原始 chunk JSON）
+function installAiFactory(start: (onDelta: (d: string) => void) => Promise<{ endedWith: 'done' | 'error' }>): void {
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: (_p: unknown, onDelta: (d: string) => void) => start(onDelta),
+    abort: vi.fn(),
+  })
+}
+
+describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
+  test('问问 AI：未配置时禁用 + title 提示；配置后点击发起流式并累积渲染', async () => {
+    installAiFactory(async (onDelta) => {
+      onDelta('{"choices":[{"delta":{"content":"建议一"}}]}')
+      onDelta('{"choices":[{"delta":{"content":"：先收尾"}}]}')
+      return { endedWith: 'done' }
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    const btn = screen.getByTestId('btn-workbench-ask-ai')
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveAttribute('title', '先在设置中配置 AI（服务地址 / API Key / 模型名）')
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' } })
+    // setState 后重渲染落定再点（disabled button 不派发 click，直接点会假阴性）
+    await waitFor(() => expect(btn).toBeEnabled())
+    await btn.click()
+    expect(await screen.findByTestId('workbench-ai-dialog')).toBeInTheDocument()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('建议一：先收尾')
+  })
+
+  test('问问 AI：stream error 显式报错文案，半截文本保留（不吞异常，spec §7/§8）', async () => {
+    installAiFactory(async (onDelta) => {
+      onDelta('{"choices":[{"delta":{"content":"半截"}}]}')
+      return { endedWith: 'error' }
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-error')).toHaveTextContent('AI 请求失败')
+    expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('半截')
   })
 })

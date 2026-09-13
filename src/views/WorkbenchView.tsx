@@ -1,13 +1,16 @@
 // src/views/WorkbenchView.tsx —— 工作台（驾驶舱）：跨图任务聚合总览（spec 2026-09-13）。
 // 只读 + 跳转（spec §1）：一切编辑回纸面做，本视图不写任何文件。纵向构图（§4）：
-// 头部 → 聚合看板（Task 5）→ 下一步建议区/最近（Task 6 完整化）。
-import { useCallback, useEffect, useState } from 'react'
+// 头部 → 聚合看板（Task 5）→ 下一步建议区/最近（Task 6 完整化）→ 问问 AI
+// 浮层（Task 8：无工具纯咨询，聚合上下文一次性问答）。
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { scanWorkTasks, WORK_DIR, type WorkScan, type WorkTask } from '../services/workbench'
-import { suggestNext, type Suggestion } from '../services/workbenchSuggest'
+import { buildSuggestPrompt, suggestNext, type Suggestion } from '../services/workbenchSuggest'
 import { BOARD_STATUSES } from '../services/statusMarkers'
+import { getTransport, parseDeltaChunk } from '../services/ai/client'
 import { joinPath } from '../services/workspace'
+import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
 import WorkbenchCard from '../components/WorkbenchCard'
 
 /** 最近 chip 行（spec §5）：持久 MRU 前 8 一键回图，只 openMap 不定位；
@@ -37,41 +40,61 @@ function RecentChips({ recentOpened, onOpen }: Readonly<{ recentOpened: string[]
 }
 
 /** 下一步建议区（spec §6）：理由 reasonKey 经 i18n 渲染，低优先级不越位补位；
- *  task 级点击走 openTask（置定位），map 级只进图不定位（spec §5） */
+ *  task 级点击走 openTask（置定位），map 级只进图不定位（spec §5）。
+ *  标题行恒渲染（含行尾「问问 AI」钮）：建议列表可为空，但有任务即可问 AI——
+ *  空建议不再整段退场（Task 8「有任务即可点」口径） */
 function SuggestSection({
   suggestions,
   openTask,
   openMapOnly,
+  onAskAi,
+  aiReady,
 }: Readonly<{
   suggestions: Suggestion[]
   openTask: (t: WorkTask) => void
   openMapOnly: (p: string) => void
+  onAskAi: () => void
+  aiReady: boolean
 }>) {
   const { t } = useTranslation()
-  if (suggestions.length === 0) return null
   return (
     <section className="mb-6" aria-label={t('workbench.suggest.section')}>
-      <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('workbench.suggest.section')}</h2>
-      <div className="flex flex-col gap-2">
-        {suggestions.map((sg) => {
-          const target = sg.task !== undefined ? `${sg.task.mapName} · ${sg.task.text}` : (sg.mapName ?? '')
-          const onClick = (): void => {
-            if (sg.task !== undefined) openTask(sg.task)
-            else if (sg.mapPath !== undefined) openMapOnly(sg.mapPath)
-          }
-          return (
-            <button
-              key={`${sg.kind}:${target}`}
-              type="button"
-              data-testid="workbench-suggestion"
-              className="rounded-md border bg-card px-4 py-2 text-left text-sm hover:bg-muted"
-              onClick={onClick}
-            >
-              {t(sg.reasonKey)}：{target}
-            </button>
-          )
-        })}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-muted-foreground">{t('workbench.suggest.section')}</h2>
+        <button
+          type="button"
+          data-testid="btn-workbench-ask-ai"
+          className="rounded-md border px-3 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!aiReady}
+          title={aiReady ? undefined : t('workbench.ai.disabledHint')}
+          onClick={onAskAi}
+        >
+          {t('workbench.suggest.askAi')}
+        </button>
       </div>
+      {suggestions.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {suggestions.map((sg) => {
+            const target = sg.task !== undefined ? `${sg.task.mapName} · ${sg.task.text}` : (sg.mapName ?? '')
+            const onClick = (): void => {
+              if (sg.task !== undefined) openTask(sg.task)
+              else if (sg.mapPath !== undefined) openMapOnly(sg.mapPath)
+            }
+            return (
+              <button
+                key={`${sg.kind}:${target}`}
+                type="button"
+                data-testid="workbench-suggestion"
+                className="rounded-md border bg-card px-4 py-2 text-left text-sm hover:bg-muted"
+                onClick={onClick}
+              >
+                {/* 冒号收进词条（zh 全角 / en 半角+空格），理由与目标的分隔不硬编码在 JSX */}
+                {t(sg.reasonKey)}{t('workbench.suggest.itemJoin')}{target}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -100,6 +123,83 @@ function BoardSection({ tasks, onOpen }: Readonly<{ tasks: WorkTask[]; onOpen: (
       </div>
     </section>
   )
+}
+
+/** 问问 AI 浮层状态机（spec §7 无工具纯咨询）：聚合上下文一次性问答，不走 agentLoop
+ *  工具链（引擎命令在无打开图时无意义）。独立成 hook：WorkbenchView 主组件认知复杂度
+ *  已在 S3776 限值上，再叠流式编排必超。 */
+function useAskAi(scan: WorkScan | null): {
+  aiReady: boolean
+  aiOpen: boolean
+  aiText: string
+  aiPhase: 'idle' | 'streaming' | 'done' | 'error'
+  askAi: () => void
+  closeAi: (o: boolean) => void
+} {
+  const aiConfig = useAppStore((s) => s.aiConfig)
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiText, setAiText] = useState('')
+  const [aiPhase, setAiPhase] = useState<'idle' | 'streaming' | 'done' | 'error'>('idle')
+  const aiAbortRef = useRef<(() => void) | null>(null)
+  const aiReady = aiConfig.baseUrl !== '' && aiConfig.apiKey !== '' && aiConfig.model !== ''
+
+  /** onDelta 在 transport Promise 回调内——自包 try/catch（React 外异步异常会被运行时
+   *  静默吞且不留痕，红线）；delta 按契约是原始 OpenAI chunk JSON，解析取 content 累积。
+   *  提为 hook 级独立函数：嵌套在 askAi 内会推高其认知复杂度（S3776） */
+  const handleDelta = (d: string): void => {
+    try {
+      const text = parseDeltaChunk(d)?.text
+      if (text !== undefined) setAiText((prev) => prev + text)
+    } catch (e) {
+      console.error('工作台 AI 流式渲染失败', e)
+    }
+  }
+
+  const askAi = async (): Promise<void> => {
+    if (scan === null) return
+    const ai = useAppStore.getState().aiConfig
+    // 尾部斜杠循环剥除（Sonar S8786 只认单量词正则，/\/+$/ 亦被报——ChatPanel 先例改循环）
+    let base = ai.baseUrl
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    const transport = getTransport()
+    aiAbortRef.current = (): void => transport.abort()
+    setAiOpen(true)
+    setAiText('')
+    setAiPhase('streaming')
+    try {
+      const outcome = await transport.start(
+        {
+          url: `${base}/chat/completions`,
+          apiKey: ai.apiKey,
+          body: {
+            model: ai.model,
+            messages: [{ role: 'user', content: buildSuggestPrompt(scan, suggestNext(scan, Date.now())) }],
+            stream: true,
+          },
+        },
+        handleDelta,
+      )
+      if (outcome.endedWith === 'error') {
+        // 双显式出口（不吞异常红线）：UI 错误文案 + console 线索（errorMessage/status 便于排障）
+        console.error('工作台 AI 咨询失败', outcome.errorMessage ?? '', outcome.status ?? '')
+        setAiPhase('error')
+      } else {
+        setAiPhase('done') // aborted ≠ error：本地掐流不是故障，不误报
+      }
+    } catch (e) {
+      console.error('工作台 AI 咨询失败', e)
+      setAiPhase('error')
+    }
+  }
+
+  // 卸载兜底：在途流掐断（关浮层=不再需要，防孤儿流）——closeAi 关闭路径同样掐
+  useEffect(() => () => aiAbortRef.current?.(), [])
+
+  const closeAi = (o: boolean): void => {
+    if (!o) aiAbortRef.current?.()
+    setAiOpen(o)
+  }
+  return { aiReady, aiOpen, aiText, aiPhase, askAi, closeAi }
 }
 
 export default function WorkbenchView() {
@@ -162,6 +262,7 @@ export default function WorkbenchView() {
   /** 看板可见任务数（archived/dropped 不占列）：空态/看板/建议区统一用它做总门控，
    *  避免「只有归档任务的目录」渲染成四个全空列、跳过空态引导 */
   const visibleTasks = scan === null ? [] : scan.tasks.filter((x) => BOARD_STATUSES.includes(x.status))
+  const { aiReady, aiOpen, aiText, aiPhase, askAi, closeAi } = useAskAi(scan)
 
   return (
     <div className="flex h-full flex-col bg-background" data-testid="workbench-view">
@@ -199,9 +300,23 @@ export default function WorkbenchView() {
         {scan !== null && scan.dirExists && visibleTasks.length === 0 ? (
           <p className="mt-16 text-center text-sm text-muted-foreground">{t('workbench.empty.noTasks')}</p>
         ) : null}
-        {scan !== null && visibleTasks.length > 0 ? <SuggestSection suggestions={suggestions} openTask={openTask} openMapOnly={openMapOnly} /> : null}
+        {scan !== null && visibleTasks.length > 0 ? (
+          <SuggestSection suggestions={suggestions} openTask={openTask} openMapOnly={openMapOnly} onAskAi={askAi} aiReady={aiReady} />
+        ) : null}
         {scan !== null && visibleTasks.length > 0 ? <BoardSection tasks={scan.tasks} onOpen={openTask} /> : null}
       </div>
+      <Dialog open={aiOpen} onOpenChange={closeAi}>
+        {/* 宽度覆盖必须同断点压制默认 sm:max-w-lg（Dialog max-w 变体坑），裸 max-w-2xl 会被源序反杀 */}
+        <DialogContent className="sm:max-w-none sm:max-w-2xl" data-testid="workbench-ai-dialog">
+          <DialogTitle>{t('workbench.ai.title')}</DialogTitle>
+          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm" data-testid="workbench-ai-text">
+            {aiText}
+          </div>
+          {aiPhase === 'error' ? (
+            <p className="text-sm text-destructive" data-testid="workbench-ai-error">{t('workbench.ai.error')}</p>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
