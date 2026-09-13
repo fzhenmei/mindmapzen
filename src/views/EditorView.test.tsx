@@ -3042,4 +3042,52 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
       errSpy.mockRestore()
     }
   })
+
+  test('首挂未渲 miss：消费经 node_tree_render_end 有限重试后居中（Task 9 定位修复回归）', async () => {
+    // 首挂时序（工作台 e2e 实锤）：引擎 render() 排 setTimeout 0，onCanvasReady 时首渲
+    // 未落——已展开路径即时寻址必 miss。此前 miss 即放弃居中（大图目标在屏外），修复后
+    // 经渲染完成事件重试。fake 模拟：findNodeByUid 首查 null（首渲未落），次查命中
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    useAppStore.setState({ pendingLocate: { path: ['分支'], text: '任务甲' } })
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    const handle = fakeHandle
+    // 首挂寻址 miss 注入（引擎首渲排队中形态）：首查 null，其后恢复真实寻址
+    const realFind = handle.renderer?.findNodeByUid.bind(handle.renderer)
+    let finds = 0
+    handle.renderer!.findNodeByUid = (uid: string) => {
+      finds += 1
+      return finds === 1 ? null : realFind?.(uid)
+    }
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    expect(useAppStore.getState().pendingLocate).toBeNull() // 消费照常即清（miss 不回滚）
+    const center = handle.renderer?.moveNodeToCenter as ReturnType<typeof vi.fn>
+    expect(center).not.toHaveBeenCalled() // 首查 miss：不放弃也不误居中，重试挂起
+    // 首渲落定（node_tree_render_end）：重试命中，居中生效
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitRenderEnd!()
+    })
+    expect(center).toHaveBeenCalledWith(fakeChildNode)
+  })
 })

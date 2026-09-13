@@ -189,6 +189,10 @@ function useAskAi(scan: WorkScan | null): {
     } catch (e) {
       console.error('工作台 AI 咨询失败', e)
       setAiPhase('error')
+    } finally {
+      // 回合收尾即摘除 abort 句柄（对齐 ChatPanel 口径）：流已结束，closeAi/卸载不再
+      // 触发过期 transport.abort()（浮层互斥保证单流在途，无句柄被新回合覆盖的竞态）
+      aiAbortRef.current = null
     }
   }
 

@@ -144,4 +144,33 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     expect(await screen.findByTestId('workbench-ai-error')).toHaveTextContent('AI 请求失败')
     expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('半截')
   })
+
+  test('问问 AI：流式中关浮层——主动掐流且不误报错误（abort ≠ error，Task 9 摘除句柄回归）', async () => {
+    // stallTransport 同款（ChatPanel.test.tsx 终审 I2）：start 挂起模拟模型停摆，
+    // abort() 令其以 'aborted' 主动收尾（不等 Rust 空闲超时 120s）
+    let aborts = 0
+    let resolveStart: ((o: { endedWith: 'done' | 'error' | 'aborted' }) => void) | null = null
+    ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+      start: () =>
+        new Promise<{ endedWith: 'done' | 'error' | 'aborted' }>((resolve) => {
+          resolveStart = resolve
+        }),
+      abort: () => {
+        aborts++
+        resolveStart?.({ endedWith: 'aborted' })
+      },
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-dialog')).toBeInTheDocument()
+    // 关浮层（onOpenChange(false) → closeAi 掐流）：transport.abort 主动收尾在途流
+    await screen.getByRole('button', { name: 'Close' }).click()
+    expect(aborts).toBe(1)
+    await waitFor(() => expect(screen.queryByTestId('workbench-ai-dialog')).not.toBeInTheDocument())
+    // 本地掐流不是故障：不落错误文案（aborted ≠ error）
+    expect(screen.queryByTestId('workbench-ai-error')).not.toBeInTheDocument()
+  })
 })

@@ -34,7 +34,7 @@ import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
 import type { TaskStatus } from '../services/statusMarkers'
-import { expandToUid, execOnRenderNode, findUidByPathText, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { expandToUid, execOnRenderNode, findUidByPathText, mergeStatusBadge, nodeStatusOf, RENDER_RETRY_MAX } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -189,10 +189,30 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     switchView('mindmap')
     const mm = mmRef.current
     if (mm === null) return
+    // 首挂时序（2026-09 工作台跨图定位 e2e 实锤）：引擎 render() 排 setTimeout 0，
+    // onCanvasReady 时首渲未落——已展开路径的即时寻址必 miss。miss 时经
+    // node_tree_render_end 有限重试（execOnRenderNode 同款 RENDER_RETRY_MAX 口径），
+    // 等首渲/展开重渲落定再居中；超限才放弃（大图不居中=目标在屏外，属功能缺陷）
+    let tries = 0
     const apply = (): void => {
       const node = mm.renderer?.findNodeByUid(uid)
-      if (node !== null && node !== undefined) mm.renderer?.moveNodeToCenter?.(node as never)
-      else console.warn('看板定位未命中渲染节点，跳过居中', uid)
+      if (node !== null && node !== undefined) {
+        mm.renderer?.moveNodeToCenter?.(node as never)
+        return
+      }
+      if (tries < RENDER_RETRY_MAX) {
+        tries += 1
+        mm.on('node_tree_render_end', function onEnd() {
+          mm.off('node_tree_render_end', onEnd)
+          try {
+            apply()
+          } catch (e) {
+            console.error('看板定位回调失败', e)
+          }
+        })
+        return
+      }
+      console.warn('看板定位未命中渲染节点，跳过居中', uid)
     }
     try {
       if (expandToUid(mm, uid)) {
@@ -205,7 +225,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           }
         })
       } else {
-        apply() // 路径已全展开：渲染树可即时寻址
+        apply() // 路径已全展开：即时寻址（首挂未渲由上方重试分支兜底）
       }
     } catch (e) {
       console.error('看板回导图定位失败', e)

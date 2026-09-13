@@ -73,8 +73,9 @@ export function expandToUid(mm: MindMapHandle, uid: string): boolean {
 }
 
 /** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
- *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环） */
-const RENDER_RETRY_MAX = 3
+ *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环）。导出供 EditorView.locateNode
+ *  同口径复用（首挂定位 miss 重试） */
+export const RENDER_RETRY_MAX = 3
 
 /** 渲染节点寻址落命令（2026-09 审查 Important-2 自 KanbanView.withRenderNode 提升，
  *  KanbanView 三操作与 useIconPicker/useTagPicker 桥接同用）：渲染树命中即同步落命令；
