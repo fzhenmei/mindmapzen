@@ -2905,6 +2905,20 @@ describe('看板模式（2026-09 Task 7）', () => {
     expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
   })
 
+  test('Ctrl+Shift+K 输入域守卫：过滤框/正文输入中不切视图（防丢草稿），非输入域照切', async () => {
+    await renderKanbanReady(kanbanTree())
+    // 2026-09-13 终审遗留修复：正文面板/AI 输入框/看板列底与过滤输入中触发会切视图丢草稿——
+    // 焦点在 input/textarea/contenteditable 时放行不截获（守卫同 Ctrl+C 输入域模式）
+    const filter = screen.getByTestId('kanban-filter')
+    fireEvent.change(filter, { target: { value: '进行中' } })
+    fireEvent.keyDown(filter, { key: 'k', ctrlKey: true, shiftKey: true })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(useAppStore.getState().viewMode).toBe('kanban') // 未切——草稿（过滤词）保全
+    // 非输入域（window 直发）照常切换：守卫不得误伤正常出路
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'))
+  })
+
   test('看板卡片菜单「节点图标」桥接 picker：显式卡片 uid 落命令（Task 6 审查预警 A 回归钉）', async () => {
     // 画布无选中（selection.activeUidRef=null）：若桥接缺显式 uid，apply 将取 null 直接丢弃
     const handle = await renderKanbanReady(kanbanTree())
