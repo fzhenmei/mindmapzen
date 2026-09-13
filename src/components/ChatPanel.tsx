@@ -56,6 +56,13 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       return
     }
     setInput('')
+    // v1.1 ②：git 备份未启用（默认）且本会话未告知——首轮发送前插安全网信息卡（出现在
+    // 用户消息上方）。纯指路（案头 → 设置 → 版本管理）不做面板内开关：设置已有入口避免重复
+    const appNow = useAppStore.getState()
+    if (!appNow.gitConfig.enabled && !appNow.aiBackupNoticeShown) {
+      appNow.markAiBackupNoticeShown()
+      chat.pushNotice(i18n.t('ai.notice.noBackup'))
+    }
     // 对话历史只回传 user/assistant 文本（工具明细不回传，省 token；卡片留在 UI）；
     // 先取历史再 pushUser——runUserTurn 自会追加本轮 userText，取晚一步会把当前消息重复上送
     const history = useChatStore
@@ -189,6 +196,10 @@ function MessageRow({ msg, idx }: Readonly<{ msg: ChatMessage; idx: number }>) {
   }
   if (msg.role === 'error') {
     return <p className="mb-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs text-destructive" data-testid="ai-msg-error">{msg.text}</p>
+  }
+  if (msg.role === 'notice') {
+    // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清
+    return <p className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">{msg.text}</p>
   }
   return (
     <div className="mb-3">

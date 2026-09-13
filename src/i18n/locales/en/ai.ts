@@ -29,6 +29,9 @@ export default {
     network: 'AI request failed: {{message}}',
     notConfigured: 'AI not configured: fill API URL, key and model in Library → Settings → AI',
   },
+  notice: {
+    noBackup: 'Version control is off: AI edits have no automatic backup safety net; mistakes can be undone step by step with Ctrl+Z. Enable auto-commit in Library → Settings → Version control.',
+  },
   settings: {
     title: 'AI',
     baseUrl: 'API URL (OpenAI-compatible)',

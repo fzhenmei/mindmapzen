@@ -75,6 +75,10 @@ interface AppState {
   settings: CopySettings
   /** 版本管理配置（M20 想法8）：init 自配置，setGitConfig 持久化 */
   gitConfig: GitConfig
+  /** AI 安全网告知已示（v1.1 ②）：git 备份未启用时首轮 AI 发送前插信息卡——会话级一次，
+   *  不持久化；App 级而非 chatStore——切图 reset 不重弹 */
+  aiBackupNoticeShown: boolean
+  markAiBackupNoticeShown: () => void
   /** git 命令端口（M20）：App 装配注入（生产 Tauri git_exec / E2E harness 桩）；null 时备份为 no-op */
   gitRun: GitRun | null
   /** 最近备份结果原始数据（2026-09 i18n：只存 BackupOutcome 枚举与原始串，人话摘要由
@@ -186,6 +190,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   titlebarBg: '--background',
   settings: DEFAULT_COPY_SETTINGS,
   gitConfig: DEFAULT_GIT_CONFIG,
+  /** AI 安全网告知已示（v1.1 ②）：git 备份未启用时首轮 AI 发送前插信息卡——会话级一次，
+   *  不持久化（重开应用再提；开关切换后语义仍成立）；App 级而非 chatStore——切图 reset 不重弹 */
+  aiBackupNoticeShown: false,
+  markAiBackupNoticeShown: () => set({ aiBackupNoticeShown: true }),
   gitRun: null,
   lastBackup: null,
   gitStatus: { lastCommit: null, aheadCount: null },
