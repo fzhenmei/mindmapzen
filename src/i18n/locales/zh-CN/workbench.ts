@@ -3,7 +3,9 @@ export default {
   title: '工作台',
   toLibrary: '去案头',
   scanning: '正在聚合工作目录…',
-  failedBar: '{{count}} 张图读取失败',
+  // 冒号收进词条（zh 全角 / en 半角+空格）：调用侧只拼 names，标点不硬编码在 JSX
+  failedBar: '{{count}} 张图读取失败：',
+  createFailed: '创建工作目录失败',
   empty: {
     noDirTitle: '还没有工作目录',
     noDirBody:

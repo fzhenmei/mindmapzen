@@ -4,7 +4,9 @@ const workbench: Dict['workbench'] = {
   title: 'Workbench',
   toLibrary: 'Back to desk',
   scanning: 'Scanning work directory…',
-  failedBar: '{{count}} map(s) failed to load',
+  // 标点入词条：en 侧不渗全角冒号/顿号（正字法随语言，分隔符在调用侧按 i18n.language 取）
+  failedBar: '{{count}} map(s) failed to load: ',
+  createFailed: 'Failed to create work directory',
   empty: {
     noDirTitle: 'No work directory yet',
     noDirBody:
