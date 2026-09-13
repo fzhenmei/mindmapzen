@@ -1,16 +1,19 @@
-// src/services/ai/tools.test.ts —— 五工具执行器（Task 7，spec §3）：
+// src/services/ai/tools.test.ts —— 七工具执行器（Task 7，spec §3 + v1.1 up/down_node）：
 // fake mm 模拟引擎行为（execCommand 记录 + nodeData.children 追加），断言命令参数与 uid 取回
 import { describe, expect, test, vi } from 'vitest'
 import { executeAiTool, AI_TOOL_SCHEMAS } from './tools'
 import { withAiCall } from './lock'
 import type { MindMapHandle } from '../../types/engine'
 
-interface FakeNode { data: { uid?: string; text: string }; nodeData: { children: FakeNd[] }; children: FakeNode[] }
+interface FakeNode { data: { uid?: string; text: string }; nodeData: { children: FakeNd[] }; children: FakeNode[]; parent?: FakeNode | null }
 type FakeNd = { data: { uid?: string; text: string }; children?: FakeNd[] }
 
 function makeFakeMm() {
-  const child: FakeNode = { data: { uid: 'b8c1', text: '子节点' }, nodeData: { children: [] }, children: [] }
-  const root: FakeNode = { data: { uid: 'a3f2', text: '根' }, nodeData: { children: [child] }, children: [child] }
+  const child: FakeNode = { data: { uid: 'b8c1', text: '一' }, nodeData: { children: [] }, children: [] }
+  const second: FakeNode = { data: { uid: 'c2d2', text: '二' }, nodeData: { children: [] }, children: [] }
+  const root: FakeNode = { data: { uid: 'a3f2', text: '根' }, nodeData: { children: [child, second] }, children: [child, second] }
+  child.parent = root
+  second.parent = root
   const execCommand = vi.fn((cmd: string, ...args: unknown[]) => {
     if (cmd === 'INSERT_CHILD_NODE') {
       const nodes = args[1] as FakeNode[]
@@ -23,16 +26,16 @@ function makeFakeMm() {
   const mm = {
     execCommand,
     renderer: {
-      findNodeByUid: (uid: string) => (uid === 'a3f2' ? root : uid === 'b8c1' ? child : null),
-      renderTree: { data: { uid: 'a3f2', text: '根' }, children: [{ data: { uid: 'b8c1', text: '子节点' } }] },
+      findNodeByUid: (uid: string) => (uid === 'a3f2' ? root : uid === 'b8c1' ? child : uid === 'c2d2' ? second : null),
+      renderTree: { data: { uid: 'a3f2', text: '根' }, children: [{ data: { uid: 'b8c1', text: '一' } }, { data: { uid: 'c2d2', text: '二' } }] },
     },
   } as unknown as MindMapHandle
   return { mm, execCommand }
 }
 
-test('schema 五件套齐', () => {
+test('schema 七件套齐', () => {
   expect(AI_TOOL_SCHEMAS.map((t) => t.function.name)).toEqual([
-    'get_mindmap', 'add_node', 'update_node_text', 'remove_node', 'move_node',
+    'get_mindmap', 'add_node', 'update_node_text', 'remove_node', 'move_node', 'up_node', 'down_node',
   ])
 })
 
@@ -63,6 +66,23 @@ describe('executeAiTool', () => {
     // 拒绝），MOVE_NODE_TO 永不派发与断言矛盾；fake 补解析 'b8c1' 后用可区分双 uid 核验传参
     executeAiTool(mm, 'move_node', { uid: 'b8c1', newParentUid: 'a3f2' }, withAiCall)
     expect(execCommand).toHaveBeenLastCalledWith('MOVE_NODE_TO', expect.anything(), expect.anything())
+  })
+  test('up_node/down_node：同级移动一位（UP_NODE/DOWN_NODE 显式节点传参，不动 activeNode）', () => {
+    const { mm, execCommand } = makeFakeMm()
+    const up = executeAiTool(mm, 'up_node', { uid: 'c2d2' }, withAiCall) // 第二位上移 → 成功
+    expect(up.ok).toBe(true)
+    expect(execCommand).toHaveBeenLastCalledWith('UP_NODE', expect.anything())
+    const down = executeAiTool(mm, 'down_node', { uid: 'b8c1' }, withAiCall) // 第一位下移 → 成功
+    expect(down.ok).toBe(true)
+    expect(execCommand).toHaveBeenLastCalledWith('DOWN_NODE', expect.anything())
+  })
+  test('up_node/down_node 边界守卫：首位/末位/根/不存在拒绝且零命令派发（引擎静默 no-op 会骗过 AI）', () => {
+    const { mm, execCommand } = makeFakeMm()
+    expect(executeAiTool(mm, 'up_node', { uid: 'b8c1' }, withAiCall).ok).toBe(false) // 已是同级首位
+    expect(executeAiTool(mm, 'down_node', { uid: 'c2d2' }, withAiCall).ok).toBe(false) // 已是同级末位
+    expect(executeAiTool(mm, 'up_node', { uid: 'a3f2' }, withAiCall).ok).toBe(false) // 根（无 parent）
+    expect(executeAiTool(mm, 'down_node', { uid: 'nope' }, withAiCall).ok).toBe(false) // 节点不存在
+    expect(execCommand).not.toHaveBeenCalled()
   })
   test('get_mindmap 返回 uid 缩进树', () => {
     const { mm } = makeFakeMm()
