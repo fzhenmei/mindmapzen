@@ -29,6 +29,10 @@ export default {
     network: 'AI 请求失败：{{message}}',
     notConfigured: 'AI 未配置：请到 案头 → 设置 → AI 填写 API 地址、密钥与模型名',
   },
+  notice: {
+    // v1.1 ②：git 备份未启用时首轮 AI 发送的安全网告知（会话级一次，聊天流信息卡）
+    noBackup: '未开启版本管理：AI 编辑无自动备份安全网，误改可用 Ctrl+Z 逐命令撤销。可在 案头 → 设置 → 版本管理 开启自动提交。',
+  },
   settings: {
     title: 'AI',
     baseUrl: 'API 地址（OpenAI 兼容）',

@@ -12,7 +12,7 @@ export interface ToolCardData {
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'error'
+  role: 'user' | 'assistant' | 'error' | 'notice'
   text: string
   cards?: ToolCardData[]
   rendered?: boolean
@@ -40,6 +40,9 @@ interface ChatState {
   unrenderLastAssistant: () => void
   pushCard: (c: ToolCardData) => void
   pushError: (text: string) => void
+  /** 系统提示信息卡（v1.1 ②：无安全网告知等中性提示）——不进对话历史回传（AI 上下文
+   *  只取 user/assistant，历史过滤器天然排除），仅 UI 留存 */
+  pushNotice: (text: string) => void
   setPhase: (p: ChatPhase) => void
   setStopRequest: (fn: (() => void) | null) => void
   notifyBlocked: () => void
@@ -103,6 +106,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: msgs }
     }),
   pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
+  pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
   setPhase: (p) => set({ phase: p }),
   setStopRequest: (fn) => set({ stopRequest: fn }),
   notifyBlocked: () => {

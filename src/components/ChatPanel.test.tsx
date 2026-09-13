@@ -33,6 +33,9 @@ beforeEach(() => {
   useAppStore.setState({
     aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' },
     backupNow: vi.fn(async () => {}),
+    // v1.1 ② 安全网告知：git 备份默认关（真实默认），告知标记每用例重置防跨用例残留
+    gitConfig: { enabled: false, remoteUrl: null, token: null },
+    aiBackupNoticeShown: false,
   } as never)
   // fake transport：纯文本回答（走 window 注入点，验证 Task 8 的 getTransport 工厂）
   ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
@@ -126,6 +129,27 @@ test('v1.1（原终审 I3 语义升级）：回合中 ai-close 卸载——卸�
   await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
   expect(useChatStore.getState().stopRequest).toBeNull() // 收尾摘除全局句柄
   expect(useChatStore.getState().messages.at(-1)?.role).not.toBe('error') // 中止 ≠ 错误卡
+})
+
+test('v1.1 ②：git 备份未启用——首轮发送插入安全网信息卡，会话内不重复', async () => {
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '你好')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  expect(await screen.findByTestId('ai-msg-notice')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-msg-notice')).toHaveTextContent('版本管理')
+  await screen.findByText(/收到/)
+  await userEvent.type(screen.getByTestId('ai-input'), '再问')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await waitFor(() => expect(screen.getAllByTestId('ai-msg-notice')).toHaveLength(1)) // 会话级一次
+})
+
+test('v1.1 ②：git 备份已启用——无安全网信息卡', async () => {
+  useAppStore.setState({ gitConfig: { enabled: true, remoteUrl: null, token: null } } as never)
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '你好')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByText(/收到/)
+  expect(screen.queryByTestId('ai-msg-notice')).not.toBeInTheDocument()
 })
 
 test('终审三叉#2：引擎未就绪发送——错误卡片出现（无声失败消除）', async () => {
