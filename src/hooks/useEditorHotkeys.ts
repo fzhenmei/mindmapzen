@@ -58,10 +58,15 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
       }
       // 看板视图切换（2026-09）：Ctrl+Shift+K。刻意不进 anyDialog 互斥——视图模式不是
       // 对话框（看板浮层自带关闭钮），其上开的对话框（正文/图标/标签）Esc 即关；
-      // 从看板一键回导图是高频出路，任何时刻都应可达
+      // 从看板一键回导图是高频出路，任何时刻都应可达。输入域守卫（2026-09-13 终审遗留
+      // 修复，同 Ctrl+C 模式）：正文面板/AI 输入框/看板列底与过滤输入中触发会切视图丢草稿
+      // ——焦点在输入域时放行（无原生行为=no-op），先失焦再切
       if (k === 'k' && e.shiftKey) {
-        toggleViewMode()
-        return true
+        const t = e.target
+        if (!(t instanceof Element && t.closest('input, textarea, [contenteditable="true"]'))) {
+          toggleViewMode()
+          return true
+        }
       }
       return false
     }
