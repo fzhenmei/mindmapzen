@@ -222,6 +222,7 @@ beforeEach(async () => {
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
+    pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
     settings: { copyIncludeLinks: true, copyIncludeBody: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
@@ -2993,5 +2994,52 @@ describe('看板模式（2026-09 Task 7）', () => {
     // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
     expect(writes[0]).not.toContain('子任务B')
     expect(writes[0]).not.toContain('B1')
+  })
+})
+
+// ── 工作台跨图定位（2026-09 spec §5 文本寻址）：EditorView 引擎就绪消费 pendingLocate ──
+describe('工作台跨图定位（2026-09 spec §5）', () => {
+  test('引擎就绪消费 pendingLocate：消费即清 + path+text 寻址命中经 locateNode 居中', async () => {
+    // 夹具：根 > 分支 > 任务甲（引擎树形态 data.text/data.uid）。任务甲 uid 用 child-uid
+    // ——fake renderer.findNodeByUid 仅认 root/child/deep 三 uid，居中断言靠它命中 fakeChildNode
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ pendingLocate: { path: ['分支'], text: '任务甲' } })
+      render(
+        <EditorView
+          mdPath="/ws/a.md"
+          openInEditor={openInEditor}
+          writeClipboard={vi.fn(async () => {})}
+          exportPorts={stubExportPorts}
+          registerCloseGuard={noopRegister}
+          pickImageFile={stubPickImage}
+          readClipboardImage={stubReadClipboardImage}
+          exitApp={noopExitApp}
+        />,
+      )
+      await screen.findByTestId('fake-canvas')
+      // 消费触发 setPendingLocate 重渲会重赋模块级 fakeHandle（工厂每渲重建），断言须锁定
+      // emit 前实例——mmRef 所持同款约定
+      const handle = fakeHandle
+      act(() => {
+        ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+      })
+      expect(useAppStore.getState().pendingLocate).toBeNull() // 消费即清（不残留误定位）
+      // 定位生效：getData 全量快照按 path+text 寻址取真 uid → locateNode 居中（路径已全
+      // 展开走同步寻址分支，moveNodeToCenter 收 fakeChildNode）
+      expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledWith(fakeChildNode)
+      expect(errSpy).not.toHaveBeenCalled() // 全链 try/catch 有出口，命中路径零报错
+    } finally {
+      errSpy.mockRestore()
+    }
   })
 })

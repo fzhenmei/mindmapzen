@@ -34,7 +34,7 @@ import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
 import type { TaskStatus } from '../services/statusMarkers'
-import { expandToUid, execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { expandToUid, execOnRenderNode, findUidByPathText, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -448,6 +448,24 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onCanvasReady={(mm) => {
             purify(mm) // 连线净化（M5d Task 2）：首帧后建注册表 → 剥显示文本 → 落初始连线
             undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
+            // 工作台跨图定位（2026-09 spec §5 文本寻址）：引擎就绪即消费 pendingLocate——
+            // 消费即清，避免切图残留误定位。md 不序列化 uid，寻址走 path+text 在 getData()
+            // 全量快照（含收起隐藏子树）DFS 命中取真 uid，再交 locateNode（switchView +
+            // expandToUid 活树 + 居中，内部全链 try/catch）。miss（图被外部改动）console.warn
+            // 线索、静默进图不清屏。落点裁定：挂引擎就绪回调而非 useOpenDocument.onReady
+            // ——后者触发时 state 方置 'ready'、画布尚未挂载（EditorCanvasArea 以其为渲染
+            // 门），mmRef 必为 null，消费将清而不定位
+            const locate = useAppStore.getState().pendingLocate
+            if (locate !== null) {
+              useAppStore.getState().setPendingLocate(null)
+              try {
+                const uid = findUidByPathText(mm.getData(), locate.path, locate.text)
+                if (uid !== null) locateNode(uid)
+                else console.warn('工作台定位未命中节点（图可能与扫描时已不同）', locate)
+              } catch (e) {
+                console.error('工作台跨图定位失败', e)
+              }
+            }
           }}
           onDataChange={(data) => {
             stats.onDataChange(data) // 统计行（2026-09）：携带快照时重数节点

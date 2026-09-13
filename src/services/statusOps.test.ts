@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { execOnRenderNode, expandToUid, mergeStatusBadge, nodeStatusOf } from './statusOps'
+import { execOnRenderNode, expandToUid, findUidByPathText, mergeStatusBadge, nodeStatusOf } from './statusOps'
 import type { MindMapHandle } from '../types/engine'
 
 describe('statusOps（徽章互保协议）', () => {
@@ -111,5 +111,28 @@ describe('statusOps（徽章互保协议）', () => {
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('数据树中无此节点'), 'ghost')
     expect(apply).not.toHaveBeenCalled()
     errSpy.mockRestore()
+  })
+})
+
+describe('findUidByPathText（工作台跨图定位文本寻址，spec §5）', () => {
+  // 引擎树形态（data.text/data.uid + children，与 getData()/renderTree 同构——调用侧
+  // 入参是 mm.getData() 全量快照；brief 原夹具为 ZenNode 顶层形态，与调用点不符，此处
+  // 按引擎形态落笔，三断言语义不变）：两「分支」下各一「任务甲」+ 根下直挂一「任务甲」
+  const tree = {
+    data: { text: '根', uid: 'r' },
+    children: [
+      { data: { text: '分支', uid: 'b' }, children: [{ data: { text: '任务甲', uid: 't1' }, children: [] }] },
+      { data: { text: '分支', uid: 'b2' }, children: [{ data: { text: '任务甲', uid: 't2' }, children: [] }] },
+      { data: { text: '任务甲', uid: 't3' }, children: [] },
+    ],
+  }
+  test('path+text 命中：同父链同文本取 DFS 首个', () => {
+    expect(findUidByPathText(tree, ['分支'], '任务甲')).toBe('t1')
+  })
+  test('空 path（未分组直挂根）：命中根下同名节点', () => {
+    expect(findUidByPathText(tree, [], '任务甲')).toBe('t3')
+  })
+  test('miss 返回 null（图被外部改动）', () => {
+    expect(findUidByPathText(tree, ['不存在'], '任务甲')).toBeNull()
   })
 })
