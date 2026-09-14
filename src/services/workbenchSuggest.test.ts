@@ -1,6 +1,6 @@
 // src/services/workbenchSuggest.test.ts
 import { describe, expect, test } from 'vitest'
-import { buildSuggestPrompt, STALE_MAP_DAYS, suggestNext } from './workbenchSuggest'
+import { adviceFingerprint, buildSuggestPrompt, STALE_MAP_DAYS, suggestNext } from './workbenchSuggest'
 import type { WorkScan, WorkTask } from './workbench'
 
 const DAY = 24 * 3600 * 1000
@@ -60,5 +60,22 @@ describe('buildSuggestPrompt', () => {
     expect(p).toContain('任务0 [todo]')
     expect(p).toContain('图「图A」')
     expect(p).toContain('stale-todo')
+  })
+})
+
+describe('adviceFingerprint（AI 建议缓存指纹，2026-09-14 双条件口径）', () => {
+  test('同内容两次构造指纹一致；任务关键字段（状态/文本）变化指纹变', () => {
+    const fp = (status: WorkTask['status'], text?: string): string =>
+      adviceFingerprint({
+        ...scanOf([{ status, mtime: 1 }]),
+        tasks: [{ ...scanOf([{ status, mtime: 1 }]).tasks[0]!, text: text ?? `任务0` }],
+      })
+    expect(fp('todo')).toBe(fp('todo'))
+    expect(fp('todo')).not.toBe(fp('doing'))
+    expect(fp('todo', '改名')).not.toBe(fp('todo', '任务0'))
+  })
+  test('mtime 不进指纹（图被动过但任务清单没变，建议仍有效）；任务数变指纹变', () => {
+    expect(adviceFingerprint(scanOf([{ status: 'todo', mtime: 1 }]))).toBe(adviceFingerprint(scanOf([{ status: 'todo', mtime: 99 }])))
+    expect(adviceFingerprint(scanOf([{ status: 'todo', mtime: 1 }]))).not.toBe(adviceFingerprint(scanOf([{ status: 'todo', mtime: 1 }, { status: 'todo', mtime: 1 }])))
   })
 })

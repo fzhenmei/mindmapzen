@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiAdvice, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -73,6 +73,10 @@ interface AppState {
   aiConfig: AiConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）：null = 默认 320；提交语义同 sidebarWidth */
   aiChatWidth: number | null
+  /** 工作台 AI 建议缓存（2026-09-14）：双条件复用（24h 内且任务指纹一致），
+   *  init 自配置，setAiAdvice load-merge-save 持久化 */
+  aiAdvice: AiAdvice | null
+  setAiAdvice: (advice: AiAdvice | null) => Promise<void>
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
   /** 界面语言三态偏好(auto = 跟随系统) */
@@ -202,6 +206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   outlineWidth: null,
   aiConfig: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
+  aiAdvice: null,
   resolvedTheme: 'light',
   resolvedLanguage: 'zh-CN',
   titlebarBg: '--background',
@@ -231,7 +236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -402,6 +407,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, aiChatWidth: w })
     set({ aiChatWidth: w })
+  },
+
+  /** 工作台 AI 建议缓存提交（2026-09-14）：即时生效 + load-merge-save 持久化；
+   *  null = 清除（换建议覆盖/弃用）。存档只在流正常结束处调用（useAskAi） */
+  setAiAdvice: async (advice) => {
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, aiAdvice: advice })
+    set({ aiAdvice: advice })
   },
 
   /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */

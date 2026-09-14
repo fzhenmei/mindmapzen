@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { scanWorkTasks, WORK_DIR, type WorkScan, type WorkTask } from '../services/workbench'
-import { buildSuggestPrompt, suggestNext, type Suggestion } from '../services/workbenchSuggest'
+import { adviceFingerprint, ADVICE_TTL_MS, buildSuggestPrompt, suggestNext, type Suggestion } from '../services/workbenchSuggest'
 import { BOARD_STATUSES } from '../services/statusMarkers'
 import { getTransport, parseDeltaChunk } from '../services/ai/client'
 import { joinPath } from '../services/workspace'
@@ -61,13 +61,15 @@ function SuggestSection({
     <section className="mb-6" aria-label={t('workbench.suggest.section')}>
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">{t('workbench.suggest.section')}</h2>
+        {/* onClick 箭头包装防 event 顶参：直绑 onAskAi 时 click 事件对象会传成
+            askAi(force) 的首参（truthy）——缓存判定恒被跳过，2026-09-14 实锤踩过 */}
         <button
           type="button"
           data-testid="btn-workbench-ask-ai"
           className="rounded-md border px-3 py-1 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!aiReady}
           title={aiReady ? undefined : t('workbench.ai.disabledHint')}
-          onClick={onAskAi}
+          onClick={() => onAskAi()}
         >
           {t('workbench.suggest.askAi')}
         </button>
@@ -133,7 +135,8 @@ function useAskAi(scan: WorkScan | null): {
   aiOpen: boolean
   aiText: string
   aiPhase: 'idle' | 'streaming' | 'done' | 'error'
-  askAi: () => void
+  /** force=true 跳过缓存（「再问一次」）；缺省走双条件缓存判定 */
+  askAi: (force?: boolean) => void
   /** 停止等待（2026-09-14 试用反馈）：掐断在途流、保留半截文本——与关浮层共用
    *  aiAbortRef（aborted ≠ error，不落错误文案），但浮层留着供用户看已到内容 */
   stopAi: () => void
@@ -149,17 +152,37 @@ function useAskAi(scan: WorkScan | null): {
   /** onDelta 在 transport Promise 回调内——自包 try/catch（React 外异步异常会被运行时
    *  静默吞且不留痕，红线）；delta 按契约是原始 OpenAI chunk JSON，解析取 content 累积。
    *  提为 hook 级独立函数：嵌套在 askAi 内会推高其认知复杂度（S3776） */
+  /** 最终文本的 ref 镜像：流结束存档要在 outcome 后读全文，setAiText 的函数式更新读
+   *  不到当前值——闭包里的 aiText 是渲染时快照。与 state 双写，重置处同步清 */
+  const aiTextRef = useRef('')
+
   const handleDelta = (d: string): void => {
     try {
       const text = parseDeltaChunk(d)?.text
-      if (text !== undefined) setAiText((prev) => prev + text)
+      if (text !== undefined) {
+        aiTextRef.current += text
+        setAiText(aiTextRef.current)
+      }
     } catch (e) {
       console.error('工作台 AI 流式渲染失败', e)
     }
   }
 
-  const askAi = async (): Promise<void> => {
+  /** force = 「再问一次」：跳过缓存直接请求（2026-09-14 缓存增强） */
+  const askAi = async (force = false): Promise<void> => {
     if (scan === null) return
+    const fingerprint = adviceFingerprint(scan)
+    if (!force) {
+      // 双条件缓存命中（24h 内且任务指纹一致）：直接展示上次建议，零请求零等待
+      const hit = useAppStore.getState().aiAdvice
+      if (hit !== null && Date.now() - hit.at <= ADVICE_TTL_MS && hit.fingerprint === fingerprint) {
+        aiTextRef.current = hit.text
+        setAiText(hit.text)
+        setAiPhase('done')
+        setAiOpen(true)
+        return
+      }
+    }
     const ai = useAppStore.getState().aiConfig
     // 尾部斜杠循环剥除（Sonar S8786 只认单量词正则，/\/+$/ 亦被报——ChatPanel 先例改循环）
     let base = ai.baseUrl
@@ -167,6 +190,7 @@ function useAskAi(scan: WorkScan | null): {
     const transport = getTransport()
     aiAbortRef.current = (): void => transport.abort()
     setAiOpen(true)
+    aiTextRef.current = ''
     setAiText('')
     setAiPhase('streaming')
     try {
@@ -188,6 +212,13 @@ function useAskAi(scan: WorkScan | null): {
         setAiPhase('error')
       } else {
         setAiPhase('done') // aborted ≠ error：本地掐流不是故障，不误报
+        // 只有正常完成才存档（2026-09-14 缓存）：错误/中止的半截文本对下次无意义。
+        // 持久化失败不阻塞展示（缓存是优化非关键路径）——console 留线索即可
+        if (outcome.endedWith === 'done' && aiTextRef.current !== '') {
+          await useAppStore.getState().setAiAdvice({ text: aiTextRef.current, at: Date.now(), fingerprint }).catch((e: unknown) => {
+            console.error('AI 建议缓存持久化失败', e)
+          })
+        }
       }
     } catch (e) {
       console.error('工作台 AI 咨询失败', e)
@@ -341,6 +372,17 @@ export default function WorkbenchView() {
                 onClick={stopAi}
               >
                 {t('workbench.ai.stop')}
+              </button>
+            ) : aiPhase === 'done' || aiPhase === 'error' ? (
+              /* 再问一次（2026-09-14 缓存增强）：缓存直读/流式完成/失败重试三态可达，
+                 强制跳过缓存重新请求并覆盖存档 */
+              <button
+                type="button"
+                data-testid="workbench-ai-ask-again"
+                className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
+                onClick={() => void askAi(true)}
+              >
+                {t('workbench.ai.askAgain')}
               </button>
             ) : null}
           </div>

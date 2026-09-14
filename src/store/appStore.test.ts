@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null })
 })
 
 describe('appStore', () => {
@@ -120,6 +120,22 @@ describe('sessionRecent（会话内打开 MRU）', () => {
 
 // 打开失败清理（2026-09 优雅恢复）：文件读不到（被删/移动/权限）时移出最近清单——
 // recentOpened 持久化 + sessionRecent 内存（Ctrl+Tab 数据源）；解析失败不清理（文件仍在）
+describe('aiAdvice（工作台 AI 建议缓存，2026-09-14）', () => {
+  test('setAiAdvice 即时生效 + load-merge-save 持久化；null 覆盖清除', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
+    const advice = { text: '建议正文', at: 1700000000000, fingerprint: 'fp1' }
+    await useAppStore.getState().setAiAdvice(advice)
+    expect(useAppStore.getState().aiAdvice).toEqual(advice)
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.aiAdvice).toEqual(advice)
+    expect(cfg.preferredLayout).toBe('logic') // 合并未覆盖他人
+    await useAppStore.getState().setAiAdvice(null)
+    expect(useAppStore.getState().aiAdvice).toBeNull()
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).aiAdvice).toBeNull()
+  })
+})
+
 describe('dropRecent（打开失败清理）', () => {
   test('从 recentOpened 与 sessionRecent 移除并持久化', async () => {
     useAppStore.setState({ configPath: '/cfg.json' })

@@ -90,3 +90,18 @@ export function buildSuggestPrompt(scan: WorkScan, suggestions: Suggestion[]): s
   }
   return lines.join('\n')
 }
+
+/** AI 建议缓存 TTL（2026-09-14 双条件口径之一）：24h 内且指纹一致才复用，免重复请求 */
+export const ADVICE_TTL_MS = 24 * 3600 * 1000
+
+/** AI 建议缓存指纹（双条件口径之二）：任务清单内容签名（djb2 变体，32 位截断）。
+ *  只签关键字段（来源图/uid/状态/文本）——uid 是聚合层确定性重计数，同内容稳定；
+ *  mtime 不进指纹：图被动过但任务清单没变时建议仍有效（内容没变不过期） */
+export function adviceFingerprint(scan: WorkScan): string {
+  let h = 5381
+  for (const t of scan.tasks) {
+    const seg = `${t.mapPath}|${t.uid}|${t.status}|${t.text}|`
+    for (let i = 0; i < seg.length; i++) h = ((h * 33) ^ seg.charCodeAt(i)) >>> 0
+  }
+  return h.toString(36)
+}

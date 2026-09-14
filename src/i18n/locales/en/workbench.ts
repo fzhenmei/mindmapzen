@@ -18,6 +18,6 @@ const workbench: Dict['workbench'] = {
   suggest: { section: 'Next up', finish: 'Finish what’s in progress', blocked: 'Waiting items — time to nudge?', staleTodo: 'Longest-shelved todos', staleMap: 'This work map has been idle for a week', askAi: 'Ask AI', itemJoin: ': ' },
   board: { section: 'Work plan' },
   recent: { section: 'Recent' },
-  ai: { title: 'AI suggestions', disabledHint: 'Configure AI first in Settings (base URL / API key / model)', error: 'AI request failed', thinking: 'AI is analyzing your tasks…', stop: 'Stop', feeNote: 'AI consults consume tokens and may incur costs, depending on your AI service' },
+  ai: { title: 'AI suggestions', disabledHint: 'Configure AI first in Settings (base URL / API key / model)', error: 'AI request failed', thinking: 'AI is analyzing your tasks…', stop: 'Stop', askAgain: 'Ask again', feeNote: 'AI consults consume tokens and may incur costs, depending on your AI service' },
 }
 export default workbench

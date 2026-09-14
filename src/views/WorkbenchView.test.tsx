@@ -10,7 +10,9 @@ import WorkbenchView from './WorkbenchView'
 let fs: MemoryFsAdapter
 beforeEach(() => {
   fs = new MemoryFsAdapter()
-  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'workbench', error: null })
+  // aiAdvice 必须逐用例重置：测试夹具任务集相同 → 指纹相同，前用例存档会让
+  // 后续用例的「问问 AI」缓存命中跳过请求（2026-09-14 缓存引入的跨用例泄漏）
+  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'workbench', error: null, aiAdvice: null })
 })
 
 describe('WorkbenchView 骨架（spec §4/§8）', () => {
@@ -186,6 +188,64 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     await waitFor(() => expect(screen.queryByTestId('workbench-ai-stop')).not.toBeInTheDocument())
     expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('建议一')
     expect(screen.queryByTestId('workbench-ai-error')).not.toBeInTheDocument()
+  })
+
+  test('问问 AI 缓存（2026-09-14）：完成存档；再开零请求直读；再问一次重新请求覆盖', async () => {
+    let starts = 0
+    installAiFactory(async (onDelta) => {
+      starts++
+      onDelta(`{"choices":[{"delta":{"content":"第${starts}次建议"}}]}`)
+      return { endedWith: 'done' }
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, aiAdvice: null, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    // 第一次：请求并完成 → 存档（文本 + 指纹）
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('第1次建议')
+    await waitFor(() => expect(useAppStore.getState().aiAdvice).toMatchObject({ text: '第1次建议' }))
+    const fp = useAppStore.getState().aiAdvice?.fingerprint
+    expect(fp).toBeTruthy()
+    await screen.getByRole('button', { name: 'Close' }).click()
+    await waitFor(() => expect(screen.queryByTestId('workbench-ai-dialog')).not.toBeInTheDocument())
+    // 第二次：缓存命中直接展示——零请求、无占位、有再问一次钮
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('第1次建议')
+    expect(screen.queryByTestId('workbench-ai-thinking')).not.toBeInTheDocument()
+    expect(starts).toBe(1)
+    expect(screen.getByTestId('workbench-ai-ask-again')).toBeInTheDocument()
+    // 再问一次：强制重新请求并覆盖缓存
+    await screen.getByTestId('workbench-ai-ask-again').click()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('第2次建议')
+    expect(starts).toBe(2)
+    expect(useAppStore.getState().aiAdvice).toMatchObject({ text: '第2次建议', fingerprint: fp })
+  })
+
+  test('问问 AI 缓存失效（双条件）：指纹不符或超 24h 均自动重新请求', async () => {
+    let starts = 0
+    installAiFactory(async (onDelta) => {
+      starts++
+      onDelta('{"choices":[{"delta":{"content":"新建议"}}]}')
+      return { endedWith: 'done' }
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    // 指纹不符（模拟任务清单已变）：点开自动重问——断言走请求（starts 计数 + 新文本）；
+    // 不抓瞬态占位（同步完成 transport 的占位一闪即逝，占位语义由专门用例把守）
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, aiAdvice: { text: '旧建议', at: Date.now(), fingerprint: 'stale-fp' }, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('新建议')
+    expect(starts).toBe(1)
+    // 指纹相符但超 24h：同样自动重问
+    const goodFp = useAppStore.getState().aiAdvice?.fingerprint
+    await screen.getByRole('button', { name: 'Close' }).click()
+    await waitFor(() => expect(screen.queryByTestId('workbench-ai-dialog')).not.toBeInTheDocument())
+    useAppStore.setState({ aiAdvice: { text: '过期建议', at: Date.now() - 25 * 3600 * 1000, fingerprint: goodFp ?? 'x' } })
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('新建议')
+    expect(starts).toBe(2)
   })
 
   test('问问 AI：流式中关浮层——主动掐流且不误报错误（abort ≠ error，Task 9 摘除句柄回归）', async () => {

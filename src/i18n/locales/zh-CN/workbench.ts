@@ -17,5 +17,5 @@ export default {
   suggest: { section: '下一步建议', finish: '进行中的事，先收尾', blocked: '等待中的事，看是否该催', staleTodo: '搁置最久的待办', staleMap: '这张工作图一周没动了', askAi: '问问 AI', itemJoin: '：' },
   board: { section: '工作计划' },
   recent: { section: '最近' },
-  ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败', thinking: 'AI 正在分析你的任务清单…', stop: '停止', feeNote: 'AI 咨询会消耗 Token，可能产生费用——取决于你接入的 AI 服务' },
+  ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败', thinking: 'AI 正在分析你的任务清单…', stop: '停止', askAgain: '再问一次', feeNote: 'AI 咨询会消耗 Token，可能产生费用——取决于你接入的 AI 服务' },
 }
