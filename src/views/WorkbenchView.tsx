@@ -134,6 +134,9 @@ function useAskAi(scan: WorkScan | null): {
   aiText: string
   aiPhase: 'idle' | 'streaming' | 'done' | 'error'
   askAi: () => void
+  /** 停止等待（2026-09-14 试用反馈）：掐断在途流、保留半截文本——与关浮层共用
+   *  aiAbortRef（aborted ≠ error，不落错误文案），但浮层留着供用户看已到内容 */
+  stopAi: () => void
   closeAi: (o: boolean) => void
 } {
   const aiConfig = useAppStore((s) => s.aiConfig)
@@ -203,7 +206,7 @@ function useAskAi(scan: WorkScan | null): {
     if (!o) aiAbortRef.current?.()
     setAiOpen(o)
   }
-  return { aiReady, aiOpen, aiText, aiPhase, askAi, closeAi }
+  return { aiReady, aiOpen, aiText, aiPhase, askAi, stopAi: () => aiAbortRef.current?.(), closeAi }
 }
 
 export default function WorkbenchView() {
@@ -267,7 +270,7 @@ export default function WorkbenchView() {
   /** 看板可见任务数（archived/dropped 不占列）：空态/看板/建议区统一用它做总门控，
    *  避免「只有归档任务的目录」渲染成四个全空列、跳过空态引导 */
   const visibleTasks = scan === null ? [] : scan.tasks.filter((x) => BOARD_STATUSES.includes(x.status))
-  const { aiReady, aiOpen, aiText, aiPhase, askAi, closeAi } = useAskAi(scan)
+  const { aiReady, aiOpen, aiText, aiPhase, askAi, stopAi, closeAi } = useAskAi(scan)
 
   return (
     <div className="flex h-full flex-col bg-background" data-testid="workbench-view">
@@ -316,10 +319,31 @@ export default function WorkbenchView() {
           <DialogTitle>{t('workbench.ai.title')}</DialogTitle>
           <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm" data-testid="workbench-ai-text">
             {aiText}
+            {/* 首 token 前占位（2026-09-14 试用反馈）：推理模型首 token 可达十几秒，
+                纯空白会被当成卡死——呼吸态文案到首 delta 让位 */}
+            {aiText === '' && aiPhase === 'streaming' ? (
+              <p className="animate-pulse text-muted-foreground" data-testid="workbench-ai-thinking">
+                {t('workbench.ai.thinking')}
+              </p>
+            ) : null}
           </div>
           {aiPhase === 'error' ? (
             <p className="text-sm text-destructive" data-testid="workbench-ai-error">{t('workbench.ai.error')}</p>
           ) : null}
+          <div className="flex items-center justify-between gap-2">
+            {/* 费用知情（2026-09-14 试用反馈）：BYOK 服务的计费策略用户自知，提示而非拦截 */}
+            <p className="text-xs text-muted-foreground" data-testid="workbench-ai-fee-note">{t('workbench.ai.feeNote')}</p>
+            {aiPhase === 'streaming' ? (
+              <button
+                type="button"
+                data-testid="workbench-ai-stop"
+                className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
+                onClick={stopAi}
+              >
+                {t('workbench.ai.stop')}
+              </button>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

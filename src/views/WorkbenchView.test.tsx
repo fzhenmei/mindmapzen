@@ -146,6 +146,48 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('半截')
   })
 
+  test('问问 AI：首 token 前工作中占位 + 费用提示；停止钮掐流保留半截文本（2026-09-14 试用反馈）', async () => {
+    // start 挂起可 abort，模拟首 token 延迟（推理模型可达十几秒）——原实现浮层纯空白无反馈。
+    // emit 经闭包函数转发：闭包内赋值的变量在测试主体直接调用会被 TS 窄化为 never（TS2349）
+    let emit: ((d: string) => void) | null = null
+    let aborts = 0
+    let resolveStart: ((o: { endedWith: 'done' | 'aborted' }) => void) | null = null
+    const pushDelta = (s: string): void => {
+      emit?.(s)
+    }
+    ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+      start: (_p: unknown, onDelta: (d: string) => void) => {
+        emit = onDelta
+        return new Promise<{ endedWith: 'done' | 'aborted' }>((resolve) => {
+          resolveStart = resolve
+        })
+      },
+      abort: () => {
+        aborts++
+        resolveStart?.({ endedWith: 'aborted' })
+      },
+    })
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    await screen.getByTestId('btn-workbench-ask-ai').click()
+    // 首 token 前占位（animate-pulse 呼吸态）+ 费用提示行恒可见 + 停止钮（streaming 态）
+    expect(await screen.findByTestId('workbench-ai-thinking')).toHaveTextContent('AI 正在分析你的任务清单')
+    expect(screen.getByTestId('workbench-ai-fee-note')).toHaveTextContent('消耗 Token')
+    expect(screen.getByTestId('workbench-ai-stop')).toBeInTheDocument()
+    // 首 delta 到达：占位让位真实文本
+    pushDelta('{"choices":[{"delta":{"content":"建议一"}}]}')
+    await waitFor(() => expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('建议一'))
+    expect(screen.queryByTestId('workbench-ai-thinking')).not.toBeInTheDocument()
+    // 停止钮掐流：abort 一次、按钮随 streaming 结束退场、半截文本保留、不误报错误
+    await screen.getByTestId('workbench-ai-stop').click()
+    expect(aborts).toBe(1)
+    await waitFor(() => expect(screen.queryByTestId('workbench-ai-stop')).not.toBeInTheDocument())
+    expect(screen.getByTestId('workbench-ai-text')).toHaveTextContent('建议一')
+    expect(screen.queryByTestId('workbench-ai-error')).not.toBeInTheDocument()
+  })
+
   test('问问 AI：流式中关浮层——主动掐流且不误报错误（abort ≠ error，Task 9 摘除句柄回归）', async () => {
     // stallTransport 同款（ChatPanel.test.tsx 终审 I2）：start 挂起模拟模型停摆，
     // abort() 令其以 'aborted' 主动收尾（不等 Rust 空闲超时 120s）
