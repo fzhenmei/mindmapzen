@@ -42,4 +42,4 @@ tokio = { version = "1.53.1", features = ["macros", "rt", "net", "io-util"] }
 
 # 标题栏主题染色（DWM 染色命令 set_titlebar_colors 的 win32 绑定，仅 Windows 需要）
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
