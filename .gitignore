@@ -35,3 +35,6 @@ blob-report/
 
 # 官网源码已移出本仓库,独立维护
 website/
+
+# 内部过程文档(已从开源历史清除,自 bundle 恢复仅本地保留)
+docs/superpowers/
