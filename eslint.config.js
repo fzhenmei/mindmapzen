@@ -9,7 +9,12 @@ export default tseslint.config(
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
-    languageOptions: { globals: globals.browser },
+    // 显式钉住 tsconfigRootDir：仓库里有第二份 tsconfig（website/ 子项目），新版
+    // @typescript-eslint/parser 自动推断遇多候选会整体报 Parsing error
+    languageOptions: {
+      globals: globals.browser,
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
+    },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
