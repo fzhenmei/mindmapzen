@@ -21,7 +21,6 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 
-# Superpowers SDD 工作区（台账/简报/审查包，属会话级产物）
 .superpowers/
 
 # Playwright 产物（失败时的快照与 trace）
@@ -30,11 +29,7 @@ playwright-report/
 blob-report/
 .playwright-mcp/
 
-# 私有工作流配置（本地保留,不入库）
+
 .claude/
-
-# 官网源码已移出本仓库,独立维护
 website/
-
-# 内部过程文档(已从开源历史清除,自 bundle 恢复仅本地保留)
 docs/superpowers/
