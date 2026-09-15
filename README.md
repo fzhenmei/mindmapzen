@@ -1,41 +1,45 @@
 # mind-map-zen
 
-本地优先的免费思维导图桌面应用：用熟悉的导图画布整理想法，每张导图就是一个 Markdown 文件，与 AI 交流零摩擦。
+**English** | [简体中文](README.zh-CN.md)
 
-- Tauri 2 + React 19 + [simple-mind-map](https://github.com/wanglin2/mind-map) 引擎
-- 每张导图 = 一个 `.md` 文件（唯一事实源）+ 一个 `.zen.json` 布局元数据文件
-- 砚与纸双主题：跟随系统或手动切换，界面与画布同步
-- 当前能力（v1.0.0）：首次开屏引导、案头三区（图标工具栏/文件级目录树/大纲预览，单击选中双击打开）、连线净化（画布隐藏 `[[ ]]` 标记、md 句尾规范化）、连线弯曲记忆（拖弯 sidecar 持久恢复）、案头目录组织（左树导航/按层过滤/移动导图/新建目录）、画布编辑/复制 md（整图/子树）/导入/多行粘贴/布局切换（导图/逻辑/组织三种）/关闭守卫/纸墨·夜墨双主题、节点备注（引用块）、`[[名称]]` 双链连线、设置页（复制含备注/保留双链/更换工作区/退出工作区）；布局与主题偏好自动记忆、PNG/SVG 导出与复制为图片、图标按钮浮签提示、朱砂方印应用图标；列表页称「案头」、画布编辑称「纸面」
+A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-map canvas where every map is a single Markdown file — zero friction when sharing your thoughts with AI.
 
-## 当前限制
+- Tauri 2 + React 19 + the [simple-mind-map](https://github.com/wanglin2/mind-map) engine
+- Every map = one `.md` file (the single source of truth) + one `.zen.json` layout sidecar
+- Inkstone & Paper dual themes: follow the system or switch manually; UI and canvas stay in sync
+- Current capabilities (v1.0.0): first-run onboarding tour; a three-pane Desk (icon toolbar / per-file directory tree / outline preview — single click selects, double click opens); clean connections (canvas hides `[[ ]]` markers, normalizes Markdown line endings); connection-bend memory (drag-bent links persist via the sidecar and restore on reopen); Desk directory organization (left-tree navigation / filter by level / move maps / create directories); canvas editing / copy as Markdown (whole map or subtree) / import / multiline paste / layout switching (mind map / logic chart / org chart) / close guard / Paper-Ink & Night-Ink dual themes; node notes (quote blocks); `[[Name]]` bidirectional links; a settings page (copy with notes / keep links / switch workspace / leave workspace); layout & theme preferences remembered automatically; PNG/SVG export and copy-as-image; hover tooltips on icon buttons; a cinnabar-seal app icon. The file library view is called "Desk" (案头); canvas editing is called "Paper" (纸面)
 
-- 打开外部 `.md` 时，无法映射为节点的段落/代码块等内容在保存时会被丢弃（打开有横幅提示，显式保存前确认）
+## Current limitations
 
-## 开发指南
+- When opening an external `.md` file, paragraphs, code blocks, and other content that cannot be mapped to nodes are dropped on save (a banner warns when opening, and confirmation is required before an explicit save)
 
-### 环境要求
+## Development guide
 
-- **Node.js LTS（建议 ≥ 22，[nodejs.org](https://nodejs.org/) 下载）**：前端开发/构建/测试与所有 npm 脚本的运行时；Tauri CLI（`@tauri-apps/cli`）已列入 devDependencies，`npm install` 后即可用，无需全局安装
-- **Rust stable 工具链**：仅编译桌面壳（`npm run dev:app`、`npm run build:release`）需要——用 [rustup](https://rustup.rs/) 安装 stable（Windows 目标 `x86_64-pc-windows-msvc`），`src-tauri/Cargo.toml` 钉的 `rust-version = "1.77.2"` 是下限；纯前端命令（`dev` / `test` / `e2e` / `lint` / `typecheck` / `build`）不装 Rust 也能跑
-- **Visual Studio C++ 生成工具（MSVC + Windows 10/11 SDK）**：Rust msvc 目标链接与 `tauri-winres` 资源编译的前提（release 打包所需 `rc.exe` 即出自 Windows SDK，见下方说明）；建议先装它再装 Rust
-- **WebView2 运行时**：Tauri 的界面载体，Windows 10/11 一般自带，无需单独安装
+### Prerequisites
 
-首次克隆后先 `npm install`；跑 e2e 前首次执行 `npx playwright install` 下载浏览器。Windows PowerShell 里若 `npm` 报「禁止运行脚本」，执行一次 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` 放行 npm.ps1 即可。
+- **Node.js LTS (≥ 22 recommended, from [nodejs.org](https://nodejs.org/))**: runtime for frontend dev/build/test and all npm scripts. The Tauri CLI (`@tauri-apps/cli`) is a devDependency — available right after `npm install`, no global install needed
+- **Rust stable toolchain**: only needed to compile the desktop shell (`npm run dev:app`, `npm run build:release`) — install stable via [rustup](https://rustup.rs/) (Windows target `x86_64-pc-windows-msvc`); the `rust-version = "1.77.2"` pinned in `src-tauri/Cargo.toml` is the minimum. Pure-frontend commands (`dev` / `test` / `e2e` / `lint` / `typecheck` / `build`) run without Rust
+- **Visual Studio C++ Build Tools (MSVC + Windows 10/11 SDK)**: prerequisite for Rust msvc-target linking and `tauri-winres` resource compilation (`rc.exe`, needed for release packaging, comes from the Windows SDK — see below). Install this before Rust
+- **WebView2 Runtime**: the UI host for Tauri, preinstalled on Windows 10/11 — no separate install needed
+
+After cloning, run `npm install` first; before the first e2e run, execute `npx playwright install` to download browsers. If `npm` reports "running scripts is disabled" in Windows PowerShell, run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once to allow npm.ps1.
 
 ```bash
-npm run dev        # 前端开发服务器（Vite）
-npm run dev:app    # 桌面壳完整开发模式（Tauri 窗口；单实例锁与 release 分离，可与 release 并行，见下方说明）
-npm run tauri dev  # 桌面壳开发模式旧入口（单实例锁与 release 共享，二者不能并行）
-npm test           # 单元/组件测试（Vitest）
-npm run e2e        # 端到端测试（Playwright，web 模式）
+npm run dev        # frontend dev server (Vite)
+npm run dev:app    # desktop-shell dev mode (Tauri window; single-instance lock separated from release, can run in parallel — see below)
+npm run tauri dev  # legacy desktop-shell dev entry (shares the single-instance lock with release; cannot run in parallel)
+npm test           # unit/component tests (Vitest)
+npm run e2e        # end-to-end tests (Playwright, web mode)
 npm run lint       # ESLint
-npm run typecheck  # TypeScript 类型检查
-npm run build      # 前端构建（tsc + vite）
-npm run build:release  # release 打包（msi/nsis 安装包，见下方说明）
+npm run typecheck  # TypeScript type check
+npm run build      # frontend build (tsc + vite)
+npm run build:release  # release packaging (msi/nsis installers — see below)
 ```
 
-**release 打包**：`npm run build:release` 委托 `tauri build` 出包——产物在 `src-tauri/target/release/bundle/`（msi + nsis 双格式），免安装单文件 exe `mind-map-zen.exe` 在 `src-tauri/target/release/`（裸 exe 名取自 `src-tauri/Cargo.toml` 的包名，与 `tauri.conf.json` 的 `productName` 无关——后者只管 bundle 安装包）。脚本（`scripts/build-release.mjs`）会自动定位 Windows SDK 的 `rc.exe` 并前置进 PATH：改过 `src-tauri/tauri.conf.json` 或 `capabilities/*` 后 `tauri-winres` 重编译需要它，而普通终端 PATH 里没有（有编译缓存时不触发，一触发即报 RC.EXE panic）。参数原样透传，如 `npm run build:release -- --no-bundle` 只出 exe 不打安装包。
+**Release packaging**: `npm run build:release` delegates to `tauri build` — artifacts land in `src-tauri/target/release/bundle/` (msi + nsis), and the standalone portable exe `mind-map-zen.exe` sits in `src-tauri/target/release/` (the bare exe name comes from the package name in `src-tauri/Cargo.toml`, unrelated to `productName` in `tauri.conf.json` — the latter only governs bundled installers). The script (`scripts/build-release.mjs`) auto-locates the Windows SDK's `rc.exe` and prepends it to PATH: recompiling `tauri-winres` after changes to `src-tauri/tauri.conf.json` or `capabilities/*` requires it, while ordinary terminal PATHs lack it (cached builds don't trigger it; once triggered it fails with an RC.EXE panic). Arguments pass through, e.g. `npm run build:release -- --no-bundle` produces only the exe without installers.
 
-**单实例锁与 dev/release 并行**：应用用 `tauri-plugin-single-instance` 防多开——同 identifier 二次启动不起新进程，转而聚焦已有主窗口。锁 key 取自 `tauri.conf.json` 的 identifier（Windows 为 named mutex，如 release 的 `com.mindmapzen.app-sim`），dev 与 release 默认共享一把锁。并行调试请用 `npm run dev:app`：它以 `--config src-tauri/tauri.dev.conf.json`（JSON Merge Patch，覆盖 identifier 为 `com.mindmapzen.app.dev`；用配置文件而非内联 JSON，避免 npm 的 cmd script-shell 剥引号）把锁分离——dev 与 release 可并行，同类型（dev↔dev、release↔release）仍互斥。注意事项：WebView2 本地数据目录（localStorage 等）跟随 identifier，首次用 `dev:app` 会重新开始一次，换来 dev 与 release 数据彻底隔离（开发试验不污染真实数据）；`npm run tauri dev` 仍是共享锁的旧入口，与已运行的 release 互斥；release 构建不受影响。
+**Single-instance lock & dev/release parallelism**: the app uses `tauri-plugin-single-instance` to prevent multiple instances — a second launch with the same identifier focuses the existing main window instead of starting a new process. The lock key comes from the `identifier` in `tauri.conf.json` (a named mutex on Windows, e.g. `com.mindmapzen.app-sim` for release); dev and release share one lock by default. For parallel debugging use `npm run dev:app`: it passes `--config src-tauri/tauri.dev.conf.json` (a JSON Merge Patch overriding the identifier to `com.mindmapzen.app.dev`; a config file instead of inline JSON avoids npm's cmd script-shell stripping quotes) to separate the lock — dev and release can then run in parallel, while same-type instances (dev↔dev, release↔release) remain mutually exclusive. Note: the WebView2 local data directory (localStorage etc.) follows the identifier, so the first `dev:app` run starts fresh — dev experiments never pollute real data. `npm run tauri dev` remains the legacy shared-lock entry, mutually exclusive with a running release; release builds are unaffected.
 
-设计文档见 [docs/superpowers/specs/](docs/superpowers/specs/)。
+## License
+
+[MIT](LICENSE)
