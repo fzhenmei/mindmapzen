@@ -29,3 +29,9 @@ test-results/
 playwright-report/
 blob-report/
 .playwright-mcp/
+
+# 私有工作流配置（本地保留,不入库）
+.claude/
+
+# 官网源码已移出本仓库,独立维护
+website/
