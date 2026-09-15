@@ -6,12 +6,50 @@ A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-
 
 - Tauri 2 + React 19 + the [simple-mind-map](https://github.com/wanglin2/mind-map) engine
 - Every map = one `.md` file (the single source of truth) + one `.zen.json` layout sidecar
-- Inkstone & Paper dual themes: follow the system or switch manually; UI and canvas stay in sync
-- Current capabilities (v1.0.0): first-run onboarding tour; a three-pane Desk (icon toolbar / per-file directory tree / outline preview — single click selects, double click opens); clean connections (canvas hides `[[ ]]` markers, normalizes Markdown line endings); connection-bend memory (drag-bent links persist via the sidecar and restore on reopen); Desk directory organization (left-tree navigation / filter by level / move maps / create directories); canvas editing / copy as Markdown (whole map or subtree) / import / multiline paste / layout switching (mind map / logic chart / org chart) / close guard / Paper-Ink & Night-Ink dual themes; node notes (quote blocks); `[[Name]]` bidirectional links; a settings page (copy with notes / keep links / switch workspace / leave workspace); layout & theme preferences remembered automatically; PNG/SVG export and copy-as-image; hover tooltips on icon buttons; a cinnabar-seal app icon. The file library view is called "Desk" (案头); canvas editing is called "Paper" (纸面)
+- Kanban mode and AI chat built into the same tree
+- English / 简体中文 UI, Inkstone & Paper themes (with Night Ink)
+
+## Feature overview (v2.18)
+
+### Desk (map library)
+
+- Directory-tree navigation, filter by level, outline preview (single click selects, double click opens)
+- Create, rename, delete (to recycle bin), move maps, create folders, tree context menu
+- Import `.xmind` and `.md` (with ignored-block preview confirmation)
+- "Copy as WeChat Official Account format": turn the whole Markdown document into rich text ready to paste into WeChat's editor (inline syntax-highlighted code blocks, mermaid diagrams as images)
+
+### Paper (canvas editing)
+
+- Keyboard-first editing: `Tab` for child nodes, `Enter` for siblings, drag to reorder, multiline paste with one node per line
+- Three layouts: mind map, logic chart, org chart; fold/expand, zoom and pan
+- `[[Name]]` bidirectional links: markers hidden on canvas leaving clean links, and hand-bent curves survive reopen
+- Curated node icons and status badges
+- Node body: near-fullscreen split-screen vditor editing, stored as a Markdown quote block, mermaid rendered on hover
+- Copy the whole map or a subtree as Markdown; export PNG/SVG
+
+### Kanban mode
+
+- One tree, two views: plan on the canvas, execute on the board — nodes carry a trailing `@status` marker (six states, including archived)
+- Full-featured board: drag between columns, inline editing, add at column bottom, convert back to a plain node
+- Whole subtrees become cards, hover to peek at descendants, copy a card and paste it to AI
+- Header filter (title/path/tag), bulk-archive the done column; `Ctrl+Shift+K` to toggle
+
+### AI chat
+
+- Built-in AI panel: edit the map through conversation, seven structured map tools (create/delete/update, move, reorder among siblings)
+- Every map is a `.md` file — let AI edit the file directly and reopen for the latest, or drive the canvas through the built-in panel
+- Per-turn badges; a safety-net notice is auto-inserted on the first turn when git backup is not enabled
+
+### Local & data
+
+- Automatic git backup of the workspace: a version-history dialog to roll back at any time — and rolls-back can themselves be rolled back
+- 11-step guided tour on first launch
+- Free, local-first, offline-capable, no account
 
 ## Current limitations
 
-- When opening an external `.md` file, paragraphs, code blocks, and other content that cannot be mapped to nodes are dropped on save (a banner warns when opening, and confirmation is required before an explicit save)
+- When opening an external `.md` file, paragraphs, code blocks, and other content not mapped to nodes are dropped on save (a banner warns when opening, and explicit saves ask for confirmation)
+- Windows installers only for now (msi/nsis/portable exe)
 
 ## Development guide
 
