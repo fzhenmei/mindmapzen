@@ -1,0 +1,58 @@
+name: 🐛 Bug report / 缺陷报告
+description: Something is broken or behaves unexpectedly / 功能异常、结果不符合预期
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report! Before opening, please search existing issues to avoid duplicates.
+        感谢反馈!提交前请先搜索已有 issue,避免重复。
+
+        Three things help us fix it fast: the app version, your Windows version, and exact steps to reproduce.
+        有助于快速定位的三样东西:应用版本、Windows 版本、可复现的操作步骤。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Describe the bug / 描述问题
+      description: What happened, and what did you expect instead? / 发生了什么?预期应该是什么?
+      placeholder: |
+        1. ……
+        2. ……
+        Expected / 预期:……
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version / 应用版本
+      description: The release you installed, e.g. v2.18.0 / 所安装 Release 的版本号
+      placeholder: v2.18.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS / 操作系统
+      options:
+        - Windows 11
+        - Windows 10
+        - Other (please specify in the description) / 其他(请在描述中说明)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: |
+        Numbered steps. If a specific map triggers it, drag the `.md` file into this issue.
+        按编号写清操作;若是特定导图触发,请把 `.md` 文件直接拖进 issue。
+      placeholder: |
+        1. ……
+        2. ……
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Screenshots or logs / 截图或日志
+      description: Optional, but a screenshot often makes the bug obvious at a glance. / 可选;截图常常一目了然。
