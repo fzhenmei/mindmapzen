@@ -46,6 +46,11 @@
 - 首次启动 11 步漫游引导
 - 免费、本地优先、离线可用、无账号
 
+## 下载与安全提示
+
+- 安装包从 [GitHub Releases](https://github.com/fzhenmei/mindmapzen/releases) 获取：MSI / NSIS 安装包 + 便携版 zip
+- 安装包未购买代码签名证书，浏览器或 SmartScreen 可能提示「未知发布者 / 不常见下载」——点「保留 / 仍要下载」与「更多信息 → 仍要运行」即可继续；也可用各 Release 说明中的 SHA-256 校验后再运行：`certutil -hashfile <文件名> SHA256`
+
 ## 当前限制
 
 - 打开外部 `.md` 时，未映射为节点的段落/代码块等内容在保存时会被丢弃（打开时有横幅告知，显式保存前另有确认）

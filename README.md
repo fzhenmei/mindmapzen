@@ -46,6 +46,11 @@ A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-
 - 11-step guided tour on first launch
 - Free, local-first, offline-capable, no account
 
+## Download & security note
+
+- Get installers from [GitHub Releases](https://github.com/fzhenmei/mindmapzen/releases): MSI / NSIS installers plus a portable zip
+- Installers are not code-signed, so your browser or SmartScreen may flag them as "unknown publisher / uncommon download" — choose "Keep / Keep anyway" and "More info → Run anyway" to proceed, or verify against the SHA-256 hashes in each release notes first: `certutil -hashfile <file> SHA256`
+
 ## Current limitations
 
 - When opening an external `.md` file, paragraphs, code blocks, and other content not mapped to nodes are dropped on save (a banner warns when opening, and explicit saves ask for confirmation)
