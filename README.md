@@ -13,6 +13,15 @@
 
 ## 开发指南
 
+### 环境要求
+
+- **Node.js LTS（建议 ≥ 22，[nodejs.org](https://nodejs.org/) 下载）**：前端开发/构建/测试与所有 npm 脚本的运行时；Tauri CLI（`@tauri-apps/cli`）已列入 devDependencies，`npm install` 后即可用，无需全局安装
+- **Rust stable 工具链**：仅编译桌面壳（`npm run dev:app`、`npm run build:release`）需要——用 [rustup](https://rustup.rs/) 安装 stable（Windows 目标 `x86_64-pc-windows-msvc`），`src-tauri/Cargo.toml` 钉的 `rust-version = "1.77.2"` 是下限；纯前端命令（`dev` / `test` / `e2e` / `lint` / `typecheck` / `build`）不装 Rust 也能跑
+- **Visual Studio C++ 生成工具（MSVC + Windows 10/11 SDK）**：Rust msvc 目标链接与 `tauri-winres` 资源编译的前提（release 打包所需 `rc.exe` 即出自 Windows SDK，见下方说明）；建议先装它再装 Rust
+- **WebView2 运行时**：Tauri 的界面载体，Windows 10/11 一般自带，无需单独安装
+
+首次克隆后先 `npm install`；跑 e2e 前首次执行 `npx playwright install` 下载浏览器。Windows PowerShell 里若 `npm` 报「禁止运行脚本」，执行一次 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` 放行 npm.ps1 即可。
+
 ```bash
 npm run dev        # 前端开发服务器（Vite）
 npm run dev:app    # 桌面壳完整开发模式（Tauri 窗口；单实例锁与 release 分离，可与 release 并行，见下方说明）
