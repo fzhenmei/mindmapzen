@@ -56,11 +56,13 @@ test('无工作区时渲染开屏页，创建工作区后进入案头', async ()
 })
 
 // M5d 缓期项清偿：设置页「更换工作区」（2026-09 导航系统迁 AppDialogs）——route=library
-// 非脏态直通 executeWorkspaceAction，经 store pickDirPort 选新文件夹后案头切换、对话框关闭
-test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框', async () => {
+// 非脏态直通 executeWorkspaceAction，经 store pickDirPort 选新文件夹后案头切换、对话框关闭。
+// 选中失效断言（修复轮 1）：切走时 maps 落地后兜底剪枝清选中，换回原工作区详情态不复活
+test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框，选中态随切换失效', async () => {
   await fs.writeTextFileAtomic('/ws2/新家.md', '# 新家\n')
   await useAppStore.getState().setWorkspace('/ws')
-  const pick = vi.fn(async () => '/ws2')
+  // 两次更换：先到 /ws2，再换回 /ws（换回腿验证旧选中不复活）
+  const pick = vi.fn().mockResolvedValueOnce('/ws2').mockResolvedValueOnce('/ws')
   useAppStore.getState().setPickDirPort(pick)
   render(
     <>
@@ -68,15 +70,26 @@ test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框',
       <AppDialogs />
     </>,
   )
+  // 先选中想法A进详情态（此态若不剪，换走再换回会复活）
+  fireEvent.click(await screen.findByTestId('file-node-想法A'))
+  expect(await screen.findByTestId('file-detail')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('btn-settings'))
   expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('settings-workspace-change'))
   expect(screen.queryByTestId('settings-dialog')).not.toBeInTheDocument()
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws2'))
   expect(pick).toHaveBeenCalledTimes(1)
-  // 切换工作区回欢迎页；左树（默认全展开）直列新图文件行
+  // 切换工作区回欢迎页（详情态随 maps 刷新后的兜底剪枝失效）；左树（默认全展开）直列新图文件行
   expect(await screen.findByTestId('desk-idle')).toBeInTheDocument()
+  await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
   expect(await screen.findByTestId('file-node-新家')).toBeInTheDocument()
+  // 换回原工作区：想法A文件行回来，但旧选中不复活——仍停留欢迎页（无详情态）
+  fireEvent.click(screen.getByTestId('btn-settings'))
+  fireEvent.click(screen.getByTestId('settings-workspace-change'))
+  await waitFor(() => expect(useAppStore.getState().workspaceDir).toBe('/ws'))
+  expect(await screen.findByTestId('file-node-想法A')).toBeInTheDocument()
+  await waitFor(() => expect(screen.queryByTestId('file-detail')).not.toBeInTheDocument())
+  expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
 })
 
 // v0.7.0 验收：设置页「退出工作区（回到开屏）」——清 workspaceDir 回开屏页并持久化 null
