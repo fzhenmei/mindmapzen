@@ -75,10 +75,24 @@ export default {
       item: '{{type}}：{{excerpt}}',
       confirm: '导入',
     },
+    // 「从 Git 库打开」克隆对话框（CloneDialog）
+    clone: {
+      title: '从 Git 库打开',
+      url: 'Git 库地址',
+      urlPlaceholder: 'https://git.example.com/repo.git',
+      username: '用户名（私有库填写，可选）',
+      password: '密码 / Token（私有库填写，可选）',
+      location: '克隆位置',
+      browse: '浏览…',
+      targetPreview: '将克隆到：{{path}}',
+      confirm: '克隆',
+      cloning: '正在克隆…',
+    },
   },
   welcomeScreen: {
     tagline: '想法落成 .md',
     chooseWorkspace: '选择工作区文件夹',
+    cloneFromGit: '从 Git 库打开',
   },
   templates: {
     workspace: '工作区模板',

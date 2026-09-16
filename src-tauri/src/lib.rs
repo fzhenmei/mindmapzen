@@ -86,26 +86,24 @@ fn set_titlebar_colors(
     Ok(())
 }
 
-/// git 命令执行（M20 版本管理）：cwd 限定调用方传入的工作区目录，args 为 git 子命令。
-/// v2.4 性能修复：
+/// git 子进程执行底座（git_exec / git_clone 共用）。v2.4 性能修复沉淀：
 ///  ① async + tokio::process——不阻塞线程（同步 output() 冻结消息泵，UI 全卡，验收实案）；
 ///  ② Windows CREATE_NO_WINDOW——git.exe 是控制台程序，默认会闪黑色 cmd 窗口（验收实案）；
-///  ③ 30s 超时——防异常仓库（如巨型 status）把会话挂死。
+///  ③ 超时入参——防异常命令把会话挂死（常规命令 30s；clone 拉网络远端放宽）。
 /// 单用户桌面应用，信任本地图；输出与退出码整体回传（服务层按 ok/out 解析状态）
-#[tauri::command]
-async fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
+async fn run_git(cwd: &str, args: &[String], timeout_secs: u64) -> Result<GitResult, String> {
     use std::time::Duration;
     use tokio::process::Command as TokioCommand;
 
     let mut cmd = TokioCommand::new("git");
-    cmd.args(&args).current_dir(&cwd);
+    cmd.args(args).current_dir(cwd);
     #[cfg(windows)]
     {
         // tokio Command 自带 creation_flags（Windows）：控制台子进程不创建新窗口
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
-    let out = tokio::time::timeout(Duration::from_secs(30), cmd.output())
+    let out = tokio::time::timeout(Duration::from_secs(timeout_secs), cmd.output())
         .await
         .map_err(|_| "GIT_TIMEOUT".to_string())?
         .map_err(|e| e.to_string())?;
@@ -114,6 +112,22 @@ async fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
         out: String::from_utf8_lossy(&out.stdout).into_owned(),
         err: String::from_utf8_lossy(&out.stderr).into_owned(),
     })
+}
+
+/// git 命令执行（M20 版本管理）：cwd 限定调用方传入的工作区目录，args 为 git 子命令。
+/// 超时 30s——防异常仓库（如巨型 status）把会话挂死
+#[tauri::command]
+async fn git_exec(cwd: String, args: Vec<String>) -> Result<GitResult, String> {
+    run_git(&cwd, &args, 30).await
+}
+
+/// git 克隆（「从 Git 库打开」）：cwd 为目标父目录，在父目录下克隆出 <repo_name>/。
+/// 仓库名由前端从 URL 解析（目标目录 = 父目录/仓库名，前端据此设工作区与失败回收）。
+/// 超时 600s——clone 拉网络远端（大库/慢网），远超常规命令 30s 预算；
+/// 认证由前端把凭证内嵌进 URL（basic auth 惯例），对任意 Git Server 通用
+#[tauri::command]
+async fn git_clone(parent_dir: String, url: String, repo_name: String) -> Result<GitResult, String> {
+    run_git(&parent_dir, &[String::from("clone"), url, repo_name], 600).await
 }
 
 #[derive(serde::Serialize)]
@@ -185,6 +199,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             trash_delete,
             git_exec,
+            git_clone,
             set_titlebar_colors,
             ai_chat_start,
             ai_chat_abort

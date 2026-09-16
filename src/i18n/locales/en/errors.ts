@@ -64,6 +64,14 @@ const errors: Dict['errors'] = {
     reason: { noInit: 'Not initialized', statusUnreadable: 'Status unreadable', noChange: 'No changes', commitFail: 'Commit failed', noRemote: 'No remote configured' },
     fatal: { init: 'git init failed: {{detail}}', status: 'git status failed: {{detail}}', commit: 'git commit failed: {{detail}}' },
     rollback: { invalidHash: 'Invalid version: {{hash}}…', restoreFail: 'Restore failed: {{detail}}', commitFail: 'Failed to commit rollback: {{detail}}' },
+    // Open from Git repository (gitClone service validation & clone errors)
+    clone: {
+      urlEmpty: 'Enter a repository URL',
+      nameUnparsable: 'Cannot derive a repository name from the URL',
+      credsPair: 'Username and password/token must be filled in together',
+      fail: 'Clone failed: {{detail}}',
+      dirExists: 'Target directory already exists: {{path}}',
+    },
   },
 }
 export default errors

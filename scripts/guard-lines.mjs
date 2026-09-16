@@ -49,11 +49,22 @@
 // 组合（execOnRenderNode 寻址落 setIcon，复用 statusOps 三件套不重复实现）+ NodeActions
 // 状态钮 + statusPicker 槽接线，实测 736 + 9 行余量；选择器本体在 StatusPickerDialog.tsx
 // （无护栏）、命令落地在 statusOps.execOnRenderNode——功能性增长，非腐化）。
+// 2026-09（工作台批 Task 9）：745→760（locateNode 首挂定位 miss 有限重试：引擎 render()
+// 排 setTimeout 0，onCanvasReady 即时寻址必 miss、大图不居中，e2e 实锤——经
+// node_tree_render_end 按 RENDER_RETRY_MAX 重试后居中，实测 750 + 10 行余量；
+// 重试口径复用 statusOps 导出常量——功能性修复增长，无腐化）。
+// 2026-09（工作台批）：WorkbenchView 初登 336（实测 326 + 10 余量）——聚合视图
+// （看板/建议/最近/AI 浮层），子组件 WorkbenchCard 独立无护栏。
+// 2026-09-14（工作台试用反馈批）：336→365（AI 浮层首 token 占位 + 停止钮 +
+// Token 费用提示三件，实测 351 + 14 余量）——功能性增长，无腐化。
+// 2026-09-14（AI 建议缓存批）：365→405（双条件缓存：askAi 命中短路 + aiTextRef
+// 镜像 + 存档 + 再问一次钮，实测 393 + 12 余量）——功能性增长，无腐化。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 745 },
+  { path: '../src/views/EditorView.tsx', limit: 760 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
+  { path: '../src/views/WorkbenchView.tsx', limit: 405 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计

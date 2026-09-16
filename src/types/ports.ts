@@ -21,3 +21,12 @@ export type GitRun = (
   cwd: string,
   args: readonly string[],
 ) => Promise<{ ok: boolean; out: string; err: string }>
+
+/** git 克隆端口（「从 Git 库打开」）：生产为 Tauri git_clone（cwd 为目标父目录，
+ *  在其下克隆出 <repo_name>/；超时 600s 在 Rust 侧，不受 git_exec 30s 常规预算约束），
+ *  测试注入记录桩。返回结构与 GitRun 同构 */
+export type GitClone = (
+  parentDir: string,
+  url: string,
+  repoName: string,
+) => Promise<{ ok: boolean; out: string; err: string }>

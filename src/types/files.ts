@@ -120,6 +120,18 @@ export interface AppConfig {
   ai: AiConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）；null = 默认 320 */
   aiChatWidth: number | null
+  /** 工作台 AI 建议缓存（2026-09-14 双条件：24h 内且任务指纹一致才复用）；null = 无 */
+  aiAdvice: AiAdvice | null
+}
+
+/** 工作台 AI 建议缓存（cfg.json 持久化）：只有正常完成（done）的回复入档——
+ *  错误/中止的半截文本对下次会话无意义 */
+export interface AiAdvice {
+  text: string
+  /** 生成时刻（epoch 毫秒）——TTL 判定用 */
+  at: number
+  /** 生成时的任务清单指纹（adviceFingerprint）——内容变了自动失效 */
+  fingerprint: string
 }
 /** 版本管理配置（M20）：宽容解析见 config.ts（parseGitConfig） */
 export interface GitConfig {
@@ -198,6 +210,17 @@ export const DEFAULT_CONFIG: AppConfig = {
   outlineWidth: null,
   ai: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
+  aiAdvice: null,
+}
+
+/** 宽容解析 AI 建议缓存（旧配置无字段兼容）：任一字段失型即弃（null，下次重新问） */
+export function parseAiAdvice(v: unknown): AiAdvice | null {
+  if (typeof v !== 'object' || v === null) return null
+  const o = v as Record<string, unknown>
+  if (typeof o.text !== 'string' || o.text === '') return null
+  if (typeof o.at !== 'number' || !Number.isFinite(o.at)) return null
+  if (typeof o.fingerprint !== 'string' || o.fingerprint === '') return null
+  return { text: o.text, at: o.at, fingerprint: o.fingerprint }
 }
 /** 连线弯曲记忆条目（M5d Task 5）：键 '/源路径->/目标路径'（路径寻址，节点改名即失联丢弃——sidecar 级语义）。
  *  cx1/cy1、cx2/cy2 = 贝塞尔两控制点相对连线起点/终点的差值（引擎 associativeLineTargetControlOffsets 口径，

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiAdvice, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -7,10 +7,11 @@ import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../service
 import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
-import type { GitRun } from '../types/ports'
+import { isE2eMode } from '../services/e2eMode'
+import type { GitClone, GitRun } from '../types/ports'
 
 interface AppState {
-  route: 'library' | 'editor'
+  route: 'library' | 'editor' | 'workbench' // workbench=工作台（2026-09 跨图总览，spec 2026-09-13-workbench §2）
   /** 启动完成标志（v2.4）：init（含磁盘 IO）完成前 App 显示 boot loading，不闪开屏/案头 */
   booted: boolean
   /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
@@ -38,6 +39,16 @@ interface AppState {
   viewMode: 'mindmap' | 'kanban'
   /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
   setViewMode: (v: 'mindmap' | 'kanban') => void
+  /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器
+   * { mapPath, path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
+   * mapPath 绑定目标图（终审 Important-1）：openMap 失败（文件被删/坏档）时寻址器残留，
+   * 用户切到别图后 EditorView 消费前须校验目标——mapPath 与当前图不符即弃置（console.warn
+   * 线索），杜绝「错图消费」误定位；EditorView 引擎 onReady 后消费（locateNode 定位）
+   * 并即刻清空——消费即清，避免切图残留误定位 */
+  pendingLocate: { mapPath: string; path: string[]; text: string } | null
+  setPendingLocate: (v: { mapPath: string; path: string[]; text: string } | null) => void
+  /** 进入工作台（案头按钮入口）：工作台不持有打开图，清编辑态（dirty/currentMdPath） */
+  goWorkbench: () => void
   dirty: boolean
   error: string | null
   configPath: string
@@ -62,6 +73,10 @@ interface AppState {
   aiConfig: AiConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）：null = 默认 320；提交语义同 sidebarWidth */
   aiChatWidth: number | null
+  /** 工作台 AI 建议缓存（2026-09-14）：双条件复用（24h 内且任务指纹一致），
+   *  init 自配置，setAiAdvice load-merge-save 持久化 */
+  aiAdvice: AiAdvice | null
+  setAiAdvice: (advice: AiAdvice | null) => Promise<void>
   /** 解析后的实际主题（auto 按系统偏好解析；驱动 document data-theme） */
   resolvedTheme: ResolvedTheme
   /** 界面语言三态偏好(auto = 跟随系统) */
@@ -81,6 +96,9 @@ interface AppState {
   markAiBackupNoticeShown: () => void
   /** git 命令端口（M20）：App 装配注入（生产 Tauri git_exec / E2E harness 桩）；null 时备份为 no-op */
   gitRun: GitRun | null
+  /** git 克隆端口（「从 Git 库打开」）：App 装配注入（生产 Tauri git_clone / E2E harness 桩）；
+   *  null 时克隆入口报「未启用版本管理」（与 gitRun 同门） */
+  gitClone: GitClone | null
   /** 最近备份结果原始数据（2026-09 i18n：只存 BackupOutcome 枚举与原始串，人话摘要由
    *  渲染层 SettingsDialog 拼——语言切换即时反映，store 不落拼好文案）；null = 从未执行 */
   lastBackup: BackupOutcome | null
@@ -171,6 +189,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentMdPath: null,
   editorSeq: 0,
   viewMode: 'mindmap',
+  pendingLocate: null,
+  setPendingLocate: (v) => set({ pendingLocate: v }),
+  goWorkbench: () => set({ currentMdPath: null, dirty: false, route: 'workbench' }),
   dirty: false,
   error: null,
   configPath: '/cfg.json',
@@ -185,6 +206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   outlineWidth: null,
   aiConfig: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
+  aiAdvice: null,
   resolvedTheme: 'light',
   resolvedLanguage: 'zh-CN',
   titlebarBg: '--background',
@@ -195,6 +217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiBackupNoticeShown: false,
   markAiBackupNoticeShown: () => set({ aiBackupNoticeShown: true }),
   gitRun: null,
+  gitClone: null,
   lastBackup: null,
   gitStatus: { lastCommit: null, aheadCount: null },
   gitHistoryList: [],
@@ -213,7 +236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -221,8 +244,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened.slice(0, 5) })
       await get().refreshMaps()
     }
-    // v2.4：不再自动回到上次打开的导图——启动恒定落案头（上次内容在「最近打开」一键可达）
-    set({ route: 'library', booted: true })
+    // 启动落点（2026-09 工作台 spec §2）：有工作区 → 工作台（打开应用先见今天该做什么）；
+    // e2e 模式维持落案头——全线 spec 假设启动即案头（file-node 直接可达），产品分支的
+    // 真实落点由 App.test.tsx 覆盖（jsdom URL 无 ?e2e=1），见 spec §11 回写。
+    // v2.4 口径「不自动回到上次打开的导图」不变——落点不是编辑器，上次内容仍在「最近打开」可达
+    set({ route: get().workspaceDir !== null && !isE2eMode() ? 'workbench' : 'library', booted: true })
   },
 
   setWorkspace: async (dir) => {
@@ -381,6 +407,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, aiChatWidth: w })
     set({ aiChatWidth: w })
+  },
+
+  /** 工作台 AI 建议缓存提交（2026-09-14）：即时生效 + load-merge-save 持久化；
+   *  null = 清除（换建议覆盖/弃用）。存档只在流正常结束处调用（useAskAi） */
+  setAiAdvice: async (advice) => {
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, aiAdvice: advice })
+    set({ aiAdvice: advice })
   },
 
   /** 复制行为设置（M5b Task 4）：即时更新状态，load-merge-save 持久化（单字段合并，不覆盖另一字段） */

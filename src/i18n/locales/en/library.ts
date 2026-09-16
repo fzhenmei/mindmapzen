@@ -83,10 +83,24 @@ const library: Dict['library'] = {
       item: '{{type}}: {{excerpt}}',
       confirm: 'Import',
     },
+    // Open from Git repository (CloneDialog)
+    clone: {
+      title: 'Open from Git repository',
+      url: 'Repository URL',
+      urlPlaceholder: 'https://git.example.com/repo.git',
+      username: 'Username (private repos, optional)',
+      password: 'Password / Token (private repos, optional)',
+      location: 'Clone location',
+      browse: 'Browse…',
+      targetPreview: 'Will clone to: {{path}}',
+      confirm: 'Clone',
+      cloning: 'Cloning…',
+    },
   },
   welcomeScreen: {
     tagline: 'Turn ideas into .md',
     chooseWorkspace: 'Choose a workspace folder',
+    cloneFromGit: 'Open from Git repository',
   },
   templates: {
     workspace: 'Workspace template',

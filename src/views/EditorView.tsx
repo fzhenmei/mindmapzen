@@ -36,7 +36,7 @@ import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
 import type { TaskStatus } from '../services/statusMarkers'
-import { expandToUid, execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { expandToUid, execOnRenderNode, findUidByPathText, mergeStatusBadge, nodeStatusOf, RENDER_RETRY_MAX } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -219,10 +219,30 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     switchView('mindmap')
     const mm = mmRef.current
     if (mm === null) return
+    // 首挂时序（2026-09 工作台跨图定位 e2e 实锤）：引擎 render() 排 setTimeout 0，
+    // onCanvasReady 时首渲未落——已展开路径的即时寻址必 miss。miss 时经
+    // node_tree_render_end 有限重试（execOnRenderNode 同款 RENDER_RETRY_MAX 口径），
+    // 等首渲/展开重渲落定再居中；超限才放弃（大图不居中=目标在屏外，属功能缺陷）
+    let tries = 0
     const apply = (): void => {
       const node = mm.renderer?.findNodeByUid(uid)
-      if (node !== null && node !== undefined) mm.renderer?.moveNodeToCenter?.(node as never)
-      else console.warn('看板定位未命中渲染节点，跳过居中', uid)
+      if (node !== null && node !== undefined) {
+        mm.renderer?.moveNodeToCenter?.(node as never)
+        return
+      }
+      if (tries < RENDER_RETRY_MAX) {
+        tries += 1
+        mm.on('node_tree_render_end', function onEnd() {
+          mm.off('node_tree_render_end', onEnd)
+          try {
+            apply()
+          } catch (e) {
+            console.error('看板定位回调失败', e)
+          }
+        })
+        return
+      }
+      console.warn('看板定位未命中渲染节点，跳过居中', uid)
     }
     try {
       if (expandToUid(mm, uid)) {
@@ -235,7 +255,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           }
         })
       } else {
-        apply() // 路径已全展开：渲染树可即时寻址
+        apply() // 路径已全展开：即时寻址（首挂未渲由上方重试分支兜底）
       }
     } catch (e) {
       console.error('看板回导图定位失败', e)
@@ -478,6 +498,31 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           onCanvasReady={(mm) => {
             purify(mm) // 连线净化（M5d Task 2）：首帧后建注册表 → 剥显示文本 → 落初始连线
             undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
+            // 工作台跨图定位（2026-09 spec §5 文本寻址）：引擎就绪即消费 pendingLocate——
+            // 消费即清，避免切图残留误定位。md 不序列化 uid，寻址走 path+text 在 getData()
+            // 全量快照（含收起隐藏子树）DFS 命中取真 uid，再交 locateNode（switchView +
+            // expandToUid 活树 + 居中，内部全链 try/catch）。miss（图被外部改动）console.warn
+            // 线索、静默进图不清屏。落点裁定：挂引擎就绪回调而非 useOpenDocument.onReady
+            // ——后者触发时 state 方置 'ready'、画布尚未挂载（EditorCanvasArea 以其为渲染
+            // 门），mmRef 必为 null，消费将清而不定位。
+            // 目标图绑定（终审 Important-1 错图消费）：openMap 失败（被删/坏档）时寻址器
+            // 残留，用户经错误面板/Ctrl+Tab 切到别图——mapPath 与当前图不符即弃置不定位
+            // （console.warn 留线索，不吞），杜绝 path+text 碰巧同名时误定位到错图节点
+            const locate = useAppStore.getState().pendingLocate
+            if (locate !== null) {
+              useAppStore.getState().setPendingLocate(null)
+              if (locate.mapPath !== mdPath) {
+                console.warn('工作台定位目标图与当前图不符，弃置寻址器（目标图打开失败后切图）', locate)
+                return
+              }
+              try {
+                const uid = findUidByPathText(mm.getData(), locate.path, locate.text)
+                if (uid !== null) locateNode(uid)
+                else console.warn('工作台定位未命中节点（图可能与扫描时已不同）', locate)
+              } catch (e) {
+                console.error('工作台跨图定位失败', e)
+              }
+            }
           }}
           onDataChange={(data) => {
             stats.onDataChange(data) // 统计行（2026-09）：携带快照时重数节点

@@ -222,6 +222,7 @@ beforeEach(async () => {
     recentOpened: [], // 快速切换（v2.5）：候选与 ping-pong 数据源逐用例重置，防跨用例泄漏
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
+    pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
     settings: { copyIncludeLinks: true, copyIncludeBody: true },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
@@ -3040,5 +3041,143 @@ describe('看板模式（2026-09 Task 7）', () => {
     // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
     expect(writes[0]).not.toContain('子任务B')
     expect(writes[0]).not.toContain('B1')
+  })
+})
+
+// ── 工作台跨图定位（2026-09 spec §5 文本寻址）：EditorView 引擎就绪消费 pendingLocate ──
+describe('工作台跨图定位（2026-09 spec §5）', () => {
+  test('引擎就绪消费 pendingLocate：消费即清 + path+text 寻址命中经 locateNode 居中', async () => {
+    // 夹具：根 > 分支 > 任务甲（引擎树形态 data.text/data.uid）。任务甲 uid 用 child-uid
+    // ——fake renderer.findNodeByUid 仅认 root/child/deep 三 uid，居中断言靠它命中 fakeChildNode
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ pendingLocate: { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' } })
+      render(
+        <EditorView
+          mdPath="/ws/a.md"
+          openInEditor={openInEditor}
+          writeClipboard={vi.fn(async () => {})}
+          exportPorts={stubExportPorts}
+          registerCloseGuard={noopRegister}
+          pickImageFile={stubPickImage}
+          readClipboardImage={stubReadClipboardImage}
+          exitApp={noopExitApp}
+        />,
+      )
+      await screen.findByTestId('fake-canvas')
+      // 消费触发 setPendingLocate 重渲会重赋模块级 fakeHandle（工厂每渲重建），断言须锁定
+      // emit 前实例——mmRef 所持同款约定
+      const handle = fakeHandle
+      act(() => {
+        ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+      })
+      expect(useAppStore.getState().pendingLocate).toBeNull() // 消费即清（不残留误定位）
+      // 定位生效：getData 全量快照按 path+text 寻址取真 uid → locateNode 居中（路径已全
+      // 展开走同步寻址分支，moveNodeToCenter 收 fakeChildNode）
+      expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledWith(fakeChildNode)
+      expect(errSpy).not.toHaveBeenCalled() // 全链 try/catch 有出口，命中路径零报错
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  test('首挂未渲 miss：消费经 node_tree_render_end 有限重试后居中（Task 9 定位修复回归）', async () => {
+    // 首挂时序（工作台 e2e 实锤）：引擎 render() 排 setTimeout 0，onCanvasReady 时首渲
+    // 未落——已展开路径即时寻址必 miss。此前 miss 即放弃居中（大图目标在屏外），修复后
+    // 经渲染完成事件重试。fake 模拟：findNodeByUid 首查 null（首渲未落），次查命中
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    useAppStore.setState({ pendingLocate: { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' } })
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    const handle = fakeHandle
+    // 首挂寻址 miss 注入（引擎首渲排队中形态）：首查 null，其后恢复真实寻址
+    const realFind = handle.renderer?.findNodeByUid.bind(handle.renderer)
+    let finds = 0
+    handle.renderer!.findNodeByUid = (uid: string) => {
+      finds += 1
+      return finds === 1 ? null : realFind?.(uid)
+    }
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    expect(useAppStore.getState().pendingLocate).toBeNull() // 消费照常即清（miss 不回滚）
+    const center = handle.renderer?.moveNodeToCenter as ReturnType<typeof vi.fn>
+    expect(center).not.toHaveBeenCalled() // 首查 miss：不放弃也不误居中，重试挂起
+    // 首渲落定（node_tree_render_end）：重试命中，居中生效
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitRenderEnd!()
+    })
+    expect(center).toHaveBeenCalledWith(fakeChildNode)
+  })
+
+  test('mapPath 不符：弃置寻址器不定位（终审 Important-1 错图消费修复）', async () => {
+    // 触发链：点图 B 任务卡 → openMap(B) 失败（被删/坏档）→ EditorView 停 error 态、
+    // onCanvasReady 不触发 → 寻址器残留 → 用户切到图 A → 图 A 就绪消费前须校验目标：
+    // mapPath 不符即清空弃置 + console.warn 线索，绝不误定位到图 A 的同名节点
+    fakeTree = {
+      data: { text: '根', expand: true, uid: 'root-uid' },
+      children: [
+        { data: { text: '分支', expand: true, uid: 'branch-uid' }, children: [
+          { data: { text: '任务甲', expand: true, uid: 'child-uid' }, children: [] },
+        ] },
+      ],
+    }
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 分支\n\n### 任务甲\n')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // 寻址器绑定打不开的图 B；当前挂载的是图 A（mdPath=/ws/a.md）——path+text 与图 A
+      // 内容碰巧全同名（复刻最险形态），校验是唯一防线
+      useAppStore.setState({ pendingLocate: { mapPath: '/ws/图B.md', path: ['分支'], text: '任务甲' } })
+      render(
+        <EditorView
+          mdPath="/ws/a.md"
+          openInEditor={openInEditor}
+          writeClipboard={vi.fn(async () => {})}
+          exportPorts={stubExportPorts}
+          registerCloseGuard={noopRegister}
+          pickImageFile={stubPickImage}
+          readClipboardImage={stubReadClipboardImage}
+          exitApp={noopExitApp}
+        />,
+      )
+      await screen.findByTestId('fake-canvas')
+      const handle = fakeHandle
+      act(() => {
+        ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+      })
+      expect(useAppStore.getState().pendingLocate).toBeNull() // 弃置即清（不残留到下一图）
+      expect(handle.renderer?.moveNodeToCenter).not.toHaveBeenCalled() // 同名也不误定位
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('目标图与当前图不符'), expect.objectContaining({ mapPath: '/ws/图B.md' }))
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })

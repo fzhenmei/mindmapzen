@@ -73,8 +73,9 @@ export function expandToUid(mm: MindMapHandle, uid: string): boolean {
 }
 
 /** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
- *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环） */
-const RENDER_RETRY_MAX = 3
+ *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环）。导出供 EditorView.locateNode
+ *  同口径复用（首挂定位 miss 重试） */
+export const RENDER_RETRY_MAX = 3
 
 /** 渲染节点寻址落命令（2026-09 审查 Important-2 自 KanbanView.withRenderNode 提升，
  *  KanbanView 三操作与 useIconPicker/useTagPicker 桥接同用）：渲染树命中即同步落命令；
@@ -128,4 +129,32 @@ export function execOnRenderNode(
     }
   }
   mm.on('node_tree_render_end', onEnd)
+}
+
+/** 工作台跨图定位的文本寻址输入树（引擎全量树最小只读面：data.text/data.uid/children）。
+ *  uid 收宽为 unknown：引擎 data 带字符串索引签名（EngineNode），uid 类型侧不可精化，
+ *  运行时恒 string——命中处以 typeof 收窄，EngineNode 无需断言即可入参 */
+type AddrNode = { data: { text: string; uid?: unknown }; children?: AddrNode[] }
+
+/** 工作台跨图定位的文本寻址（spec 2026-09-13 §5）：md 不序列化 uid，扫描期 uid 在引擎
+ *  侧必然失配——按「大纲路径段 + 节点文本」在引擎全量树 DFS 命中第一个节点取真 uid。
+ *  入参即引擎树形态，getData() 快照与 renderTree 皆可（含收起隐藏子树——收起只改
+ *  data.expand 不摘 children）；只读寻址不写树（收起分支事故的教训是「直写副本」，
+ *  读快照安全）。同名歧义取 DFS 首个（path 前缀收窄歧义面，miss 由调用方 console.warn
+ *  兜底） */
+export function findUidByPathText(root: AddrNode, path: readonly string[], text: string): string | null {
+  const walk = (node: AddrNode, depth: number): string | null => {
+    for (const c of node.children ?? []) {
+      if (depth < path.length) {
+        if (c.data.text === path[depth]) {
+          const hit = walk(c, depth + 1)
+          if (hit !== null) return hit
+        }
+      } else if (c.data.text === text && typeof c.data.uid === 'string') {
+        return c.data.uid
+      }
+    }
+    return null
+  }
+  return walk(root, 0)
 }

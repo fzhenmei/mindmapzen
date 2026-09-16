@@ -12,11 +12,14 @@ import LibraryDialogs from '../components/LibraryDialogs'
 import WelcomePane from '../components/WelcomePane'
 import { ThemeFab } from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
+import CloneDialog, { type CloneRequest } from '../components/CloneDialog'
+import { cloneWorkspace, repoNameFromUrl } from '../services/gitClone'
+import { joinPath } from '../services/workspace'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
-import { IconImport, IconPlus, IconSettings } from '../components/icons'
+import { IconImport, IconPlus, IconSettings, IconWorkbench } from '../components/icons'
 import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
@@ -104,6 +107,31 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     } catch (e) {
       store.setError(t('errors.setWorkspaceFailed', { reason: String(e) }))
     }
+  }
+
+  /** 「从 Git 库打开」对话框开合（开屏态专属入口） */
+  const [cloneOpen, setCloneOpen] = useState(false)
+  /** 克隆确认：前置目录存在检查（防 git 因目标非空报错后误回收用户既有目录）→
+   *  服务层克隆 + 注册 zen-origin → 成功设为工作区。失败抛错给对话框就地显示
+   *  （NewMapDialog 同契约）；半成品目录走 adapter.remove（Tauri=回收站） */
+  const cloneFromGit = async (req: CloneRequest) => {
+    const { gitClone, gitRun, adapter } = useAppStore.getState()
+    if (gitClone === null || gitRun === null) throw new Error(t('errors.gitNotEnabled'))
+    const name = repoNameFromUrl(req.url)
+    if (name === '') throw new Error(t('errors.git.clone.nameUnparsable'))
+    const target = joinPath(req.parentDir, name)
+    if (await adapter.exists(target)) throw new Error(t('errors.git.clone.dirExists', { path: target }))
+    const r = await cloneWorkspace(req.parentDir, req.url, req.username, req.password, gitClone, gitRun)
+    if (!r.ok) {
+      // 克隆已确认目标原不存在，此刻残留即半成品——回收安全；回收失败不淹没克隆报错，留痕即可
+      if (r.dir !== '' && (await adapter.exists(r.dir))) {
+        await adapter.remove(r.dir).catch((e) => console.warn('克隆半成品回收失败（不影响报错）:', e))
+      }
+      throw new Error(r.error)
+    }
+    await store.setWorkspace(r.dir)
+    setCloneOpen(false)
+    pruneSelectedMap()
   }
 
   /** 树移动收口（2026-09 拖拽 + 对话框流共用 useTreeMoves）：刷新 = maps 重扫 + 左树
@@ -211,7 +239,17 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
     return (
       <div className="library relative flex h-full flex-col bg-background">
         {error && <div className="error-banner">{error}</div>}
-        <WelcomeScreen onCreateWorkspace={() => void chooseWorkspace()} />
+        <WelcomeScreen
+          onCreateWorkspace={() => void chooseWorkspace()}
+          onCloneFromGit={() => setCloneOpen(true)}
+        />
+        {cloneOpen && (
+          <CloneDialog
+            pickDirectory={pickDirectory}
+            onConfirm={cloneFromGit}
+            onCancel={() => setCloneOpen(false)}
+          />
+        )}
         {/* 右下主题钮（2026-09 三态统一）：开屏无 SidebarInset 浮层，锚定视口级 .library */}
         <ThemeFab />
       </div>
@@ -345,6 +383,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧） */}
+              {iconBtn(t('workbench.title'), 'btn-workbench', IconWorkbench, () => useAppStore.getState().goWorkbench())}
               {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(''))}
               {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>

@@ -68,6 +68,22 @@ describe('checkAndBackup（M20 免命令自动备份）', () => {
     expect(calls.some((c) => c.startsWith('push -u zen-origin HEAD'))).toBe(true)
   })
 
+  // 「从 Git 库打开」联动：全局未配远程时回退仓库级 zen-origin（克隆时注册）
+  test('全局未配远程但仓库有 zen-origin：直接推它（不再 add/set-url）', async () => {
+    const { run, calls } = makeRun([
+      { match: 'rev-parse', ok: true },
+      { match: 'status --porcelain', ok: true, out: 'M a.md' },
+      { match: 'remote get-url', ok: true, out: 'https://user:pass%40x@git.local/repo.git\n' },
+      { match: 'push', ok: true },
+    ])
+    const r = await checkAndBackup('/ws', CFG(), run)
+    expect(r.push).toEqual({ kind: 'ok' })
+    expect(calls.some((c) => c.startsWith('push -u zen-origin HEAD'))).toBe(true)
+    // 回退路径 current 即 url：不应产生 add/set-url 改写
+    expect(calls.some((c) => c.startsWith('remote add'))).toBe(false)
+    expect(calls.some((c) => c.startsWith('remote set-url'))).toBe(false)
+  })
+
   test('push 失败不阻断：committed 仍 true，错误消息回报', async () => {
     const { run } = makeRun([
       { match: 'rev-parse', ok: true },

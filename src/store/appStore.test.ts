@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null })
 })
 
 describe('appStore', () => {
@@ -47,12 +47,14 @@ describe('appStore', () => {
     expect(useAppStore.getState().route).toBe('library')
   })
 
-  // v2.4 验收：启动恒定落案头（不自动回上次导图——上次内容在欢迎页「最近打开」可达）
-  test('init 有 lastOpened 也落案头，booted 置位', async () => {
+  // v2.4 验收：不自动回上次导图（lastOpened 不劫持进编辑器；上次内容在欢迎页「最近打开」可达）。
+  // 2026-09 工作台起启动落点改为：有工作区 → 工作台（原断言 'library' 随产品行为更新，
+  // 核心口径不变——落点仍不是编辑器）
+  test('init 有 lastOpened 也不回编辑器，有工作区落工作台，booted 置位', async () => {
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastOpened: '/ws/已有.md' }))
     useAppStore.setState({ configPath: '/cfg.json' })
     await useAppStore.getState().init()
-    expect(useAppStore.getState().route).toBe('library')
+    expect(useAppStore.getState().route).toBe('workbench')
     expect(useAppStore.getState().booted).toBe(true)
   })
 
@@ -118,6 +120,22 @@ describe('sessionRecent（会话内打开 MRU）', () => {
 
 // 打开失败清理（2026-09 优雅恢复）：文件读不到（被删/移动/权限）时移出最近清单——
 // recentOpened 持久化 + sessionRecent 内存（Ctrl+Tab 数据源）；解析失败不清理（文件仍在）
+describe('aiAdvice（工作台 AI 建议缓存，2026-09-14）', () => {
+  test('setAiAdvice 即时生效 + load-merge-save 持久化；null 覆盖清除', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
+    const advice = { text: '建议正文', at: 1700000000000, fingerprint: 'fp1' }
+    await useAppStore.getState().setAiAdvice(advice)
+    expect(useAppStore.getState().aiAdvice).toEqual(advice)
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.aiAdvice).toEqual(advice)
+    expect(cfg.preferredLayout).toBe('logic') // 合并未覆盖他人
+    await useAppStore.getState().setAiAdvice(null)
+    expect(useAppStore.getState().aiAdvice).toBeNull()
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).aiAdvice).toBeNull()
+  })
+})
+
 describe('dropRecent（打开失败清理）', () => {
   test('从 recentOpened 与 sessionRecent 移除并持久化', async () => {
     useAppStore.setState({ configPath: '/cfg.json' })
@@ -419,5 +437,39 @@ describe('favorites + librarySort（收藏与排序）', () => {
     await useAppStore.getState().init()
     expect(useAppStore.getState().favorites).toEqual([])
     expect(useAppStore.getState().librarySort).toBe('modified')
+  })
+})
+
+// 工作台路由与启动落点（2026-09 工作台）：route 三态新增 workbench；有工作区启动
+// 落工作台（打开应用先见今天该做什么），e2e 模式维持落案头（全线 spec 假设启动即
+// 案头）；pendingLocate 为文本寻址器 { mapPath, path, text }——md 不序列化 uid，跨图
+// 跳转只能以路径+文本定位（spec §11 Ruling）；mapPath 绑定目标图（终审 Important-1
+// 错图消费修复），EditorView 消费即清
+describe('工作台路由与启动落点（2026-09 工作台）', () => {
+  test('init 有工作区：启动落工作台（产品分支，jsdom URL 无 ?e2e=1）', async () => {
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    useAppStore.setState({ adapter: fs, workspaceDir: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().route).toBe('workbench')
+  })
+
+  test('init 无工作区：维持落案头（onboarding 不抢）', async () => {
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({}))
+    useAppStore.setState({ adapter: fs, workspaceDir: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().route).toBe('library')
+  })
+
+  test('goWorkbench 清编辑态置路由；setPendingLocate 置/清', () => {
+    useAppStore.setState({ currentMdPath: '/ws/a.md', dirty: true, route: 'editor' })
+    useAppStore.getState().goWorkbench()
+    expect(useAppStore.getState().route).toBe('workbench')
+    expect(useAppStore.getState().currentMdPath).toBeNull()
+    expect(useAppStore.getState().dirty).toBe(false)
+    const locate = { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' }
+    useAppStore.getState().setPendingLocate(locate)
+    expect(useAppStore.getState().pendingLocate).toEqual(locate)
+    useAppStore.getState().setPendingLocate(null)
+    expect(useAppStore.getState().pendingLocate).toBeNull()
   })
 })
