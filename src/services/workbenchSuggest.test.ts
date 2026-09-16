@@ -1,6 +1,6 @@
 // src/services/workbenchSuggest.test.ts
 import { describe, expect, test } from 'vitest'
-import { adviceFingerprint, buildSuggestPrompt, STALE_MAP_DAYS, suggestNext } from './workbenchSuggest'
+import { adviceFingerprint, buildSuggestPrompt, STALE_MAP_DAYS, suggestNext, WIP_WARN } from './workbenchSuggest'
 import type { WorkScan, WorkTask } from './workbench'
 
 const DAY = 24 * 3600 * 1000
@@ -19,7 +19,7 @@ const scanOf = (specs: Array<{ status: WorkTask['status']; mtime: number; mapNam
   }
 }
 
-describe('suggestNext（spec §6 名额 1/1/2/1，不越位补位）', () => {
+describe('suggestNext（spec §6 名额 1/1/2/1/1、上限 6，不越位补位）', () => {
   test('R1 doing 取图 mtime 最新 1 条', () => {
     const r = suggestNext(scanOf([{ status: 'doing', mtime: 1 }, { status: 'doing', mtime: 5, mapName: '图B' }]), NOW)
     const fin = r.filter((s) => s.kind === 'finish')
@@ -49,6 +49,73 @@ describe('suggestNext（spec §6 名额 1/1/2/1，不越位补位）', () => {
   })
   test('全空扫描：零建议（不硬凑）', () => {
     expect(suggestNext({ dirExists: true, maps: [{ mapPath: '/ws/工作/a.md', mapName: 'a', dirRel: '', mtime: NOW }], tasks: [], failed: [] }, NOW)).toEqual([])
+  })
+})
+
+describe('R5 no-next（项目开放回路检查，GTD：每个开放项目要有下一步行动）', () => {
+  test('blocked-only 图触发：map 级建议（无 task），多张取 mtime 最旧', () => {
+    const r = suggestNext(
+      scanOf([{ status: 'blocked', mtime: 1, mapName: '图A' }, { status: 'blocked', mtime: 1, mapName: '图B' }], { 图A: NOW - 5 * DAY, 图B: NOW - 9 * DAY }),
+      NOW,
+    ).filter((s) => s.kind === 'no-next')
+    expect(r).toHaveLength(1)
+    expect(r[0]!.task).toBeUndefined()
+    expect(r[0]!.mapName).toBe('图B')
+    expect(r[0]!.mapPath).toBe('/ws/工作/图B.md')
+    expect(r[0]!.reasonKey).toBe('workbench.suggest.noNext')
+  })
+  test('纯 done/dropped 图不触发（做完了就是做完了，无开放回路）', () => {
+    const r = suggestNext(scanOf([{ status: 'done', mtime: 1 }, { status: 'dropped', mtime: 2 }]), NOW)
+    expect(r.filter((s) => s.kind === 'no-next')).toHaveLength(0)
+  })
+  test('blocked 图还有 todo 不触发（有下一步可推进）', () => {
+    const r = suggestNext(scanOf([{ status: 'blocked', mtime: 1 }, { status: 'todo', mtime: 2 }]), NOW)
+    expect(r.filter((s) => s.kind === 'no-next')).toHaveLength(0)
+  })
+  test('blocked 图还有 doing 不触发（在推进中）', () => {
+    const r = suggestNext(scanOf([{ status: 'blocked', mtime: 1 }, { status: 'doing', mtime: 2 }]), NOW)
+    expect(r.filter((s) => s.kind === 'no-next')).toHaveLength(0)
+  })
+})
+
+describe('R1 finishOverload（WIP 超载警示变体，看板 WIP limit 口径）', () => {
+  test(`doing 严格多于 WIP_WARN（${WIP_WARN}）条：kind 仍 finish，reasonKey 切超载并带计数，task 仍取最新`, () => {
+    const r = suggestNext(
+      scanOf([
+        { status: 'doing', mtime: 1 }, { status: 'doing', mtime: 2 }, { status: 'doing', mtime: 3 }, { status: 'doing', mtime: 4 },
+      ]),
+      NOW,
+    ).filter((s) => s.kind === 'finish')
+    expect(r).toHaveLength(1)
+    expect(r[0]!.reasonKey).toBe('workbench.suggest.finishOverload')
+    expect(r[0]!.count).toBe(4)
+    expect(r[0]!.task?.mtime).toBe(4)
+  })
+  test('恰好 WIP_WARN 条不切超载文案（严格大于边界）', () => {
+    const r = suggestNext(
+      scanOf([
+        { status: 'doing', mtime: 1 }, { status: 'doing', mtime: 2 }, { status: 'doing', mtime: 3 },
+      ]),
+      NOW,
+    ).filter((s) => s.kind === 'finish')
+    expect(r).toHaveLength(1)
+    expect(r[0]!.reasonKey).toBe('workbench.suggest.finish')
+    expect(r[0]!.count).toBeUndefined()
+  })
+})
+
+describe('规则序与总上限（spec §6 v1.1：R1→R2→R3→R5→R4，上限 6）', () => {
+  test('五规则同触发：顺序正确且总数恰为 6', () => {
+    const scan = scanOf(
+      [
+        { status: 'doing', mtime: 10 }, { status: 'todo', mtime: 1 }, { status: 'todo', mtime: 2 },
+        { status: 'blocked', mtime: 5, mapName: '图B' },
+      ],
+      { 图B: NOW - 9 * DAY },
+    )
+    const r = suggestNext(scan, NOW)
+    expect(r.map((s) => s.kind)).toEqual(['finish', 'blocked', 'stale-todo', 'stale-todo', 'no-next', 'stale-map'])
+    expect(r).toHaveLength(6)
   })
 })
 

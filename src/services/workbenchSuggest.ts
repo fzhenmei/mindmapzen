@@ -1,39 +1,56 @@
-// src/services/workbenchSuggest.ts —— 工作台规则建议引擎（spec §6）：四规则可解释、
-// 名额 1/1/2/1、上限 5、低优先级不越位补位（做完了就是做完了，不硬凑建议）。
+// src/services/workbenchSuggest.ts —— 工作台规则建议引擎（spec §6）：五规则可解释、
+// 名额 1/1/2/1/1、上限 6、低优先级不越位补位（做完了就是做完了，不硬凑建议）。
 // 全纯函数：reasonKey 是 i18n key，文案渲染归视图层。
 import type { WorkScan, WorkTask } from './workbench'
 
 /** 图级停滞阈值（天）：模块常量，不做设置项（spec §6） */
 export const STALE_MAP_DAYS = 7
 
-export type SuggestionKind = 'finish' | 'blocked' | 'stale-todo' | 'stale-map'
+/** WIP 超载阈值（条，严格大于才触发）：看板 WIP limit 口径——同时进行的事超过该数，
+ *  R1 文案切超载变体提醒收敛（spec §6 v1.1，理论依据见 spec §12） */
+export const WIP_WARN = 3
+
+export type SuggestionKind = 'finish' | 'blocked' | 'stale-todo' | 'no-next' | 'stale-map'
 
 /** 理由词条 key（字面量联合）：消费端 t(reasonKey) 的 key 空间由此收紧（i18next 严格类型） */
 export type SuggestReasonKey =
   | 'workbench.suggest.finish'
+  | 'workbench.suggest.finishOverload'
   | 'workbench.suggest.blocked'
   | 'workbench.suggest.staleTodo'
+  | 'workbench.suggest.noNext'
   | 'workbench.suggest.staleMap'
 
 export interface Suggestion {
   kind: SuggestionKind
   /** task 级建议（R1-R3）的跳转目标 */
   task?: WorkTask
-  /** map 级建议（R4）的目标 */
+  /** map 级建议（R4/R5）的目标 */
   mapName?: string
   mapPath?: string
   reasonKey: SuggestReasonKey
+  /** WIP 计数：仅 finishOverload 词条插值 {{count}} 用（spec §6 v1.1） */
+  count?: number
 }
 
-/** R1 doing 取所属图 mtime 最新 1 条（最近在动的先收尾）；R2 blocked 取最旧 1 条
+/** R1 doing 取所属图 mtime 最新 1 条（最近在动的先收尾；严格多于 WIP_WARN 条时文案切
+ *  超载变体并带计数——先收敛再开新事，看板 WIP limit 口径）；R2 blocked 取最旧 1 条
  *  （搁最久的等待最该催）；R3 todo 按所属图 mtime 升序至多 2（搁置最久的待办）；
+ *  R5 blocked-only 图（开放回路全部卡在等待、无 todo/doing 可推进）取 mtime 最久 1 张
+ *  ——GTD「每个开放项目都要有下一步行动」的结构性停滞信号，比 R4 的时间性闲置更精确；
  *  R4 工作/ 下 mtime 严格早于 now-7 天的图取最久 1 张（含无任务图——图本身停摆也该看） */
 export function suggestNext(scan: WorkScan, now: number): Suggestion[] {
   const out: Suggestion[] = []
   const doing = scan.tasks.filter((t) => t.status === 'doing')
   if (doing.length > 0) {
     const pick = [...doing].sort((a, b) => b.mtime - a.mtime)[0]!
-    out.push({ kind: 'finish', task: pick, reasonKey: 'workbench.suggest.finish' })
+    const overload = doing.length > WIP_WARN
+    out.push({
+      kind: 'finish',
+      task: pick,
+      reasonKey: overload ? 'workbench.suggest.finishOverload' : 'workbench.suggest.finish',
+      ...(overload ? { count: doing.length } : {}),
+    })
   }
   const blocked = scan.tasks.filter((t) => t.status === 'blocked')
   if (blocked.length > 0) {
@@ -44,13 +61,31 @@ export function suggestNext(scan: WorkScan, now: number): Suggestion[] {
   for (const t of todos.slice(0, 2)) {
     out.push({ kind: 'stale-todo', task: t, reasonKey: 'workbench.suggest.staleTodo' })
   }
+  // R5 按图聚合开放状态（todo/doing/blocked 计数）：blocked>0 且 todo=doing=0 才是
+  // 「无下一步」——纯 done/dropped 图无开放回路，不算（做完了就是做完了）
+  const openByMap = new Map<string, { todo: number; doing: number; blocked: number }>()
+  for (const t of scan.tasks) {
+    if (t.status !== 'todo' && t.status !== 'doing' && t.status !== 'blocked') continue
+    const c = openByMap.get(t.mapPath) ?? { todo: 0, doing: 0, blocked: 0 }
+    c[t.status] += 1
+    openByMap.set(t.mapPath, c)
+  }
+  const noNext = scan.maps
+    .filter((m) => {
+      const c = openByMap.get(m.mapPath)
+      return c !== undefined && c.blocked > 0 && c.todo === 0 && c.doing === 0
+    })
+    .sort((a, b) => a.mtime - b.mtime)[0]
+  if (noNext !== undefined) {
+    out.push({ kind: 'no-next', mapName: noNext.mapName, mapPath: noNext.mapPath, reasonKey: 'workbench.suggest.noNext' })
+  }
   const staleBefore = now - STALE_MAP_DAYS * 24 * 3600 * 1000
   const stale = scan.maps.filter((m) => m.mtime < staleBefore).sort((a, b) => a.mtime - b.mtime)
   const pick = stale[0]
   if (pick !== undefined) {
     out.push({ kind: 'stale-map', mapName: pick.mapName, mapPath: pick.mapPath, reasonKey: 'workbench.suggest.staleMap' })
   }
-  return out.slice(0, 5)
+  return out.slice(0, 6)
 }
 
 /** 任务按图分组（AI 上下文用）：key = 图名，子目录图带目录后缀 */
@@ -101,7 +136,7 @@ export function adviceFingerprint(scan: WorkScan): string {
   let h = 5381
   for (const t of scan.tasks) {
     const seg = `${t.mapPath}|${t.uid}|${t.status}|${t.text}|`
-    for (let i = 0; i < seg.length; i++) h = ((h * 33) ^ seg.charCodeAt(i)) >>> 0
+    for (let i = 0; i < seg.length; i++) h = ((h * 33) ^ (seg.codePointAt(i) ?? 0)) >>> 0
   }
   return h.toString(36)
 }
