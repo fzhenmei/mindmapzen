@@ -157,7 +157,6 @@ const editor: Dict['editor'] = {
   // entries reuse nodeActions.icon/tag
   kanban: {
     viewName: 'Kanban',
-    close: 'Close the kanban and return to the map',
     status: {
       todo: 'To do',
       doing: 'In progress',
