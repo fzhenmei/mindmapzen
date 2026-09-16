@@ -19,7 +19,7 @@ import { engineTreeToZen } from '../services/mdTree'
 import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
-import { IconArchive, IconWinClose } from '../components/icons'
+import { IconArchive } from '../components/icons'
 
 /** 过滤匹配（2026-09 看板治理 spec §4）：标题 / 路径段 / 标签，大小写不敏感；
  *  空过滤恒真（过滤关闭态）——纯视图态，不进 undo */
@@ -224,16 +224,6 @@ export default function KanbanView({
           placeholder={t('editor.kanban.filterPlaceholder')}
           className="ml-auto w-56 shrink-0 rounded-md border bg-background px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        <button
-          type="button"
-          data-testid="kanban-close"
-          aria-label={t('editor.kanban.close')}
-          title={t('editor.kanban.close')}
-          onClick={onClose}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <IconWinClose size={14} />
-        </button>
       </header>
       {/* 四列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
       <div className="flex flex-1 items-start gap-3 overflow-x-auto p-4">
