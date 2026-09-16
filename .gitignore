@@ -34,7 +34,6 @@ blob-report/
 website/
 docs/superpowers/
 
-# 机密文件防线(只挡未跟踪文件;本机另有 gitleaks 三层扫描兜底已入库内容)
 .env
 .env.*
 *.pem
