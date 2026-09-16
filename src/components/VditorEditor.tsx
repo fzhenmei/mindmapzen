@@ -11,19 +11,28 @@ import { useTranslation } from 'react-i18next'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import { VDITOR_CDN } from '../services/vditorPreview'
+import { applyImgSrcMap, collectRelativeImgSrcs } from '../services/imageAssets'
 
 /** mermaid 围栏插入钮(vditor 无内置 mermaid 工具栏项):光标处插入模板图源 */
 const MERMAID_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>'
+
+/** 正文插图上传结果：md = 待插入片段（宿主已落盘 assets/）；error = 失败提示（vditor tip 显示） */
+export type BodyImageUploadResult = { md: string } | { error: string }
 
 interface Props {
   value: string
   onChange(next: string): void
   lang: 'zh_CN' | 'en_US'
   theme: 'light' | 'dark'
+  /** 粘贴/拖入图片接管（2026-09 替换 vditor base64 兜底）：图片文件 → 落盘 assets/，
+   *  返回待插入 md（`![stem](assets/x.png)`，与节点插图同口径）或错误提示 */
+  uploadImages(files: File[]): Promise<BodyImageUploadResult>
+  /** 预览区相对路径 src → dataURL（分屏预览 webview 解析不了工作区相对路径） */
+  resolveImages(srcs: Set<string>): Promise<Map<string, string>>
 }
 
-export default function VditorEditor({ value, onChange, lang, theme }: Readonly<Props>) {
+export default function VditorEditor({ value, onChange, lang, theme, uploadImages, resolveImages }: Readonly<Props>) {
   const { t } = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
   const vdRef = useRef<Vditor | null>(null)
@@ -31,6 +40,10 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
   const lastEmittedRef = useRef<string | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange // 渲染期同步,构造闭包恒读最新
+  const uploadRef = useRef(uploadImages)
+  uploadRef.current = uploadImages
+  const resolveRef = useRef(resolveImages)
+  resolveRef.current = resolveImages
 
   useEffect(() => {
     const host = hostRef.current
@@ -38,6 +51,14 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
     // init 就绪标记:vditor 在 i18n/lute 脚本加载完成(initUI 挂 DOM、注册监听)后
     // 调 after——此后 destroy 才是完整安全的(清 DOM + UIUnbindListener 摘 resize 监听)
     let inited = false
+    /** upload.handler 异步体:宿主落盘返回 md → insertValue;错误串由 handler 透传
+     *  (插入经 vdRef.current——vd 构造后才有实例,粘贴必在构造完成后) */
+    const runBodyUpload = async (imgs: File[]): Promise<string | null> => {
+      const r = await uploadRef.current(imgs)
+      if ('error' in r) return r.error
+      vdRef.current?.insertValue(r.md)
+      return null
+    }
     const vd = new Vditor(host, {
       mode: 'sv',
       lang,
@@ -47,8 +68,30 @@ export default function VditorEditor({ value, onChange, lang, theme }: Readonly<
       theme: theme === 'dark' ? 'dark' : 'classic',
       cache: { enable: false },
       // 弹窗预览区关导出工具条(视口切换+公众号/知乎按钮):正文编辑场景无用且碍眼
-      // (2026-09-09 用户反馈;案头详情的发布场景另行走 PUBLISH_ACTIONS 白名单)
-      preview: { actions: [] },
+      // (2026-09-09 用户反馈;案头详情的发布场景另行走 PUBLISH_ACTIONS 白名单)。
+      // parse:分屏预览渲染后回调——相对路径 img 经 resolveImages 换 dataURL(2026-09
+      // 正文插图改 assets/ 相对路径的配套;webview 解析不了工作区相对路径)
+      preview: {
+        actions: [],
+        parse: (el: HTMLElement) => {
+          const srcs = collectRelativeImgSrcs(el)
+          if (srcs.size === 0) return
+          void resolveRef.current(srcs).then((map) => applyImgSrcMap(el, map))
+        },
+      },
+      // 正文插图接管(2026-09):vditor 无 upload 配置时粘贴/拖入图片走内置 base64 兜底
+      // (FileReader.readAsDataURL 直插 data: 串,巨型 md 毒化保存链)——handler 恒配置
+      // 截断该分支:图片交宿主落盘 assets/,成功 insertValue 相对路径引用(与节点插图同口径),
+      // 失败返回错误串由 vditor tip 显示(显式出口);非图片文件同 vditor 默认忽略。
+      // 注:vditor 类型面 handler 只收窄 union(不认 Promise<string|null>),runBodyUpload
+      // 的联合结果以单点断言收窄回 union 内
+      upload: {
+        handler: (files: File[]): string | null | Promise<string> | Promise<null> => {
+          const imgs = files.filter((f) => f.type.startsWith('image/'))
+          if (imgs.length === 0) return null
+          return runBodyUpload(imgs) as Promise<string> | Promise<null>
+        },
+      },
       toolbar: [
         'undo', 'redo', '|', 'headings', 'bold', 'italic', 'strike', '|',
         'quote', 'line', 'code', 'inline-code', '|', 'link', 'list', 'check', '|', 'table',

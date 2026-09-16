@@ -4,6 +4,8 @@
 // 退役:md 源码按字符截断会截破语法(表格半张/代码块未闭合),改限高滚动。
 import { i18n } from '../i18n'
 import { renderVditorPreview } from '../services/vditorPreview'
+import { applyImgSrcMap, buildImageMetaFromSrcs, collectRelativeImgSrcs } from '../services/imageAssets'
+import { useAppStore } from '../store/appStore'
 
 export interface NoteTooltip {
   show(note: string, left: number, top: number): void
@@ -43,6 +45,17 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
     try {
       await renderVditorPreview(el, note, theme)
       if (seq !== showSeq) return
+      // 正文插图（2026-09 相对路径）：webview 解析不了工作区相对 src——读盘换 dataURL
+      //（同案头详情口径 getState 直取；无图/无工作区零开销跳过）
+      const srcs = collectRelativeImgSrcs(el)
+      if (srcs.size > 0) {
+        const { adapter, workspaceDir } = useAppStore.getState()
+        if (workspaceDir !== null) {
+          const meta = await buildImageMetaFromSrcs(adapter, workspaceDir, srcs)
+          if (seq !== showSeq) return // 读盘窗内切了目标：放弃本次换图
+          applyImgSrcMap(el, new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
+        }
+      }
       const more = document.createElement('div')
       more.className = 'zen-note-tip-more'
       more.style.cssText = 'margin-top:6px;color:var(--muted-foreground);font-size:11px;'

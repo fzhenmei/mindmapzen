@@ -187,7 +187,7 @@ vi.mock('vditor', () => {
   const Ctor = vi.fn(function () {
     return inst
   })
-  return { default: Object.assign(Ctor, { preview: vi.fn().mockResolvedValue(undefined) }) }
+  return { default: Object.assign(Ctor, { preview: vi.fn().mockResolvedValue(undefined), __inst: inst }) }
 })
 
 let fs: MemoryFsAdapter
@@ -2754,6 +2754,53 @@ test('Shift+F2 无目标（悬停/选中皆空）→ 盖警告签不开弹窗；
   expect(screen.queryByTestId('body-dialog')).not.toBeInTheDocument() // 不弹无关联空态弹窗
   expect(screen.getByTestId('warn-stamp')).toBeInTheDocument() // 警告签劝导（2026-09-09 无目标反馈）
   expect(handle.execCommand).not.toHaveBeenCalled()
+})
+
+// ── 正文插图（2026-09 与节点插图同口径）：粘贴/拖入图片经 vditor upload.handler 落盘
+//    assets/ 插相对路径引用（替换 vditor 无 upload 配置时的 base64 兜底——data: 串直插
+//    md 毒化保存链）；分屏预览 parse 回调把相对 src 换 dataURL（webview 解析不了相对路径）──
+
+/** 最近一次 vditor 构造 options（正文弹窗开着时 = 弹窗内 VditorEditor 实例） */
+const lastVditorOpts = (): Record<string, unknown> =>
+  (Vditor as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1] as Record<string, unknown>
+
+test('正文插图：粘贴图片经 handler 落盘 assets/ 并插入相对路径引用（BodyDialog 透传链）', async () => {
+  await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const handler = (lastVditorOpts().upload as { handler: (f: File[]) => Promise<string | null> }).handler
+  const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], '贴图.png', { type: 'image/png' })
+  await expect(handler([file])).resolves.toBeNull()
+  // 落盘与节点插图同口径：防撞名复制入 assets/，md 引用相对路径
+  expect([...(await fs.readBytes('/ws/assets/贴图.png'))]).toEqual([0x89, 0x50, 0x4e, 0x47])
+  const inst = (Vditor as unknown as { __inst: { insertValue: ReturnType<typeof vi.fn> } }).__inst
+  expect(inst.insertValue).toHaveBeenCalledWith('![贴图](assets/贴图.png)\n')
+})
+
+test('正文插图：无工作区/落盘失败返回错误词条（显式出口），不插入', async () => {
+  await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  act(() => {
+    useAppStore.setState({ workspaceDir: null })
+  })
+  const handler = (lastVditorOpts().upload as { handler: (f: File[]) => Promise<string | null> }).handler
+  const inst = (Vditor as unknown as { __inst: { insertValue: ReturnType<typeof vi.fn> } }).__inst
+  inst.insertValue.mockClear() // 模块级单例 mock：上一用例的成功插入计数残留
+  const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], '贴图.png', { type: 'image/png' })
+  await expect(handler([file])).resolves.toBe('图片保存失败')
+  expect(inst.insertValue).not.toHaveBeenCalled()
+})
+
+test('正文预览：parse 回调把相对路径 img 换 dataURL（读盘经 buildImageMetaFromSrcs）', async () => {
+  await fs.writeBytes('/ws/assets/预览.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+  await renderReadySelected()
+  fireEvent.click(screen.getByTestId('btn-body'))
+  const parse = lastVditorOpts().preview as { parse: (el: HTMLElement) => void }
+  const el = document.createElement('div')
+  const img = document.createElement('img')
+  img.src = 'assets/预览.png'
+  el.append(img)
+  parse.parse(el)
+  await waitFor(() => expect(img.src).toBe(pngDataUrl))
 })
 
 // ── AI 对话面板挂载（2026-09 AI Agent v1 Task 11）：入口显隐（未配置隐藏）、面板开合、

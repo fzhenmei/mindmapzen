@@ -12,7 +12,7 @@ import { i18n } from '../i18n'
 import type { MindMapHandle } from '../types/engine'
 import type { NodeImage } from '../services/imageMarkers'
 import { mimeOf, parseImageSize } from '../services/imageMeta'
-import { ASSETS_DIR } from '../services/imageAssets'
+import { writeImageAsset } from '../services/imageAssets'
 import { joinPath } from '../services/workspace'
 import type { FsAdapter } from '../types/files'
 
@@ -138,24 +138,11 @@ export function useImageEdit(
     [mmRef, injectImgMap, onDataChanged],
   )
 
-  /** 防撞名落盘入 assets/（同名已存在则加 -N 序号）；wsDir 为空返回 null 兜底——
+  /** 防撞名落盘入 assets/——共享 writeImageAsset（正文插图同口径）；
    *  选图/对话框粘贴/画布贴图共用 */
   const writeAsset = useCallback(
-    async (name: string, bytes: Uint8Array): Promise<{ src: string; stem: string } | null> => {
-      if (wsDir === null) return null
-      const dot = name.lastIndexOf('.')
-      const stem = dot > 0 ? name.slice(0, dot) : name
-      const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : 'png'
-      let src = `${ASSETS_DIR}/${stem}.${ext}`
-      let n = 1
-      while (await adapter.exists(joinPath(wsDir, src))) {
-        n += 1
-        src = `${ASSETS_DIR}/${stem}-${n}.${ext}`
-      }
-      await adapter.ensureDir(joinPath(wsDir, ASSETS_DIR))
-      await adapter.writeBytes(joinPath(wsDir, src), bytes)
-      return { src, stem }
-    },
+    async (name: string, bytes: Uint8Array): Promise<{ src: string; stem: string } | null> =>
+      writeImageAsset(adapter, wsDir, name, bytes),
     [wsDir, adapter],
   )
 

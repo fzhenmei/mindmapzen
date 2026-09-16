@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import FileDetail from './FileDetail'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { renderVditorPreview } from '../services/vditorPreview'
 import type { MapInfo } from '../types/files'
 
 // jsdom 不执行 vditor 注入的子资源脚本(渲染 promise 永不 resolve),真实渲染归 e2e;
@@ -65,6 +66,26 @@ describe('FileDetail', () => {
     } finally {
       Reflect.deleteProperty(navigator, 'platform')
     }
+  })
+
+  // 正文插图（2026-09）：引用块行中图片也进 imgMap——收集口径从行尾标记升级为全文
+  // collectMdImageSrcs（超集），行中图（`> 前置 ![](a) 后置`）行尾口径收不到
+  test('正文引用块行中图片换 dataURL（收集口径全文化）', async () => {
+    const fs = new MemoryFsAdapter()
+    useAppStore.setState({ adapter: fs })
+    await fs.writeTextFileAtomic('/ws/周计划.md', '# 周计划\n\n> 前置 ![中图](assets/mid.png) 后置\n')
+    await fs.writeBytes('/ws/assets/mid.png', new Uint8Array([7]))
+    vi.mocked(renderVditorPreview).mockImplementationOnce(async (el: HTMLElement) => {
+      const img = document.createElement('img')
+      img.src = 'assets/mid.png'
+      el.append(img)
+    })
+    render(<FileDetail info={info} />)
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="md-preview"] img')!.getAttribute('src')).toBe(
+        'data:image/png;base64,Bw==',
+      ),
+    )
   })
 })
 

@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
-import { buildImageMetaFromSrcs } from '../services/imageAssets'
+import { buildImageMetaFromSrcs, collectMdImageSrcs } from '../services/imageAssets'
 import { toNativePath } from '../services/nativePath'
-import { extractImageMarker } from '../services/imageMarkers'
 import { mdOutline } from '../services/mdOutline'
 import type { MapInfo } from '../types/files'
 import MarkdownPreview from './MarkdownPreview'
@@ -60,12 +59,9 @@ export default function FileDetail({ info }: Readonly<Props>) {
         if (cancelled) return
         setState({ kind: 'text', text })
         if (workspaceDir === null) return
-        const srcs = new Set(
-          text
-            .split('\n')
-            .map((l) => extractImageMarker(l)?.src)
-            .filter((s): s is string => s !== undefined),
-        )
+        // 全文收集（2026-09 正文插图）：collectMdImageSrcs 是行尾标记口径的超集，
+        // 引用块（正文）行中图片同收
+        const srcs = collectMdImageSrcs(text)
         const meta = await buildImageMetaFromSrcs(adapter, workspaceDir, srcs)
         if (!cancelled) setImgMap(new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
       } catch {
