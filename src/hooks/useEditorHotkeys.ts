@@ -25,9 +25,11 @@ interface Params {
   cycleStep(reverse: boolean): void
   /** 视图模式切换（2026-09 看板模式）：Ctrl+Shift+K 导图 ⇄ 看板浮层（EditorView 组合，读 store 现值翻转） */
   toggleViewMode(): void
+  /** 返回来路（2026-09 导航系统 spec §7）：Alt+← 的快捷键路径（EditorView 组合 guardAiTurn+leaveTo） */
+  goBack(): void
 }
 
-export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep, toggleViewMode }: Params): void {
+export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep, toggleViewMode, goBack }: Params): void {
   useEffect(() => {
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
@@ -80,6 +82,16 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
         e.preventDefault()
         // 守卫同切换族：对话框互斥期 no-op（面板非对话框，但快捷键让位互斥总线）
         if (!anyDialogRef.current) toggleBodyDialog()
+      }
+      // 返回来路（2026-09 导航系统 spec §7）：Alt+←（浏览器回退惯例）。输入域守卫同
+      // Ctrl+Shift+K——正文面板/AI 输入框/看板过滤输入中放行，防丢草稿
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft') {
+        const t = e.target
+        if (!(t instanceof Element && t.closest('input, textarea, [contenteditable="true"]'))) {
+          e.preventDefault()
+          goBack()
+          return
+        }
       }
     }
     window.addEventListener('keydown', onKey)
