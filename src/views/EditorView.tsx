@@ -608,6 +608,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSwitchLayout={switchLayout}
         viewMode={viewMode}
         onSwitchView={switchView}
+        backTarget={'library'} onWorkbenchClick={() => {}} onSettingsClick={() => {}} /* 临时最小接线:Task 6 换真接线 */
       />
       )}
       {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；

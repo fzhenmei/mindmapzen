@@ -43,13 +43,21 @@ import {
   IconRedo,
   IconRoute,
   IconSave,
+  IconSettings,
   IconSwitch,
   IconUndo,
+  IconWorkbench,
 } from './icons'
 
 interface Props {
   /** 返回文件库（EditorView 组合：暂停自动保存 → 显式保存链 → 成功才导航） */
   onBack(): void
+  /** 返回目标(2026-09 导航系统 spec §3 R1):来路驱动提示——workbench 时「返回工作台」 */
+  backTarget: 'library' | 'workbench'
+  /** 去工作台(2026-09 导航系统 spec §4):固定语义直达,无论来路;走 leaveTo 安全链 */
+  onWorkbenchClick(): void
+  /** 打开设置(2026-09 导航系统 spec §6):App 级设置对话框 */
+  onSettingsClick(): void
   /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
   onSwitchClick(): void
   /** 新建导图（2026-09 画布内入口）：呼出新建对话框（名称+模板，复用案头组件）；
@@ -121,6 +129,9 @@ const MORE_LAYOUTS = [
  *  快捷键仍由 EditorView 的 window keydown effect 承担） */
 export default function ZenBar({
   onBack,
+  backTarget,
+  onWorkbenchClick,
+  onSettingsClick,
   onSwitchClick,
   onNewClick,
   undoRedo,
@@ -161,16 +172,28 @@ export default function ZenBar({
       data-testid="zen-bar"
       className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-lg bg-card px-2.5 shadow-lg"
     >
-      <Tip label={t('editor.zenbar.backToDesk')}>
+      <Tip label={backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-back"
-          aria-label={t('editor.zenbar.backToDesk')}
+          aria-label={backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')}
           onClick={onBack}
         >
           <IconArrowLeft />
+        </Button>
+      </Tip>
+      <Tip label={t('editor.zenbar.workbench')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-goto-workbench"
+          aria-label={t('editor.zenbar.workbench')}
+          onClick={onWorkbenchClick}
+        >
+          <IconWorkbench />
         </Button>
       </Tip>
       <Tip label={t('editor.zenbar.switchMap')}>
@@ -473,6 +496,19 @@ export default function ZenBar({
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      <Separator orientation="vertical" className="mx-1" />
+      <Tip label={t('editor.zenbar.settings')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-editor-settings"
+          aria-label={t('editor.zenbar.settings')}
+          onClick={onSettingsClick}
+        >
+          <IconSettings />
+        </Button>
+      </Tip>
     </header>
   )
 }
