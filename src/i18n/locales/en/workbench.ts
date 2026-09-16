@@ -15,7 +15,19 @@ const workbench: Dict['workbench'] = {
     noTasks: 'No tasks with status markers in the work directory yet. Open a map and set a node status (todo/doing/…) — tasks will show up here.',
   },
   // itemJoin：建议行理由与目标的分隔符（en 半角冒号+空格，不渗全角正字法）
-  suggest: { section: 'Next up', finish: 'Finish what’s in progress', blocked: 'Waiting items — time to nudge?', staleTodo: 'Longest-shelved todos', staleMap: 'This work map has been idle for a week', askAi: 'Ask AI', itemJoin: ': ' },
+  suggest: {
+    section: 'Next up',
+    finish: 'Finish what’s in progress',
+    // WIP overload variant (spec §6 v1.1): swapped in when doing exceeds 3; count passed by the view
+    finishOverload: '{{count}} things in progress — finish before starting new ones',
+    blocked: 'Waiting items — time to nudge?',
+    staleTodo: 'Longest-shelved todos',
+    // R5 no-next (spec §6 v1.1): structural stall of a blocked-only map, GTD open-loop check
+    noNext: 'This work map is all waiting — it needs a next action',
+    staleMap: 'This work map has been idle for a week',
+    askAi: 'Ask AI',
+    itemJoin: ': ',
+  },
   board: { section: 'Work plan' },
   recent: { section: 'Recent' },
   ai: { title: 'AI suggestions', disabledHint: 'Configure AI first in Settings (base URL / API key / model)', error: 'AI request failed', thinking: 'AI is analyzing your tasks…', stop: 'Stop', askAgain: 'Ask again', feeNote: 'AI consults consume tokens and may incur costs, depending on your AI service' },

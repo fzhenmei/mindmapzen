@@ -14,7 +14,19 @@ export default {
     noTasks: '工作目录里还没有带状态标记的任务。打开导图给节点选择状态（待办/进行中/…），任务就会出现在这里。',
   },
   // itemJoin：建议行理由与目标的分隔符（zh 全角冒号 / en 半角+空格），不硬编码在 JSX
-  suggest: { section: '下一步建议', finish: '进行中的事，先收尾', blocked: '等待中的事，看是否该催', staleTodo: '搁置最久的待办', staleMap: '这张工作图一周没动了', askAi: '问问 AI', itemJoin: '：' },
+  suggest: {
+    section: '下一步建议',
+    finish: '进行中的事，先收尾',
+    // WIP 超载变体（spec §6 v1.1）：doing 严格多于 3 条时 R1 换用，count 由视图透传
+    finishOverload: '同时在办 {{count}} 件事——先收尾再开新事',
+    blocked: '等待中的事，看是否该催',
+    staleTodo: '搁置最久的待办',
+    // R5 无下一步（spec §6 v1.1）：blocked-only 图的结构性停滞，GTD 开放回路口径
+    noNext: '这张工作图只剩等待中的事，没有下一步行动了',
+    staleMap: '这张工作图一周没动了',
+    askAi: '问问 AI',
+    itemJoin: '：',
+  },
   board: { section: '工作计划' },
   recent: { section: '最近' },
   ai: { title: 'AI 建议', disabledHint: '先在设置中配置 AI（服务地址 / API Key / 模型名）', error: 'AI 请求失败', thinking: 'AI 正在分析你的任务清单…', stop: '停止', askAgain: '再问一次', feeNote: 'AI 咨询会消耗 Token，可能产生费用——取决于你接入的 AI 服务' },

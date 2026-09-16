@@ -90,8 +90,9 @@ function SuggestSection({
                 className="rounded-md border bg-card px-4 py-2 text-left text-sm hover:bg-muted"
                 onClick={onClick}
               >
-                {/* 冒号收进词条（zh 全角 / en 半角+空格），理由与目标的分隔不硬编码在 JSX */}
-                {t(sg.reasonKey)}{t('workbench.suggest.itemJoin')}{target}
+                {/* 冒号收进词条（zh 全角 / en 半角+空格），理由与目标的分隔不硬编码在 JSX；
+                    count 透传 finishOverload 的 {{count}} 插值（spec §6 v1.1），无值词条不受影响 */}
+                {t(sg.reasonKey, { count: sg.count })}{t('workbench.suggest.itemJoin')}{target}
               </button>
             )
           })}
