@@ -100,6 +100,15 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     expect(openMap).toHaveBeenCalledWith('/ws/昨日图.md')
     expect(useAppStore.getState().pendingLocate).toBeNull()
   })
+
+  test('头部设置齿轮打开 App 级设置对话框（2026-09 导航系统）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    render(<WorkbenchView />)
+    await screen.findByText('任务')
+    await screen.getByTestId('btn-wb-settings').click()
+    // 断言 store 态：AppDialogs 渲染面已由其自身测试覆盖（spec §6 三空间一致入口）
+    await waitFor(() => expect(useAppStore.getState().appDialog).toBe('settings'))
+  })
 })
 
 // fake transport 注入走 window.__AI_TRANSPORT_FACTORY__（ChatPanel.test.tsx 既有口径，

@@ -1,6 +1,7 @@
 // 工作台（驾驶舱）词条（spec 2026-09-13-workbench-design）
 export default {
   title: '工作台',
+  settings: '设置',
   toLibrary: '去案头',
   scanning: '正在聚合工作目录…',
   // 冒号收进词条（zh 全角 / en 半角+空格）：调用侧只拼 names，标点不硬编码在 JSX

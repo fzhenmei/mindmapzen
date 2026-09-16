@@ -11,6 +11,7 @@ import { BOARD_STATUSES } from '../services/statusMarkers'
 import { getTransport, parseDeltaChunk } from '../services/ai/client'
 import { joinPath } from '../services/workspace'
 import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
+import { IconSettings } from '../components/icons'
 import WorkbenchCard from '../components/WorkbenchCard'
 
 /** 最近 chip 行（spec §5）：持久 MRU 前 8 一键回图，只 openMap 不定位；
@@ -308,9 +309,22 @@ export default function WorkbenchView() {
     <div className="flex h-full flex-col bg-background" data-testid="workbench-view">
       <header className="flex items-center justify-between border-b px-6 py-4">
         <h1 className="text-lg font-semibold">{t('workbench.title')}</h1>
-        <button type="button" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted" onClick={() => void backToLibrary()}>
-          {t('workbench.toLibrary')}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 设置入口（2026-09 导航系统 spec §6）：App 级对话框，三空间一致 */}
+          <button
+            type="button"
+            data-testid="btn-wb-settings"
+            aria-label={t('workbench.settings')}
+            title={t('workbench.settings')}
+            className="rounded-md border p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => useAppStore.getState().openAppDialog('settings')}
+          >
+            <IconSettings size={16} />
+          </button>
+          <button type="button" className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted" onClick={() => void backToLibrary()}>
+            {t('workbench.toLibrary')}
+          </button>
+        </div>
       </header>
       {error && <div className="error-banner">{error}</div>}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">

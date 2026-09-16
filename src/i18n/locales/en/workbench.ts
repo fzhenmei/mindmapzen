@@ -2,6 +2,7 @@ import type { Dict } from '../../en'
 
 const workbench: Dict['workbench'] = {
   title: 'Workbench',
+  settings: 'Settings',
   toLibrary: 'Back to desk',
   scanning: 'Scanning work directory…',
   // 标点入词条：en 侧不渗全角冒号/顿号（正字法随语言，分隔符在调用侧按 i18n.language 取）
