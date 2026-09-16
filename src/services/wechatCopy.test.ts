@@ -286,4 +286,21 @@ describe('copyAsWechatHtml:读盘 → 预处理 → 渲染 → 插图 → 内联
     ).rejects.toThrow('文件不存在')
     expect(document.querySelector('.wechat-copy-stage')).toBeNull()
   })
+
+  test('正文(引用块)行中图片也换 dataURL(2026-09 全文收集:行尾标记口径的超集)', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/ws/文.md', '# 标题\n\n> 前置 ![中图](assets/mid.png) 后置\n')
+    await fs.writeBytes('/ws/assets/mid.png', new Uint8Array([7]))
+    // mock 渲染注入行中图 img(行尾标记口径收集不到该 src——升级前不换)
+    vi.mocked(renderVditorPreview).mockImplementationOnce(async (el: HTMLElement) => {
+      const img = document.createElement('img')
+      img.src = 'assets/mid.png'
+      el.append(img)
+    })
+    const written: string[] = []
+    await copyAsWechatHtml(fs, '/ws', '/ws/文.md', async (html) => {
+      written.push(html)
+    })
+    expect(written[0]!).toContain('data:image/png;base64,Bw==')
+  })
 })

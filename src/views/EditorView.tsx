@@ -4,6 +4,8 @@ import { Sparkles } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { useSubtreeCopy } from '../hooks/useSubtreeCopy'
+import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets'
+import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
@@ -141,6 +143,34 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 正文弹窗（2026-09-08 弹窗化；模态一次编辑一个节点）：开闭/防抖写回在 hook，
   // 弹窗本体在 BodyDialog.tsx（无护栏，遮罩锁选中无联动载入）
   const bodyDialog = useBodyDialog(mmRef, selection.activeUidRef)
+  /** 正文插图上传（2026-09 与节点插图同口径）：bytes 防撞名落盘 assets/，返回插入
+   *  md（相对路径引用，`![stem](assets/x.png)` 每图一行）；多图逐张独立、成功不丢，
+   *  全军覆没才报错（词条由 vditor tip 显示，显式出口） */
+  const uploadBodyImages = async (files: File[]): Promise<BodyImageUploadResult> => {
+    const parts: string[] = []
+    let lastError: string | null = null
+    for (const f of files) {
+      try {
+        const written = await writeImageAsset(adapter, workspaceDir, f.name, new Uint8Array(await f.arrayBuffer()))
+        if (written === null) {
+          lastError = t('editor.bodyPanel.imageSaveFailed')
+          continue
+        }
+        parts.push(`![${written.stem}](${written.src})`)
+      } catch (e) {
+        console.error('正文插图落盘失败', e)
+        lastError = t('editor.bodyPanel.imageSaveFailed')
+      }
+    }
+    if (parts.length === 0) return { error: lastError ?? t('editor.bodyPanel.imageSaveFailed') }
+    return { md: `${parts.join('\n')}\n` }
+  }
+  /** 正文预览相对 src → dataURL（分屏预览 imgMap：与案头详情同口径读盘；无工作区空表） */
+  const resolveBodyImages = async (srcs: Set<string>): Promise<Map<string, string>> => {
+    if (workspaceDir === null) return new Map()
+    const meta = await buildImageMetaFromSrcs(adapter, workspaceDir, srcs)
+    return new Map([...meta].map(([k, v]) => [k, v.dataUrl]))
+  }
   // 正文角标悬停 uid（2026-09-09）：热键 Shift+F2 悬停优先编辑被预览节点；null = 退场回落选中
   const noteHoverUidRef = useRef<string | null>(null)
   /** 正文编辑入口守卫（2026-09-09）：悬停/选中皆空且弹窗未开 → 盖居中警告签（WarnStamp），
@@ -590,7 +620,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       )}
       {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；
           bodyDraft !== null 即开（渲染门兼卸载门，close 置 null 即整树摘除） */}
-      {docReady && bodyDialog.bodyDraft !== null && <BodyDialog {...bodyDialog} />}
+      {docReady && bodyDialog.bodyDraft !== null && (
+        <BodyDialog {...bodyDialog} uploadImages={uploadBodyImages} resolveImages={resolveBodyImages} />
+      )}
       {/* 印记（Task 7）：显式保存成功朱砂印 / 复制成功墨青印，右上角闪现 1.2s（自动保存静默不印记）。
           key=seq 使重复盖印强制重挂载；onDone 到期受控卸载（置 null），否则旧 state 残留令后续同值盖印失效 */}
       {stamp && <SaveStamp key={stamp.seq} kind={stamp.kind} onDone={() => setStamp(null)} />}
