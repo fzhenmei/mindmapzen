@@ -16,6 +16,23 @@ interface AppState {
    *  createAndOpen 自非编辑器路由进入时记录,返回钮/Alt+← 经 exitEditor 消费;内存态
    *  不落盘。编辑器内切图(胶囊条/Ctrl+P/Ctrl+Tab)不重记——空间没换,来路不变 */
   editorOrigin: 'library' | 'workbench'
+  /** App 级对话框(2026-09 导航系统 spec §6):设置及其二级历史框——三空间可达,
+   *  区别于案头 LibraryDialogs 的文件操作框群;至多一个(Radix modal 语义) */
+  appDialog: 'settings' | 'history' | null
+  openAppDialog: (kind: 'settings' | 'history') => void
+  closeAppDialog: () => void
+  /** 目录选择端口(2026-09 导航系统 spec §6):设置「更换工作区」用——App 装配注入
+   *  (生产 Tauri 对话框 / E2E __zenE2e 桩),同 adapter 注入模式;null 时 no-op */
+  pickDirPort: (() => Promise<string | null>) | null
+  setPickDirPort: (p: (() => Promise<string | null>) | null) => void
+  /** 待执行的工作区动作(2026-09 导航系统 spec §6 安全规则):编辑器脏态下从设置发起
+   *  更换/退出时先记此字段,EditorView 安全链保存成功后消费执行——消费即清 */
+  pendingWorkspaceAction: 'change' | 'exit' | null
+  setPendingWorkspaceAction: (v: 'change' | 'exit' | null) => void
+  /** 工作区动作请求:编辑器脏态 → 记 pending(由 EditorView 保存后执行);其余直接执行 */
+  requestWorkspaceAction: (kind: 'change' | 'exit') => void
+  /** 工作区动作执行(AppDialogs 与 EditorView 安全网共用终点) */
+  executeWorkspaceAction: (kind: 'change' | 'exit') => Promise<void>
   /** 启动完成标志（v2.4）：init（含磁盘 IO）完成前 App 显示 boot loading，不闪开屏/案头 */
   booted: boolean
   /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
@@ -187,6 +204,13 @@ const appendTab = (tabs: string[], mdPath: string): string[] =>
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
   editorOrigin: 'library',
+  appDialog: null,
+  openAppDialog: (kind) => set({ appDialog: kind }),
+  closeAppDialog: () => set({ appDialog: null }),
+  pickDirPort: null,
+  setPickDirPort: (p) => set({ pickDirPort: p }),
+  pendingWorkspaceAction: null,
+  setPendingWorkspaceAction: (v) => set({ pendingWorkspaceAction: v }),
   booted: false,
   recentOpened: [],
   sessionRecent: [],
@@ -518,6 +542,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   exitEditor: async () => {
     if (get().editorOrigin === 'workbench') get().goWorkbench()
     else await get().backToLibrary()
+  },
+
+  requestWorkspaceAction: (kind) => {
+    const { route, dirty } = get()
+    // 编辑器脏态:显式保存成功才执行(spec §6 安全规则);干净图/非编辑器路由直接走
+    if (route === 'editor' && dirty) {
+      set({ appDialog: null, pendingWorkspaceAction: kind })
+      return
+    }
+    set({ appDialog: null })
+    void get().executeWorkspaceAction(kind)
+  },
+  executeWorkspaceAction: async (kind) => {
+    if (kind === 'exit') {
+      await get().exitWorkspace()
+      return
+    }
+    const port = get().pickDirPort
+    if (port === null) return
+    try {
+      const dir = await port()
+      // 取消选择:留在原地(不关编辑器、不切工作区)
+      if (dir === null || dir === '') return
+      // 先清编辑态再切换:currentMdPath 指旧工作区文件,setWorkspace 的 lastOpened
+      // 持久化取它(案头发起时恒 null 的隐含假设),残留会写入脏指针;route 落案头
+      set({ currentMdPath: null, dirty: false, route: 'library' })
+      await get().setWorkspace(dir)
+    } catch (e) {
+      console.error('更换工作区失败', e)
+      get().setError(i18n.t('errors.setWorkspaceFailed', { reason: String(e) }))
+    }
   },
 
   backToLibrary: async () => {

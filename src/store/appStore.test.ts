@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', editorOrigin: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null })
+  useAppStore.setState({ route: 'library', editorOrigin: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null })
 })
 
 describe('appStore', () => {
@@ -114,6 +114,66 @@ describe('appStore', () => {
       await useAppStore.getState().openMap('/ws/已有.md')
       await useAppStore.getState().openMap('/ws/另一张.md') // 胶囊条/Ctrl+P 都走 openMap,此时 route 已是 editor
       expect(useAppStore.getState().editorOrigin).toBe('workbench')
+    })
+  })
+
+  // 2026-09 导航系统 spec §6:设置全局化——App 级对话框态 + 工作区动作安全网
+  describe('设置全局化', () => {
+    test('openAppDialog/closeAppDialog 开合设置与历史框', () => {
+      useAppStore.getState().openAppDialog('settings')
+      expect(useAppStore.getState().appDialog).toBe('settings')
+      useAppStore.getState().openAppDialog('history')
+      expect(useAppStore.getState().appDialog).toBe('history')
+      useAppStore.getState().closeAppDialog()
+      expect(useAppStore.getState().appDialog).toBeNull()
+    })
+
+    test('requestWorkspaceAction 编辑器脏态:关框并记 pending(不立即执行)', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'editor', dirty: true, appDialog: 'settings' })
+      useAppStore.getState().requestWorkspaceAction('exit')
+      expect(useAppStore.getState().appDialog).toBeNull()
+      expect(useAppStore.getState().pendingWorkspaceAction).toBe('exit')
+      expect(useAppStore.getState().workspaceDir).toBe('/ws') // 未动
+    })
+
+    test('requestWorkspaceAction 非脏态:直接执行 exit(清工作区)', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'library', appDialog: 'settings' })
+      useAppStore.getState().requestWorkspaceAction('exit')
+      await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
+      expect(useAppStore.getState().appDialog).toBeNull()
+    })
+
+    test('executeWorkspaceAction change:选目录后清编辑态落案头并切换', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'editor', currentMdPath: '/ws/已有.md', dirty: true })
+      useAppStore.getState().setPickDirPort(async () => '/new-ws')
+      await useAppStore.getState().executeWorkspaceAction('change')
+      const s = useAppStore.getState()
+      expect(s.workspaceDir).toBe('/new-ws')
+      expect(s.route).toBe('library')
+      expect(s.currentMdPath).toBeNull()
+      expect(s.dirty).toBe(false)
+    })
+
+    test('executeWorkspaceAction change:取消选择(端口返 null)留在原地', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'editor', currentMdPath: '/ws/已有.md' })
+      useAppStore.getState().setPickDirPort(async () => null)
+      await useAppStore.getState().executeWorkspaceAction('change')
+      expect(useAppStore.getState().route).toBe('editor')
+      expect(useAppStore.getState().currentMdPath).toBe('/ws/已有.md')
+      expect(useAppStore.getState().workspaceDir).toBe('/ws')
+    })
+
+    test('executeWorkspaceAction change:端口抛错走全局横幅不吞异常', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.getState().setPickDirPort(async () => {
+        throw new Error('端口故障')
+      })
+      await useAppStore.getState().executeWorkspaceAction('change')
+      expect(useAppStore.getState().error).toContain('端口故障')
     })
   })
 })
