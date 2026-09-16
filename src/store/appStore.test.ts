@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -119,6 +119,13 @@ describe('appStore', () => {
 
   // 2026-09 导航系统 spec §6:设置全局化——App 级对话框态 + 工作区动作安全网
   describe('设置全局化', () => {
+    // exitWorkspace 覆盖桩的兜底恢复:zustand setState 浅拷贝会把桩带进后续 state 对象,
+    // 只在测试末尾恢复不够(断言失败即泄漏),afterEach 无条件还原原始函数
+    const originalExitWorkspace = useAppStore.getState().exitWorkspace
+    afterEach(() => {
+      useAppStore.setState({ exitWorkspace: originalExitWorkspace })
+    })
+
     test('openAppDialog/closeAppDialog 开合设置与历史框', () => {
       useAppStore.getState().openAppDialog('settings')
       expect(useAppStore.getState().appDialog).toBe('settings')
@@ -143,6 +150,16 @@ describe('appStore', () => {
       useAppStore.getState().requestWorkspaceAction('exit')
       await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
       expect(useAppStore.getState().appDialog).toBeNull()
+    })
+
+    // Important 修复轮:exit 分支包 try/catch——exitWorkspace(配置 IO)reject 时走全局
+    // 横幅留线索,不再 unhandled rejection(不吞异常约束);vitest 把 unhandled rejection
+    // 记为错误,本用例通过即证明出口存在
+    test('requestWorkspaceAction exit 失败:走全局横幅不吞异常', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ exitWorkspace: async () => { throw new Error('退出故障') }, route: 'library', appDialog: 'settings' })
+      useAppStore.getState().requestWorkspaceAction('exit')
+      await waitFor(() => expect(useAppStore.getState().error).toContain('退出故障'))
     })
 
     test('executeWorkspaceAction change:选目录后清编辑态落案头并切换', async () => {

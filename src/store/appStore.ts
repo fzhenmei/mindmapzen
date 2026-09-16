@@ -556,7 +556,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   executeWorkspaceAction: async (kind) => {
     if (kind === 'exit') {
-      await get().exitWorkspace()
+      try {
+        await get().exitWorkspace()
+      } catch (e) {
+        console.error('退出工作区失败', e)
+        get().setError(i18n.t('errors.exitWorkspaceFailed', { reason: String(e) }))
+      }
       return
     }
     const port = get().pickDirPort
