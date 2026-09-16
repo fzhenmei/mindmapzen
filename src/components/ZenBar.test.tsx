@@ -70,7 +70,7 @@ describe('ZenBar 复制选项下拉', () => {
   })
   afterEach(cleanup)
 
-  test('箭头展开菜单：两项勾选态反映 copySettings 现值（默认 双链on/含正文on；「包含备注」项已随 copyIncludeNote 退役）', () => {
+  test('箭头展开菜单：三项勾选态反映 copySettings 现值（默认 双链on/含正文on/含图标状态off——2026-09 粘 AI 防干扰默认剥）', () => {
     renderBar()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     openMenu()
@@ -78,6 +78,7 @@ describe('ZenBar 复制选项下拉', () => {
     expect(screen.queryByTestId('copy-note-option')).not.toBeInTheDocument()
     expect(screen.getByTestId('copy-links-option')).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByTestId('copy-include-body')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('copy-include-icon-status')).toHaveAttribute('aria-checked', 'false')
   })
 
   test('勾选即回调对应 key，菜单保持打开可连续切换（onSelect preventDefault）', () => {
@@ -89,6 +90,8 @@ describe('ZenBar 复制选项下拉', () => {
     // 菜单未关：后续项仍可点（同径再验 2026-09 正文项 copyIncludeBody）
     fireEvent.click(screen.getByTestId('copy-include-body'))
     expect(onToggle).toHaveBeenCalledWith('copyIncludeBody')
+    fireEvent.click(screen.getByTestId('copy-include-icon-status'))
+    expect(onToggle).toHaveBeenCalledWith('copyIncludeIconStatus')
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
@@ -108,11 +111,12 @@ describe('ZenBar 复制选项下拉', () => {
     openMenu()
     fireEvent.click(screen.getByTestId('copy-links-option'))
     fireEvent.click(screen.getByTestId('copy-include-body'))
+    fireEvent.click(screen.getByTestId('copy-include-icon-status'))
     await waitFor(() =>
-      expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false }),
+      expect(useAppStore.getState().settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false, copyIncludeIconStatus: true }),
     )
     const cfg = JSON.parse(await useAppStore.getState().adapter.readTextFile('/cfg.json'))
-    expect(cfg.settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
+    expect(cfg.settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false, copyIncludeIconStatus: true })
     expect(cfg.workspaceDir).toBe('/ws') // 合并保存保留其他字段
     expect(cfg.preferredLayout).toBe('logic')
     expect(cfg.theme).toBe('dark')

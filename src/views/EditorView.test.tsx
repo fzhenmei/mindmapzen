@@ -223,7 +223,7 @@ beforeEach(async () => {
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
     pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
-    settings: { copyIncludeLinks: true, copyIncludeBody: true },
+    settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
     // 泄漏的偏好会让后续用例的布局点击命中已激活项而 no-op——统一回默认
@@ -703,17 +703,17 @@ const copyWith = async (settings: CopySettings, tree: EngineNode = noteLinkTree(
 }
 
 test('复制后处理：默认设置含正文、留双链', async () => {
-  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：引擎镜像 data.note 不进复制产物（备注已并入正文，无独立备注层）', async () => {
   // 2026-09-06 备注合并:ZenNode.note 退役,engineTreeToZen 只收 data.body——
   // copyIncludeNote 设置键已随 Task 5 整链退役,任何设置组合下备注行都不再产出
-  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true })).toBe('# 根\n\n## 见 [[B]]\n')
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false })).toBe('# 根\n\n## 见 [[B]]\n')
 })
 
 test('复制后处理：copyIncludeLinks=false 时 [[B]] 剥括号留名', async () => {
-  expect(await copyWith({ copyIncludeLinks: false, copyIncludeBody: true })).toBe('# 根\n\n## 见 B\n')
+  expect(await copyWith({ copyIncludeLinks: false, copyIncludeBody: true, copyIncludeIconStatus: false })).toBe('# 根\n\n## 见 B\n')
 })
 
 // ---- 复制含正文开关（2026-09 正文 Task 7）：树层剥除先于序列化 ----
@@ -725,12 +725,12 @@ const bodyTree = (): EngineNode => ({
 })
 
 test('复制后处理：copyIncludeBody=false 时树层剥正文（管全部正文，含引用块部分）——md 含节点文本、不含正文段', async () => {
-  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: false }, bodyTree()))
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: false, copyIncludeIconStatus: false }, bodyTree()))
     .toBe('# 根\n\n## 新分支\n')
 })
 
 test('复制后处理：copyIncludeBody=true（默认含，给 AI 改稿刚需）时正文段随节点行原样输出', async () => {
-  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, bodyTree()))
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false }, bodyTree()))
     .toBe('# 根\n\n## 新分支\n既有正文\n')
 })
 
@@ -742,8 +742,28 @@ test('复制后处理：copyIncludeBody=true 不误伤正文代码块内 `> ` �
       { data: { text: '新分支', expand: true, uid: 'child-uid', body: '```diff\n> 删除的行\n```', note: '备注' }, children: [] },
     ],
   }
-  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true }, tree))
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false }, tree))
     .toBe('# 根\n\n## 新分支\n```diff\n> 删除的行\n```\n')
+})
+
+// ---- 图标与看板状态剥除（2026-09 粘 AI 防干扰）：树层剥 icons/status 先于序列化 ----
+// 样例树：child 带图标 ::flag、状态 @doing、标签 #采购（引擎形态：data.icon 内部保留名
+// zen_status- 首项 + zen_ 前缀用户图标；data.tag 数组）
+const iconStatusTree = (): EngineNode => ({
+  data: { text: '根', expand: true, uid: 'root-uid' },
+  children: [
+    { data: { text: '任务A', expand: true, uid: 'child-uid', icon: ['zen_status-doing', 'zen_flag'], tag: ['采购'] }, children: [] },
+  ],
+})
+
+test('复制后处理：默认（copyIncludeIconStatus=false）树层剥图标与看板状态——md 无 ::flag/@doing，#采购 保留（粘给 AI 干净）', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false }, iconStatusTree()))
+    .toBe('# 根\n\n## 任务A #采购\n')
+})
+
+test('复制后处理：copyIncludeIconStatus=true 时 ::flag/@doing 随行尾注入（带标记粘贴场景，如粘回导图保留图标状态）', async () => {
+  expect(await copyWith({ copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: true }, iconStatusTree()))
+    .toBe('# 根\n\n## 任务A #采购 ::flag @doing\n')
 })
 
 // ---- 连线净化（M5d Task 2）：uid 注册表、显示剥离与序列化注入 ----
@@ -3036,7 +3056,10 @@ describe('看板模式（2026-09 Task 7）', () => {
     fireEvent.pointerDown(screen.getByTestId('kanban-menu-a-uid'), { button: 0 })
     fireEvent.click(await screen.findByTestId('kanban-copy-a-uid'))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0]).toContain('# 任务A @doing')
+    // 2026-09 粘 AI 防干扰：默认 copyIncludeIconStatus=false 同样管看板卡片复制——
+    // @doing 不入产物（用户口径：看板复制粘给 AI 也不受状态标记干扰）
+    expect(writes[0]).toContain('# 任务A\n')
+    expect(writes[0]).not.toContain('@doing')
     expect(writes[0]).toContain('说明C')
     // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
     expect(writes[0]).not.toContain('子任务B')

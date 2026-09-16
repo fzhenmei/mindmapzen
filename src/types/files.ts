@@ -70,11 +70,15 @@ export interface CopySettings {
   copyIncludeLinks: boolean
   /** 复制 md 时包含节点正文（2026-09 写作）；默认含——给 AI 改稿是刚需 */
   copyIncludeBody: boolean
+  /** 复制 md 时包含图标与看板状态行尾标记（2026-09 粘 AI 防干扰）；默认不含——::icon/@status
+   *  对 AI 是噪音；需要带标记粘贴（如粘回导图保留图标状态）时在砚栏复制下拉勾选。标签 #tag
+   *  不在此开关内（带语义分类信息，恒保留） */
+  copyIncludeIconStatus: boolean
 }
 
 export type CopySettingKey = keyof CopySettings
 
-export const DEFAULT_COPY_SETTINGS: CopySettings = { copyIncludeLinks: true, copyIncludeBody: true }
+export const DEFAULT_COPY_SETTINGS: CopySettings = { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false }
 
 /** 宽容解析配置中的复制设置：非对象/字段类型非法逐字段回退默认（旧配置无 settings 字段按默认兼容；
  *  未知键不读不存——旧配置的 copyIncludeNote 加载被忽略，load-merge-save 落盘不会使其复活） */
@@ -84,6 +88,8 @@ export function parseSettings(v: unknown): CopySettings {
   return {
     copyIncludeLinks: typeof o.copyIncludeLinks === 'boolean' ? o.copyIncludeLinks : DEFAULT_COPY_SETTINGS.copyIncludeLinks,
     copyIncludeBody: typeof o.copyIncludeBody === 'boolean' ? o.copyIncludeBody : DEFAULT_COPY_SETTINGS.copyIncludeBody,
+    copyIncludeIconStatus:
+      typeof o.copyIncludeIconStatus === 'boolean' ? o.copyIncludeIconStatus : DEFAULT_COPY_SETTINGS.copyIncludeIconStatus,
   }
 }
 

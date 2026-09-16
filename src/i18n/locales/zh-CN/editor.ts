@@ -18,6 +18,7 @@ export default {
     copyOptions: '复制选项',
     copyIncludeLinks: '保留双链标记',
     copyIncludeBody: '含正文',
+    copyIncludeIconStatus: '含图标与看板状态',
     copyPathTip: '复制文件路径（发给 AI 直接读取）',
     // 复制 md 给 AI 的图片头注(aiImagePaths 服务,内容型标记随界面语言)
     aiImageHeader: '> 图片为本地绝对路径，请用工具读取',

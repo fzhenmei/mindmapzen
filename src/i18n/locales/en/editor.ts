@@ -21,6 +21,7 @@ const editor: Dict['editor'] = {
     copyOptions: 'Copy options',
     copyIncludeLinks: 'Keep wikilink markers',
     copyIncludeBody: 'Include body text',
+    copyIncludeIconStatus: 'Include icons & kanban status',
     copyPathTip: 'Copy file path (for AI to read directly)',
     aiImageHeader: '> Images are local absolute paths; read them with your tools',
     save: 'Save (Ctrl+S)',

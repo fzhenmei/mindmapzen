@@ -6,7 +6,7 @@ import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, findSubtreeByUid, serialize } from '../services/mdTree'
-import { applyCopySettings, stripTreeBody } from '../services/copyFilter'
+import { applyCopySettings, stripTreeBody, stripTreeIconStatus } from '../services/copyFilter'
 import { absolutizeImagePaths } from '../services/aiImagePaths'
 import { truncateCardSubtree } from '../services/kanban'
 import type { WriteClipboard } from '../services/clipboard'
@@ -30,17 +30,20 @@ export function useSubtreeCopy({
   const { t } = useTranslation()
 
   /** 子树→md→剪贴板公共管线（doCopy 与看板卡片复制共用零分叉）：正文按 settings 树层
-   *  剥除（终审 C1，先于序列化——md 层正则剥 `> ` 行会误伤正文代码块/引用行）；md 层
-   *  后处理仅剩双链括号（getState 取实时值）。尾段图片引用相对→绝对（2026-09）：须在
-   *  剥正文之后——头注引用行不能被一并剥掉。序列化同步段 try 兜底（2026-09-07 回归：
-   *  Word 粘贴携 \r\n 致 assert 抛错曾无声失败），异步段 then 同口径 */
+   *  剥除（终审 C1，先于序列化——md 层正则剥 `> ` 行会误伤正文代码块/引用行）；图标与
+   *  看板状态同层树剥（2026-09 粘 AI 防干扰，copyIncludeIconStatus 默认 false——字段剥除
+   *  即无行尾 ::icon/@status 注入）；md 层后处理仅剩双链括号（getState 取实时值）。
+   *  尾段图片引用相对→绝对（2026-09）：须在剥正文之后——头注引用行不能被一并剥掉。
+   *  序列化同步段 try 兜底（2026-09-07 回归：Word 粘贴携 \r\n 致 assert 抛错曾无声失败），
+   *  异步段 then 同口径 */
   const copyMdToClipboard = useCallback(
     (zen: ZenNode, kind: 'copied-md' | 'copied-node'): void => {
       let md: string
       try {
         const settings = useAppStore.getState().settings
         const bodyApplied = settings.copyIncludeBody ? zen : stripTreeBody(zen)
-        md = applyCopySettings(serialize(bodyApplied, registry.byUid), settings)
+        const markerApplied = settings.copyIncludeIconStatus ? bodyApplied : stripTreeIconStatus(bodyApplied)
+        md = applyCopySettings(serialize(markerApplied, registry.byUid), settings)
       } catch (e) {
         setError(t('errors.copyMdFailed', { reason: e instanceof Error ? e.message : String(e) }))
         return
