@@ -158,3 +158,71 @@ export function findUidByPathText(root: AddrNode, path: readonly string[], text:
   }
   return walk(root, 0)
 }
+
+/** 定位居中引擎编排(看板回导图/工作台跨图定位共用,2026-09 自 EditorView 下沉——
+ *  纯引擎操作无视图依赖):expanded=true(刚展开收起祖先)则经 node_tree_render_end
+ *  一次性回调在新树上寻址;false(路径已全展开)即时寻址。引擎 render() 排
+ *  setTimeout 0,onCanvasReady 时首渲未落、即时寻址必 miss——apply 内置
+ *  RENDER_RETRY_MAX 有限重试(execOnRenderNode 同款口径),等首渲/展开重渲落定再
+ *  居中,超限放弃仅 warn(定位是非关键路径,不阻塞使用);回调自兜 try/catch——
+ *  引擎事件回调里的异常运行时只静默吞。 */
+export function centerNodeOnRender(mm: MindMapHandle, uid: string, expanded: boolean): void {
+  let tries = 0
+  const apply = (): void => {
+    const node = mm.renderer?.findNodeByUid(uid)
+    if (node !== null && node !== undefined) {
+      mm.renderer?.moveNodeToCenter?.(node as never)
+      return
+    }
+    if (tries < RENDER_RETRY_MAX) {
+      tries += 1
+      mm.on('node_tree_render_end', function onEnd() {
+        mm.off('node_tree_render_end', onEnd)
+        try {
+          apply()
+        } catch (e) {
+          console.error('看板定位回调失败', e)
+        }
+      })
+      return
+    }
+    console.warn('看板定位未命中渲染节点，跳过居中', uid)
+  }
+  if (expanded) {
+    mm.on('node_tree_render_end', function onEnd() {
+      mm.off('node_tree_render_end', onEnd)
+      try {
+        apply()
+      } catch (e) {
+        console.error('看板定位回调失败', e)
+      }
+    })
+  } else {
+    apply() // 路径已全展开：即时寻址（首挂未渲由上方重试分支兜底）
+  }
+}
+
+/** 工作台跨图定位消费(2026-09 spec §5 文本寻址,自 EditorView 下沉):寻址器由调用方
+ *  消费即清(不残留误定位),此处只做目标图校验 + 寻址 + 居中。mapPath 与当前图不符
+ *  (openMap 失败寻址器残留后切图,path+text 碰巧同名会误定位错图节点——终审
+ *  Important-1)即弃置仅 warn;寻址 miss(图被外部改动)静默进图不清屏。挂点必须在
+ *  onCanvasReady——useOpenDocument.onReady 触发时画布未挂载、mmRef 恒 null,挂它必
+ *  「清而不定位」。 */
+export function consumePendingLocate(
+  mm: MindMapHandle,
+  mdPath: string,
+  locate: { mapPath: string; path: string[]; text: string },
+  center: (uid: string) => void,
+): void {
+  if (locate.mapPath !== mdPath) {
+    console.warn('工作台定位目标图与当前图不符，弃置寻址器（目标图打开失败后切图）', locate)
+    return
+  }
+  try {
+    const uid = findUidByPathText(mm.getData(), locate.path, locate.text)
+    if (uid !== null) center(uid)
+    else console.warn('工作台定位未命中节点（图可能与扫描时已不同）', locate)
+  } catch (e) {
+    console.error('工作台跨图定位失败', e)
+  }
+}
