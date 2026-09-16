@@ -52,7 +52,6 @@ export interface LibraryDialogsApi {
   readonly newMapDir: string
   /** 新建目录的父目录（''=工作区根） */
   readonly dirParent: string
-  openDialog(kind: Exclude<DialogKind, null>): void
   /** 关框全清（target/dirTarget 同清；对无目标的框等价于仅关框——互斥态下无副作用） */
   closeDialog(): void
   closeImportPreview(): void
@@ -239,7 +238,6 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
     importPreview,
     newMapDir,
     dirParent,
-    openDialog: (kind) => setDialog(kind),
     closeDialog,
     closeImportPreview: () => setImportPreview(null),
     openNewMap,

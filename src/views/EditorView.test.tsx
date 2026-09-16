@@ -224,6 +224,7 @@ beforeEach(async () => {
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
     pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
+    appDialog: null, // App 级设置/历史框（终审修复进 anyDialog 总线）：逐用例重置，防开框用例泄漏闩死后续快捷键
     settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，

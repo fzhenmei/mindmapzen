@@ -545,9 +545,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   requestWorkspaceAction: (kind) => {
-    const { route, dirty } = get()
-    // 编辑器脏态:显式保存成功才执行(spec §6 安全规则);干净图/非编辑器路由直接走
-    if (route === 'editor' && dirty) {
+    const { route } = get()
+    // 编辑器路由统一记 pending 交 EditorView 安全网(spec §6「所有新出口 guardAiTurn 拦截」;
+    // 终审修复,原仅脏态走此路):AI 回合流式窗口内首编辑未落 dirty 仍 false,干净图直通会
+    // 卸载 EditorView → chatStore.reset 只清 stopRequest 不 abort 在途流,泄漏后台请求。
+    // 挂载侧消费链 guardAiTurn+leaveTo(干净图 explicitSave 空成功零额外成本);非编辑器
+    // 路由无该安全网,保持直接执行
+    if (route === 'editor') {
       set({ appDialog: null, pendingWorkspaceAction: kind })
       return
     }

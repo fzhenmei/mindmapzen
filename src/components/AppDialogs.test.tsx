@@ -5,7 +5,7 @@ import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
 // App 级对话框宿主(2026-09 导航系统 spec §6):设置三空间可达——按 store.appDialog
-// 渲染;工作区动作经 requestWorkspaceAction(脏态安全网在 EditorView,此处测直通路径)
+// 渲染;工作区动作经 requestWorkspaceAction(编辑器路由安全网在 EditorView,此处测直通路径)
 describe('AppDialogs', () => {
   beforeEach(async () => {
     const fs = new MemoryFsAdapter()
@@ -33,7 +33,7 @@ describe('AppDialogs', () => {
     useAppStore.getState().openAppDialog('settings')
     render(<AppDialogs />)
     expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
-    // route=library 非脏态:requestWorkspaceAction 直接执行 exitWorkspace
+    // route=library 非编辑器路由（终审修复后编辑器不分脏净都记 pending）:requestWorkspaceAction 直接执行 exitWorkspace
     fireEvent.click(screen.getByTestId('settings-workspace-exit'))
     await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
     expect(useAppStore.getState().appDialog).toBeNull()

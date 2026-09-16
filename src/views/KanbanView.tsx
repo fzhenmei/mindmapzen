@@ -210,8 +210,10 @@ export default function KanbanView({
           z 阶梯承重（导航系统 Task 7 起浮层内关闭钮已拆，鼠标退出唯一路径 = 砚栏视图组
           toggle）：本层 z-[9] 必须低于砚栏 z-10（浮层盖砚栏则 toggle 不可点，e2e
           navigation.spec 实测拦截）而高于画布侧悬浮件 z-[8]（NodeActions/MultiSelectBar，
-          MultiSelectBar.tsx 头注释记录的阶梯）；AI 面板 z-20 / AI 舌页 z-30 属窗口级
-          铬件，压住本层是既定行为。原 z-20 是浮层自带关闭钮时代（6ed47c2）的遗留 */}
+          MultiSelectBar.tsx 头注释记录的阶梯）；同层 z-[9] 邻居（SaveStamp/CopyStamp/
+          WarnStamp/zen-banner，App.css z-index:9）仅凭 DOM 顺序压在本层之上——重构
+          调整渲染顺序会静默淹没看板态的保存反馈，动前先核此处。AI 面板 z-20 / AI 舌页
+          z-30 属窗口级铬件，压住本层是既定行为。原 z-20 是浮层自带关闭钮时代（6ed47c2）的遗留 */}
       <header className="flex items-center gap-2 border-b px-4 py-2">
         <h2 className="shrink-0 text-sm font-medium">{t('editor.kanban.viewName')}</h2>
         <input

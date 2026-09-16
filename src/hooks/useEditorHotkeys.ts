@@ -84,8 +84,9 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
         if (!anyDialogRef.current) toggleBodyDialog()
       }
       // 返回来路（2026-09 导航系统 spec §7）：Alt+←（浏览器回退惯例）。输入域守卫同
-      // Ctrl+Shift+K——正文面板/AI 输入框/看板过滤输入中放行，防丢草稿
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft') {
+      // Ctrl+Shift+K——正文面板/AI 输入框/看板过滤输入中放行，防丢草稿；对话框互斥守卫
+      // 同切换族（终审修复）——模态在开（含 App 级设置/历史框）时 no-op，不幕后保存并导航
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowLeft' && !anyDialogRef.current) {
         const t = e.target
         if (!(t instanceof Element && t.closest('input, textarea, [contenteditable="true"]'))) {
           e.preventDefault()

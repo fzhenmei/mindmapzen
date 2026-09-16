@@ -144,7 +144,18 @@ describe('appStore', () => {
       expect(useAppStore.getState().workspaceDir).toBe('/ws') // 未动
     })
 
-    test('requestWorkspaceAction 非脏态:直接执行 exit(清工作区)', async () => {
+    // 终审修复:编辑器路由不分脏净统一记 pending——AI 回合流式窗口内 dirty 尚未置位,
+    // 干净图直通会绕过 EditorView 安全网(chatStore.reset 不 abort 在途流)
+    test('requestWorkspaceAction 编辑器干净态:同样记 pending(不立即执行)', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'editor', dirty: false, appDialog: 'settings' })
+      useAppStore.getState().requestWorkspaceAction('exit')
+      expect(useAppStore.getState().appDialog).toBeNull()
+      expect(useAppStore.getState().pendingWorkspaceAction).toBe('exit')
+      expect(useAppStore.getState().workspaceDir).toBe('/ws') // 未动
+    })
+
+    test('requestWorkspaceAction 非编辑器路由:直接执行 exit(清工作区)', async () => {
       await useAppStore.getState().setWorkspace('/ws')
       useAppStore.setState({ route: 'library', appDialog: 'settings' })
       useAppStore.getState().requestWorkspaceAction('exit')

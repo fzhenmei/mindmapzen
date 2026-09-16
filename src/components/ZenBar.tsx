@@ -155,6 +155,8 @@ export default function ZenBar({
 }: Readonly<Props>) {
   const { t } = useTranslation()
   const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
+  // 返回钮文案（终审修复：Tip label 与 aria-label 两处同源）——工作台来路回工作台，案头来路回案头
+  const backLabel = backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')
   // 布局语义名（键集与 LayoutKind 一一对应）：常用钮/更多下拉/触发钮 aria 三处共用
   const layoutNames: Record<LayoutKind, string> = {
     mindmap: t('editor.zenbar.layouts.mindmap'),
@@ -172,13 +174,13 @@ export default function ZenBar({
       data-testid="zen-bar"
       className="zen-bar absolute bottom-3 left-1/2 z-10 flex h-10 -translate-x-1/2 items-center gap-0.5 rounded-lg bg-card px-2.5 shadow-lg"
     >
-      <Tip label={backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')}>
+      <Tip label={backLabel}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           data-testid="btn-back"
-          aria-label={backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')}
+          aria-label={backLabel}
           onClick={onBack}
         >
           <IconArrowLeft />
