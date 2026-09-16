@@ -9,11 +9,16 @@ vi.mock('../services/vditorPreview', () => ({
 
 import { createNoteTooltip } from './noteTooltip'
 import { renderVditorPreview } from '../services/vditorPreview'
+import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { useAppStore } from '../store/appStore'
 
 const mocked = vi.mocked(renderVditorPreview)
 
 afterEach(() => {
   mocked.mockClear()
+  mocked.mockImplementation(async (el: HTMLElement, md: string) => {
+    el.innerHTML = `<div class="vditor-preview">${md.slice(0, 40)}</div>`
+  })
   document.querySelectorAll('.zen-note-tip').forEach((el) => el.remove())
 })
 
@@ -60,6 +65,25 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     expect(el.style.display).toBe('none')
     expect(el.textContent).toBe('')
+    tip.destroy()
+  })
+
+  test('正文插图(2026-09 相对路径):渲染后相对 src img 换 dataURL(读盘同案头口径)', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeBytes('/ws/assets/悬停.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws' })
+    // mock 渲染注入带相对 src 的 img(模拟 lute 产物;webview 解析不了相对路径)
+    mocked.mockImplementationOnce(async (el: HTMLElement) => {
+      const img = document.createElement('img')
+      img.src = 'assets/悬停.png'
+      el.append(img)
+    })
+    const tip = createNoteTooltip('light')
+    tip.show('带图正文', 0, 0)
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    await vi.waitFor(() =>
+      expect(el.querySelector('img')!.src).toBe(`data:image/png;base64,${btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47))}`),
+    )
     tip.destroy()
   })
 })

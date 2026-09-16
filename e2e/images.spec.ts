@@ -282,3 +282,58 @@ test('画布粘贴：smm 节点 JSON 还原子节点（接管后文本分派不�
   )
   expect(md).toContain('## 还原的节点')
 })
+
+// 2026-09 正文插图改资产落盘：vditor 无 upload 配置时粘贴图片走内置 base64 兜底
+// （data: 串直插 md 毒化保存链）；宿主 upload.handler 接管后与节点插图同口径——
+// 落盘 assets/ + md 相对路径引用。本用例锁正文弹窗整链：粘贴 → 编辑区相对路径
+// 引用 → 分屏预览 dataURL → 保存 md 引用块行。
+test('正文插图：弹窗粘贴——落盘 assets/、正文 md 相对路径、分屏预览 dataURL', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('正文贴图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('正文贴图').first()).toBeVisible()
+
+  // 选中根 → 开正文弹窗（vditor sv 分屏就绪：textarea 编辑区出现）
+  await page.getByText('正文贴图').first().click()
+  await page.getByTestId('btn-body').click()
+  await expect(page.getByTestId('body-dialog')).toBeVisible()
+  const editor = page.locator('[data-testid="vditor-host"] textarea')
+  await expect(editor).toBeVisible()
+
+  // 合成 paste 事件 dispatch 到 sv 编辑区 textarea（vditor 在此监听；同 ImageDialog 用例同构）
+  await page.evaluate(() => {
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+      0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+      0x42, 0x60, 0x82,
+    ])
+    const dt = new DataTransfer()
+    dt.items.add(new File([png], 'shot.png', { type: 'image/png' }))
+    const ta = document.querySelector('[data-testid="vditor-host"] textarea')
+    ta?.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+
+  // 编辑区出现相对路径引用（upload.handler 落盘 assets/ 后 insertValue；绝非 base64）
+  await expect(editor).toHaveValue(/!\[shot\]\(assets\/shot\.png\)/)
+  // 分屏预览（防抖+渲染异步）：相对 src 经 parse 回调换 dataURL
+  await expect(page.locator('[data-testid="body-dialog"] img').first()).toHaveAttribute(
+    'src',
+    /^data:image\/png;base64,/,
+  )
+
+  // 关弹窗（flush 写 data.body）→ 显式保存：md 引用块行携带相对路径，无 base64
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('body-dialog')).toBeHidden()
+  await page.getByTestId('btn-back').click()
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/正文贴图.md',
+    ),
+  )
+  expect(md).toContain('# 正文贴图\n![shot](assets/shot.png)') // 正文原样块紧跟标题行（mdTree emitBody）
+  expect(md).not.toContain('base64')
+})

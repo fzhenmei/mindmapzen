@@ -3,36 +3,19 @@
 // 故格式化层为自研逐元素内联样式映射,lute 仅负责 md→DOM 前半程
 import type { FsAdapter } from '../types/files'
 import { toDisplayText } from './displayText'
-import { buildImageMetaFromSrcs } from './imageAssets'
-import { extractImageMarker } from './imageMarkers'
+import { applyImgSrcMap, buildImageMetaFromSrcs, collectMdImageSrcs } from './imageAssets'
 import { highlightCodeBlocks } from './codeHighlight'
 import { replaceMermaidCode } from './mermaidImage'
 import { renderVditorPreview } from './vditorPreview'
 
-/** src 解码形态(vditor 预览会把非 ASCII src 百分号编码,如 assets/配图.png →
- *  assets/%E9…png);已损坏的编码序列无解码形态,原样返回(等于未命中) */
-const decodedSrc = (src: string): string => {
-  try {
-    return decodeURIComponent(src)
-  } catch {
-    return src
-  }
-}
-
-/** 插图换 dataURL:与案头详情同口径(行级收集图片标记 → buildImageMetaFromSrcs),
- *  逐 img 按 src 原文或解码形态比对命中 */
+/** 插图换 dataURL:md 全文收集图片 src(2026-09 升级 collectMdImageSrcs——行尾标记
+ *  口径的超集,正文引用块行中图同收)→ buildImageMetaFromSrcs → 逐 img 命中替换
+ *  (原文/百分号解码形态双比对在 applyImgSrcMap) */
 async function resolveImages(fs: FsAdapter, wsDir: string, display: string, root: ParentNode): Promise<void> {
-  const srcs = new Set(
-    display.split('\n').map((l) => extractImageMarker(l)?.src).filter((s): s is string => s !== undefined),
-  )
+  const srcs = collectMdImageSrcs(display)
   if (srcs.size === 0) return
   const meta = await buildImageMetaFromSrcs(fs, wsDir, srcs) // 单图失败内部宽容跳过
-  for (const img of root.querySelectorAll('img')) {
-    const raw = img.getAttribute('src')
-    if (raw === null || raw === '') continue
-    const hit = meta.get(raw) ?? meta.get(decodedSrc(raw))
-    if (hit !== undefined) img.src = hit.dataUrl
-  }
+  applyImgSrcMap(root, new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
 }
 
 /** 编排:读盘 → 预处理(显示层标记剥净 + mermaid 改标)→ 离屏渲染 → 插图换

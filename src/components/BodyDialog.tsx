@@ -6,7 +6,7 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
-import VditorEditor from './VditorEditor'
+import VditorEditor, { type BodyImageUploadResult } from './VditorEditor'
 import { useAppStore } from '../store/appStore'
 import type { BodyDialog as BodyDialogState } from '../hooks/useBodyDialog'
 
@@ -25,8 +25,24 @@ const hintOf = (nodeText: string, editable: boolean, t: TFunction): string | nul
 }
 
 /** 正文编辑弹窗:header(节点文本截断 + ×)+ VDitor 编辑区 + 底部字数条。
- *  Esc/遮罩/× 关闭均走 onOpenChange(false) → close()(flush 后收起) */
-export default function BodyDialog({ open, bodyDraft, nodeText, editable, close, edit }: Readonly<BodyDialogState>) {
+ *  Esc/遮罩/× 关闭均走 onOpenChange(false) → close()(flush 后收起)。
+ *  uploadImages/resolveImages 为正文插图通道（2026-09，EditorView 装配）——hook 态
+ *  之外的两根直通线，随 state 一起从 EditorView 传入 */
+export default function BodyDialog({
+  open,
+  bodyDraft,
+  nodeText,
+  editable,
+  close,
+  edit,
+  uploadImages,
+  resolveImages,
+}: Readonly<BodyDialogState> & {
+  /** 粘贴/拖入图片 → 落盘 assets/ 返回插入 md 或错误（VditorEditor 契约） */
+  uploadImages(files: File[]): Promise<BodyImageUploadResult>
+  /** 预览区相对 src → dataURL（VditorEditor 契约） */
+  resolveImages(srcs: Set<string>): Promise<Map<string, string>>
+}) {
   const { t, i18n } = useTranslation()
   const theme = useAppStore((s) => s.resolvedTheme)
   const lang = i18n.language?.startsWith('zh') ? 'zh_CN' : 'en_US'
@@ -63,7 +79,7 @@ export default function BodyDialog({ open, bodyDraft, nodeText, editable, close,
           <Hint text={hint} />
         ) : (
           <div data-testid="body-editor" className="min-h-0 flex-1">
-            <VditorEditor value={draft} onChange={edit} lang={lang} theme={theme} />
+            <VditorEditor value={draft} onChange={edit} lang={lang} theme={theme} uploadImages={uploadImages} resolveImages={resolveImages} />
           </div>
         )}
         <footer className="shrink-0 border-t border-border px-4 py-1.5 text-right">

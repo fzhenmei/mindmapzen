@@ -21,7 +21,6 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 
-# Superpowers SDD 工作区（台账/简报/审查包，属会话级产物）
 .superpowers/
 
 # Playwright 产物（失败时的快照与 trace）
@@ -29,3 +28,8 @@ test-results/
 playwright-report/
 blob-report/
 .playwright-mcp/
+
+
+.claude/
+website/
+docs/superpowers/
