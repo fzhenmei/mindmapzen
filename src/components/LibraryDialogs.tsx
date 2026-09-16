@@ -1,6 +1,7 @@
 // src/components/LibraryDialogs.tsx —— 案头对话框容器（2026-09 行数护栏拆自 LibraryView，
-// 零行为变化）：新建/设置/历史/重命名/新建目录/删除目录/删除/移动/导入预览九框 JSX
-// 原样迁入。状态与业务确认在 useLibraryDialogs（api），本容器纯展示——开态即 api.dialog。
+// 零行为变化）：新建/重命名/新建目录/删除目录/删除/移动/导入预览七框 JSX 原样迁入
+// （设置/历史 2026-09 导航系统迁 AppDialogs，三空间可达）。状态与业务确认在
+// useLibraryDialogs（api），本容器纯展示——开态即 api.dialog。
 // 对话框互斥约定（ui Dialog）：dialog 与 importPreview 互不并存——Radix Dialog 为
 // modal（遮罩挡背景 + 滚动锁定），两条入口天然互斥。
 import { useTranslation } from 'react-i18next'
@@ -9,8 +10,6 @@ import type { DirNode } from '../services/desk'
 import type { MapInfo } from '../types/files'
 import { dirDeleteSummary } from '../services/desk'
 import NameDialog from './NameDialog'
-import SettingsDialog from './SettingsDialog'
-import HistoryDialog from './HistoryDialog'
 import NewMapDialog from './NewMapDialog'
 import DeleteConfirmDialog from './DeleteConfirmDialog'
 import ImportPreviewDialog from './ImportPreviewDialog'
@@ -39,19 +38,6 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
           onConfirm={api.confirmCreateMap}
         />
       )}
-      {/* 设置对话框（M5b Task 4 + M5d 更换工作区 + v0.7.0 退出工作区）：与其他对话框共用
-          dialog 互斥状态；更换工作区先关对话框再走 pickDirectory 流（同开屏「创建工作区」）；
-          退出工作区清 store 落 workspaceDir:null 回开屏页（无工作区分支渲染 WelcomeScreen） */}
-      {dialog === 'settings' && (
-        <SettingsDialog
-          onOpenHistory={api.onOpenHistory}
-          onClose={api.closeDialog}
-          onChangeWorkspace={api.onChangeWorkspace}
-          onExitWorkspace={api.onExitWorkspace}
-        />
-      )}
-      {/* 版本历史/回滚（M22）：从设置页打开（Radix modal 互斥，settings 先关再开本框） */}
-      {dialog === 'history' && <HistoryDialog onClose={api.closeDialog} />}
       {dialog === 'rename' && target && (
         <NameDialog
           title={t('library.dialogs.rename.title')}

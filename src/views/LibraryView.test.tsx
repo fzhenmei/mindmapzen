@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe } from 'vitest'
 import LibraryView from './LibraryView'
+import AppDialogs from '../components/AppDialogs'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
@@ -34,7 +35,8 @@ beforeEach(async () => {
   fs = new MemoryFsAdapter()
   await fs.writeTextFileAtomic('/ws/想法A.md', '# A\n')
   useAppStore.getState().setAdapter(fs)
-  useAppStore.setState({ route: 'library', maps: [], workspaceDir: null, currentMdPath: null, error: null, selectedDir: '' })
+  useAppStore.setState({ route: 'library', maps: [], workspaceDir: null, currentMdPath: null, error: null, selectedDir: '', appDialog: null })
+  useAppStore.getState().setPickDirPort(null)
   pickImportFile.mockClear()
 })
 
@@ -53,12 +55,19 @@ test('无工作区时渲染开屏页，创建工作区后进入案头', async ()
   expect(screen.queryByTestId('welcome-screen')).not.toBeInTheDocument()
 })
 
-// M5d 缓期项清偿：设置页「更换工作区」——pickDirectory 选新文件夹后案头切换、对话框关闭
+// M5d 缓期项清偿：设置页「更换工作区」（2026-09 导航系统迁 AppDialogs）——route=library
+// 非脏态直通 executeWorkspaceAction，经 store pickDirPort 选新文件夹后案头切换、对话框关闭
 test('设置更换工作区：经 pickDirectory 切换案头并关闭对话框', async () => {
   await fs.writeTextFileAtomic('/ws2/新家.md', '# 新家\n')
   await useAppStore.getState().setWorkspace('/ws')
   const pick = vi.fn(async () => '/ws2')
-  render(<LibraryView pickDirectory={pick} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+  useAppStore.getState().setPickDirPort(pick)
+  render(
+    <>
+      <LibraryView pickDirectory={pick} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />
+      <AppDialogs />
+    </>,
+  )
   fireEvent.click(screen.getByTestId('btn-settings'))
   expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('settings-workspace-change'))
@@ -75,7 +84,12 @@ test('设置退出工作区：回到开屏页，配置落 workspaceDir:null（�
   useAppStore.setState({ configPath: '/cfg.json' })
   await useAppStore.getState().setWorkspace('/ws')
   await useAppStore.getState().setPreferredLayout('logic') // 预置另一字段：合并保存不得覆盖
-  render(<LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+  render(
+    <>
+      <LibraryView pickDirectory={vi.fn()} pickImportFile={pickImportFile} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />
+      <AppDialogs />
+    </>,
+  )
   fireEvent.click(screen.getByTestId('btn-settings'))
   fireEvent.click(screen.getByTestId('settings-workspace-exit'))
   await waitFor(() => expect(useAppStore.getState().workspaceDir).toBeNull())
@@ -317,7 +331,12 @@ describe('案头目录（M5a）', () => {
     const dirFs = new MemoryFsAdapter()
     useAppStore.getState().setAdapter(dirFs)
     await useAppStore.getState().setWorkspace('/ws')
-    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+    render(
+      <>
+        <LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />
+        <AppDialogs />
+      </>,
+    )
     fireEvent.click(screen.getByTestId('btn-settings'))
     expect(await screen.findByTestId('settings-dialog')).toBeInTheDocument()
     expect(screen.queryByTestId('copy-note-toggle')).not.toBeInTheDocument()
