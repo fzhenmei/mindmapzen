@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null })
+  useAppStore.setState({ route: 'library', editorOrigin: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null })
 })
 
 describe('appStore', () => {
@@ -83,6 +83,38 @@ describe('appStore', () => {
     expect(s.route).toBe('library')
     expect(s.dirty).toBe(false)
     expect(s.currentMdPath).toBeNull()
+  })
+
+  // 2026-09 导航系统 spec §3 R1「返回=回来路」:来路记忆 + exitEditor 分派
+  describe('导航来路', () => {
+    test('openMap 自工作台进入记 editorOrigin=workbench,exitEditor 回工作台', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'workbench' })
+      await useAppStore.getState().openMap('/ws/已有.md')
+      expect(useAppStore.getState().route).toBe('editor')
+      expect(useAppStore.getState().editorOrigin).toBe('workbench')
+      await useAppStore.getState().exitEditor()
+      expect(useAppStore.getState().route).toBe('workbench')
+      expect(useAppStore.getState().currentMdPath).toBeNull()
+    })
+
+    test('openMap 自案头进入记 editorOrigin=library,exitEditor 回案头', async () => {
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'library' })
+      await useAppStore.getState().openMap('/ws/已有.md')
+      expect(useAppStore.getState().editorOrigin).toBe('library')
+      await useAppStore.getState().exitEditor()
+      expect(useAppStore.getState().route).toBe('library')
+    })
+
+    test('编辑器内切图不重记来路', async () => {
+      await fs.writeTextFileAtomic('/ws/另一张.md', '# b\n')
+      await useAppStore.getState().setWorkspace('/ws')
+      useAppStore.setState({ route: 'workbench' })
+      await useAppStore.getState().openMap('/ws/已有.md')
+      await useAppStore.getState().openMap('/ws/另一张.md') // 胶囊条/Ctrl+P 都走 openMap,此时 route 已是 editor
+      expect(useAppStore.getState().editorOrigin).toBe('workbench')
+    })
   })
 })
 

@@ -12,6 +12,10 @@ import type { GitClone, GitRun } from '../types/ports'
 
 interface AppState {
   route: 'library' | 'editor' | 'workbench' // workbench=工作台（2026-09 跨图总览，spec 2026-09-13-workbench §2）
+  /** 进入编辑器前的出发空间(2026-09 导航系统 spec §3 R1「返回=回来路」):openMap/
+   *  createAndOpen 自非编辑器路由进入时记录,返回钮/Alt+← 经 exitEditor 消费;内存态
+   *  不落盘。编辑器内切图(胶囊条/Ctrl+P/Ctrl+Tab)不重记——空间没换,来路不变 */
+  editorOrigin: 'library' | 'workbench'
   /** 启动完成标志（v2.4）：init（含磁盘 IO）完成前 App 显示 boot loading，不闪开屏/案头 */
   booted: boolean
   /** 最近打开清单（v2.4 案头欢迎页）：mdPath 新→旧，上限 10 */
@@ -49,6 +53,9 @@ interface AppState {
   setPendingLocate: (v: { mapPath: string; path: string[]; text: string } | null) => void
   /** 进入工作台（案头按钮入口）：工作台不持有打开图，清编辑态（dirty/currentMdPath） */
   goWorkbench: () => void
+  /** 返回来路(2026-09 导航系统 spec §3 R1):按 editorOrigin 分派——工作台来路回工作台
+   *  (goWorkbench 清编辑态),否则回案头(refreshMaps)。入口须经 leaveTo 安全链 */
+  exitEditor(): Promise<void>
   dirty: boolean
   error: string | null
   configPath: string
@@ -179,6 +186,7 @@ const appendTab = (tabs: string[], mdPath: string): string[] =>
 
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
+  editorOrigin: 'library',
   booted: false,
   recentOpened: [],
   sessionRecent: [],
@@ -286,6 +294,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, configPath, workspaceDir, preferredLayout } = get()
     if (!workspaceDir) return
     const info = await createMap(adapter, workspaceDir, name, preferredLayout, templateContent, relDir)
+    // 来路记忆(2026-09 导航系统 spec §3 R1):自非编辑器路由进入才记——编辑器内
+    // 切图(胶囊条/Ctrl+P/Ctrl+Tab 都走本 action)空间未换,来路保持
+    if (get().route !== 'editor') set({ editorOrigin: get().route === 'workbench' ? 'workbench' : 'library' })
     set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)], mapTabs: appendTab(get().mapTabs, info.mdPath) })
     // 新建即最近（v2.5）：与 openMap 同款 MRU 维护——新图立即可达快速切换浮层与案头欢迎页
     const recentOpened = [info.mdPath, ...get().recentOpened.filter((p) => p !== info.mdPath)].slice(0, 10)
@@ -475,6 +486,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openMap: async (mdPath) => {
+    // 来路记忆(2026-09 导航系统 spec §3 R1):自非编辑器路由进入才记——编辑器内
+    // 切图(胶囊条/Ctrl+P/Ctrl+Tab 都走本 action)空间未换,来路保持
+    if (get().route !== 'editor') set({ editorOrigin: get().route === 'workbench' ? 'workbench' : 'library' })
     // 会话内 MRU 置顶（v2.5 快速切换）：与持久化的 recentOpened 分开维护（各取各的语义）
     set({ currentMdPath: mdPath, route: 'editor', error: null, sessionRecent: [mdPath, ...get().sessionRecent.filter((p) => p !== mdPath)], mapTabs: appendTab(get().mapTabs, mdPath) })
     const { adapter, configPath } = get()
@@ -500,6 +514,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // 看板视图切换（2026-09）：纯内存态（见字段注释——不落盘，重启恒回导图）
   setViewMode: (v) => set({ viewMode: v }),
+
+  exitEditor: async () => {
+    if (get().editorOrigin === 'workbench') get().goWorkbench()
+    else await get().backToLibrary()
+  },
 
   backToLibrary: async () => {
     set({ currentMdPath: null, dirty: false, route: 'library' })
