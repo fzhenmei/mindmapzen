@@ -79,8 +79,8 @@ describe('theme（M4 禅意视觉）', () => {
 describe('settings（M5b Task 4：复制行为；2026-09-06 copyIncludeNote 退役）', () => {
   test('合法值往返', async () => {
     const fs = new MemoryFsAdapter()
-    await saveConfig(fs, '/cfg.json', cfg({ workspaceDir: null, settings: { copyIncludeLinks: false, copyIncludeBody: false } }))
-    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false })
+    await saveConfig(fs, '/cfg.json', cfg({ workspaceDir: null, settings: { copyIncludeLinks: false, copyIncludeBody: false, copyIncludeIconStatus: false } }))
+    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: false, copyIncludeIconStatus: false })
   })
   test('缺失 settings 字段回退默认（旧配置兼容）', async () => {
     const fs = new MemoryFsAdapter()
@@ -90,14 +90,23 @@ describe('settings（M5b Task 4：复制行为；2026-09-06 copyIncludeNote 退�
   test('字段类型非法逐字段回退默认（wrong types 不整块丢弃合法字段）', async () => {
     const fs = new MemoryFsAdapter()
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeLinks: 'yes', copyIncludeBody: false } }))
-    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: true, copyIncludeBody: false })
+    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: true, copyIncludeBody: false, copyIncludeIconStatus: false })
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: 'bogus' }))
     expect((await loadConfig(fs, '/cfg.json')).settings).toEqual(DEFAULT_COPY_SETTINGS)
   })
   test('旧配置含 copyIncludeNote 键：静默忽略（多余键不读，解析产物仅两键）', async () => {
     const fs = new MemoryFsAdapter()
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeNote: true, copyIncludeLinks: false } }))
-    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: true })
+    expect((await loadConfig(fs, '/cfg.json')).settings).toEqual({ copyIncludeLinks: false, copyIncludeBody: true, copyIncludeIconStatus: false })
+  })
+  test('copyIncludeIconStatus（2026-09 粘 AI 防干扰）：旧配置无键回退 false（默认剥图标与看板状态）；显式 true 往返；非法值回退', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeLinks: true, copyIncludeBody: true } }))
+    expect((await loadConfig(fs, '/cfg.json')).settings.copyIncludeIconStatus).toBe(false)
+    await saveConfig(fs, '/cfg.json', cfg({ workspaceDir: null, settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: true } }))
+    expect((await loadConfig(fs, '/cfg.json')).settings.copyIncludeIconStatus).toBe(true)
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: 'no' } }))
+    expect((await loadConfig(fs, '/cfg.json')).settings.copyIncludeIconStatus).toBe(false)
   })
 })
 

@@ -273,6 +273,14 @@ export default function ZenBar({
           >
             {t('editor.zenbar.copyIncludeBody')}
           </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            data-testid="copy-include-icon-status"
+            checked={copySettings.copyIncludeIconStatus}
+            onCheckedChange={() => onToggleCopySetting('copyIncludeIconStatus')}
+            onSelect={(e) => e.preventDefault()}
+          >
+            {t('editor.zenbar.copyIncludeIconStatus')}
+          </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <Tip label={t('editor.zenbar.copyPathTip')}>

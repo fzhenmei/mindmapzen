@@ -26,3 +26,10 @@ export function applyCopySettings(md: string, settings: CopySettings): string {
 export function stripTreeBody(tree: ZenNode): ZenNode {
   return { ...tree, body: undefined, children: tree.children.map(stripTreeBody) }
 }
+
+/** 剥除树内全部图标与看板状态（2026-09 粘 AI 防干扰）：tree 层递归删 icons/status，先于
+ *  serialize（字段剥除即无行尾 ::icon/@status 注入，md 层零正则）；标签/正文/插图/uid 不动
+ *  ——标签带语义分类（AI 可借它理解结构），正文与插图是内容，uid 是连线注册表键。纯函数不改入参 */
+export function stripTreeIconStatus(tree: ZenNode): ZenNode {
+  return { ...tree, icons: undefined, status: undefined, children: tree.children.map(stripTreeIconStatus) }
+}

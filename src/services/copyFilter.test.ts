@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { applyCopySettings, stripLinkBrackets, stripTreeBody } from './copyFilter'
+import { applyCopySettings, stripLinkBrackets, stripTreeBody, stripTreeIconStatus } from './copyFilter'
 import { serialize } from './mdTree'
 import type { ZenNode } from '../types/tree'
 
@@ -41,12 +41,46 @@ describe('stripTreeBody（copyIncludeBody=false 树层剥正文，2026-09）', (
   })
 })
 
+describe('stripTreeIconStatus（copyIncludeIconStatus=false 树层剥图标与看板状态，2026-09 粘 AI 防干扰）', () => {
+  test('递归剥 icons/status，标签/正文/插图原样保留', () => {
+    const tree: ZenNode = {
+      text: 'r',
+      icons: ['flag'],
+      status: 'doing',
+      tags: ['采购'],
+      body: '论述。',
+      image: { src: 'img/a.png', alt: '图' },
+      children: [{ text: 'c', icons: ['star'], status: 'done', children: [] }],
+    }
+    expect(stripTreeIconStatus(tree)).toEqual({
+      text: 'r',
+      tags: ['采购'],
+      body: '论述。',
+      image: { src: 'img/a.png', alt: '图' },
+      children: [{ text: 'c', children: [] }],
+    })
+  })
+  test('纯函数：入参树不被改动（icons/status 原样保留）', () => {
+    const child: ZenNode = { text: 'c', icons: ['flag'], status: 'todo', children: [] }
+    const tree: ZenNode = { text: 'r', icons: ['star'], status: 'doing', children: [child] }
+    stripTreeIconStatus(tree)
+    expect(tree.icons).toEqual(['star'])
+    expect(tree.status).toBe('doing')
+    expect(child.icons).toEqual(['flag'])
+    expect(child.status).toBe('todo')
+  })
+  test('剥除后序列化产物不含 ::icon/@status，#tag 保留（粘给 AI 的干净口径）', () => {
+    const tree: ZenNode = { text: 'r', icons: ['flag'], status: 'doing', tags: ['采购'], children: [] }
+    expect(serialize(stripTreeIconStatus(tree))).toBe('# r #采购\n')
+  })
+})
+
 describe('applyCopySettings（按设置组合；md 层仅剩双链剥除——剥正文在树层先于 serialize）', () => {
   test('copyIncludeLinks=true：原文恒等', () => {
     const md = '# 根\n\n## A\n论述。\n'
-    expect(applyCopySettings(md, { copyIncludeLinks: true, copyIncludeBody: true })).toBe(md)
+    expect(applyCopySettings(md, { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false })).toBe(md)
   })
   test('copyIncludeLinks=false：[[B]] → B', () => {
-    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeLinks: false, copyIncludeBody: true })).toBe('## A 见 B\n')
+    expect(applyCopySettings('## A 见 [[B]]\n', { copyIncludeLinks: false, copyIncludeBody: true, copyIncludeIconStatus: false })).toBe('## A 见 B\n')
   })
 })
