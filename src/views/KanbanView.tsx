@@ -3,7 +3,7 @@
 // 每个编辑操作 = 恰一条引擎命令 + 显式 onDataChanged()（useIconPicker.apply 同款
 // 纪律：命令入 undo 历史、回调触发保存链置脏）；卡片集经 data_change 订阅全量
 // 重投影（自身命令也触发，幂等无碍）。
-// 浮层期画布不卸载不 resize（WebView2 0×0 污染防护）：absolute inset-0 z-20 不透明
+// 浮层期画布不卸载不 resize（WebView2 0×0 污染防护）：absolute inset-0 z-[9] 不透明
 // 覆盖，挂载即夺 body 焦点使引擎快捷键层失活（keyCommand.defaultEnableCheck 只认
 // body 焦点）。宿主 window 兜底层（MindMapCanvas.onKeydown）按 viewMode 门禁：看板态
 // Tab/Enter/Delete 译件短路（不放行打进被遮画布），撤销兜底（Ctrl+Z/y）除外——看板内
@@ -19,7 +19,7 @@ import { engineTreeToZen } from '../services/mdTree'
 import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
-import { IconArchive, IconWinClose } from '../components/icons'
+import { IconArchive } from '../components/icons'
 
 /** 过滤匹配（2026-09 看板治理 spec §4）：标题 / 路径段 / 标签，大小写不敏感；
  *  空过滤恒真（过滤关闭态）——纯视图态，不进 undo */
@@ -189,7 +189,7 @@ export default function KanbanView({
       tabIndex={-1}
       aria-label={t('editor.kanban.viewName')}
       data-testid="kanban-view"
-      className="absolute inset-0 z-20 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-background p-0 text-foreground outline-none"
+      className="absolute inset-0 z-[9] m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-background p-0 text-foreground outline-none"
       onKeyDown={(e) => {
         // Esc 分层（2026-09 验收微调）：普通态 Esc 返回导图。
         // ① 卡片编辑/列内新增：子孙输入框 onKeyDown stopPropagation（React 树内真实拦截），
@@ -206,7 +206,14 @@ export default function KanbanView({
       {/* 原生 dialog（Sonar S6819：role="dialog" 的规则终点即原生元素）。非模态 open
           属性不引原生 Esc 拦截（cancel 事件仅 showModal 触发），Esc 语义仍归 onKeyDown；
           UA 默认样式（margin auto / fit-content 尺寸 / max 钳制 / border / padding /
-          CanvasText 前景色）用工具类压平，保持原 div 覆盖盒不变 */}
+          CanvasText 前景色）用工具类压平，保持原 div 覆盖盒不变。
+          z 阶梯承重（导航系统 Task 7 起浮层内关闭钮已拆，鼠标退出唯一路径 = 砚栏视图组
+          toggle）：本层 z-[9] 必须低于砚栏 z-10（浮层盖砚栏则 toggle 不可点，e2e
+          navigation.spec 实测拦截）而高于画布侧悬浮件 z-[8]（NodeActions/MultiSelectBar，
+          MultiSelectBar.tsx 头注释记录的阶梯）；同层 z-[9] 邻居（SaveStamp/CopyStamp/
+          WarnStamp/zen-banner，App.css z-index:9）仅凭 DOM 顺序压在本层之上——重构
+          调整渲染顺序会静默淹没看板态的保存反馈，动前先核此处。AI 面板 z-20 / AI 舌页
+          z-30 属窗口级铬件，压住本层是既定行为。原 z-20 是浮层自带关闭钮时代（6ed47c2）的遗留 */}
       <header className="flex items-center gap-2 border-b px-4 py-2">
         <h2 className="shrink-0 text-sm font-medium">{t('editor.kanban.viewName')}</h2>
         <input
@@ -224,16 +231,6 @@ export default function KanbanView({
           placeholder={t('editor.kanban.filterPlaceholder')}
           className="ml-auto w-56 shrink-0 rounded-md border bg-background px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        <button
-          type="button"
-          data-testid="kanban-close"
-          aria-label={t('editor.kanban.close')}
-          title={t('editor.kanban.close')}
-          onClick={onClose}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <IconWinClose size={14} />
-        </button>
       </header>
       {/* 四列横排：细滚动条系统对 overflow 容器自动生效（slimScrollbar 全局注入） */}
       <div className="flex flex-1 items-start gap-3 overflow-x-auto p-4">

@@ -213,6 +213,7 @@ beforeEach(async () => {
   useAppStore.getState().setAdapter(fs)
   useAppStore.setState({
     route: 'editor',
+    editorOrigin: 'library', // 返回来路（2026-09 导航系统）：逐用例重置，防「工作台来路」用例泄漏到后续 btn-back 断言
     workspaceDir: '/ws',
     currentMdPath: '/ws/a.md',
     editorSeq: 0, // 冲突 reload 用例断言递增，逐用例重置防跨用例泄漏
@@ -223,6 +224,7 @@ beforeEach(async () => {
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
     pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
+    appDialog: null, // App 级设置/历史框（终审修复进 anyDialog 总线）：逐用例重置，防开框用例泄漏闩死后续快捷键
     settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
     // ui ToggleGroup 官方语义「点已激活项=取消选择（onValueChange('')）」下，
@@ -3203,4 +3205,84 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
       warnSpy.mockRestore()
     }
   })
+})
+
+// 2026-09 导航系统 spec §3/§4/§7:返回来路 + 工作台入口 + Alt+←
+test('返回来路:工作台进入的图 btn-back 落工作台', async () => {
+  // 造来路:openMap 自 workbench 发起(测试 harness 的 beforeEach 以 library 打开,此处覆写)
+  useAppStore.setState({ route: 'workbench' })
+  await useAppStore.getState().openMap('/ws/a.md')
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-back'))
+  await waitFor(() => expect(useAppStore.getState().route).toBe('workbench'))
+})
+
+test('Alt+← 与返回钮同效(案头来路落案头)', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true })
+  await waitFor(() => expect(useAppStore.getState().route).toBe('library'))
+})
+
+test('砚栏工作台钮:经保存链直达工作台', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-goto-workbench'))
+  await waitFor(() => expect(useAppStore.getState().route).toBe('workbench'))
+})
+
+test('砚栏设置钮打开 App 级设置对话框', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+    />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  fireEvent.click(screen.getByTestId('btn-editor-settings'))
+  await waitFor(() => expect(useAppStore.getState().appDialog).toBe('settings'))
 })

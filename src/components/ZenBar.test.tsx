@@ -28,6 +28,9 @@ function renderBar(overrides: {
   onBodyClick?: () => void
   viewMode?: 'mindmap' | 'kanban'
   onSwitchView?: (v: 'mindmap' | 'kanban') => void
+  backTarget?: 'library' | 'workbench'
+  onWorkbenchClick?: () => void
+  onSettingsClick?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
@@ -53,6 +56,9 @@ function renderBar(overrides: {
         onSwitchLayout={overrides.onSwitchLayout ?? noop}
         viewMode={overrides.viewMode ?? 'mindmap'}
         onSwitchView={overrides.onSwitchView ?? noop}
+        backTarget={overrides.backTarget ?? 'library'}
+        onWorkbenchClick={overrides.onWorkbenchClick ?? noop}
+        onSettingsClick={overrides.onSettingsClick ?? noop}
       />
     </TooltipProvider>,
   )
@@ -204,5 +210,29 @@ describe('ZenBar 正文面板开关', () => {
     const lit = screen.getByTestId('btn-body')
     expect(lit).toHaveAttribute('data-active', '')
     expect(lit).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+// ---- 导航三钮（2026-09 导航系统）：动态返回提示 + 工作台直达 + 设置齿轮 ----
+
+describe('砚栏导航钮(2026-09 导航系统)', () => {
+  test('返回钮提示随来路:workbench → 返回工作台', () => {
+    renderBar({ backTarget: 'workbench' })
+    expect(screen.getByTestId('btn-back').getAttribute('aria-label')).toBe('返回工作台')
+  })
+
+  test('返回钮默认提示:返回案头', () => {
+    renderBar()
+    expect(screen.getByTestId('btn-back').getAttribute('aria-label')).toBe('返回案头')
+  })
+
+  test('工作台/设置钮渲染且回调触发', () => {
+    const onWorkbenchClick = vi.fn()
+    const onSettingsClick = vi.fn()
+    renderBar({ onWorkbenchClick, onSettingsClick })
+    fireEvent.click(screen.getByTestId('btn-goto-workbench'))
+    expect(onWorkbenchClick).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByTestId('btn-editor-settings'))
+    expect(onSettingsClick).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,6 +12,7 @@ export default {
   cannotMoveIntoSelf: '不能移动到自身或其子目录内',
   targetDirNameExists: '目标目录下已存在同名目录',
   setWorkspaceFailed: '设置工作区失败：{{reason}}',
+  exitWorkspaceFailed: '退出工作区失败：{{reason}}',
   // Task 7 编辑器视图错误拼装(EditorView 组件内 t() 取值)
   copyPathFailed: '复制路径失败：{{reason}}',
   copyMdFailed: '复制失败：{{reason}}',

@@ -12,6 +12,9 @@ import type { Dict } from '../../en'
 const editor: Dict['editor'] = {
   zenbar: {
     backToDesk: 'Back to desk',
+    backToWorkbench: 'Back to workbench',
+    workbench: 'Workbench',
+    settings: 'Settings',
     switchMap: 'Switch map (Ctrl+P)',
     newMap: 'New map',
     undo: 'Undo (Ctrl+Z)',
@@ -154,7 +157,6 @@ const editor: Dict['editor'] = {
   // entries reuse nodeActions.icon/tag
   kanban: {
     viewName: 'Kanban',
-    close: 'Close the kanban and return to the map',
     status: {
       todo: 'To do',
       doing: 'In progress',

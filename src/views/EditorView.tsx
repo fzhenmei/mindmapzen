@@ -70,7 +70,7 @@ interface Props {
 
 export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
   const { t } = useTranslation()
-  const { adapter, markDirty, clearDirty, backToLibrary, setError } = useAppStore()
+  const { adapter, markDirty, clearDirty, exitEditor, editorOrigin, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
@@ -81,6 +81,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // AI 面板（2026-09 AI Agent v1）：配置订阅（入口显隐）+ 落盘宽（默认 null = 320）
   const aiConfig = useAppStore((s) => s.aiConfig)
   const aiChatWidth = useAppStore((s) => s.aiChatWidth)
+  const appDialog = useAppStore((s) => s.appDialog) // App 级设置/历史框（终审修复进 anyDialog 互斥总线，见下方聚合处）
   // AI 回合锁定（Task 12，spec §6）：回合期间（非 idle）切图拦截/状态签/编辑菜单禁用
   const aiPhase = useChatStore((s) => s.phase)
   const mmRef = useRef<MindMapHandle | null>(null)
@@ -313,8 +314,24 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     next()
   }
 
+  /** 返回来路（2026-09 导航系统 spec §3 R1）：砚栏返回钮 / Alt+← / 错误面板共用——
+   *  安全链（保存成功才导航）+ AI 回合锁，失败/确认挂起留在编辑器 */
+  const goBackToOrigin = (): void => guardAiTurn(() => void quick.leaveTo(exitEditor))
+
   // 顶部条取色令牌（v2.5）：编辑器全屏画布顶部是 --background，挂载即声明（TitleBar 换底色）
   useEffect(() => useAppStore.setState({ titlebarBg: '--background' }), [])
+
+  // 设置内工作区动作的编辑器安全网（2026-09 导航系统 spec §6）：脏态下发起的更换/退出
+  // 先记 pending（AppDialogs requestWorkspaceAction），此处消费——保存成功才执行；
+  // 消费即清（同 pendingLocate 模式）；保存失败/确认挂起留在编辑器（动作丢弃可重试），
+  // AI 回合拦截时同样丢弃（notifyBlocked 已有提示）
+  const pendingWorkspaceAction = useAppStore((s) => s.pendingWorkspaceAction)
+  useEffect(() => {
+    if (pendingWorkspaceAction === null) return
+    useAppStore.getState().setPendingWorkspaceAction(null)
+    guardAiTurn(() => void quick.leaveTo(() => useAppStore.getState().executeWorkspaceAction(pendingWorkspaceAction)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 消费即清:仅 pending 变化触发,quick/guardAiTurn 为视图级稳定引用
+  }, [pendingWorkspaceAction])
 
   /** 关闭请求先冲正文防抖草稿（终审 I2）：干净图防抖窗内直接关窗（Alt+F4/点 X）时
    *  dirty 未及置（data_change 经引擎节流异步），返回「是否有草稿被冲」供守卫按三态处理 */
@@ -371,7 +388,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 任一对话框在开（终审修复）：正文弹窗快捷键守卫——互斥期不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
   // 2026-09：新建导图对话框同列互斥；2026-09-08 弹窗化：正文弹窗同列互斥（模态锁节点）
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open
+  // 2026-09 导航系统终审修复：App 级设置/历史框（appDialog）同列互斥——模态在开时 Alt+← 等让位（Ctrl+Shift+K 刻意不进，见 useEditorHotkeys）
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关 Shift+F2 / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -391,6 +409,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       const v = useAppStore.getState().viewMode
       useAppStore.getState().setViewMode(v === 'kanban' ? 'mindmap' : 'kanban')
     },
+    // 返回来路（2026-09 导航系统 spec §7）：Alt+← 与砚栏返回钮同链
+    goBack: goBackToOrigin,
   })
 
   useEffect(() => {
@@ -452,7 +472,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           errorInfo={errorInfo}
           mdPath={mdPath}
           openInEditor={openInEditor}
-          onBack={() => guardAiTurn(() => void quick.leaveTo(backToLibrary))}
+          onBack={goBackToOrigin}
           onSwitch={() => guardAiTurn(quick.open)}
           engineTree={engineTree}
           registry={registry}
@@ -587,7 +607,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* 浮动砚栏（M5a 拆分至 ZenBar）。仅就绪态渲染（2026-09）：错误/加载态引擎未建，按钮无意义 */}
       {docReady && (
       <ZenBar
-        onBack={() => guardAiTurn(() => void quick.leaveTo(backToLibrary))} // 失败/确认挂起：留在编辑器（确认后仅落盘，不自动导航）；AI 回合拦截（Task 12 fix）
+        onBack={goBackToOrigin}
+        backTarget={editorOrigin}
+        onWorkbenchClick={() => guardAiTurn(() => void quick.leaveTo(() => Promise.resolve(useAppStore.getState().goWorkbench())))}
+        onSettingsClick={() => useAppStore.getState().openAppDialog('settings')}
         onSwitchClick={() => guardAiTurn(quick.open)}
         onNewClick={() => setNewMapOpen(true)}
         undoRedo={undoRedo}

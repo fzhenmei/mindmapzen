@@ -17,6 +17,7 @@ import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/t
 import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
 import DevBadge from './components/DevBadge'
+import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
@@ -317,6 +318,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // 目录选择端口注入(2026-09 导航系统 spec §6):设置「更换工作区」从 AppDialogs 发起,
+  // 与 LibraryView 共用同一个 pickDirectory(生产 Tauri 对话框 / e2e __zenE2e 桩)
+  useEffect(() => {
+    useAppStore.getState().setPickDirPort(pickDirectory)
+  }, [])
+
   // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
   // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间；DevBadge 开发版贴纸同随三态
   // （release 构建组件自渲染 null）
@@ -324,6 +331,7 @@ export default function App() {
     <div className="flex h-screen flex-col">
       <TitleBar />
       <div className="min-h-0 flex-1">{children}</div>
+      <AppDialogs />
       <DevBadge />
       <TourOverlay />
     </div>

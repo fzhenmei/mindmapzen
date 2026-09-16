@@ -90,12 +90,24 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   useEffect(() => useAppStore.setState({ titlebarBg: '--sidebar' }), [])
 
   /** 选中态失效清理（M5d 审查修复）：重命名/删除/移动/切换工作区后，选中图 mdPath 失联则清空
-   *  （否则预览指向已不存在的文件、卡片高亮悬空）。须在 maps 已刷新后调用 */
-  const pruneSelectedMap = () => {
+   *  （否则预览指向已不存在的文件、卡片高亮悬空）。须在 maps 已刷新后调用。
+   *  useCallback 固定身份（体仅引用稳定的 setSelectedMap 与模块导入，无反应式依赖，
+   *  同 reloadTree 先例）——下方兜底 effect 依赖它，身份恒定不引入多余触发 */
+  const pruneSelectedMap = useCallback(() => {
     setSelectedMap((cur) =>
       cur !== null && useAppStore.getState().maps.some((m) => m.mdPath === cur) ? cur : null,
     )
-  }
+  }, [])
+
+  // 工作区切换后的选中失效清理（2026-09 导航系统）：设置迁 AppDialogs 后更换工作区
+  // 不再经过本视图 deps——按 workspaceDir 变化兜底清选中，防旧工作区文件残留详情态。
+  // maps 进依赖闭合时序窗：setWorkspace 先置 workspaceDir 后 await refreshMaps，仅依赖
+  // workspaceDir 时 effect 在旧清单上判定（失联不可见 → 不剪），maps 落地后再补剪一次
+  // 才真正闭合（prune 幂等——刷新/增删后的常规 maps 更新对有效选中是 no-op）；
+  // 挂载时触发为 no-op（选中本就是 null）
+  useEffect(() => {
+    pruneSelectedMap()
+  }, [workspaceDir, maps, pruneSelectedMap])
 
   const chooseWorkspace = async () => {
     try {
@@ -143,10 +155,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   })
 
   // 对话框集群（2026-09 行数护栏拆分）：状态机与业务确认在 useLibraryDialogs，渲染在
-  // LibraryDialogs；视图仅注入联动依赖（选中清理/左树重读/工作区选择/树移动/目录删除回落）
+  // LibraryDialogs；视图仅注入联动依赖（选中清理/左树重读/树移动/目录删除回落）
   const dlg = useLibraryDialogs({
     pickImportFile,
-    chooseWorkspace,
     reloadTree,
     pruneSelectedMap,
     onDirRemoved: (rel) => {
@@ -322,7 +333,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                     aria-label={t('library.library.settings')}
                     title={t('library.library.settings')}
                     className={SIDEBAR_ICON_BTN}
-                    onClick={() => dlg.openDialog('settings')}
+                    onClick={() => useAppStore.getState().openAppDialog('settings')}
                   >
                     <IconSettings />
                   </button>
@@ -400,7 +411,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       </SidebarProvider>
 
       {/* 对话框集群（2026-09 行数护栏拆分）：状态机与业务确认在 useLibraryDialogs，
-          渲染在 LibraryDialogs——九框互斥约定与注释见该容器 */}
+          渲染在 LibraryDialogs——七框互斥约定与注释见该容器（设置/历史已迁 AppDialogs） */}
       <LibraryDialogs api={dlg} maps={maps} tree={tree} />
     </div>
   )

@@ -1,7 +1,7 @@
 // src/hooks/useLibraryDialogs.ts —— 案头对话框集群状态机（2026-09 行数护栏拆自 LibraryView，
 // 零行为变化）：dialog/target/dirTarget/importPreview/newMapDir/dirParent 六态 + 各框开关
 // 与业务确认（导入/新建导图/新建目录/重命名/删除/目录删除/移动）。视图级联动（选中清理/
-// 左树重读/工作区选择）经 deps 注入——本 hook 不持有树与选中态（同 useTreeMoves 约定）。
+// 左树重读）经 deps 注入——本 hook 不持有树与选中态（同 useTreeMoves 约定）。
 import { useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { i18n } from '../i18n'
@@ -21,15 +21,14 @@ export type PickedImport =
   | { name: string; kind: 'md'; text: string }
   | { name: string; kind: 'xmind'; bytes: Uint8Array }
 
-/** 对话框互斥态（ui Dialog modal 语义：至多同时一个；与 importPreview 亦互斥） */
-export type DialogKind = 'new' | 'rename' | 'delete' | 'deletedir' | 'move' | 'newdir' | 'settings' | 'history' | null
+/** 对话框互斥态（ui Dialog modal 语义：至多同时一个；与 importPreview 亦互斥）。
+ *  设置/历史已迁 AppDialogs（2026-09 导航系统），此处只余案头文件操作框群 */
+export type DialogKind = 'new' | 'rename' | 'delete' | 'deletedir' | 'move' | 'newdir' | null
 
 /** 视图联动依赖（hook 不持有的态与回调，全部由 LibraryView 注入） */
 export interface LibraryDialogsDeps {
   /** 外部导入源选择（生产为 Tauri 对话框 + adapter 读取，测试注入桩；取消返回 null） */
   pickImportFile(): Promise<PickedImport | null>
-  /** 更换工作区（设置对话框入口；开屏「创建工作区」同流） */
-  chooseWorkspace(): Promise<void>
   /** 重读左树（目录增删/移动取消后还原真实盘态） */
   reloadTree(): Promise<void>
   /** 选中态失效清理（重命名/删除/移动后，maps 已刷新时调用） */
@@ -53,7 +52,6 @@ export interface LibraryDialogsApi {
   readonly newMapDir: string
   /** 新建目录的父目录（''=工作区根） */
   readonly dirParent: string
-  openDialog(kind: Exclude<DialogKind, null>): void
   /** 关框全清（target/dirTarget 同清；对无目标的框等价于仅关框——互斥态下无副作用） */
   closeDialog(): void
   closeImportPreview(): void
@@ -63,10 +61,6 @@ export interface LibraryDialogsApi {
   /** 文件行右键/详情页首动作：带目标导图开对应框 */
   openMapAction(a: MapAction, m: MapInfo): void
   openDeleteDir(rel: string): void
-  /** 设置框三出口（历史/换工作区/退工作区）——换工作区先关框再走 deps 流 */
-  onOpenHistory(): void
-  onChangeWorkspace(): void
-  onExitWorkspace(): void
   /** 导入（.md / .xmind）：复制入库（内容按规范序列化另存，不移动原文件）；
    *  有未映射内容先预览确认（md 解析忽略块 / xmind 游离主题等摘要，同一通道） */
   startImport(): Promise<void>
@@ -244,22 +238,12 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
     importPreview,
     newMapDir,
     dirParent,
-    openDialog: (kind) => setDialog(kind),
     closeDialog,
     closeImportPreview: () => setImportPreview(null),
     openNewMap,
     openNewDir,
     openMapAction,
     openDeleteDir,
-    onOpenHistory: () => setDialog('history'),
-    onChangeWorkspace: () => {
-      closeDialog()
-      void deps.chooseWorkspace()
-    },
-    onExitWorkspace: () => {
-      closeDialog()
-      void useAppStore.getState().exitWorkspace()
-    },
     startImport,
     confirmImport,
     confirmCreateMap,

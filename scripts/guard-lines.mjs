@@ -59,12 +59,14 @@
 // Token 费用提示三件，实测 351 + 14 余量）——功能性增长，无腐化。
 // 2026-09-14（AI 建议缓存批）：365→405（双条件缓存：askAi 命中短路 + aiTextRef
 // 镜像 + 存档 + 再问一次钮，实测 393 + 12 余量）——功能性增长，无腐化。
+// 2026-09（导航系统批）：405→420（头部设置齿轮：App 级设置对话框入口钮 +
+//  imports，实测 408 + 12 余量；对话框渲染面在 AppDialogs——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
   { path: '../src/views/EditorView.tsx', limit: 760 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
-  { path: '../src/views/WorkbenchView.tsx', limit: 405 },
+  { path: '../src/views/WorkbenchView.tsx', limit: 420 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计

@@ -9,6 +9,9 @@
 export default {
   zenbar: {
     backToDesk: '返回案头',
+    backToWorkbench: '返回工作台',
+    workbench: '工作台',
+    settings: '设置',
     switchMap: '切换导图（Ctrl+P）',
     newMap: '新建导图',
     undo: '回退（Ctrl+Z）',
@@ -153,7 +156,6 @@ export default {
   // 白名单一一对应；菜单「图标/标签」两项复用 nodeActions.icon/tag
   kanban: {
     viewName: '看板',
-    close: '关闭看板，返回导图',
     status: {
       todo: '待办',
       doing: '进行中',
