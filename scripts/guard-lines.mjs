@@ -64,11 +64,13 @@
 // 2026-09（画布三态 M1）：useStatusPick 拆出（-14）+ MarkdownView/归档/大纲装配（+25），
 // 净 +11 升限至 775，实测 770 + 5 行余量——功能性拆分与三态新功能面并存，无腐化。
 // 2026-09（画布三态 M3）：WorkbenchView 退役（并入案头 DeskOverview），条目移除。
+// 2026-09（画布三态 M3）：DeskOverview 承接 WorkbenchView（条目随其退役移除），新条目防承接组件腐化。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
   { path: '../src/views/EditorView.tsx', limit: 775 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
+  { path: '../src/components/DeskOverview.tsx', limit: 440 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计
