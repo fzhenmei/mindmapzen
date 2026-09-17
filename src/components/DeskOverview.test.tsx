@@ -36,21 +36,21 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(await screen.findByText('任务一')).toBeInTheDocument()
   })
 
-  test('纵向状态行分组与跨图跳转：openMap + pendingLocate 置位（spec §5）', async () => {
+  test('状态段分组与跨图跳转：openMap + pendingLocate 置位（spec §5）', async () => {
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务甲 @todo\n\n## 任务乙 @doing\n')
     await fs.writeTextFileAtomic('/ws/工作/图B.md', '# 图B\n\n## 任务丙 @blocked\n')
     const openMap = vi.fn()
     useAppStore.setState({ openMap: openMap as never, pendingLocate: null })
     render(<DeskOverview />)
     await screen.findByText('任务甲')
-    // 纵向形态：每状态一行（行头「状态名 · 计数」+ 行内卡片横向带），行头与卡片同父行容器
+    // 行列表形态：每状态一段（workbench-row-* 挂段容器=行头「状态名 · 计数」+ 全宽行）
     const rowTodo = screen.getByTestId('workbench-row-todo')
     const rowDoing = screen.getByTestId('workbench-row-doing')
-    expect(rowTodo.parentElement!.textContent).toContain('任务甲')
-    expect(rowTodo.parentElement!.textContent).not.toContain('任务乙')
-    expect(rowDoing.parentElement!.textContent).toContain('任务乙')
-    expect(screen.getByTestId('workbench-row-blocked').parentElement!.textContent).toContain('任务丙')
-    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
+    expect(rowTodo.textContent).toContain('任务甲')
+    expect(rowTodo.textContent).not.toContain('任务乙')
+    expect(rowDoing.textContent).toContain('任务乙')
+    expect(screen.getByTestId('workbench-row-blocked').textContent).toContain('任务丙')
+    // 点击任务丙行（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
     // mapPath 绑定目标图（终审 Important-1：错图消费防线的数据源），path+text 寻址
     const card = screen.getAllByTestId('workbench-card').find((el) => el.textContent?.includes('任务丙'))!
     await card.click()
@@ -94,12 +94,12 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(useAppStore.getState().pendingLocate).not.toBeNull()
   })
 
-  test('纵向聚合：每状态一行（无卡状态不渲染行），行内卡片横向带', async () => {
+  test('纵向聚合：每状态一段（无卡状态不渲染段），段内全宽行列表', async () => {
     await fs.writeTextFileAtomic('/ws/工作/a.md', '# a\n\n## 甲 @todo\n\n## 乙 @doing\n')
     render(<DeskOverview />)
     await waitFor(() => expect(screen.getByTestId('workbench-row-todo')).toBeInTheDocument())
     expect(screen.getByTestId('workbench-row-doing')).toBeInTheDocument()
-    // BOARD_STATUSES 中无任务的状态（如 blocked）不渲染行
+    // BOARD_STATUSES 中无任务的状态（如 blocked）不渲染段
     expect(screen.queryByTestId('workbench-row-blocked')).toBeNull()
   })
 

@@ -1,6 +1,7 @@
 // src/components/DeskOverview.tsx —— 案头总览区（2026-09 画布三态 M3，工作台并入欢迎页）：
-// GTD 下一步建议 + 跨图任务聚合（纵向形态：每状态一行卡片带，无卡不渲染行）+ 问问 AI
-// 浮层。扫描走 scanWorkTasksCached（mtime 指纹缓存，回案头零重复读）。空态分层：
+// GTD 下一步建议 + 跨图任务聚合 + 问问 AI 浮层。2026-09 验收微调：两区弃卡片改
+// 「最近的」同款全宽行列表（聚合每状态段=行头+行列表，无卡不渲染段）。扫描走
+// scanWorkTasksCached（mtime 指纹缓存，回案头零重复读）。空态分层：
 // 工作/ 目录不存在 → 轻引导（页面退役后唯一创建入口）；目录在但无可见任务 → 内容整段
 // 退场（欢迎页退化为纯开始区）。跳转协议原工作台 spec §5（文本寻址 pendingLocate +
 // openMap；先置定位再开图，顺序不可反）。挂在 WelcomePane overview slot（最近的之后）。
@@ -15,7 +16,6 @@ import { BOARD_STATUSES } from '../services/statusMarkers'
 import { getTransport, parseDeltaChunk } from '../services/ai/client'
 import { joinPath } from '../services/workspace'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
-import WorkbenchCard from './WorkbenchCard'
 
 /** 问问 AI 浮层的回合相位（useAskAi 状态机三处共用：state/返回类型/浮层 props） */
 type AiPhase = 'idle' | 'streaming' | 'done' | 'error'
@@ -23,7 +23,8 @@ type AiPhase = 'idle' | 'streaming' | 'done' | 'error'
 /** 下一步建议区（原工作台 spec §6 迁移）：理由 reasonKey 经 i18n 渲染，低优先级不越位
  *  补位；task 级点击走 openTask（置定位），map 级只进图不定位（spec §5）。
  *  标题行恒渲染（含「问问 AI」钮）：建议列表可为空，但有任务即可问 AI——空建议
- *  不再整段退场（「有任务即可点」口径）。小节题改欢迎页同款居中样式（纵轴构图） */
+ *  不再整段退场（「有任务即可点」口径）。2026-09 验收微调：建议项弃卡片，
+ *  改「最近的」同款全宽行（divide-y + hover:bg-accent，文案单行 truncate） */
 function SuggestSection({
   suggestions,
   openTask,
@@ -60,7 +61,7 @@ function SuggestSection({
         </button>
       </div>
       {suggestions.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y">
           {suggestions.map((sg) => {
             const target = sg.task !== undefined ? `${sg.task.mapName} · ${sg.task.text}` : (sg.mapName ?? '')
             const onClick = (): void => {
@@ -68,27 +69,43 @@ function SuggestSection({
               else if (sg.mapPath !== undefined) openMapOnly(sg.mapPath)
             }
             return (
-              <button
-                key={`${sg.kind}:${target}`}
-                type="button"
-                data-testid="workbench-suggestion"
-                className="rounded-md border bg-card px-4 py-2 text-left text-sm hover:bg-muted"
-                onClick={onClick}
-              >
-                {/* 冒号收进词条（zh 全角 / en 半角+空格），理由与目标的分隔不硬编码在 JSX；
-                    count 透传 finishOverload 的 {{count}} 插值（spec §6 v1.1），无值词条不受影响 */}
-                {t(sg.reasonKey, { count: sg.count })}{t('workbench.suggest.itemJoin')}{target}
-              </button>
+              <li key={`${sg.kind}:${target}`}>
+                <button type="button" data-testid="workbench-suggestion"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
+                  onClick={onClick}>
+                  {/* 冒号收进词条（zh 全角 / en 半角+空格）；count 透传 {{count}} 插值（spec §6 v1.1） */}
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {t(sg.reasonKey, { count: sg.count })}{t('workbench.suggest.itemJoin')}{target}
+                  </span>
+                </button>
+              </li>
             )
           })}
-        </div>
+        </ul>
       ) : null}
     </section>
   )
 }
 
-/** 纵向聚合行渲染（原工作台四列看板改造，M3 spec §10）：每状态一行卡片带，无卡不
- *  渲染行。文件内局部子组件——行级渲染分支自主组件抽离（S3776：主组件只留扫描
+/** 聚合任务行（原 WorkbenchCard 行列表化）：「最近的」同款全宽行——徽标+文本+路径段（窄屏隐藏）+子任务数 */
+function taskRow(x: WorkTask, onOpen: (task: WorkTask) => void) {
+  const p = x.dirRel === '' ? x.path.join(' / ') : [x.dirRel, ...x.path].join(' / ')
+  return (
+    <li key={`${x.mapPath}#${x.uid}`}>
+      <button type="button" data-testid="workbench-card"
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
+        onClick={() => onOpen(x)}>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs">{x.mapName}</span>
+        <span className="min-w-0 flex-1 truncate font-file text-[13px]">{x.text}</span>
+        {p !== '' && <span className="hidden truncate text-xs text-muted-foreground sm:inline">{p}</span>}
+        {x.childCount > 0 && <span className="shrink-0 text-xs text-muted-foreground">+{x.childCount}</span>}
+      </button>
+    </li>
+  )
+}
+
+/** 纵向聚合段渲染（原工作台四列看板改造，M3 spec §10）：每状态一段=行头+全宽行列表，
+ *  无卡不渲染段。文件内局部子组件——行级渲染分支自主组件抽离（S3776：主组件只留扫描
  *  状态机与总门控）；tasks 传已过滤的可见任务（archived/dropped 不占行） */
 function StatusRows({ tasks, onOpen }: Readonly<{ tasks: WorkTask[]; onOpen: (t: WorkTask) => void }>) {
   const { t } = useTranslation()
@@ -101,20 +118,16 @@ function StatusRows({ tasks, onOpen }: Readonly<{ tasks: WorkTask[]; onOpen: (t:
       <div className="flex flex-col gap-4">
         {BOARD_STATUSES.map((s) => {
           const cards = tasks.filter((x) => x.status === s)
-          if (cards.length === 0) return null // 无卡不渲染行（M3 spec §10 裁定）
+          if (cards.length === 0) return null // 无卡不渲染段（M3 spec §10 裁定）
           return (
-            <div key={s}>
+            <div key={s} data-testid={`workbench-row-${s}`}>
               {/* 计数用中点分隔（U+00B7）：两语言通用，en 侧不渗全角括号 */}
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground" data-testid={`workbench-row-${s}`}>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
                 {t(`editor.kanban.status.${s}`)} · {cards.length}
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {cards.map((x) => (
-                  <div key={`${x.mapPath}#${x.uid}`} className="w-56 shrink-0">
-                    <WorkbenchCard task={x} onOpen={onOpen} />
-                  </div>
-                ))}
-              </div>
+              <ul className="flex flex-col divide-y">
+                {cards.map((x) => taskRow(x, onOpen))}
+              </ul>
             </div>
           )
         })}
@@ -416,7 +429,7 @@ export default function DeskOverview() {
       {hasContent ? (
         <>
           <SuggestSection suggestions={suggestions} openTask={openTask} openMapOnly={openMapOnly} onAskAi={askAi} aiReady={aiReady} />
-          {/* 纵向聚合（原四列看板改造，M3 spec §10）：每状态一行，无卡不渲染行 */}
+          {/* 纵向聚合（原四列看板改造，M3 spec §10）：每状态一段，无卡不渲染段 */}
           <StatusRows tasks={visibleTasks} onOpen={openTask} />
         </>
       ) : null}

@@ -21,11 +21,10 @@ test('案头总览聚合与跨图定位', async ({ page }) => {
   })
   // e2e 落案头 idle 态：总览在欢迎页直接可见（原 btn-workbench 入口已退役）
   await expect(page.getByTestId('desk-overview')).toBeVisible()
-  // 纵向行形态：workbench-row-* 是行头（状态名 · 计数），卡片在与行头同父的行容器内
-  //（locator('..') 上溯到行容器再下钻——行头本身不含卡片文本）
-  const rowTodo = page.getByTestId('workbench-row-todo').locator('..')
-  const rowDoing = page.getByTestId('workbench-row-doing').locator('..')
-  const rowBlocked = page.getByTestId('workbench-row-blocked').locator('..')
+  // 行列表形态：workbench-row-* 挂状态段容器（行头「状态名 · 计数」+ 全宽行），直接下钻
+  const rowTodo = page.getByTestId('workbench-row-todo')
+  const rowDoing = page.getByTestId('workbench-row-doing')
+  const rowBlocked = page.getByTestId('workbench-row-blocked')
   await expect(rowTodo.getByTestId('workbench-card').filter({ hasText: '任务甲' })).toBeVisible()
   await expect(rowDoing.getByText('任务乙')).toBeVisible()
   // 来源徽标（跨图来源可辨）
@@ -33,7 +32,7 @@ test('案头总览聚合与跨图定位', async ({ page }) => {
   // 建议区：R1 doing（任务乙）与 R2 blocked（任务丙）至少各一条
   await expect(page.getByTestId('workbench-suggestion').filter({ hasText: '任务乙' })).toBeVisible()
   await expect(page.getByTestId('workbench-suggestion').filter({ hasText: '任务丙' })).toBeVisible()
-  // 跨图定位：点任务丙卡片 → 进纸面 → 节点可见（真实引擎链路）
+  // 跨图定位：点任务丙行 → 进纸面 → 节点可见（真实引擎链路）
   await rowBlocked.getByTestId('workbench-card').filter({ hasText: '任务丙' }).click()
   await expect(page.getByText('图B').first()).toBeVisible()
   await expect(page.getByText('任务丙').first()).toBeVisible()
