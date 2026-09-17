@@ -2963,10 +2963,10 @@ describe('看板模式（2026-09 Task 7）', () => {
     expect(screen.getByTestId('fake-canvas')).toBeInTheDocument() // 切回画布仍在（从未卸载）
   })
 
-  test('Ctrl+Shift+K 切换视图；对话框开着也切（视图切换不进 anyDialog 互斥）', async () => {
+  test('Ctrl+1/2/3 直达视图；对话框开着也直达（视图切换不进 anyDialog 互斥）', async () => {
     // 2026-09 画布三态 M1：导出钮改导图态专属（ZenBar 三态矩阵，看板态不显）——
-    // 「对话框开着也切」语义改自导图态起：先开导出框再 Ctrl+Shift+K 进看板、同键切回，
-    // 对话框全程在场（视图切换不关对话框、也不被 anyDialog 互斥拦）
+    // 「对话框开着也切」语义自导图态起：先开导出框再 Ctrl+3 进看板、Ctrl+1 切回，
+    // 对话框全程在场（视图直达不关对话框、也不被 anyDialog 互斥拦）
     fakeTree = kanbanTree()
     render(
       <EditorView
@@ -2984,26 +2984,26 @@ describe('看板模式（2026-09 Task 7）', () => {
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     fireEvent.click(screen.getByTestId('btn-export'))
     expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
-    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(window, { key: '3', ctrlKey: true })
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('kanban'))
     expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 切看板：对话框不关
-    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(window, { key: '1', ctrlKey: true })
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'))
     expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
     expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 原对话框不受扰
   })
 
-  test('Ctrl+Shift+K 输入域守卫：过滤框/正文输入中不切视图（防丢草稿），非输入域照切', async () => {
+  test('数字键直达输入域守卫：过滤框/正文输入中不切视图（防丢草稿），非输入域照切', async () => {
     await renderKanbanReady(kanbanTree())
     // 2026-09-13 终审遗留修复：正文面板/AI 输入框/看板列底与过滤输入中触发会切视图丢草稿——
     // 焦点在 input/textarea/contenteditable 时放行不截获（守卫同 Ctrl+C 输入域模式）
     const filter = screen.getByTestId('kanban-filter')
     fireEvent.change(filter, { target: { value: '进行中' } })
-    fireEvent.keyDown(filter, { key: 'k', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(filter, { key: '1', ctrlKey: true })
     await new Promise((r) => setTimeout(r, 50))
     expect(useAppStore.getState().viewMode).toBe('kanban') // 未切——草稿（过滤词）保全
     // 非输入域（window 直发）照常切换：守卫不得误伤正常出路
-    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    fireEvent.keyDown(window, { key: '1', ctrlKey: true })
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'))
   })
 
@@ -3094,8 +3094,9 @@ describe('画布三态装配（2026-09 M1）', () => {
     useAppStore.setState({ viewMode: 'mindmap' })
   })
 
-  /** 渲染 → ready → 切目标态（renderKanbanReady 同源约定：ready 时刻锁定前 emit） */
-  const renderReadySwitch = async (v: 'markdown' | 'kanban'): Promise<void> => {
+  /** 渲染 → ready（不预切态：键盘直达用例自导图态起键；docReady 是三态浮层渲染前置，
+   *  emit 必须先于按键——否则 viewMode 已切而浮层不挂） */
+  const renderReady = async (): Promise<void> => {
     render(
       <EditorView
         mdPath="/ws/a.md"
@@ -3110,6 +3111,11 @@ describe('画布三态装配（2026-09 M1）', () => {
     )
     await screen.findByTestId('fake-canvas')
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  }
+
+  /** 渲染 → ready → 切目标态（renderReady 薄封装；renderKanbanReady 同源约定） */
+  const renderReadySwitch = async (v: 'markdown' | 'kanban'): Promise<void> => {
+    await renderReady()
     act(() => {
       useAppStore.getState().setViewMode(v)
     })
@@ -3130,6 +3136,25 @@ describe('画布三态装配（2026-09 M1）', () => {
     fireEvent.click(screen.getByTestId('btn-kanban-archive'))
     // archiveOpen=true：归档列渲染（archived 列头可见）
     expect(screen.getByText('归档')).toBeInTheDocument()
+  })
+
+  test('Ctrl+1/2/3 三态直达：Ctrl+2 进 Markdown、Ctrl+3 进看板（window 直发非输入域照切）', async () => {
+    await renderReady()
+    expect(screen.getByTestId('zen-bar')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true })
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('markdown'))
+    expect(await screen.findByTestId('markdown-view')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: '3', ctrlKey: true })
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('kanban'))
+    expect(await screen.findByTestId('kanban-view')).toBeInTheDocument()
+  })
+
+  test('Ctrl+Shift+K 不再切视图（2026-09 画布三态：直达键落地，翻转键退役）', async () => {
+    await renderReady()
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(useAppStore.getState().viewMode).toBe('mindmap')
+    expect(screen.queryByTestId('kanban-view')).toBeNull()
   })
 })
 

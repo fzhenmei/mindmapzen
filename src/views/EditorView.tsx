@@ -377,7 +377,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 任一对话框在开（终审修复）：正文弹窗快捷键守卫——互斥期不再开；ref 渲染期同步供只绑一次闭包读，state 供浮动条隐藏
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
   // 2026-09：新建导图对话框同列互斥；2026-09-08 弹窗化：正文弹窗同列互斥（模态锁节点）
-  // 2026-09 导航系统终审修复：App 级设置/历史框（appDialog）同列互斥——模态在开时 Alt+← 等让位（Ctrl+Shift+K 刻意不进，见 useEditorHotkeys）
+  // 2026-09 导航系统终审修复：App 级设置/历史框（appDialog）同列互斥——模态在开时 Alt+← 等让位（三态直达键 Ctrl+1/2/3 刻意不进，见 useEditorHotkeys）
   const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
@@ -392,11 +392,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // 均不开——open 即被拦，commit 路径自然封死（无需改 useQuickSwitch 内部）
     openQuickSwitch: () => guardAiTurn(quick.open),
     cycleStep: (reverse: boolean) => guardAiTurn(() => quick.cycleStep(reverse)),
-    // 视图切换（2026-09 看板模式）：getState 读现值翻转——监听只绑一次（首渲染闭包），
-    // 订阅值会陈旧，getState 恒新；看板不涉 AI 回合锁（不切图不写盘，纯视图态）
-    toggleViewMode: () => {
-      const v = useAppStore.getState().viewMode
-      useAppStore.getState().setViewMode(v === 'kanban' ? 'mindmap' : 'kanban')
+    // 视图模式直达（2026-09 画布三态）：getState 读现值同值 no-op——监听只绑一次（首渲染
+    // 闭包），订阅值会陈旧，getState 恒新；视图态不涉 AI 回合锁（不切图不写盘，纯视图态）
+    switchViewMode: (v) => {
+      if (useAppStore.getState().viewMode === v) return
+      useAppStore.getState().setViewMode(v)
     },
     // 返回来路（2026-09 导航系统 spec §7）：Alt+← 与砚栏返回钮同链
     goBack: goBackToOrigin,
