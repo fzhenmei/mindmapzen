@@ -593,3 +593,11 @@ describe('工作台路由与启动落点（2026-09 工作台）', () => {
     expect(useAppStore.getState().pendingLocate).toBeNull()
   })
 })
+
+// 画布三态（2026-09）：viewMode 从 导图/看板 二态扩为 导图/Markdown/看板
+test('setViewMode 支持三态：markdown 直设', () => {
+  useAppStore.getState().setViewMode('markdown')
+  expect(useAppStore.getState().viewMode).toBe('markdown')
+  useAppStore.getState().setViewMode('mindmap')
+  expect(useAppStore.getState().viewMode).toBe('mindmap')
+})

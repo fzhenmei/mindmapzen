@@ -41,12 +41,16 @@ export default {
       timeline: '时间轴',
       fishbone: '鱼骨图',
     },
-    // 视图切换组（2026-09 看板模式）：导图 ⇄ 看板浮层（Ctrl+Shift+K 同效）
-    viewToggle: '视图切换（Ctrl+Shift+K）',
+    // 视图切换组（2026-09 看板模式 → 画布三态）：导图 / Markdown / 看板浮层（Ctrl+1/2/3 同效）
+    viewToggle: '视图切换（Ctrl+1/2/3）',
     views: {
       mindmap: '导图',
+      markdown: 'Markdown',
       kanban: '看板',
     },
+    outlineShow: '显示大纲',
+    outlineHide: '隐藏大纲',
+    archiveToggle: '归档列',
   },
   canvas: {
     loading: '正在打开…',
@@ -184,5 +188,9 @@ export default {
     // 子孙徽标（2026-09 子树卡片）：{{n}} = 截断范围内无状态后代数
     children: '{{n}} 子节点',
     cardHint: '双击编辑任务名',
+  },
+  // Markdown 视图（2026-09 画布三态）
+  markdown: {
+    viewName: 'Markdown 视图',
   },
 }
