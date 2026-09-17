@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
 
 // 案头用例走 ?desk=1 预置（见 e2eHarness）：/ws/项目/项目图.md + /ws/根图.md，
-// 工作区已设为 /ws。2026-09 主区纯预览化两态：未选文件（idle/选中目录）→ 欢迎页；
-// 树文件行单击 → 详情态（md 预览）。文件浏览与导航全在左树（目录下直列文件行）
-test('案头：目录选中主区欢迎页、树文件行进详情与移动', async ({ page }) => {
+// 工作区已设为 /ws。2026-09 画布三态 M2：主区恒欢迎页（单态），树文件行单击 → 右区
+// 右上悬浮预览浮窗（file-preview-popover，FileDetail 详情态退役）；双击照旧进纸面。
+// 文件浏览与导航全在左树（目录下直列文件行），文件操作收敛树右键（ctx-* 菜单）
+test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移动', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
@@ -13,19 +14,21 @@ test('案头：目录选中主区欢迎页、树文件行进详情与移动', as
   await expect(page.getByTestId('file-node-项目图')).toBeVisible()
   await expect(page.getByTestId('desk-idle')).toBeVisible()
 
-  // 选中目录「项目」：主区仍是欢迎页（纯预览化：目录态不换主区内容）
+  // 选中目录「项目」：主区仍是欢迎页，不开浮窗（目录态无预览）
   await page.getByTestId('dir-node-项目').click()
   await expect(page.getByTestId('desk-idle')).toBeVisible()
-  await expect(page.getByTestId('file-detail')).toHaveCount(0)
+  await expect(page.getByTestId('file-preview-popover')).toHaveCount(0)
 
-  // 树文件行单击 = 选中进详情态（md 预览铺满主区）
+  // 树文件行单击 = 右区右上悬浮预览浮窗（md 预览在浮窗体内）
   await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  await expect(page.getByTestId('md-preview')).toHaveText(/根图/)
+  const popover = page.getByTestId('file-preview-popover')
+  await expect(popover).toBeVisible()
+  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/)
 
-  // 移动流：详情页首 btn-move → move-dialog → 选目录 → 确认。
+  // 移动流：树右键 ctx-btn-move → move-dialog → 选目录 → 确认。
   // 对话框树复用 dir-node-<name> testid（与左树同名），严格模式下必须以 move-dialog 圈定
-  await page.getByTestId('btn-move').click()
+  await page.getByTestId('file-node-根图').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-move').click()
   const dialog = page.getByTestId('move-dialog')
   await expect(dialog).toBeVisible()
   await dialog.getByTestId('dir-node-项目').click()
@@ -55,57 +58,64 @@ test('案头：目录选中主区欢迎页、树文件行进详情与移动', as
   expect(rootGone).toBe(true)
 })
 
-// 容器合并改版：窗体缩窄（header 容器 < 680px），详情动作组整组收进「更多」浮层
-// （容器查询 @container 纯 CSS 分流，零 JS 测量；常驻 4 钮不受影响）
-test('案头：窄窗详情动作收纳进「更多」浮层', async ({ page }) => {
-  test.setTimeout(30_000)
-  // 900px 视口：侧栏 256px + inset 边距后 header ≈ 628px < 680px 阈值
-  await page.setViewportSize({ width: 900, height: 720 })
-  await page.goto('/?e2e=1&desk=1')
+// 容器合并「窄窗详情动作收纳」用例随 DetailActions 退役删除（M2）：@container 分流与
+// more-* 浮层不复存在，浮窗关闭钮 btn-preview-close 单路恒显（无视口分支），由下例覆盖
 
-  // 进详情态：宽组整组收起（btn-move 隐藏），「更多」钮出现
-  await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  await expect(page.getByTestId('btn-move')).toBeHidden()
-  await expect(page.getByTestId('btn-detail-more')).toBeVisible()
-
-  // 浮层平铺全部详情动作；菜单「关闭预览」回欢迎页
-  await page.getByTestId('btn-detail-more').click()
-  await expect(page.getByTestId('more-btn-detail-back')).toBeVisible()
-  await page.getByTestId('more-btn-detail-back').click()
-  await expect(page.getByTestId('desk-idle')).toBeVisible()
-})
-
-// 2026-09 交互语义：树文件行单击=选中进详情态（md 预览），双击或详情「打开」=进纸面
-test('案头：树文件行单击出详情、详情打开进纸面', async ({ page }) => {
+// 2026-09 交互语义（M2 悬浮预览）：树文件行单击=右区右上悬浮预览浮窗，双击=进纸面
+test('案头：树文件行单击出悬浮预览、双击进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 单击根图文件行：主区切文件详情态（页首即卡头 + markdown 预览）
+  // 单击根图文件行：右区右上浮窗（头部文件名 + markdown 预览）；主区仍是欢迎页
   await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  await expect(page.getByTestId('md-preview')).toHaveText(/根图/)
+  const popover = page.getByTestId('file-preview-popover')
+  await expect(popover).toBeVisible()
+  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/)
   // 仍是案头，未进纸面（命令栏不可见）
   await expect(page.getByTestId('zen-bar')).toHaveCount(0)
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
 
-  // 详情态「关闭预览」回欢迎页；再进详情走「打开」按钮（双击手势的兜底入口）
-  await page.getByTestId('btn-detail-back').click()
+  // 浮窗头部关闭钮关窗；再单击同文件行重开（toggle 的开路，主区欢迎页全程不动）
+  await page.getByTestId('btn-preview-close').click()
+  await expect(popover).toHaveCount(0)
   await expect(page.getByTestId('desk-idle')).toBeVisible()
   await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  await page.getByTestId('btn-detail-open').click()
+  await expect(popover).toBeVisible()
+
+  // 双击文件行照旧开纸面（详情「打开」钮退役，双击是唯一开图手势）
+  await page.getByTestId('file-node-根图').dblclick()
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
-// 2026-09 发布复制：详情态 btn-copy-wechat 走真渲染全链（离屏 vditor → 内联样式 →
-// mermaid 成图），出 section 根 HTML 写富文本剪贴板端口（E2E web 模式记录到
-// __zenE2e.lastCopiedHtml）；真实粘贴进公众号编辑器的往返验证归 docs/manual-checklist.md 真机项
-test('案头：详情态「复制为公众号格式」出内联样式 HTML（mermaid 转 PNG 图）', async ({ page }) => {
+// spec §4.1 关窗契约回归钉（真实鼠标链路，2026-09 评审修复）：文件行真实点击 =
+// mousedown（浮窗外点，豁免左树文件行 data-tree-file-row）→ click（selectFile toggle）。
+// 无豁免时外点先清选中、click 的 toggle 落在 null 上必重开——真机「再点同一文件关窗」
+// 失效。Playwright click 即完整真实事件序（mousedown/up/click），此处钉终态=关
+test('案头：再点同一文件行关悬浮预览（真实事件序 mousedown+click）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
-  // harness 异步装配:先等左树出现(装配完成门)再覆写预置文件加 mermaid 块(同文件名,左树无需刷新)。
-  // 用正文块(引用块)形态的围栏——mermaid 实际多居于此,带 > 前缀的围栏改标是本链路的关键路径
-  await expect(page.getByTestId('file-node-根图')).toBeVisible()
+
+  await page.getByTestId('file-node-根图').click()
+  const popover = page.getByTestId('file-preview-popover')
+  await expect(popover).toBeVisible()
+  // 再单击同一文件行：mousedown 豁免不误关，click toggle 关——浮窗消失回欢迎页
+  await page.getByTestId('file-node-根图').click()
+  await expect(popover).toHaveCount(0)
+  await expect(page.getByTestId('desk-idle')).toBeVisible()
+})
+
+// 2026-09 发布复制：树右键 ctx-btn-copy-wechat 走真渲染全链（离屏 vditor → 内联样式 →
+// mermaid 成图），出 section 根 HTML 写富文本剪贴板端口（E2E web 模式记录到
+// __zenE2e.lastCopiedHtml）；真实粘贴进公众号编辑器的往返验证归 docs/manual-checklist.md 真机项
+test('案头：树右键「复制为公众号格式」出内联样式 HTML（mermaid 转 PNG 图）', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+  // harness 异步装配(main.tsx 顶层 await)：poll 守卫 __zenE2e 就绪后再覆写预置文件加
+  // mermaid 块（icons.spec:184 同款守卫；同文件名覆写，左树无需刷新）。用正文块（引用块）
+  // 形态的围栏——mermaid 实际多居于此,带 > 前缀的围栏改标是本链路的关键路径
+  await expect
+    .poll(() => page.evaluate(() => Boolean((window as unknown as { __zenE2e?: object }).__zenE2e)))
+    .toBe(true)
   await page.evaluate(() =>
     (window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }).__zenE2e.writeFile(
       '/ws/根图.md',
@@ -113,12 +123,14 @@ test('案头：详情态「复制为公众号格式」出内联样式 HTML（mer
     ),
   )
   await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  // 案头预览自身应有语法高亮(lute 挂的 hljs 类曾毒化 vditor 语言识别致全部 plaintext,已修)
+  await expect(page.getByTestId('file-preview-popover')).toBeVisible()
+  // 悬浮预览自身应有语法高亮(lute 挂的 hljs 类曾毒化 vditor 语言识别致全部 plaintext,已修)
   await expect
     .poll(() => page.locator('.md-preview pre code span[class]').count(), { timeout: 10_000 })
     .toBeGreaterThan(0)
-  await page.getByTestId('btn-copy-wechat').click()
+  // 复制入口在树右键菜单（右键同文件行会 toggle 关浮窗——复制管线取文件自身，与选中无关）
+  await page.getByTestId('file-node-根图').click({ button: 'right' })
+  await page.getByTestId('ctx-btn-copy-wechat').click()
   await expect
     .poll(() =>
       page.evaluate(
@@ -174,21 +186,22 @@ test('案头：目录树含文件行，双击文件行打开进纸面', async ({
   await expect(page.getByText('根图').first()).toBeVisible()
 })
 
-// 2026-09 树右键菜单：文件行 = 打开/移动/重命名/删除（右键即选中切预览，VSCode 惯例）；
-// 目录行 = 在此新建导图/新建子目录。此处覆盖重命名与目录内新建（vitest 已覆盖删除/移动/树根）
+// 2026-09 树右键菜单：文件行 = 打开/收藏/移动/重命名/删除/复制路径/公众号复制（右键即
+// 选中开预览，VSCode 惯例）；目录行 = 在此新建导图/新建子目录。此处覆盖重命名与目录内
+// 新建（vitest 已覆盖删除/移动/树根）
 test('案头：树右键菜单——文件行重命名、目录行在此新建导图', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 右键根图文件行：即选中进详情态 + 弹出菜单，重命名走对话框流
+  // 右键根图文件行：即选中开悬浮预览 + 弹出菜单，重命名走对话框流
   await page.getByTestId('file-node-根图').click({ button: 'right' })
-  await expect(page.getByTestId('file-detail')).toBeVisible()
+  await expect(page.getByTestId('file-preview-popover')).toBeVisible()
   await page.getByTestId('ctx-btn-rename').click()
   await page.getByTestId('input-name').fill('改名图')
   await page.getByTestId('btn-confirm').click()
-  // 树行换名；详情态随 mdPath 失联清理回欢迎页
+  // 树行换名；浮窗随 mdPath 失联清理（选中失效不回浮窗）
   await expect(page.getByTestId('file-node-改名图')).toBeVisible()
-  await expect(page.getByTestId('file-detail')).toHaveCount(0)
+  await expect(page.getByTestId('file-preview-popover')).toHaveCount(0)
 
   // 右键「项目」目录行：在此新建导图（标题示目录、落盘建在彼处）
   await page.getByTestId('dir-node-项目').click({ button: 'right' })
@@ -355,14 +368,19 @@ test('案头：左栏拖拽调宽并持久化', async ({ page }) => {
   expect(cfg.sidebarWidth).toBeGreaterThan(300)
 })
 
-// 2026-09 分区拖拽（大纲）：详情态大纲面板左缘手柄向左拖增宽，双击恢复默认
-test('案头：大纲面板拖拽调宽与双击恢复', async ({ page }) => {
+// 2026-09 分区拖拽（大纲）：详情态大纲随 FileDetail 退役（M2），大纲唯一宿主迁至画布
+// Markdown 态（MarkdownView 沿用 previewOutline/outlineWidth 偏好与同款 SplitResizer）。
+// 左缘手柄向左拖增宽，双击恢复默认
+test('案头：大纲面板拖拽调宽与双击恢复（画布 Markdown 态）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  await page.getByTestId('file-node-根图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  // 默认视口 1280：详情区 ≈1016px ≥ 900，auto 大纲显示
+  // 双击根图进纸面 → Ctrl+2 切 Markdown 态（只读文档视图 + 大纲面板）
+  await page.getByTestId('file-node-根图').dblclick()
+  await expect(page.getByText('根图').first()).toBeVisible()
+  await page.keyboard.press('Control+2')
+  await expect(page.getByTestId('markdown-view')).toBeVisible()
+  // 默认视口 1280 ≥ 900：auto 大纲显示（宽默认 224）
   const panel = page.getByTestId('outline-panel')
   await expect(panel).toBeVisible()
   const before = (await panel.boundingBox())!.width

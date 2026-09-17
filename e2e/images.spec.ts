@@ -182,8 +182,8 @@ test('插图：剪贴板无图——按钮与 Ctrl+V 均提示「剪贴板中没
   await expect(page.getByTestId('paste-error')).toHaveText('剪贴板中没有图片')
 })
 
-// M19 验收补：详情态 markdown 预览渲染图片（相对路径经 imgMap 解析为 dataURL）
-test('插图：详情态预览显示图片（imgMap dataURL 解析）', async ({ page }) => {
+// M19 验收补：悬浮预览浮窗 markdown 预览渲染图片（相对路径经 imgMap 解析为 dataURL）
+test('插图：悬浮预览显示图片（imgMap dataURL 解析）', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
@@ -198,8 +198,8 @@ test('插图：详情态预览显示图片（imgMap dataURL 解析）', async ({
     await z.writeFile('/ws/预览图.md', '# 预览图 ![配图](assets/prev.png)\n')
   })
   await page.getByTestId('file-node-预览图').click()
-  await expect(page.getByTestId('file-detail')).toBeVisible()
-  // 预览 img 渲染且 src 已解析为 dataURL（未解析会是 404 的相对路径）
+  await expect(page.getByTestId('file-preview-popover')).toBeVisible()
+  // 预览 img 渲染且 src 已解析为 dataURL（未解析会是 404 的相对路径）——正文在浮窗内
   const img = page.getByTestId('md-preview').locator('img')
   await expect(img).toBeVisible()
   await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/)
