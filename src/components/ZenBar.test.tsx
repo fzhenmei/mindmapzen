@@ -176,7 +176,7 @@ describe('ZenBar 更多布局下拉', () => {
   })
 })
 
-// ---- 视图切换组（2026-09 看板模式）：导图/看板两钮（布局组同款 ToggleGroup 语言）----
+// ---- 视图切换组（2026-09 看板模式）：导图/Markdown/看板三钮（布局组同款 ToggleGroup 语言）----
 
 describe('ZenBar 视图切换组', () => {
   afterEach(cleanup)
