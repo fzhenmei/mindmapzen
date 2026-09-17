@@ -46,9 +46,12 @@ test('mermaid：正文围栏在悬浮预览渲染成 SVG；语法错误降级为
   const goodSvg = preview.locator('div.language-mermaid svg.flowchart')
   await expect(goodSvg).toBeVisible({ timeout: 15_000 })
   // 坏图降级：mermaid 错误图（error roledescription）+ 附注保留源码文本
+  // （同为 lute 懒加载管线，超时与好图断言对齐——全量并发下默认 5s 偶发不够）
   const errSvg = preview.locator('div.language-mermaid svg[aria-roledescription="error"]')
-  await expect(errSvg).toBeVisible()
-  await expect(preview.locator('div.language-mermaid small')).toContainText('这不是合法的 mermaid')
+  await expect(errSvg).toBeVisible({ timeout: 15_000 })
+  await expect(preview.locator('div.language-mermaid small')).toContainText('这不是合法的 mermaid', {
+    timeout: 15_000,
+  })
 
   // md 落盘事实源不变（围栏仍在引用块内——正文原样块，打开即面板可见内容）
   const md = await page.evaluate(() =>

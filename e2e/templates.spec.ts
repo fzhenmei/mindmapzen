@@ -34,10 +34,11 @@ test('模板：内置「AI 协作开发」实例化——根名替换、结构�
   expect(md).toContain('## 待我验收')
   expect(md).toContain('## 规范与决策')
 
-  // 返回案头进详情态：md 预览渲染模板层级
+  // 返回案头进详情态：md 预览渲染模板层级（lute 异步渲染，全量并发下默认 5s 偶发不够，
+  // 15s 与 desk/mermaid 悬浮预览断言同口径）
   await page.getByTestId('btn-back').click()
   await page.getByTestId('file-node-Mind Map Zen 规划').click()
-  await expect(page.getByTestId('md-preview')).toContainText('待我验收')
+  await expect(page.getByTestId('md-preview')).toContainText('待我验收', { timeout: 15_000 })
 })
 
 test('模板：工作区 templates/ 目录的用户模板可选可实例化', async ({ page }) => {

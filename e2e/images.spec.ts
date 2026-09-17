@@ -200,9 +200,10 @@ test('插图：悬浮预览显示图片（imgMap dataURL 解析）', async ({ pa
   await page.getByTestId('file-node-预览图').click()
   await expect(page.getByTestId('file-preview-popover')).toBeVisible()
   // 预览 img 渲染且 src 已解析为 dataURL（未解析会是 404 的相对路径）——正文在浮窗内
+  // （lute 异步渲染后内容才到，全量并发下默认 5s 偶发不够，15s 与 desk/mermaid 同口径）
   const img = page.getByTestId('md-preview').locator('img')
-  await expect(img).toBeVisible()
-  await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/)
+  await expect(img).toBeVisible({ timeout: 15_000 })
+  await expect(img).toHaveAttribute('src', /^data:image\/png;base64,/, { timeout: 15_000 })
 })
 
 // 2026-09 画布贴图落盘修复：引擎原生 Control+v 经 navigator.clipboard.read() 读剪贴板
