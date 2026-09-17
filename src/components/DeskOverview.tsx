@@ -73,8 +73,9 @@ function SuggestSection({
                 <button type="button" data-testid="workbench-suggestion"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
                   onClick={onClick}>
-                  {/* 冒号收进词条（zh 全角 / en 半角+空格）；count 透传 {{count}} 插值（spec §6 v1.1） */}
-                  <span className="min-w-0 flex-1 truncate text-sm">
+                  {/* 冒号收进词条（zh 全角 / en 半角+空格）；count 透传 {{count}} 插值（spec §6 v1.1）；
+                      text-[13px] 与「最近的」/聚合行主文本同号（验收微调：原 text-sm 大 1px） */}
+                  <span className="min-w-0 flex-1 truncate text-[13px]">
                     {t(sg.reasonKey, { count: sg.count })}{t('workbench.suggest.itemJoin')}{target}
                   </span>
                 </button>
