@@ -28,7 +28,7 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
   const { t } = useTranslation()
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
   const [imgMap, setImgMap] = useState<ReadonlyMap<string, string>>(new Map())
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDialogElement>(null)
 
   // 读取与插图解析（迁自 FileDetail:51-74，口径不变：主读取失败出 error 占位；
   // 插图失败宽容空表——图挂了不出错误占位，img 原样占位）
@@ -81,27 +81,34 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const body =
-    state.kind === 'error' ? (
-      <div data-testid="file-preview-error" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <p className="text-base font-medium text-foreground">{t('library.fileDetail.previewFailedTitle')}</p>
-        <p>{t('library.fileDetail.previewFailedBody')}</p>
-        <p className="break-all text-xs">{toNativePath(info.mdPath)}</p>
-      </div>
-    ) : state.kind === 'text' ? (
-      <MarkdownPreview text={state.text} imgMap={imgMap} />
-    ) : (
-      <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">…</div>
-    )
+  /** 三态体（Sonar S3358 拆分，语义零变化）：主读取失败 → 错误占位（说明 + 路径）；
+   *  成功 → 正文预览；读取中 → 省略占位 */
+  const renderBody = () => {
+    if (state.kind === 'error')
+      return (
+        <div data-testid="file-preview-error" className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+          <p className="text-base font-medium text-foreground">{t('library.fileDetail.previewFailedTitle')}</p>
+          <p>{t('library.fileDetail.previewFailedBody')}</p>
+          <p className="break-all text-xs">{toNativePath(info.mdPath)}</p>
+        </div>
+      )
+    if (state.kind === 'text') return <MarkdownPreview text={state.text} imgMap={imgMap} />
+    return <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">…</div>
+  }
 
   return (
     // 右区右上角：挂 main（宿主已加 relative）；w-120=480px / max-h-[70vh]（spec §4.2）。
-    // z-20 高于内容与 ThemeFab（右下角，不冲突），低于 App 级 Radix portal 对话框
-    <div
+    // z-20 高于内容与 ThemeFab（右下角，不冲突），低于 App 级 Radix portal 对话框。
+    // 原生 <dialog open> 非模态（S6819，同 KanbanView/MarkdownView 先例）：不抢焦点、
+    // 不触发原生 cancel；UA 默认样式须压平——m-0/p-0/max-w-none 杀边距与自适应宽，
+    // left-auto 必加（UA 设 left:0，与 top-2 right-2 over-constrained，LTR 下 left 胜出
+    // 会把浮窗钉到左缘；先例全屏 inset-0 无此问题，本例右上角定位必须杀 left）
+    <dialog
       ref={rootRef}
+      open
+      tabIndex={-1}
       data-testid="file-preview-popover"
-      className="absolute top-2 right-2 z-20 flex max-h-[70vh] w-120 flex-col overflow-hidden rounded-lg border bg-card shadow-lg"
-      role="dialog"
+      className="absolute top-2 right-2 left-auto z-20 m-0 flex max-h-[70vh] w-120 max-w-none flex-col overflow-hidden rounded-lg border bg-card p-0 shadow-lg outline-none"
       aria-label={`${info.name}.md`}
     >
       <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
@@ -116,7 +123,7 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
           <IconWinClose size={14} />
         </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
-    </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{renderBody()}</div>
+    </dialog>
   )
 }
