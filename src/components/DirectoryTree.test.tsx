@@ -29,6 +29,8 @@ const renderTree = (over: Partial<Parameters<typeof DirectoryTree>[0]> = {}) =>
         onSelectFile={noop}
         onOpenFile={noop}
         onFileAction={noop}
+        onCopyPath={noop}
+        onCopyWechat={noop}
         onCreateMapIn={noop}
         onCreateDirIn={noop}
         onDeleteDir={noop}
@@ -100,6 +102,26 @@ describe('DirectoryTree 收藏入口', () => {
       expect(btn).toHaveAttribute('aria-label', '取消收藏')
     }
     expect(screen.getByTestId('fav-btn-乙图')).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+// DetailActions 退役承接（2026-09 画布三态 M2）：详情页首独有「复制路径/公众号复制」
+// 收敛进文件行右键菜单（删除项之后隔线一组）；全链（路径寻址/剪贴板）在 LibraryView 装配
+describe('DirectoryTree 文件右键复制项', () => {
+  test('菜单提供「复制路径」，点击回调待复制文件', async () => {
+    const onCopyPath = vi.fn()
+    renderTree({ onCopyPath })
+    fireEvent.contextMenu(screen.getByTestId('file-node-甲图'))
+    fireEvent.click(await screen.findByTestId('ctx-btn-copy-path'))
+    expect(onCopyPath).toHaveBeenCalledWith(expect.objectContaining({ name: '甲图' }))
+  })
+
+  test('菜单提供「复制为公众号格式」，点击回调待复制文件', async () => {
+    const onCopyWechat = vi.fn()
+    renderTree({ onCopyWechat })
+    fireEvent.contextMenu(screen.getByTestId('file-node-甲图'))
+    fireEvent.click(await screen.findByTestId('ctx-btn-copy-wechat'))
+    expect(onCopyWechat).toHaveBeenCalledWith(expect.objectContaining({ name: '甲图' }))
   })
 })
 
