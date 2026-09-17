@@ -1,0 +1,96 @@
+// src/components/FilePreviewPopover.test.tsx —— 案头悬浮预览（2026-09 画布三态 M2，
+// FileDetail 详情态退役承接）：单击文件行在右区右上角浮现的预览小窗。
+// 读取管线迁自 FileDetail（真实 md + 插图 dataURL + 失败兜底），轻量无大纲。
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import FilePreviewPopover from './FilePreviewPopover'
+import { useAppStore } from '../store/appStore'
+import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import type { MapInfo } from '../types/files'
+
+// jsdom 不执行 vditor 注入的子资源脚本（渲染 promise 永不 resolve），真实渲染归 e2e；
+// 单测 mock renderVditorPreview 注入代表性 DOM（标题行 → 标题元素）——沿 FileDetail.test 同款
+vi.mock('../services/vditorPreview', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('../services/vditorPreview')>()
+  return {
+    ...orig,
+    renderVditorPreview: vi.fn(async (el: HTMLElement, md: string) => {
+      el.innerHTML = md
+        .split('\n')
+        .flatMap((l) => {
+          const m = /^(#{1,6})\s/.exec(l)
+          if (m === null) return []
+          const level = m[1].length
+          return [`<h${level}>${l.slice(m[0].length)}</h${level}>`]
+        })
+        .join('')
+    }),
+  }
+})
+
+const INFO: MapInfo = { mdPath: '/ws/甲.md', name: '甲', relDir: '', size: 10, createdAt: 1, modifiedAt: 2 }
+
+function makeInfo(over: Partial<MapInfo>): MapInfo { return { ...INFO, ...over } }
+
+describe('FilePreviewPopover', () => {
+  // fs 预置沿 FileDetail.test 模式：内存 adapter 注入 + 工作区目录 + 预置 md 文件
+  beforeEach(async () => {
+    useAppStore.setState({ adapter: new MemoryFsAdapter(), workspaceDir: '/ws' })
+    await useAppStore.getState().adapter.writeTextFileAtomic('/ws/甲.md', '# 标题甲\n\n正文')
+    await useAppStore.getState().adapter.writeTextFileAtomic('/ws/乙.md', '# 标题乙\n')
+  })
+
+  test('渲染选中 md：头部文件名 + 正文经 MarkdownPreview', async () => {
+    render(<FilePreviewPopover info={makeInfo({})} onClose={() => {}} />)
+    expect(screen.getByTestId('file-preview-popover')).toBeInTheDocument()
+    expect(screen.getByText('甲.md')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('标题甲')).toBeInTheDocument())
+  })
+
+  test('读取失败：错误占位含路径（显式出口，不吞异常）', async () => {
+    // 不预置 /ws/缺.md（读取抛错）
+    render(<FilePreviewPopover info={makeInfo({ mdPath: '/ws/缺.md', name: '缺' })} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByTestId('file-preview-error')).toBeInTheDocument())
+    expect(screen.getByTestId('file-preview-error').textContent).toContain('缺.md')
+  })
+
+  test('Esc 关窗（非输入域）；关闭钮关窗', () => {
+    const onClose = vi.fn()
+    render(<FilePreviewPopover info={makeInfo({})} onClose={onClose} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByTestId('btn-preview-close'))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  test('Esc 输入域守卫：焦点在输入框时不关窗', () => {
+    const onClose = vi.fn()
+    render(<FilePreviewPopover info={makeInfo({})} onClose={onClose} />)
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+    // 在聚焦元素上派发（冒泡至 window 监听，target=input）——真实浏览器键盘事件的
+    // target 即聚焦元素；window 直发的 target 是 window 本身，测不出守卫（同
+    // EditorView.test 数字键直达输入域守卫用例的派发约定）
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    input.remove()
+  })
+
+  test('点浮窗外部关窗；点浮窗内部不关', () => {
+    const onClose = vi.fn()
+    render(<FilePreviewPopover info={makeInfo({})} onClose={onClose} />)
+    fireEvent.mouseDown(screen.getByTestId('file-preview-popover'))
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.mouseDown(document.body)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('切换目标文件：info 变化重读（内容切换非叠加）', async () => {
+    const { rerender } = render(<FilePreviewPopover info={makeInfo({})} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('标题甲')).toBeInTheDocument())
+    rerender(<FilePreviewPopover info={makeInfo({ mdPath: '/ws/乙.md', name: '乙' })} onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText('标题乙')).toBeInTheDocument())
+    expect(screen.queryByText('标题甲')).toBeNull()
+  })
+})
