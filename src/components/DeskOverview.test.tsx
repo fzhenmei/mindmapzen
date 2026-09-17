@@ -22,7 +22,7 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     render(<DeskOverview />)
     expect(await screen.findByTestId('desk-overview-create')).toBeInTheDocument()
     expect(screen.getByText(/建一个「工作」目录/)).toBeInTheDocument() // 轻引导只有 body 文案（非大卡片带标题）
-    expect(screen.queryByText('还没有工作目录')).toBeNull() // noDirTitle 不再渲染（轻形态）
+    expect(screen.queryByTestId('desk-overview-error')).toBeNull() // 轻引导=「未建目录」态，非 IO 故障占位（二者互斥）
     await screen.getByTestId('desk-overview-create').click()
     // 一键创建（ensureDir）+ 重扫：目录已存在但无任务 → M3 空态分层裁定——内容整段退场
     await waitFor(() => expect(screen.queryByTestId('desk-overview-create')).toBeNull())
