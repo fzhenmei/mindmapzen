@@ -158,7 +158,7 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   expect(tipPad).toBe('6px 12px')
 
   // ④ 圆角令牌锁：资源管理器 tile 退役后改锁 :root 阶梯令牌（--radius 0.5rem），
-  //    消费面断言移交详情态容器（⑤ 同段）
+  //    消费面断言移交悬浮预览浮窗容器（⑤ 同段）
   const radiusToken = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
   )

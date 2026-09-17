@@ -27,6 +27,7 @@ test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移�
 
   // 移动流：树右键 ctx-btn-move → move-dialog → 选目录 → 确认。
   // 对话框树复用 dir-node-<name> testid（与左树同名），严格模式下必须以 move-dialog 圈定
+  // （右键同文件行会 toggle 关浮窗——移动管线取文件自身，与选中无关）
   await page.getByTestId('file-node-根图').click({ button: 'right' })
   await page.getByTestId('ctx-btn-move').click()
   const dialog = page.getByTestId('move-dialog')
