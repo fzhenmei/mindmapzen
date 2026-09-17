@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LayoutKind } from '../editor/layoutMap'
 import type { UndoRedo } from '../hooks/useUndoRedo'
+import type { ViewMode } from '../store/appStore'
 import type { CopySettingKey, CopySettings } from '../types/files'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
@@ -23,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import {
+  IconArchive,
   IconArrowLeft,
   IconChevronDown,
   IconCopy,
@@ -37,8 +39,10 @@ import {
   IconLayoutFishbone,
   IconLayoutRight,
   IconLayoutTimeline,
+  IconMarkdown,
   IconMinus,
   IconNetwork,
+  IconOutline,
   IconPlus,
   IconRedo,
   IconRoute,
@@ -94,10 +98,17 @@ interface Props {
   layout: LayoutKind
   /** 布局切换（引擎即时重排 + 偏好落盘，逻辑在 EditorView） */
   onSwitchLayout(kind: LayoutKind): void
-  /** 视图模式（2026-09 看板模式）：导图 ⇄ 看板浮层（内存态，逻辑在 EditorView/appStore） */
-  viewMode: 'mindmap' | 'kanban'
-  /** 视图切换（同值 no-op 在 EditorView 的 switchView；快捷键 Ctrl+Shift+K 同效） */
-  onSwitchView(v: 'mindmap' | 'kanban'): void
+  /** 视图模式（2026-09 画布三态：导图/Markdown/看板，内存态，逻辑在 EditorView/appStore）：
+   *  驱动各段显隐矩阵——Markdown 态藏 撤销重做/正文/导出/缩放/布局，看板态藏 布局/缩放 */
+  viewMode: ViewMode
+  /** 视图切换（同值 no-op 在 EditorView 的 switchView；快捷键 Ctrl+1/2/3 同效） */
+  onSwitchView(v: ViewMode): void
+  /** 大纲显隐（2026-09 画布三态）：Markdown 态专有钮；visible 由 MarkdownView 上报（auto 跟宽） */
+  outlineVisible: boolean
+  onToggleOutline(): void
+  /** 归档列显隐（2026-09 画布三态）：看板态专有钮（toggle 宿主持有的 archiveOpen） */
+  kanbanArchiveOpen: boolean
+  onToggleKanbanArchive(): void
 }
 
 /** 浮签包装（本文件局部）：ui Tooltip 组合的简写——14 枚图标钮同构，
@@ -126,7 +137,9 @@ const MORE_LAYOUTS = [
 ] as const
 
 /** 纸面命令栏：返回/回退/重做/复制/保存/正文面板/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
- *  快捷键仍由 EditorView 的 window keydown effect 承担） */
+ *  快捷键仍由 EditorView 的 window keydown effect 承担）。
+ *  2026-09 画布三态：左段（返回/工作台/切换/新建|撤销重做|复制组/路径/保存）与视图组恒显，
+ *  缩放/布局/正文/导出为导图态专属；Markdown 态露大纲钮、看板态露归档钮（视图组右侧专有段） */
 export default function ZenBar({
   onBack,
   backTarget,
@@ -152,8 +165,16 @@ export default function ZenBar({
   onSwitchLayout,
   viewMode,
   onSwitchView,
+  outlineVisible,
+  onToggleOutline,
+  kanbanArchiveOpen,
+  onToggleKanbanArchive,
 }: Readonly<Props>) {
   const { t } = useTranslation()
+  // 三态显隐矩阵（2026-09 画布三态）：mmView=Markdown 态（藏 撤销重做/正文/导出/缩放/布局）；
+  // mapOnly=导图态（缩放/布局/正文/导出为画布专属，Markdown/看板两态不显）
+  const mmView = viewMode === 'markdown'
+  const mapOnly = viewMode === 'mindmap'
   const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
   // 返回钮文案（终审修复：Tip label 与 aria-label 两处同源）——工作台来路回工作台，案头来路回案头
   const backLabel = backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')
@@ -222,33 +243,39 @@ export default function ZenBar({
           <IconFilePlus />
         </Button>
       </Tip>
-      <Separator orientation="vertical" className="mx-1" />
-      <Tip label={t('editor.zenbar.undo')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-undo"
-          aria-label={t('editor.zenbar.undo')}
-          onClick={undoRedo.onUndo}
-          disabled={!undoRedo.canUndo}
-        >
-          <IconUndo />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.redo')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-redo"
-          aria-label={t('editor.zenbar.redo')}
-          onClick={undoRedo.onRedo}
-          disabled={!undoRedo.canRedo}
-        >
-          <IconRedo />
-        </Button>
-      </Tip>
+      {/* 撤销/重做段（含前置分隔线整段包裹，避免孤立分隔线）：Markdown 态隐藏
+       *  （编辑走 vditor 自有历史），导图/看板两态在（引擎 back_forward 历史共享） */}
+      {!mmView && (
+        <>
+          <Separator orientation="vertical" className="mx-1" />
+          <Tip label={t('editor.zenbar.undo')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-undo"
+              aria-label={t('editor.zenbar.undo')}
+              onClick={undoRedo.onUndo}
+              disabled={!undoRedo.canUndo}
+            >
+              <IconUndo />
+            </Button>
+          </Tip>
+          <Tip label={t('editor.zenbar.redo')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-redo"
+              aria-label={t('editor.zenbar.redo')}
+              onClick={undoRedo.onRedo}
+              disabled={!undoRedo.canRedo}
+            >
+              <IconRedo />
+            </Button>
+          </Tip>
+        </>
+      )}
       <Separator orientation="vertical" className="mx-1" />
       {/* 复制组 = split button（2026-09 复制选项自设置面板移入）：主钮照常复制（Ctrl+C 同径），
        *  箭头钮展开两项勾选（2026-09-06 备注合并后 copyIncludeNote 退役，「包含备注」项拆除），
@@ -332,93 +359,103 @@ export default function ZenBar({
           <IconSave />
         </Button>
       </Tip>
-      {/* 正文面板开关（2026-09 写作）：常态按钮（非 DropdownMenu 触发器），激活态走
-       *  data-active 通道（同 btn-layout-more 的点亮语言；不依赖 data-state） */}
-      <Tip label={t('editor.zenbar.bodyPanel')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-body"
-          data-active={bodyActive ? '' : undefined}
-          aria-label={t('editor.zenbar.bodyPanel')}
-          aria-pressed={bodyActive}
-          onClick={onBodyClick}
-          className="data-[active]:bg-accent data-[active]:text-accent-foreground"
-        >
-          <IconFileText />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.exportImage')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-export"
-          aria-label={t('editor.zenbar.exportImage')}
-          onClick={onExportClick}
-        >
-          <IconImage />
-        </Button>
-      </Tip>
+      {/* 正文 + 导出（导图态专属）：正文弹窗开关常态按钮（非 DropdownMenu 触发器），
+       *  激活态走 data-active 通道（同 btn-layout-more 的点亮语言；不依赖 data-state）；
+       *  Markdown/看板态无选中节点语义，两钮隐藏 */}
+      {mapOnly && (
+        <>
+          <Tip label={t('editor.zenbar.bodyPanel')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-body"
+              data-active={bodyActive ? '' : undefined}
+              aria-label={t('editor.zenbar.bodyPanel')}
+              aria-pressed={bodyActive}
+              onClick={onBodyClick}
+              className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+            >
+              <IconFileText />
+            </Button>
+          </Tip>
+          <Tip label={t('editor.zenbar.exportImage')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-export"
+              aria-label={t('editor.zenbar.exportImage')}
+              onClick={onExportClick}
+            >
+              <IconImage />
+            </Button>
+          </Tip>
+        </>
+      )}
+      {/* 缩放四键（含前置分隔线，导图态专属）：引擎画布缩放/定位；Markdown/看板无缩放语义 */}
+      {mapOnly && (
+        <>
+          <Separator orientation="vertical" className="mx-1" />
+          <Tip label={t('editor.zenbar.zoomOut')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-zoom-out"
+              aria-label={t('editor.zenbar.zoomOut')}
+              onClick={onZoomOut}
+            >
+              <IconMinus />
+            </Button>
+          </Tip>
+          <Tip label={t('editor.zenbar.zoomIn')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-zoom-in"
+              aria-label={t('editor.zenbar.zoomIn')}
+              onClick={onZoomIn}
+            >
+              <IconPlus />
+            </Button>
+          </Tip>
+          <Tip label={t('editor.zenbar.centerRoot')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-center-root"
+              aria-label={t('editor.zenbar.centerRoot')}
+              onClick={onCenterRoot}
+            >
+              <IconCrosshair />
+            </Button>
+          </Tip>
+          <Tip label={t('editor.zenbar.fitView')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-fit"
+              aria-label={t('editor.zenbar.fitView')}
+              onClick={onFit}
+            >
+              <IconFrame />
+            </Button>
+          </Tip>
+        </>
+      )}
       <Separator orientation="vertical" className="mx-1" />
-      <Tip label={t('editor.zenbar.zoomOut')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-zoom-out"
-          aria-label={t('editor.zenbar.zoomOut')}
-          onClick={onZoomOut}
-        >
-          <IconMinus />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.zoomIn')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-zoom-in"
-          aria-label={t('editor.zenbar.zoomIn')}
-          onClick={onZoomIn}
-        >
-          <IconPlus />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.centerRoot')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-center-root"
-          aria-label={t('editor.zenbar.centerRoot')}
-          onClick={onCenterRoot}
-        >
-          <IconCrosshair />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.fitView')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-fit"
-          aria-label={t('editor.zenbar.fitView')}
-          onClick={onFit}
-        >
-          <IconFrame />
-        </Button>
-      </Tip>
-      <Separator orientation="vertical" className="mx-1" />
-      {/* 视图组（2026-09 看板模式）：导图 ⇄ 看板浮层，同布局组 ToggleGroup（single）语言
+      {/* 视图组（2026-09 画布三态）：导图/Markdown/看板三钮，同布局组 ToggleGroup（single）语言
        *  （激活项 data-state=on、点已激活项 no-op）；项不加 ui Tooltip、用原生 title——
        *  同布局组的 TooltipTrigger(asChild) data-state 遮蔽 Radix Toggle on/off 冲突家族 */}
       <ToggleGroup
         type="single"
         value={viewMode}
         onValueChange={(v) => {
-          if (v) onSwitchView(v as 'mindmap' | 'kanban')
+          if (v) onSwitchView(v as ViewMode)
         }}
         aria-label={t('editor.zenbar.viewToggle')}
       >
@@ -431,6 +468,14 @@ export default function ZenBar({
           <IconNetwork />
         </ToggleGroupItem>
         <ToggleGroupItem
+          value="markdown"
+          data-testid="btn-view-markdown"
+          aria-label={t('editor.zenbar.views.markdown')}
+          title={t('editor.zenbar.views.markdown')}
+        >
+          <IconMarkdown />
+        </ToggleGroupItem>
+        <ToggleGroupItem
           value="kanban"
           data-testid="btn-view-kanban"
           aria-label={t('editor.zenbar.views.kanban')}
@@ -439,65 +484,114 @@ export default function ZenBar({
           <IconKanbanSquare />
         </ToggleGroupItem>
       </ToggleGroup>
-      <Separator orientation="vertical" className="mx-1" />
-      {/* 布局组 = ui ToggleGroup（single）：激活项 data-state=on 官方点亮态；点已激活项为 no-op。
-       *  项不加 ui Tooltip：TooltipTrigger(asChild) 会把自身 data-state(open/closed) 混入 item props，
-       *  遮蔽 Radix Toggle 的 on/off 信号（官方 sidebar 以 data-active 规避同款冲突，Toggle 无此通道）；
-       *  语义名由 item 自身 aria-label 承担（官方 ToggleGroup 文档同款 a11y 模式）。
-       *  2026-09 UI 评审 P3-2：补原生 title 悬停提示——不经过 Tooltip 组件、无 data-state
-       *  冲突，鼠标用户可辨识三个布局图标的语义（与全栏 14 钮的悬停体验对齐） */}
-      <ToggleGroup
-        type="single"
-        value={layout}
-        onValueChange={(v) => {
-          if (v) onSwitchLayout(v as LayoutKind)
-        }}
-        aria-label={t('editor.zenbar.layoutToggle')}
-      >
-        {BAR_LAYOUTS.map(([kind, icon]) => (
-          <ToggleGroupItem
-            key={kind}
-            value={kind}
-            data-testid={`layout-${kind}`}
-            aria-label={layoutNames[kind]}
-            title={layoutNames[kind]}
-          >
-            {icon}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      {/* 更多布局 = 单选下拉（2026-09 时间轴/鱼骨图）：收起非常用布局，不占常驻钮位。
-       *  触发钮不用 ui Toggle：DropdownMenuTrigger 的 data-state(open/closed) 会遮蔽 Toggle 的
-       *  on/off 点亮信号（同布局组 TooltipTrigger 冲突家族），激活态走 data-active 通道
-       *  （官方 sidebar 同款规避）；语义名由 aria-label 承担，激活收起项时换显该布局图标 */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            data-testid="btn-layout-more"
-            data-active={moreActive !== null ? '' : undefined}
-            aria-label={moreLabel}
-            title={moreLabel}
-            className="data-[active]:bg-accent data-[active]:text-accent-foreground"
-          >
-            {moreActive ? moreActive[1] : <IconChevronDown />}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuRadioGroup
+      {/* Markdown 态专有段（2026-09 画布三态）：大纲开关——visible 由 MarkdownView 上报（auto 跟宽），
+       *  点亮语言同 btn-body（data-active 通道 + aria-pressed，不依赖 data-state） */}
+      {viewMode === 'markdown' && (
+        <>
+          <Separator orientation="vertical" className="mx-1" />
+          <Tip label={outlineVisible ? t('editor.zenbar.outlineHide') : t('editor.zenbar.outlineShow')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-outline-toggle"
+              data-active={outlineVisible ? '' : undefined}
+              aria-label={outlineVisible ? t('editor.zenbar.outlineHide') : t('editor.zenbar.outlineShow')}
+              aria-pressed={outlineVisible}
+              onClick={onToggleOutline}
+              className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+            >
+              <IconOutline />
+            </Button>
+          </Tip>
+        </>
+      )}
+      {/* 看板态专有段（2026-09 画布三态）：归档列显隐——toggle 宿主持有的 archiveOpen，
+       *  点亮语言同上（data-active + aria-pressed） */}
+      {viewMode === 'kanban' && (
+        <>
+          <Separator orientation="vertical" className="mx-1" />
+          <Tip label={t('editor.zenbar.archiveToggle')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              data-testid="btn-kanban-archive"
+              data-active={kanbanArchiveOpen ? '' : undefined}
+              aria-label={t('editor.zenbar.archiveToggle')}
+              aria-pressed={kanbanArchiveOpen}
+              onClick={onToggleKanbanArchive}
+              className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+            >
+              <IconArchive />
+            </Button>
+          </Tip>
+        </>
+      )}
+      {/* 布局段（含前置分隔线，导图态专属）：布局只作用于导图画布，Markdown/看板态整段隐藏 */}
+      {mapOnly && (
+        <>
+          <Separator orientation="vertical" className="mx-1" />
+          {/* 布局组 = ui ToggleGroup（single）：激活项 data-state=on 官方点亮态；点已激活项为 no-op。
+           *  项不加 ui Tooltip：TooltipTrigger(asChild) 会把自身 data-state(open/closed) 混入 item props，
+           *  遮蔽 Radix Toggle 的 on/off 信号（官方 sidebar 以 data-active 规避同款冲突，Toggle 无此通道）；
+           *  语义名由 item 自身 aria-label 承担（官方 ToggleGroup 文档同款 a11y 模式）。
+           *  2026-09 UI 评审 P3-2：补原生 title 悬停提示——不经过 Tooltip 组件、无 data-state
+           *  冲突，鼠标用户可辨识三个布局图标的语义（与全栏 14 钮的悬停体验对齐） */}
+          <ToggleGroup
+            type="single"
             value={layout}
-            onValueChange={(v) => onSwitchLayout(v as LayoutKind)}
+            onValueChange={(v) => {
+              if (v) onSwitchLayout(v as LayoutKind)
+            }}
+            aria-label={t('editor.zenbar.layoutToggle')}
           >
-            {MORE_LAYOUTS.map(([kind]) => (
-              <DropdownMenuRadioItem key={kind} value={kind} data-testid={`layout-${kind}`}>
-                {layoutNames[kind]}
-              </DropdownMenuRadioItem>
+            {BAR_LAYOUTS.map(([kind, icon]) => (
+              <ToggleGroupItem
+                key={kind}
+                value={kind}
+                data-testid={`layout-${kind}`}
+                aria-label={layoutNames[kind]}
+                title={layoutNames[kind]}
+              >
+                {icon}
+              </ToggleGroupItem>
             ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </ToggleGroup>
+          {/* 更多布局 = 单选下拉（2026-09 时间轴/鱼骨图）：收起非常用布局，不占常驻钮位。
+           *  触发钮不用 ui Toggle：DropdownMenuTrigger 的 data-state(open/closed) 会遮蔽 Toggle 的
+           *  on/off 点亮信号（同布局组 TooltipTrigger 冲突家族），激活态走 data-active 通道
+           *  （官方 sidebar 同款规避）；语义名由 aria-label 承担，激活收起项时换显该布局图标 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                data-testid="btn-layout-more"
+                data-active={moreActive !== null ? '' : undefined}
+                aria-label={moreLabel}
+                title={moreLabel}
+                className="data-[active]:bg-accent data-[active]:text-accent-foreground"
+              >
+                {moreActive ? moreActive[1] : <IconChevronDown />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuRadioGroup
+                value={layout}
+                onValueChange={(v) => onSwitchLayout(v as LayoutKind)}
+              >
+                {MORE_LAYOUTS.map(([kind]) => (
+                  <DropdownMenuRadioItem key={kind} value={kind} data-testid={`layout-${kind}`}>
+                    {layoutNames[kind]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
       <Separator orientation="vertical" className="mx-1" />
       <Tip label={t('editor.zenbar.settings')}>
         <Button
