@@ -1,7 +1,7 @@
 // src/components/DeskOverview.test.tsx —— 案头总览区（2026-09 画布三态 M3）：自
-// WorkbenchView.test.tsx 迁移改写（13 例 → 12 例：去案头钮/最近 chip/设置齿轮三例随
-// 页面头部与 MRU 退役；新增纵向行退场/空任务退场两例）。挂载模式对齐源文件：真实
-// zustand store setState 预置 + MemoryFsAdapter。
+// WorkbenchView.test.tsx 迁移改写（13 例 → 15 例：去案头钮/最近 chip/设置齿轮三例随
+// 页面头部与 MRU 退役；新增纵向行退场/空任务退场/重扫失败清旧态三例）。挂载模式
+// 对齐源文件：真实 zustand store setState 预置 + MemoryFsAdapter。
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -111,6 +111,27 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(screen.getByTestId('desk-overview')).toBeInTheDocument()
     expect(screen.queryByTestId('workbench-suggestion')).toBeNull()
     expect(screen.queryByTestId('workbench-row-todo')).toBeNull()
+  })
+
+  test('先成功后失败序列：重扫抛错时旧 scan 清空，错误占位替代旧内容（不并存不误导）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
+    await fs.mkdir('/ws2/工作')
+    await fs.writeTextFileAtomic('/ws2/工作/图B.md', '# 图B\n\n## 事项 @doing\n')
+    render(<DeskOverview />)
+    await screen.findByTestId('workbench-row-todo') // 首扫成功：旧内容已入 DOM
+    // 临时故障：readDirEntries 仅对 /ws2/工作 拒绝；切工作区令 rescan 依赖变化 →
+    // 同实例重扫，复现「先成功后失败」序列
+    const orig = fs.readDirEntries.bind(fs)
+    vi.spyOn(fs, 'readDirEntries').mockImplementation((dir: string) =>
+      dir === '/ws2/工作' ? Promise.reject(new Error('io boom')) : orig(dir),
+    )
+    useAppStore.setState({ workspaceDir: '/ws2' })
+    // 错误占位可见，且旧内容（任务行/建议/创建引导）全部消失——若不 setScan(null)，
+    // 旧任务行会与错误占位并存（残留即 bug，本用例为其回归守卫）
+    expect(await screen.findByTestId('desk-overview-error')).toBeInTheDocument()
+    expect(screen.queryByTestId('workbench-row-todo')).toBeNull()
+    expect(screen.queryByTestId('workbench-suggestion')).toBeNull()
+    expect(screen.queryByTestId('desk-overview-create')).toBeNull()
   })
 })
 

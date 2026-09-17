@@ -218,6 +218,9 @@ export default function DeskOverview() {
       setScan(await scanWorkTasksCached(adapter, workspaceDir))
     } catch (e) {
       console.error('案头总览聚合失败', e)
+      // 重扫失败必须清旧 scan：否则「先成功后失败」序列下旧任务卡与错误占位并存，
+      // 或旧 dirExists:false 残留误显创建引导（回归守卫：DeskOverview.test 末例）
+      setScan(null)
       setScanFailed(true)
     } finally {
       setScanning(false)

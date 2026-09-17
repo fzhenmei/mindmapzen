@@ -4,10 +4,14 @@ import { IconImport, IconMarkdown, IconPlus } from './icons'
 import AppLogo from './AppLogo'
 import { i18n } from '../i18n'
 import type { MapInfo } from '../types/files'
+import type { ReactNode } from 'react'
 
 interface Props {
   /** 最近打开的导图（已过滤截断） */
   recent: readonly MapInfo[]
+  /** 总览槽位（2026-09 画布三态 M3）：案头总览（DeskOverview）挂载点，渲染在
+   *  「最近的」之后、页脚之前；空任务时总览自行退场，本组件零感知 */
+  overview?: ReactNode
   onNew(): void
   onImport(): void
   onOpen(m: MapInfo): void
@@ -54,8 +58,10 @@ function friendlyTime(ms: number, locale: string): string {
  *  纵向溢出（小窗体 + 最近列表满 8 行）：根容器 overflow-y-auto 整体内滚，居中改由
  *  内层 wrapper my-auto 承担——justify-center 与 overflow 同轴会把上溢裁到滚不到
  *  （flex 经典坑），auto margin 空间不足时自动退化为顶部对齐，全程可滚。
+ *  总览槽位（2026-09 画布三态 M3）：overview prop 挂案头总览（DeskOverview），插在
+ *  「最近的」之后、页脚之前——工作台并入欢迎页的接线点。
  *  testid 契约不变（desk-idle/desk-idle-new/desk-recent/recent-item-*） */
-export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonly<Props>) {
+export default function WelcomePane({ recent, overview, onNew, onImport, onOpen }: Readonly<Props>) {
   const { t } = useTranslation()
   return (
     <div
@@ -123,6 +129,10 @@ export default function WelcomePane({ recent, onNew, onImport, onOpen }: Readonl
             </ul>
           )}
         </section>
+
+        {/* 总览区（2026-09 画布三态 M3）：工作台并入——建议 + 聚合任务纵向排布；
+            空任务时 DeskOverview 自行退场，本组件零感知 */}
+        {overview}
 
         {/* 落款：页脚寄语（居中，案头题跋气质） */}
         <footer className="text-center text-xs text-muted-foreground">{t('welcome.footer')}</footer>

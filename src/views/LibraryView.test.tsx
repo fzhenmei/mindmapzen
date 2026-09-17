@@ -882,3 +882,23 @@ describe('案头收藏与排序（2026-09）', () => {
     await waitFor(() => expect(useAppStore.getState().favorites).toEqual([]))
   })
 })
+
+// 2026-09 画布三态 M3：欢迎页 overview 槽位挂 DeskOverview（案头总览并入）+ 页首
+// 工作台钮退役。工作台机制（goWorkbench/route/WorkbenchView）由后续任务退役，此处只删按钮
+describe('欢迎页总览槽位与页首工作台钮退役（画布三态 M3）', () => {
+  test('欢迎页总览：idle 态渲染 desk-overview 槽位（工作目录有任务时）', async () => {
+    // 预置工作区 + 工作/x.md 含 @todo 任务（沿本文件既有内存 fs 预置模式）
+    await fs.writeTextFileAtomic('/ws/工作/x.md', '# x\n\n## 待办 @todo\n')
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+    await waitFor(() => expect(screen.getByTestId('desk-overview')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('workbench-row-todo')).toBeInTheDocument())
+  })
+
+  test('页首工作台钮退役：btn-workbench 不存在', async () => {
+    await useAppStore.getState().setWorkspace('/ws')
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+    expect(await screen.findByTestId('btn-new')).toBeInTheDocument() // 页首就绪再断言退场
+    expect(screen.queryByTestId('btn-workbench')).toBeNull()
+  })
+})
