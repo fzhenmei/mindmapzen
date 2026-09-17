@@ -86,8 +86,12 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   // 画布级钉死：收尾文本/成功卡同样含「AI 要点」，全页 getByText 存在"工具失败仍绿"的
   // 假阴性，此处限定在引擎节点容器上（.smm-node 惯例见 canvas.spec）
   await expect(page.locator('.smm-node', { hasText: 'AI 要点' })).toBeVisible({ timeout: 15_000 })
-  // 对话流出现改图卡片（成功卡「新增「已新增「AI 要点」」」，失败卡不含该文本）与收尾文本
-  await expect(page.getByTestId('ai-card-1-0')).toContainText('AI 要点')
+  // 对话流出现改图卡片（成功卡「新增「AI 要点」」」，失败卡不含该文本）与收尾文本。
+  // 语义定位：testid 前缀 + 文本过滤，不钉消息下标——卡片 testid 为 ai-card-<消息下标>-<卡序>
+  // （ChatPanel MessageRow），7106d41 起首轮发送前插入 notice 安全网信息卡，messages 变为
+  // [notice, user, assistant]，消息下标随前置消息数漂移（曾 ai-card-1-0 → ai-card-2-0）；
+  // 卡片 append-only 无重排，文本即稳定标识
+  await expect(page.getByTestId(/^ai-card-/).filter({ hasText: 'AI 要点' })).toBeVisible()
   // 收尾文本走 MarkdownPreview 异步渲染，超时与全链路断言对齐（默认 5s 偶发不够）
   await expect(page.getByText(/已添加/).first()).toBeVisible({ timeout: 15_000 })
   // 全程无错误消息：web 模式无 Tauri invoke，工厂注入生效即不该出现 AI_TRANSPORT_UNAVAILABLE
