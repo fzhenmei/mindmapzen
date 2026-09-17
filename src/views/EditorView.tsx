@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, type ViewMode } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { useSubtreeCopy } from '../hooks/useSubtreeCopy'
 import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets'
@@ -29,14 +29,15 @@ import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
 import CanvasHint from '../components/CanvasHint'
 import { computeNodeStampPos, startLinkFromActive, useNodeActions } from '../hooks/useNodeActions'
-import { useIconPicker, findByUid, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import { useIconPicker, nodeIconsOf, nodeTextOf } from '../hooks/useIconPicker'
+import { useStatusPick } from '../hooks/useStatusPick'
 import { useTagPicker, nodeTagsOf, usedTagsOf } from '../hooks/useTagPicker'
 import { useImageEdit, nodeImageOf } from '../hooks/useImageEdit'
 import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
-import type { TaskStatus } from '../services/statusMarkers'
-import { centerNodeOnRender, consumePendingLocate, expandToUid, execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import MarkdownView from './MarkdownView'
+import { centerNodeOnRender, consumePendingLocate, expandToUid, nodeStatusOf } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -100,8 +101,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [warnStamp, setWarnStamp] = useState<{ seq: number } | null>(null) // 警告印记（2026-09-09）：无目标正文编辑 1.2s 居中劝导（seq 重挂载语义同上）
   const warnSeqRef = useRef(0)
   const [newMapOpen, setNewMapOpen] = useState(false) // 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog，确认走 leaveTo 安全链
-  // 状态选择器目标快照（2026-09 看板模式 Task 8）：开框瞬间的 uid/文本/现态；null = 关
-  const [statusPick, setStatusPick] = useState<{ uid: string; text: string; current: TaskStatus | null } | null>(null)
+  const [kanbanArchiveOpen, setKanbanArchiveOpen] = useState(false) // 归档列显隐（2026-09 画布三态上浮砚栏，跨浮层挂载保持）
+  const [mdOutlineVisible, setMdOutlineVisible] = useState(false) // Markdown 态大纲实际显隐（MarkdownView 上报，ZenBar 钮 pressed 信号）
   const [aiOpen, setAiOpen] = useState(false) // AI 对话面板开合（2026-09 AI Agent v1）：右栏常驻槽
   const [aiDragPx, setAiDragPx] = useState<number | null>(null) // AI 面板拖拽暂存宽；null = 未在拖（松手 onCommit 落盘）
 
@@ -205,8 +206,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const nodePos = useNodeActions(mmRef, selection.activeUid)
   const undoRedo = useUndoRedo() // 回退/重做（v1.1）：back_forward 历史态驱动按钮禁用，命令走引擎 BACK/FORWARD
 
-  /** 视图切换（2026-09 看板模式）：同值 no-op——砚栏视图组、快捷键翻转与看板关闭钮共用 */
-  const switchView = (v: 'mindmap' | 'kanban'): void => {
+  /** 视图切换（2026-09 看板模式；画布三态 M1 扩 markdown 态）：同值 no-op——砚栏视图组、
+   *  快捷键翻转与看板/Markdown 关闭共用 */
+  const switchView = (v: ViewMode): void => {
     if (v === viewMode) return
     useAppStore.getState().setViewMode(v)
   }
@@ -227,23 +229,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     }
   }
 
-  /** 应用状态（2026-09 看板模式 Task 8，StatusPickerDialog 确认）：确认即关框；经
-   *  execOnRenderNode 渲染节点寻址落 setIcon（SET_NODE_ICON 单命令可撤销，KanbanView.
-   *  changeStatus 同款链路）。currentIcon 从数据树读（getData 快照含收起隐藏子树，
-   *  收起分支节点照常可改）；onTreeDataChange 在命令真正落地后调用（照 useIconPicker.apply
-   *  修复模式——渲染树 miss 时先展开重试，回调外调用会误置脏）。同态短路：重选当前态
-   *  不产生命令（不占 undo 一步、不置脏，看板侧同款纪律） */
-  const applyStatus = (uid: string, status: TaskStatus | null): void => {
-    const mm = mmRef.current
-    setStatusPick(null)
-    if (mm === null) return
-    if (nodeStatusOf(mm, uid) === status) return
-    const currentIcon = findByUid(mm.getData(), uid)?.data.icon
-    execOnRenderNode(mm, uid, '改状态', (node) => {
-      ;(node as { setIcon?(icons: string[]): void })?.setIcon?.(mergeStatusBadge(currentIcon, status))
-      pipeline.onTreeDataChange()
-    })
-  }
+  // 状态选择器（2026-09 看板 Task 8；2026-09 画布三态 M1 拆 useStatusPick——行为零变化，
+  // 语义注释见该 hook：execOnRenderNode 渲染节点寻址 / getData 快照读现值 / 命令落地后
+  // onTreeDataChange / 同态短路不占 undo）
+  const { statusPick, setStatusPick, applyStatus } = useStatusPick(mmRef, () => pipeline.onTreeDataChange())
 
   /** 盖印记（Task 7）：seq 自增 → key 变化强制重挂载（到期前重置计时 / 到期后再触发也全新挂载） */
   const flashStamp = (kind: StampKind): void => {
@@ -526,6 +515,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             onEditTags={(c) => tagPick.openPicker(c.text, c.tags, usedTagsOf(mmRef.current), c.uid)}
             onLocate={locateNode}
             onCopyCard={copyKanbanCard}
+            // 归档列显隐上浮（2026-09 画布三态 M1）：宿主持有用户态，砚栏看板态专有钮 toggle
+            archiveOpen={kanbanArchiveOpen}
+            onSetArchiveOpen={setKanbanArchiveOpen}
+            onClose={() => switchView('mindmap')}
+          />
+        )}
+        {/* Markdown 浮层（2026-09 画布三态 M1）：协议同看板——引擎不卸载、盖满、
+            Esc 回导图；只读（数据源内存树完整序列化，见组件头注释） */}
+        {docReady && viewMode === 'markdown' && (
+          <MarkdownView
+            mmRef={mmRef}
+            registry={registry}
+            onOutlineVisibleChange={setMdOutlineVisible}
             onClose={() => switchView('mindmap')}
           />
         )}
@@ -631,6 +633,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSwitchLayout={switchLayout}
         viewMode={viewMode}
         onSwitchView={switchView}
+        // Markdown 态大纲钮（2026-09 画布三态 M1）：显隐信号由 MarkdownView 上报（auto 跟宽）
+        outlineVisible={mdOutlineVisible}
+        onToggleOutline={() => {
+          // FileDetail 同款交互：可见→off，不可见→on（auto 首点即转显式）
+          void useAppStore.getState().setPreviewOutline(mdOutlineVisible ? 'off' : 'on')
+        }}
+        // 看板归档列显隐（2026-09 画布三态 M1）：砚栏看板态专有钮 toggle 宿主态
+        kanbanArchiveOpen={kanbanArchiveOpen}
+        onToggleKanbanArchive={() => setKanbanArchiveOpen((v) => !v)}
       />
       )}
       {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；

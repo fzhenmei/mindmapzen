@@ -181,7 +181,7 @@ describe('ZenBar 更多布局下拉', () => {
 describe('ZenBar 视图切换组', () => {
   afterEach(cleanup)
 
-  test('两 testid 常驻：导图态导图钮点亮；点击看板钮回调 onSwitchView("kanban")', () => {
+  test('三 testid 常驻：导图态导图钮点亮；点击看板钮回调 onSwitchView("kanban")', () => {
     const onSwitchView = vi.fn()
     renderBar({ viewMode: 'mindmap', onSwitchView })
     expect(screen.getByTestId('btn-view-mindmap')).toHaveAttribute('data-state', 'on')

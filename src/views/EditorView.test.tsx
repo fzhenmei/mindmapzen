@@ -2964,11 +2964,29 @@ describe('看板模式（2026-09 Task 7）', () => {
   })
 
   test('Ctrl+Shift+K 切换视图；对话框开着也切（视图切换不进 anyDialog 互斥）', async () => {
-    await renderKanbanReady(kanbanTree())
-    expect(useAppStore.getState().viewMode).toBe('kanban')
-    // 对话框开着（导出框）依旧可切——Esc 归对话框、Ctrl+Shift+K 归视图切换
+    // 2026-09 画布三态 M1：导出钮改导图态专属（ZenBar 三态矩阵，看板态不显）——
+    // 「对话框开着也切」语义改自导图态起：先开导出框再 Ctrl+Shift+K 进看板、同键切回，
+    // 对话框全程在场（视图切换不关对话框、也不被 anyDialog 互斥拦）
+    fakeTree = kanbanTree()
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     fireEvent.click(screen.getByTestId('btn-export'))
     expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
+    await waitFor(() => expect(useAppStore.getState().viewMode).toBe('kanban'))
+    expect(screen.getByTestId('export-dialog')).toBeInTheDocument() // 切看板：对话框不关
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true, shiftKey: true })
     await waitFor(() => expect(useAppStore.getState().viewMode).toBe('mindmap'))
     expect(screen.queryByTestId('kanban-view')).not.toBeInTheDocument()
@@ -3066,6 +3084,52 @@ describe('看板模式（2026-09 Task 7）', () => {
     // 截断口径：B 卡范围（子任务B + B1）不随 A 卡复制——独立卡不产生重复上下文
     expect(writes[0]).not.toContain('子任务B')
     expect(writes[0]).not.toContain('B1')
+  })
+})
+
+// ── 画布三态装配（2026-09 M1）：EditorView 接线 MarkdownView 浮层 + 归档列上浮宿主 +
+//    ZenBar 大纲/归档专有钮（装配骨架同看板浮层用例：渲染 → ready → 切 viewMode）──────
+describe('画布三态装配（2026-09 M1）', () => {
+  beforeEach(() => {
+    useAppStore.setState({ viewMode: 'mindmap' })
+  })
+
+  /** 渲染 → ready → 切目标态（renderKanbanReady 同源约定：ready 时刻锁定前 emit） */
+  const renderReadySwitch = async (v: 'markdown' | 'kanban'): Promise<void> => {
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    act(() => {
+      useAppStore.getState().setViewMode(v)
+    })
+  }
+
+  test('Markdown 态：viewMode=markdown 挂 MarkdownView，ZenBar 大纲钮在、撤销钮隐藏', async () => {
+    await renderReadySwitch('markdown')
+    expect(await screen.findByTestId('markdown-view')).toBeInTheDocument()
+    expect(screen.getByTestId('fake-canvas')).toBeInTheDocument() // 浮层协议：引擎画布不卸载
+    expect(screen.getByTestId('btn-outline-toggle')).toBeInTheDocument() // 大纲钮（Markdown 态专有段）
+    expect(screen.queryByTestId('btn-undo')).toBeNull() // Markdown 态隐藏（编辑走 vditor 自有历史）
+  })
+
+  test('看板态：归档钮 toggle 驱动 KanbanView 归档列显隐（宿主持有 archiveOpen）', async () => {
+    await renderReadySwitch('kanban')
+    expect(await screen.findByTestId('kanban-view')).toBeInTheDocument()
+    expect(screen.queryByText('归档')).toBeNull() // 收起态：归档列不在（收起条已退役无残留）
+    fireEvent.click(screen.getByTestId('btn-kanban-archive'))
+    // archiveOpen=true：归档列渲染（archived 列头可见）
+    expect(screen.getByText('归档')).toBeInTheDocument()
   })
 })
 
