@@ -23,7 +23,9 @@ test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移�
   await page.getByTestId('file-node-根图').click()
   const popover = page.getByTestId('file-preview-popover')
   await expect(popover).toBeVisible()
-  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/)
+  // md 预览走 vditor(lute) 异步渲染，元素先挂载内容后到；全量并发下脚本加载变慢，
+  // 默认 5s 偶发不够（ai.spec 收尾文本 / mermaid.spec 好图断言同款 15s 口径）
+  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/, { timeout: 15_000 })
 
   // 移动流：树右键 ctx-btn-move → move-dialog → 选目录 → 确认。
   // 对话框树复用 dir-node-<name> testid（与左树同名），严格模式下必须以 move-dialog 圈定
@@ -71,7 +73,8 @@ test('案头：树文件行单击出悬浮预览、双击进纸面', async ({ pa
   await page.getByTestId('file-node-根图').click()
   const popover = page.getByTestId('file-preview-popover')
   await expect(popover).toBeVisible()
-  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/)
+  // lute 异步渲染慢启动同上（默认 5s 全量并发下偶发不够）
+  await expect(popover.getByTestId('md-preview')).toHaveText(/根图/, { timeout: 15_000 })
   // 仍是案头，未进纸面（命令栏不可见）
   await expect(page.getByTestId('zen-bar')).toHaveCount(0)
   await expect(page.getByTestId('desk-idle')).toBeVisible()
