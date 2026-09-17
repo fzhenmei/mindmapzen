@@ -358,18 +358,6 @@ export const IconArchive = ({ size }: IconProps) =>
 /** 右向箭头（2026-09 看板治理 · 归档列收起钮）：IconChevronDown 的右向镜像
  *  （收起 = 向板缘收纳） */
 export const IconChevronRight = ({ size }: IconProps) => base(<path d="M6 4l4 4-4 4" />, size)
-/** 工作台（2026-09 跨图总览 · 案头入口钮）：驾驶舱四格拼图——左列通高、右列上下
- *  参差，24→16 缩放（÷1.5）自 lucide layout-dashboard 图形 */
-export const IconWorkbench = ({ size }: IconProps) =>
-  base(
-    <>
-      <rect x="2" y="2" width="4.67" height="6" rx="0.67" />
-      <rect x="9.33" y="2" width="4.67" height="3.33" rx="0.67" />
-      <rect x="9.33" y="8" width="4.67" height="6" rx="0.67" />
-      <rect x="2" y="10.67" width="4.67" height="3.33" rx="0.67" />
-    </>,
-    size,
-  )
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */

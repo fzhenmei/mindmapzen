@@ -10,6 +10,7 @@ import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { copyAsWechatHtml } from '../services/wechatCopy'
 import LibraryDialogs from '../components/LibraryDialogs'
 import WelcomePane from '../components/WelcomePane'
+import DeskOverview from '../components/DeskOverview'
 import { ThemeFab } from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import CloneDialog, { type CloneRequest } from '../components/CloneDialog'
@@ -19,7 +20,7 @@ import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
 import FileDetail from '../components/FileDetail'
 import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
-import { IconImport, IconPlus, IconSettings, IconWorkbench } from '../components/icons'
+import { IconImport, IconPlus, IconSettings } from '../components/icons'
 import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
 import { iconBtn } from '../components/ui/icon-button'
@@ -234,10 +235,12 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       )
     // 详情态（容器合并）：动作钮/标题在页首（见 header），主区只剩预览面板
     if (selectedInfo !== null) return <FileDetail info={selectedInfo} />
-    // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）
+    // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）；
+    // overview 槽位挂案头总览（2026-09 画布三态 M3：工作台并入，页首 btn-workbench 已退役）
     return (
       <WelcomePane
         recent={recent}
+        overview={<DeskOverview />}
         onNew={() => dlg.openNewMap('')}
         onImport={() => void dlg.startImport()}
         onOpen={(m) => void store.openMap(m.mdPath)}
@@ -393,8 +396,8 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
                 />
               )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
-                  设置已移入侧栏底栏（居隐藏面板钮左侧） */}
-              {iconBtn(t('workbench.title'), 'btn-workbench', IconWorkbench, () => useAppStore.getState().goWorkbench())}
+                  设置已移入侧栏底栏（居隐藏面板钮左侧）。工作台钮退役（2026-09 画布
+                  三态 M3）：案头总览并入欢迎页 overview 槽位，入口随钮删除 */}
               {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(''))}
               {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>

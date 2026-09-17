@@ -1,50 +1,56 @@
-// src/views/WorkbenchView.test.tsx
-// 挂载模式对齐 LibraryView.test.tsx：真实 zustand store setState 预置 + MemoryFsAdapter。
+// src/components/DeskOverview.test.tsx —— 案头总览区（2026-09 画布三态 M3）：自
+// WorkbenchView.test.tsx 迁移改写（13 例 → 15 例：去案头钮/最近 chip/设置齿轮三例随
+// 页面头部与 MRU 退役；新增纵向行退场/空任务退场/重扫失败清旧态三例）。挂载模式
+// 对齐源文件：真实 zustand store setState 预置 + MemoryFsAdapter。
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { useAppStore } from '../store/appStore'
 import { changeUiLanguage } from '../i18n'
-import WorkbenchView from './WorkbenchView'
+import DeskOverview from './DeskOverview'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
   fs = new MemoryFsAdapter()
   // aiAdvice 必须逐用例重置：测试夹具任务集相同 → 指纹相同，前用例存档会让
   // 后续用例的「问问 AI」缓存命中跳过请求（2026-09-14 缓存引入的跨用例泄漏）
-  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'workbench', error: null, aiAdvice: null })
+  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'library', error: null, aiAdvice: null })
 })
 
-describe('WorkbenchView 骨架（spec §4/§8）', () => {
-  test('工作目录不存在：空态引导 + 一键创建后重扫出任务', async () => {
-    render(<WorkbenchView />)
-    expect(await screen.findByTestId('workbench-empty-create')).toBeInTheDocument()
-    expect(screen.getByText('还没有工作目录')).toBeInTheDocument()
-    await screen.getByTestId('workbench-empty-create').click()
-    // 一键创建（ensureDir）+ 重扫：目录已存在但无任务 → 切换到「打标记」空态
-    expect(await screen.findByText(/还没有带状态标记的任务/)).toBeInTheDocument()
+describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵向形态）', () => {
+  test('工作目录不存在：轻引导 + 一键创建后整段退场（目录在但无任务）', async () => {
+    render(<DeskOverview />)
+    expect(await screen.findByTestId('desk-overview-create')).toBeInTheDocument()
+    expect(screen.getByText(/建一个「工作」目录/)).toBeInTheDocument() // 轻引导只有 body 文案（非大卡片带标题）
+    expect(screen.queryByTestId('desk-overview-error')).toBeNull() // 轻引导=「未建目录」态，非 IO 故障占位（二者互斥）
+    await screen.getByTestId('desk-overview-create').click()
+    // 一键创建（ensureDir）+ 重扫：目录已存在但无任务 → M3 空态分层裁定——内容整段退场
+    await waitFor(() => expect(screen.queryByTestId('desk-overview-create')).toBeNull())
+    expect(screen.queryByTestId('workbench-suggestion')).toBeNull()
   })
 
-  test('有任务：头部去案头钮可达；扫描期间有确定性 loading', async () => {
+  test('扫描期间行内 loading 占位（首帧即现，不闪空）', async () => {
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务一 @todo\n')
-    render(<WorkbenchView />)
-    expect(screen.getByTestId('workbench-loading')).toBeInTheDocument() // 首帧即 loading（不闪空 UI）
-    expect(await screen.findByText('任务一')).toBeInTheDocument() // 看板区在 Task 5 完整化，此处仅断言任务可见
-    expect(screen.getByText('去案头')).toBeInTheDocument()
+    render(<DeskOverview />)
+    expect(screen.getByTestId('desk-overview-loading')).toBeInTheDocument()
+    expect(await screen.findByText('任务一')).toBeInTheDocument()
   })
 
-  test('看板四列分组与跨图跳转：openMap + pendingLocate 置位（spec §5）', async () => {
+  test('状态段分组与跨图跳转：openMap + pendingLocate 置位（spec §5）', async () => {
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务甲 @todo\n\n## 任务乙 @doing\n')
     await fs.writeTextFileAtomic('/ws/工作/图B.md', '# 图B\n\n## 任务丙 @blocked\n')
     const openMap = vi.fn()
     useAppStore.setState({ openMap: openMap as never, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务甲')
-    expect(screen.getByTestId('workbench-col-todo').textContent).toContain('任务甲')
-    expect(screen.getByTestId('workbench-col-todo').textContent).not.toContain('任务乙')
-    expect(screen.getByTestId('workbench-col-doing').textContent).toContain('任务乙')
-    expect(screen.getByTestId('workbench-col-blocked').textContent).toContain('任务丙')
-    // 点击任务丙卡片（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
+    // 行列表形态：每状态一段（workbench-row-* 挂段容器=行头「状态名 · 计数」+ 全宽行）
+    const rowTodo = screen.getByTestId('workbench-row-todo')
+    const rowDoing = screen.getByTestId('workbench-row-doing')
+    expect(rowTodo.textContent).toContain('任务甲')
+    expect(rowTodo.textContent).not.toContain('任务乙')
+    expect(rowDoing.textContent).toContain('任务乙')
+    expect(screen.getByTestId('workbench-row-blocked').textContent).toContain('任务丙')
+    // 点击任务丙行（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
     // mapPath 绑定目标图（终审 Important-1：错图消费防线的数据源），path+text 寻址
     const card = screen.getAllByTestId('workbench-card').find((el) => el.textContent?.includes('任务丙'))!
     await card.click()
@@ -52,11 +58,22 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图B.md', text: '任务丙' })
   })
 
+  test('聚合行信息密度：来源徽标 + 路径段 + 子任务计数（承接 WorkbenchCard.test 退役口径）', async () => {
+    // 深任务带父链（## 分组 → path=['分组']）与无状态后代（#### 子任务 → +1）——
+    // 两分支只在有层级/有子孙时渲染，现有夹具全是根级单行任务盖不到（path=[]/childCount=0）
+    await fs.writeTextFileAtomic('/ws/工作/图C.md', '# 图C\n\n## 分组\n\n### 深任务 @todo\n\n#### 子任务\n')
+    render(<DeskOverview />)
+    const card = (await screen.findAllByTestId('workbench-card')).find((el) => el.textContent?.includes('深任务'))!
+    expect(card.textContent).toContain('图C') // 来源徽标
+    expect(card.textContent).toContain('分组') // 大纲路径段（窄屏 hidden sm:inline 视觉退场，DOM 仍在）
+    expect(card.textContent).toContain('+1') // 截断范围内无状态后代计数
+  })
+
   test('failed-bar 标点随语言：词条含冒号，en 侧不渗全角正字法', async () => {
     // 无根标题 → parse ok:false 进 failed（services/workbench 单文件失败口径）
     await fs.writeTextFileAtomic('/ws/工作/坏图.md', '没有根标题的段落\n')
     await fs.writeTextFileAtomic('/ws/工作/另坏图.md', '也没有根标题\n')
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     expect(await screen.findByTestId('workbench-failed-bar')).toHaveTextContent('2 张图读取失败：坏图、另坏图')
     try {
       await changeUiLanguage('en')
@@ -66,20 +83,20 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     }
   })
 
-  test('创建工作目录失败：横幅可见（workbench 路由内渲染 error，不吞异常红线）', async () => {
-    render(<WorkbenchView />)
-    expect(await screen.findByTestId('workbench-empty-create')).toBeInTheDocument()
+  test('创建工作目录失败：setError 落 store（横幅渲染归案头，不吞异常红线）', async () => {
+    render(<DeskOverview />)
+    expect(await screen.findByTestId('desk-overview-create')).toBeInTheDocument()
     vi.spyOn(fs, 'ensureDir').mockRejectedValue(new Error('disk full'))
-    await screen.getByTestId('workbench-empty-create').click()
-    // 断言可见文本而非 store 置位：error 唯一渲染出口在 LibraryView，本路由须自渲染
-    expect(await screen.findByText('创建工作目录失败')).toBeInTheDocument()
+    await screen.getByTestId('desk-overview-create').click()
+    // 总览挂案头（LibraryView 已有 error 横幅出口）——本组件只落 store，横幅由案头渲染
+    await waitFor(() => expect(useAppStore.getState().error).toBe('创建工作目录失败'))
   })
 
   test('建议区：规则建议渲染 + task 级点击跳转（spec §6）', async () => {
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 进行中事 @doing\n')
     const openMap = vi.fn()
     useAppStore.setState({ openMap: openMap as never, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     const sug = await screen.findAllByTestId('workbench-suggestion')
     expect(sug[0]!.textContent).toContain('进行中的事，先收尾')
     expect(sug[0]!.textContent).toContain('进行中事')
@@ -88,26 +105,44 @@ describe('WorkbenchView 骨架（spec §4/§8）', () => {
     expect(useAppStore.getState().pendingLocate).not.toBeNull()
   })
 
-  test('最近 chip：recentOpened 渲染 + 点击 openMap（不带 pendingLocate，spec §5）', async () => {
-    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
-    await fs.writeTextFileAtomic('/ws/昨日图.md', '# 昨\n')
-    const openMap = vi.fn()
-    useAppStore.setState({ openMap: openMap as never, recentOpened: ['/ws/昨日图.md'], pendingLocate: null })
-    render(<WorkbenchView />)
-    const chip = await screen.findByTestId('workbench-recent-chip')
-    expect(chip.textContent).toContain('昨日图')
-    await chip.click()
-    expect(openMap).toHaveBeenCalledWith('/ws/昨日图.md')
-    expect(useAppStore.getState().pendingLocate).toBeNull()
+  test('纵向聚合：每状态一段（无卡状态不渲染段），段内全宽行列表', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/a.md', '# a\n\n## 甲 @todo\n\n## 乙 @doing\n')
+    render(<DeskOverview />)
+    await waitFor(() => expect(screen.getByTestId('workbench-row-todo')).toBeInTheDocument())
+    expect(screen.getByTestId('workbench-row-doing')).toBeInTheDocument()
+    // BOARD_STATUSES 中无任务的状态（如 blocked）不渲染段
+    expect(screen.queryByTestId('workbench-row-blocked')).toBeNull()
   })
 
-  test('头部设置齿轮打开 App 级设置对话框（2026-09 导航系统）', async () => {
+  test('空任务退场：目录存在但无可见任务时整段不渲染内容（仅根容器在）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/空.md', '# 空\n\n## 普通节点\n') // 无 status 标记
+    render(<DeskOverview />)
+    // 先等扫描落定（loading 退场）再断言退场——扫描未完时查 null 恒真假绿
+    await waitFor(() => expect(screen.queryByTestId('desk-overview-loading')).not.toBeInTheDocument())
+    expect(screen.getByTestId('desk-overview')).toBeInTheDocument()
+    expect(screen.queryByTestId('workbench-suggestion')).toBeNull()
+    expect(screen.queryByTestId('workbench-row-todo')).toBeNull()
+  })
+
+  test('先成功后失败序列：重扫抛错时旧 scan 清空，错误占位替代旧内容（不并存不误导）', async () => {
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
-    render(<WorkbenchView />)
-    await screen.findByText('任务')
-    await screen.getByTestId('btn-wb-settings').click()
-    // 断言 store 态：AppDialogs 渲染面已由其自身测试覆盖（spec §6 三空间一致入口）
-    await waitFor(() => expect(useAppStore.getState().appDialog).toBe('settings'))
+    await fs.mkdir('/ws2/工作')
+    await fs.writeTextFileAtomic('/ws2/工作/图B.md', '# 图B\n\n## 事项 @doing\n')
+    render(<DeskOverview />)
+    await screen.findByTestId('workbench-row-todo') // 首扫成功：旧内容已入 DOM
+    // 临时故障：readDirEntries 仅对 /ws2/工作 拒绝；切工作区令 rescan 依赖变化 →
+    // 同实例重扫，复现「先成功后失败」序列
+    const orig = fs.readDirEntries.bind(fs)
+    vi.spyOn(fs, 'readDirEntries').mockImplementation((dir: string) =>
+      dir === '/ws2/工作' ? Promise.reject(new Error('io boom')) : orig(dir),
+    )
+    useAppStore.setState({ workspaceDir: '/ws2' })
+    // 错误占位可见，且旧内容（任务行/建议/创建引导）全部消失——若不 setScan(null)，
+    // 旧任务行会与错误占位并存（残留即 bug，本用例为其回归守卫）
+    expect(await screen.findByTestId('desk-overview-error')).toBeInTheDocument()
+    expect(screen.queryByTestId('workbench-row-todo')).toBeNull()
+    expect(screen.queryByTestId('workbench-suggestion')).toBeNull()
+    expect(screen.queryByTestId('desk-overview-create')).toBeNull()
   })
 })
 
@@ -121,7 +156,7 @@ function installAiFactory(start: (onDelta: (d: string) => void) => Promise<{ end
   })
 }
 
-describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
+describe('问问 AI（spec §7：无工具纯咨询浮层，自工作台原样迁移）', () => {
   test('问问 AI：未配置时禁用 + title 提示；配置后点击发起流式并累积渲染', async () => {
     installAiFactory(async (onDelta) => {
       onDelta('{"choices":[{"delta":{"content":"建议一"}}]}')
@@ -130,7 +165,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     })
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
     useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     const btn = screen.getByTestId('btn-workbench-ask-ai')
     expect(btn).toBeDisabled()
@@ -150,7 +185,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     })
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
     useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     await screen.getByTestId('btn-workbench-ask-ai').click()
     expect(await screen.findByTestId('workbench-ai-error')).toHaveTextContent('AI 请求失败')
@@ -180,7 +215,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     })
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
     useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     await screen.getByTestId('btn-workbench-ask-ai').click()
     // 首 token 前占位（animate-pulse 呼吸态）+ 费用提示行恒可见 + 停止钮（streaming 态）
@@ -208,7 +243,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     })
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
     useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, aiAdvice: null, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     // 第一次：请求并完成 → 存档（文本 + 指纹）
     await screen.getByTestId('btn-workbench-ask-ai').click()
@@ -242,7 +277,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     // 指纹不符（模拟任务清单已变）：点开自动重问——断言走请求（starts 计数 + 新文本）；
     // 不抓瞬态占位（同步完成 transport 的占位一闪即逝，占位语义由专门用例把守）
     useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, aiAdvice: { text: '旧建议', at: Date.now(), fingerprint: 'stale-fp' }, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     await screen.getByTestId('btn-workbench-ask-ai').click()
     expect(await screen.findByTestId('workbench-ai-text')).toHaveTextContent('新建议')
@@ -274,7 +309,7 @@ describe('问问 AI（spec §7：无工具纯咨询浮层）', () => {
     })
     await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务 @todo\n')
     useAppStore.setState({ aiConfig: { baseUrl: 'http://x', apiKey: 'k', model: 'm' }, pendingLocate: null })
-    render(<WorkbenchView />)
+    render(<DeskOverview />)
     await screen.findByText('任务')
     await screen.getByTestId('btn-workbench-ask-ai').click()
     expect(await screen.findByTestId('workbench-ai-dialog')).toBeInTheDocument()

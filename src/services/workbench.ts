@@ -1,6 +1,6 @@
 // src/services/workbench.ts —— 工作台（驾驶舱）聚合服务（spec 2026-09-13 §3）：工作/ 子树
-// 全量 .md → 跨图任务索引。即时聚合：进入工作台时全量读、离开即弃——.md 唯一事实源，
-// 无缓存无失效协议。卡片口径全同源 buildKanbanCards（有 status 才是卡/截断/未分组置顶），
+// 全量 .md → 跨图任务索引。读侧带 mtime 指纹缓存层（scanWorkTasksCached：命中直返，
+// 增删改/换区必重扫）。卡片口径全同源 buildKanbanCards（有 status 才是卡/截断/未分组置顶），
 // 状态与列口径零新增（TASK_STATUSES/BOARD_STATUSES 复用）。
 import type { FsAdapter } from '../types/files'
 import type { ZenNode } from '../types/tree'
@@ -91,4 +91,56 @@ export async function scanWorkTasks(fs: FsAdapter, wsDir: string): Promise<WorkS
   // 图 mtime 降序（与案头 listMaps 口径一致：最近动的图在前）
   maps.sort((a, b) => b.mtime - a.mtime)
   return { dirExists: true, maps, tasks, failed }
+}
+
+/** mtime 指纹缓存（2026-09 画布三态 M3 spec §3.2）：总览并入案头欢迎页后常驻，
+ *  回案头不重复全量读——stat 预检（walk 只 stat 不读内容，比读文本便宜一个量级）
+ *  与缓存全等（键集合 + mtime 逐项）→ 直返上次扫描；任一差异（增/删/改/换工作区）
+ *  → 全量重扫并更新。模块级跨挂载存活；工作目录不存在视为空扫并清缓存（下次
+ *  创建后必重扫）。单文件 stat 失败（并发删/权限）记 -1——必与缓存不符，走重扫 */
+interface WorkScanCache {
+  wsDir: string
+  mtimes: Map<string, number>
+  scan: WorkScan
+}
+let scanCache: WorkScanCache | null = null
+
+function sameMtimes(a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>): boolean {
+  if (a.size !== b.size) return false
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false
+  }
+  return true
+}
+
+async function collectMtimes(fs: FsAdapter, dir: string, out: Map<string, number>): Promise<void> {
+  for (const e of await fs.readDirEntries(dir)) {
+    if (e.isDir) {
+      await collectMtimes(fs, joinPath(dir, e.name), out)
+      continue
+    }
+    if (!e.name.endsWith('.md')) continue
+    const p = joinPath(dir, e.name)
+    try {
+      out.set(p, (await fs.stat(p)).modifiedAt)
+    } catch {
+      out.set(p, -1) // stat 失败 = 必不命中，逼重扫（重扫路径单文件 catch 进 failed）
+    }
+  }
+}
+
+export async function scanWorkTasksCached(fs: FsAdapter, wsDir: string): Promise<WorkScan> {
+  const workDir = joinPath(wsDir, WORK_DIR)
+  if (!(await fs.exists(workDir))) {
+    scanCache = null
+    return { dirExists: false, maps: [], tasks: [], failed: [] }
+  }
+  const mtimes = new Map<string, number>()
+  await collectMtimes(fs, workDir, mtimes)
+  if (scanCache !== null && scanCache.wsDir === wsDir && sameMtimes(scanCache.mtimes, mtimes)) {
+    return scanCache.scan
+  }
+  const scan = await scanWorkTasks(fs, wsDir)
+  scanCache = { wsDir, mtimes, scan }
+  return scan
 }

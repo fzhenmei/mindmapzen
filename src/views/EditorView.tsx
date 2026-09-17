@@ -71,7 +71,7 @@ interface Props {
 
 export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
   const { t } = useTranslation()
-  const { adapter, markDirty, clearDirty, exitEditor, editorOrigin, setError } = useAppStore()
+  const { adapter, markDirty, clearDirty, exitEditor, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
   const dirty = useAppStore((s) => s.dirty)
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
@@ -610,8 +610,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {docReady && (
       <ZenBar
         onBack={goBackToOrigin}
-        backTarget={editorOrigin}
-        onWorkbenchClick={() => guardAiTurn(() => void quick.leaveTo(() => Promise.resolve(useAppStore.getState().goWorkbench())))}
         onSettingsClick={() => useAppStore.getState().openAppDialog('settings')}
         onSwitchClick={() => guardAiTurn(quick.open)}
         onNewClick={() => setNewMapOpen(true)}

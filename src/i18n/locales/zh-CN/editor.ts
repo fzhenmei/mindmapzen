@@ -9,8 +9,6 @@
 export default {
   zenbar: {
     backToDesk: '返回案头',
-    backToWorkbench: '返回工作台',
-    workbench: '工作台',
     settings: '设置',
     switchMap: '切换导图（Ctrl+P）',
     newMap: '新建导图',

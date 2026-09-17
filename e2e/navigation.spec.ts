@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-// 导航系统回归(spec 2026-09-16-navigation-system §3/§5/§6):返回=回来路(工作台进→
-// 返回落工作台;案头进→落案头)+ 看板退出收敛砚栏 toggle(关闭钮已移除)+ 编辑器设置
-// 入口。e2e 启动落案头(isE2eMode 分叉),案头钮进工作台复用互达入口(workbench.spec 同款)。
-test('返回来路:案头进图返回落案头,工作台进图返回落工作台', async ({ page }) => {
+// 导航系统回归(spec 2026-09-16-navigation-system §3/§5/§6,2026-09 画布三态 M3 修缮):
+// 两空间收敛后返回恒落案头(工作台来路与互达入口已退役,EditorView.test 同款口径)——
+// 总览卡片与左树文件行两条进图路径,返回均落案头 + 看板退出收敛砚栏视图组(关闭钮已
+// 移除)+ 编辑器设置入口。e2e 启动落案头(isE2eMode 分叉),总览在欢迎页直接可见。
+test('返回恒落案头:总览卡片进图与左树进图,返回均落案头', async ({ page }) => {
   test.setTimeout(30_000)
   const pageErrors: string[] = []
   page.on('pageerror', (e) => pageErrors.push(String(e)))
@@ -12,25 +13,24 @@ test('返回来路:案头进图返回落案头,工作台进图返回落工作台
   await expect(page.getByTestId('btn-new')).toBeVisible()
   await page.evaluate(async () => {
     const w = window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }
-    // 种进 工作/ 子树:工作台聚合只扫该子树(scanWorkTasks),根层图不产卡片(与 workbench.spec 同款)
+    // 种进 工作/ 子树:总览聚合只扫该子树(scanWorkTasks),根层图不产卡片(与 workbench.spec 同款)
     await w.__zenE2e.writeFile('/ws/工作/图甲.md', '# 图甲\n\n## 甲任务 @todo\n')
   })
-  // 工作台 → 图(经聚合看板卡片)→ 返回落工作台。先走此腿:卡片进图不依赖左树,
-  // 而 writeFile 只刷 maps(文件行)不重建目录节点(readDirTree 仅在 LibraryView
-  // 挂载/切工作区时跑)——渲染后新建的 工作/ 子树要等案头重挂载才可见,案头腿后置
-  await page.getByTestId('btn-workbench').click()
-  await expect(page.getByTestId('workbench-view')).toBeVisible()
+  // 总览卡片 → 图(writeFile 触发 refreshMaps → 欢迎页首挂,总览扫描含种子)。先走此腿:
+  // 卡片进图不依赖左树,而 writeFile 只刷 maps(文件行)不重建目录节点(readDirTree 仅在
+  // LibraryView 挂载/切工作区时跑)——渲染后新建的 工作/ 子树要等案头重挂载才可见,左树腿后置
   await page.getByTestId('workbench-card').filter({ hasText: '甲任务' }).click()
   await expect(page.getByText('图甲').first()).toBeVisible()
+  // 砚栏工作台直达钮随机制退役(画布三态 M3,ZenBar.test 同款断言)
+  await expect(page.getByTestId('btn-goto-workbench')).toHaveCount(0)
+  // 返回恒落案头:总览再见;LibraryView 重挂载,readDirTree 重建左树,工作/图甲 方入树
   await page.getByTestId('btn-back').click()
-  await expect(page.getByTestId('workbench-view')).toBeVisible()
-  // 工作台头部「去案头」:LibraryView 重挂载,readDirTree 重建左树,工作/图甲 方入树
-  await page.getByRole('button', { name: '去案头' }).click()
+  await expect(page.getByTestId('desk-overview')).toBeVisible()
   await expect(page.getByTestId('file-node-图甲')).toBeVisible()
-  // 案头 → 图 → 返回落案头
+  // 左树 → 图 → Alt+← 返回(与返回钮同效)仍恒落案头
   await page.getByTestId('file-node-图甲').dblclick()
   await expect(page.getByText('图甲').first()).toBeVisible()
-  await page.getByTestId('btn-back').click()
+  await page.keyboard.press('Alt+ArrowLeft')
   await expect(page.getByTestId('file-node-图甲')).toBeVisible()
   expect(pageErrors).toEqual([])
 })

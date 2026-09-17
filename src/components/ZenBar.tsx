@@ -50,16 +50,12 @@ import {
   IconSettings,
   IconSwitch,
   IconUndo,
-  IconWorkbench,
 } from './icons'
 
 interface Props {
-  /** 返回文件库（EditorView 组合：暂停自动保存 → 显式保存链 → 成功才导航） */
+  /** 返回文件库（EditorView 组合：暂停自动保存 → 显式保存链 → 成功才导航）；
+   *  两空间收敛（2026-09 画布三态 M3）后返回恒落案头，提示恒「返回案头」 */
   onBack(): void
-  /** 返回目标(2026-09 导航系统 spec §3 R1):来路驱动提示——workbench 时「返回工作台」 */
-  backTarget: 'library' | 'workbench'
-  /** 去工作台(2026-09 导航系统 spec §4):固定语义直达,无论来路;走 leaveTo 安全链 */
-  onWorkbenchClick(): void
   /** 打开设置(2026-09 导航系统 spec §6):App 级设置对话框 */
   onSettingsClick(): void
   /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
@@ -138,12 +134,11 @@ const MORE_LAYOUTS = [
 
 /** 纸面命令栏：返回/回退/重做/复制/保存/正文面板/导出 + 缩放与视图四键 + 布局切换（纯展示，状态与回调全经 props；
  *  快捷键仍由 EditorView 的 window keydown effect 承担）。
- *  2026-09 画布三态：左段（返回/工作台/切换/新建|撤销重做|复制组/路径/保存）与视图组恒显，
- *  缩放/布局/正文/导出为导图态专属；Markdown 态露大纲钮、看板态露归档钮（视图组右侧专有段） */
+ *  2026-09 画布三态：左段（返回/切换/新建|撤销重做|复制组/路径/保存）与视图组恒显，
+ *  缩放/布局/正文/导出为导图态专属；Markdown 态露大纲钮、看板态露归档钮（视图组右侧专有段）。
+ *  2026-09 画布三态 M3：工作台直达钮随工作台机制退役（总览并入案头欢迎页） */
 export default function ZenBar({
   onBack,
-  backTarget,
-  onWorkbenchClick,
   onSettingsClick,
   onSwitchClick,
   onNewClick,
@@ -176,8 +171,8 @@ export default function ZenBar({
   const mmView = viewMode === 'markdown'
   const mapOnly = viewMode === 'mindmap'
   const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
-  // 返回钮文案（终审修复：Tip label 与 aria-label 两处同源）——工作台来路回工作台，案头来路回案头
-  const backLabel = backTarget === 'workbench' ? t('editor.zenbar.backToWorkbench') : t('editor.zenbar.backToDesk')
+  // 返回钮文案（终审修复：Tip label 与 aria-label 两处同源）——两空间收敛后恒「返回案头」
+  const backLabel = t('editor.zenbar.backToDesk')
   // 布局语义名（键集与 LayoutKind 一一对应）：常用钮/更多下拉/触发钮 aria 三处共用
   const layoutNames: Record<LayoutKind, string> = {
     mindmap: t('editor.zenbar.layouts.mindmap'),
@@ -205,18 +200,6 @@ export default function ZenBar({
           onClick={onBack}
         >
           <IconArrowLeft />
-        </Button>
-      </Tip>
-      <Tip label={t('editor.zenbar.workbench')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid="btn-goto-workbench"
-          aria-label={t('editor.zenbar.workbench')}
-          onClick={onWorkbenchClick}
-        >
-          <IconWorkbench />
         </Button>
       </Tip>
       <Tip label={t('editor.zenbar.switchMap')}>
