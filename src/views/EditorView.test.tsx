@@ -213,7 +213,6 @@ beforeEach(async () => {
   useAppStore.getState().setAdapter(fs)
   useAppStore.setState({
     route: 'editor',
-    editorOrigin: 'library', // 返回来路（2026-09 导航系统）：逐用例重置，防「工作台来路」用例泄漏到后续 btn-back 断言
     workspaceDir: '/ws',
     currentMdPath: '/ws/a.md',
     editorSeq: 0, // 冲突 reload 用例断言递增，逐用例重置防跨用例泄漏
@@ -3296,10 +3295,9 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
   })
 })
 
-// 2026-09 导航系统 spec §3/§4/§7:返回来路 + 工作台入口 + Alt+←
-test('返回来路:工作台进入的图 btn-back 落工作台', async () => {
-  // 造来路:openMap 自 workbench 发起(测试 harness 的 beforeEach 以 library 打开,此处覆写)
-  useAppStore.setState({ route: 'workbench' })
+// 2026-09 导航系统 spec §3/§7 → 画布三态 M3（工作台并入案头）：两空间收敛后
+// 返回恒落案头（提示恒「返回案头」）；工作台直达钮随机制退役
+test('返回钮:btn-back 恒落案头(两空间收敛,不再有工作台来路)', async () => {
   await useAppStore.getState().openMap('/ws/a.md')
   render(
     <EditorView
@@ -3315,8 +3313,10 @@ test('返回来路:工作台进入的图 btn-back 落工作台', async () => {
   )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 提示与 aria 恒「返回案头」（backTarget 机制退役）
+  expect(screen.getByTestId('btn-back').getAttribute('aria-label')).toBe('返回案头')
   fireEvent.click(screen.getByTestId('btn-back'))
-  await waitFor(() => expect(useAppStore.getState().route).toBe('workbench'))
+  await waitFor(() => expect(useAppStore.getState().route).toBe('library'))
 })
 
 test('Alt+← 与返回钮同效(案头来路落案头)', async () => {
@@ -3336,25 +3336,6 @@ test('Alt+← 与返回钮同效(案头来路落案头)', async () => {
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true })
   await waitFor(() => expect(useAppStore.getState().route).toBe('library'))
-})
-
-test('砚栏工作台钮:经保存链直达工作台', async () => {
-  render(
-    <EditorView
-      mdPath="/ws/a.md"
-      openInEditor={openInEditor}
-      writeClipboard={vi.fn(async () => {})}
-      exportPorts={stubExportPorts}
-      registerCloseGuard={noopRegister}
-      pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage}
-      exitApp={noopExitApp}
-    />,
-  )
-  await screen.findByTestId('fake-canvas')
-  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
-  fireEvent.click(screen.getByTestId('btn-goto-workbench'))
-  await waitFor(() => expect(useAppStore.getState().route).toBe('workbench'))
 })
 
 test('砚栏设置钮打开 App 级设置对话框', async () => {

@@ -4,6 +4,8 @@
 // 工作/ 目录不存在 → 轻引导（页面退役后唯一创建入口）；目录在但无可见任务 → 内容整段
 // 退场（欢迎页退化为纯开始区）。跳转协议原工作台 spec §5（文本寻址 pendingLocate +
 // openMap；先置定位再开图，顺序不可反）。挂在 WelcomePane overview slot（最近的之后）。
+// 渲染面拆文件内局部子组件（S3776）：SuggestSection（建议区）/StatusRows（聚合行）/
+// AiDialog（AI 浮层）各自成株，主组件只留扫描状态机与总门控。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
@@ -14,6 +16,9 @@ import { getTransport, parseDeltaChunk } from '../services/ai/client'
 import { joinPath } from '../services/workspace'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import WorkbenchCard from './WorkbenchCard'
+
+/** 问问 AI 浮层的回合相位（useAskAi 状态机三处共用：state/返回类型/浮层 props） */
+type AiPhase = 'idle' | 'streaming' | 'done' | 'error'
 
 /** 下一步建议区（原工作台 spec §6 迁移）：理由 reasonKey 经 i18n 渲染，低优先级不越位
  *  补位；task 级点击走 openTask（置定位），map 级只进图不定位（spec §5）。
@@ -82,6 +87,42 @@ function SuggestSection({
   )
 }
 
+/** 纵向聚合行渲染（原工作台四列看板改造，M3 spec §10）：每状态一行卡片带，无卡不
+ *  渲染行。文件内局部子组件——行级渲染分支自主组件抽离（S3776：主组件只留扫描
+ *  状态机与总门控）；tasks 传已过滤的可见任务（archived/dropped 不占行） */
+function StatusRows({ tasks, onOpen }: Readonly<{ tasks: WorkTask[]; onOpen: (t: WorkTask) => void }>) {
+  const { t } = useTranslation()
+  return (
+    <section aria-label={t('workbench.board.section')}>
+      <h2 className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium tracking-widest text-muted-foreground">
+        <span aria-hidden="true" className="size-1.5 rounded-[1px] bg-destructive" />
+        {t('workbench.board.section')}
+      </h2>
+      <div className="flex flex-col gap-4">
+        {BOARD_STATUSES.map((s) => {
+          const cards = tasks.filter((x) => x.status === s)
+          if (cards.length === 0) return null // 无卡不渲染行（M3 spec §10 裁定）
+          return (
+            <div key={s}>
+              {/* 计数用中点分隔（U+00B7）：两语言通用，en 侧不渗全角括号 */}
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground" data-testid={`workbench-row-${s}`}>
+                {t(`editor.kanban.status.${s}`)} · {cards.length}
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {cards.map((x) => (
+                  <div key={`${x.mapPath}#${x.uid}`} className="w-56 shrink-0">
+                    <WorkbenchCard task={x} onOpen={onOpen} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 /** 问问 AI 浮层状态机（原工作台 spec §7 无工具纯咨询）：聚合上下文一次性问答，不走
  *  agentLoop 工具链（引擎命令在无打开图时无意义）。独立成 hook：主组件认知复杂度
  *  已在 S3776 限值上，再叠流式编排必超。 */
@@ -89,7 +130,7 @@ function useAskAi(scan: WorkScan | null): {
   aiReady: boolean
   aiOpen: boolean
   aiText: string
-  aiPhase: 'idle' | 'streaming' | 'done' | 'error'
+  aiPhase: AiPhase
   /** force=true 跳过缓存（「再问一次」）；缺省走双条件缓存判定 */
   askAi: (force?: boolean) => void
   /** 停止等待（2026-09-14 试用反馈）：掐断在途流、保留半截文本——与关浮层共用
@@ -100,7 +141,7 @@ function useAskAi(scan: WorkScan | null): {
   const aiConfig = useAppStore((s) => s.aiConfig)
   const [aiOpen, setAiOpen] = useState(false)
   const [aiText, setAiText] = useState('')
-  const [aiPhase, setAiPhase] = useState<'idle' | 'streaming' | 'done' | 'error'>('idle')
+  const [aiPhase, setAiPhase] = useState<AiPhase>('idle')
   const aiAbortRef = useRef<(() => void) | null>(null)
   const aiReady = aiConfig.baseUrl !== '' && aiConfig.apiKey !== '' && aiConfig.model !== ''
 
@@ -195,6 +236,74 @@ function useAskAi(scan: WorkScan | null): {
   return { aiReady, aiOpen, aiText, aiPhase, askAi, stopAi: () => aiAbortRef.current?.(), closeAi }
 }
 
+/** 问问 AI 浮层（原工作台 spec §7）：流式文本 + 首 token 占位 + 费用提示与三态按钮
+ *  区。文件内局部子组件——浮层渲染分支自主组件抽离（S3776）；按钮区以互斥 && 链
+ *  替代嵌套三元（S3358：streaming 停止 / done·error 再问一次 / idle 无钮） */
+function AiDialog({
+  open,
+  onOpenChange,
+  text,
+  phase,
+  onStop,
+  onAskAgain,
+}: Readonly<{
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  text: string
+  phase: AiPhase
+  onStop: () => void
+  onAskAgain: () => void
+}>) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* 宽度覆盖必须同断点压制默认 sm:max-w-lg（Dialog max-w 变体坑），裸 max-w-2xl 会被源序反杀 */}
+      <DialogContent className="sm:max-w-none sm:max-w-2xl" data-testid="workbench-ai-dialog">
+        <DialogTitle>{t('workbench.ai.title')}</DialogTitle>
+        <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm" data-testid="workbench-ai-text">
+          {text}
+          {/* 首 token 前占位（2026-09-14 试用反馈）：推理模型首 token 可达十几秒，
+              纯空白会被当成卡死——呼吸态文案到首 delta 让位 */}
+          {text === '' && phase === 'streaming' ? (
+            <p className="animate-pulse text-muted-foreground" data-testid="workbench-ai-thinking">
+              {t('workbench.ai.thinking')}
+            </p>
+          ) : null}
+        </div>
+        {phase === 'error' ? (
+          <p className="text-sm text-destructive" data-testid="workbench-ai-error">{t('workbench.ai.error')}</p>
+        ) : null}
+        <div className="flex items-center justify-between gap-2">
+          {/* 费用知情（2026-09-14 试用反馈）：BYOK 服务的计费策略用户自知，提示而非拦截 */}
+          <p className="text-xs text-muted-foreground" data-testid="workbench-ai-fee-note">{t('workbench.ai.feeNote')}</p>
+          {phase === 'streaming' && (
+            <button
+              type="button"
+              data-testid="workbench-ai-stop"
+              className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
+              onClick={onStop}
+            >
+              {t('workbench.ai.stop')}
+            </button>
+          )}
+          {/* 再问一次（2026-09-14 缓存增强）：缓存直读/流式完成/失败重试三态可达，
+             强制跳过缓存重新请求并覆盖存档 */}
+          {(phase === 'done' || phase === 'error') && (
+            <button
+              type="button"
+              data-testid="workbench-ai-ask-again"
+              className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
+              onClick={onAskAgain}
+            >
+              {t('workbench.ai.askAgain')}
+            </button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /** 案头总览区：无 props 自取 store（同原工作台模式）。总览嵌在欢迎页纵轴流里，
  *  只占内容高度不占满屏——错误横幅不自渲染（案头 LibraryView 已有出口，setError
  *  落 store 即达用户），与原工作台路由自渲染横幅的差异点 */
@@ -228,7 +337,8 @@ export default function DeskOverview() {
   }, [adapter, workspaceDir])
 
   useEffect(() => {
-    void rescan()
+    // fire-and-forget 启动扫描：rescan 自包全量 try/catch/finally（恒 resolve），无出口需求
+    rescan()
   }, [rescan])
 
   const createWorkDir = async (): Promise<void> => {
@@ -243,18 +353,26 @@ export default function DeskOverview() {
     await rescan()
   }
 
+  /** fire-and-forget 打开导图：openMap 含配置写盘（可失败），失败必须留 console 线索
+   *  （不吞异常红线）；Promise.resolve 兼容测试桩的同步返回（vi.fn 无返回值） */
+  const openMapQuietly = (mdPath: string): void => {
+    Promise.resolve(useAppStore.getState().openMap(mdPath)).catch((e: unknown) => {
+      console.error('案头总览跳转打开失败', e)
+    })
+  }
+
   /** 跨图跳转（原工作台 spec §5 逐字迁移，文本寻址）：先置 pendingLocate 再 openMap
    *  ——EditorView onReady 消费定位；寻址器用 path+text（md 不序列化 uid，扫描期 uid
    *  引擎侧必失配）；mapPath 绑定目标图（终审 Important-1 错图消费修复）；顺序不可反
    *  （openMap 后组件卸载，后续 set 无害但语义上定位先声明） */
   const openTask = (task: WorkTask): void => {
     useAppStore.getState().setPendingLocate({ mapPath: task.mapPath, path: task.path, text: task.text })
-    void useAppStore.getState().openMap(task.mapPath)
+    openMapQuietly(task.mapPath)
   }
 
   /** map 级建议跳转：只进图不定位（原工作台 spec §5——图级建议不带 uid） */
   const openMapOnly = (mapPath: string): void => {
-    void useAppStore.getState().openMap(mapPath)
+    openMapQuietly(mapPath)
   }
 
   const suggestions: Suggestion[] = scan === null ? [] : suggestNext(scan, Date.now())
@@ -290,7 +408,7 @@ export default function DeskOverview() {
           <p className="text-sm text-muted-foreground">{t('workbench.empty.noDirBody')}</p>
           <button type="button" data-testid="desk-overview-create"
             className="rounded-md bg-primary px-4 py-1.5 text-sm text-primary-foreground"
-            onClick={() => void createWorkDir()}>
+            onClick={() => { createWorkDir() }}>
             {t('workbench.empty.create')}
           </button>
         </div>
@@ -299,79 +417,10 @@ export default function DeskOverview() {
         <>
           <SuggestSection suggestions={suggestions} openTask={openTask} openMapOnly={openMapOnly} onAskAi={askAi} aiReady={aiReady} />
           {/* 纵向聚合（原四列看板改造，M3 spec §10）：每状态一行，无卡不渲染行 */}
-          <section aria-label={t('workbench.board.section')}>
-            <h2 className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium tracking-widest text-muted-foreground">
-              <span aria-hidden="true" className="size-1.5 rounded-[1px] bg-destructive" />
-              {t('workbench.board.section')}
-            </h2>
-            <div className="flex flex-col gap-4">
-              {BOARD_STATUSES.map((s) => {
-                const cards = scan!.tasks.filter((x) => x.status === s)
-                if (cards.length === 0) return null // 无卡不渲染行（M3 spec §10 裁定）
-                return (
-                  <div key={s}>
-                    {/* 计数用中点分隔（U+00B7）：两语言通用，en 侧不渗全角括号 */}
-                    <p className="mb-1.5 text-xs font-medium text-muted-foreground" data-testid={`workbench-row-${s}`}>
-                      {t(`editor.kanban.status.${s}`)} · {cards.length}
-                    </p>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {cards.map((x) => (
-                        <div key={`${x.mapPath}#${x.uid}`} className="w-56 shrink-0">
-                          <WorkbenchCard task={x} onOpen={openTask} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
+          <StatusRows tasks={visibleTasks} onOpen={openTask} />
         </>
       ) : null}
-      <Dialog open={aiOpen} onOpenChange={closeAi}>
-        {/* 宽度覆盖必须同断点压制默认 sm:max-w-lg（Dialog max-w 变体坑），裸 max-w-2xl 会被源序反杀 */}
-        <DialogContent className="sm:max-w-none sm:max-w-2xl" data-testid="workbench-ai-dialog">
-          <DialogTitle>{t('workbench.ai.title')}</DialogTitle>
-          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm" data-testid="workbench-ai-text">
-            {aiText}
-            {/* 首 token 前占位（2026-09-14 试用反馈）：推理模型首 token 可达十几秒，
-                纯空白会被当成卡死——呼吸态文案到首 delta 让位 */}
-            {aiText === '' && aiPhase === 'streaming' ? (
-              <p className="animate-pulse text-muted-foreground" data-testid="workbench-ai-thinking">
-                {t('workbench.ai.thinking')}
-              </p>
-            ) : null}
-          </div>
-          {aiPhase === 'error' ? (
-            <p className="text-sm text-destructive" data-testid="workbench-ai-error">{t('workbench.ai.error')}</p>
-          ) : null}
-          <div className="flex items-center justify-between gap-2">
-            {/* 费用知情（2026-09-14 试用反馈）：BYOK 服务的计费策略用户自知，提示而非拦截 */}
-            <p className="text-xs text-muted-foreground" data-testid="workbench-ai-fee-note">{t('workbench.ai.feeNote')}</p>
-            {aiPhase === 'streaming' ? (
-              <button
-                type="button"
-                data-testid="workbench-ai-stop"
-                className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
-                onClick={stopAi}
-              >
-                {t('workbench.ai.stop')}
-              </button>
-            ) : aiPhase === 'done' || aiPhase === 'error' ? (
-              /* 再问一次（2026-09-14 缓存增强）：缓存直读/流式完成/失败重试三态可达，
-                 强制跳过缓存重新请求并覆盖存档 */
-              <button
-                type="button"
-                data-testid="workbench-ai-ask-again"
-                className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted"
-                onClick={() => void askAi(true)}
-              >
-                {t('workbench.ai.askAgain')}
-              </button>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AiDialog open={aiOpen} onOpenChange={closeAi} text={aiText} phase={aiPhase} onStop={stopAi} onAskAgain={() => { askAi(true) }} />
     </section>
   )
 }

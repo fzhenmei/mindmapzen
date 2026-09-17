@@ -63,12 +63,12 @@
 //  imports，实测 408 + 12 余量；对话框渲染面在 AppDialogs——功能性增长，无腐化）。
 // 2026-09（画布三态 M1）：useStatusPick 拆出（-14）+ MarkdownView/归档/大纲装配（+25），
 // 净 +11 升限至 775，实测 770 + 5 行余量——功能性拆分与三态新功能面并存，无腐化。
+// 2026-09（画布三态 M3）：WorkbenchView 退役（并入案头 DeskOverview），条目移除。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
   { path: '../src/views/EditorView.tsx', limit: 775 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
-  { path: '../src/views/WorkbenchView.tsx', limit: 420 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计

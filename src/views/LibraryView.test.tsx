@@ -884,7 +884,7 @@ describe('案头收藏与排序（2026-09）', () => {
 })
 
 // 2026-09 画布三态 M3：欢迎页 overview 槽位挂 DeskOverview（案头总览并入）+ 页首
-// 工作台钮退役。工作台机制（goWorkbench/route/WorkbenchView）由后续任务退役，此处只删按钮
+// 工作台钮退役。工作台机制（goWorkbench/route/WorkbenchView）已随后续任务全量退役
 describe('欢迎页总览槽位与页首工作台钮退役（画布三态 M3）', () => {
   test('欢迎页总览：idle 态渲染 desk-overview 槽位（工作目录有任务时）', async () => {
     // 预置工作区 + 工作/x.md 含 @todo 任务（沿本文件既有内存 fs 预置模式）

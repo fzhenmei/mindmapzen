@@ -32,8 +32,6 @@ function renderBar(overrides: {
   onToggleOutline?: () => void
   kanbanArchiveOpen?: boolean
   onToggleKanbanArchive?: () => void
-  backTarget?: 'library' | 'workbench'
-  onWorkbenchClick?: () => void
   onSettingsClick?: () => void
 } = {}): void {
   render(
@@ -64,8 +62,6 @@ function renderBar(overrides: {
         onToggleOutline={overrides.onToggleOutline ?? noop}
         kanbanArchiveOpen={overrides.kanbanArchiveOpen ?? false}
         onToggleKanbanArchive={overrides.onToggleKanbanArchive ?? noop}
-        backTarget={overrides.backTarget ?? 'library'}
-        onWorkbenchClick={overrides.onWorkbenchClick ?? noop}
         onSettingsClick={overrides.onSettingsClick ?? noop}
       />
     </TooltipProvider>,
@@ -221,25 +217,19 @@ describe('ZenBar 正文面板开关', () => {
   })
 })
 
-// ---- 导航三钮（2026-09 导航系统）：动态返回提示 + 工作台直达 + 设置齿轮 ----
+// ---- 导航钮（2026-09 导航系统 → 画布三态 M3）：恒「返回案头」提示 + 设置齿轮；
+// ---- 工作台直达钮随工作台机制退役（btn-goto-workbench 不存在） ----
 
-describe('砚栏导航钮(2026-09 导航系统)', () => {
-  test('返回钮提示随来路:workbench → 返回工作台', () => {
-    renderBar({ backTarget: 'workbench' })
-    expect(screen.getByTestId('btn-back').getAttribute('aria-label')).toBe('返回工作台')
-  })
-
-  test('返回钮默认提示:返回案头', () => {
+describe('砚栏导航钮(两空间收敛)', () => {
+  test('返回钮提示恒「返回案头」(backTarget 机制退役)', () => {
     renderBar()
     expect(screen.getByTestId('btn-back').getAttribute('aria-label')).toBe('返回案头')
   })
 
-  test('工作台/设置钮渲染且回调触发', () => {
-    const onWorkbenchClick = vi.fn()
+  test('工作台直达钮已退役;设置钮渲染且回调触发', () => {
     const onSettingsClick = vi.fn()
-    renderBar({ onWorkbenchClick, onSettingsClick })
-    fireEvent.click(screen.getByTestId('btn-goto-workbench'))
-    expect(onWorkbenchClick).toHaveBeenCalledTimes(1)
+    renderBar({ onSettingsClick })
+    expect(screen.queryByTestId('btn-goto-workbench')).toBeNull()
     fireEvent.click(screen.getByTestId('btn-editor-settings'))
     expect(onSettingsClick).toHaveBeenCalledTimes(1)
   })

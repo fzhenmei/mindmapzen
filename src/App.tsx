@@ -8,7 +8,6 @@ import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import { describeBackendError } from './services/backendError'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
-import WorkbenchView from './views/WorkbenchView'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
 import type { ExportPorts, GitClone, GitRun, RegisterCloseGuard } from './types/ports'
@@ -349,12 +348,8 @@ export default function App() {
     )
   }
 
-  // 工作台（2026-09 跨图总览）：route 为 workbench 时 currentMdPath 必为 null
-  // （goWorkbench 清编辑态、openMap 置 editor），无打开图无守卫需求
-  if (route === 'workbench') {
-    return shell(<WorkbenchView />)
-  }
-
+  // 两空间路由（2026-09 画布三态 M3：工作台并入案头）：editor 持图、library 为案头
+  //（跨图总览由案头欢迎页 DeskOverview 承接）
   if (route === 'editor' && currentMdPath) {
     // key：切换文档时强制重挂载 EditorView（组件内部按“仅加载一次”实现，见 EditorView.tsx 注释）；
     // #editorSeq（冲突裁决 reload）：同路径递增序号也强制重挂，实现当前图从磁盘重载
