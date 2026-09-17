@@ -1,6 +1,6 @@
 // src/services/workbench.ts —— 工作台（驾驶舱）聚合服务（spec 2026-09-13 §3）：工作/ 子树
-// 全量 .md → 跨图任务索引。即时聚合：进入工作台时全量读、离开即弃——.md 唯一事实源，
-// 无缓存无失效协议。卡片口径全同源 buildKanbanCards（有 status 才是卡/截断/未分组置顶），
+// 全量 .md → 跨图任务索引。读侧带 mtime 指纹缓存层（scanWorkTasksCached：命中直返，
+// 增删改/换区必重扫）。卡片口径全同源 buildKanbanCards（有 status 才是卡/截断/未分组置顶），
 // 状态与列口径零新增（TASK_STATUSES/BOARD_STATUSES 复用）。
 import type { FsAdapter } from '../types/files'
 import type { ZenNode } from '../types/tree'

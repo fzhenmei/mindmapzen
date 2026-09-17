@@ -100,4 +100,22 @@ describe('scanWorkTasksCached mtime 指纹缓存', () => {
     const r2 = await scanWorkTasksCached(fs, '/ws2')
     expect(r2.dirExists).toBe(false)
   })
+
+  test('两工作区各有任务且交替扫描：各回各的内容，第二区首扫非第一区缓存引用', async () => {
+    vi.setSystemTime(1000)
+    await fs.writeTextFileAtomic(`/ws1/${WORK_DIR}/东区.md`, '# 东\n\n## 东区任务 @todo\n')
+    vi.setSystemTime(2000)
+    await fs.writeTextFileAtomic(`/ws2/${WORK_DIR}/西区.md`, '# 西\n\n## 西区任务 @doing\n')
+    const r1a = await scanWorkTasksCached(fs, '/ws1')
+    expect(r1a.tasks.map((x) => x.text)).toEqual(['东区任务'])
+    // 第二区首扫：单槽缓存已被 ws1 占据——wsDir 校验必须逼真扫，不得直返 ws1 的缓存引用
+    const r2a = await scanWorkTasksCached(fs, '/ws2')
+    expect(r2a).not.toBe(r1a)
+    expect(r2a.tasks.map((x) => x.text)).toEqual(['西区任务'])
+    // 交替互踩（后扫覆盖前扫的单槽）：仍各回各的内容
+    const r1b = await scanWorkTasksCached(fs, '/ws1')
+    expect(r1b.tasks.map((x) => x.text)).toEqual(['东区任务'])
+    const r2b = await scanWorkTasksCached(fs, '/ws2')
+    expect(r2b.tasks.map((x) => x.text)).toEqual(['西区任务'])
+  })
 })
