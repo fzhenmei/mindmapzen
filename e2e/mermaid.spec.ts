@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test'
 // 2026-09 渲染统一：案头预览切 vditor(lute)（M2 起由悬浮预览浮窗承接），mermaid 成图由 vditor dist 自带资源驱动
 // （MermaidBlock/项目 mermaid 包退役）——好图成 flowchart SVG；语法错误降级为 mermaid
 // 错误图（error SVG）+ 附注保留源码文本。
-test('mermaid：正文围栏在详情态预览渲染成 SVG；语法错误降级为错误图', async ({ page }) => {
+test('mermaid：正文围栏在悬浮预览渲染成 SVG；语法错误降级为错误图', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
