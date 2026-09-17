@@ -95,7 +95,7 @@ function taskRow(x: WorkTask, onOpen: (task: WorkTask) => void) {
       <button type="button" data-testid="workbench-card"
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent"
         onClick={() => onOpen(x)}>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs">{x.mapName}</span>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-file text-xs text-muted-foreground">{x.mapName}</span>
         <span className="min-w-0 flex-1 truncate font-file text-[13px]">{x.text}</span>
         {p !== '' && <span className="hidden truncate text-xs text-muted-foreground sm:inline">{p}</span>}
         {x.childCount > 0 && <span className="shrink-0 text-xs text-muted-foreground">+{x.childCount}</span>}

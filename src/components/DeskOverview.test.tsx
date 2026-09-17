@@ -58,6 +58,17 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图B.md', text: '任务丙' })
   })
 
+  test('聚合行信息密度：来源徽标 + 路径段 + 子任务计数（承接 WorkbenchCard.test 退役口径）', async () => {
+    // 深任务带父链（## 分组 → path=['分组']）与无状态后代（#### 子任务 → +1）——
+    // 两分支只在有层级/有子孙时渲染，现有夹具全是根级单行任务盖不到（path=[]/childCount=0）
+    await fs.writeTextFileAtomic('/ws/工作/图C.md', '# 图C\n\n## 分组\n\n### 深任务 @todo\n\n#### 子任务\n')
+    render(<DeskOverview />)
+    const card = (await screen.findAllByTestId('workbench-card')).find((el) => el.textContent?.includes('深任务'))!
+    expect(card.textContent).toContain('图C') // 来源徽标
+    expect(card.textContent).toContain('分组') // 大纲路径段（窄屏 hidden sm:inline 视觉退场，DOM 仍在）
+    expect(card.textContent).toContain('+1') // 截断范围内无状态后代计数
+  })
+
   test('failed-bar 标点随语言：词条含冒号，en 侧不渗全角正字法', async () => {
     // 无根标题 → parse ok:false 进 failed（services/workbench 单文件失败口径）
     await fs.writeTextFileAtomic('/ws/工作/坏图.md', '没有根标题的段落\n')
