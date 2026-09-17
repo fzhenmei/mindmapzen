@@ -101,14 +101,16 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     // z-20 高于内容与 ThemeFab（右下角，不冲突），低于 App 级 Radix portal 对话框。
     // 原生 <dialog open> 非模态（S6819，同 KanbanView/MarkdownView 先例）：不抢焦点、
     // 不触发原生 cancel；UA 默认样式须压平——m-0/p-0/max-w-none 杀边距与自适应宽，
-    // left-auto 必加（UA 设 left:0，与 top-2 right-2 over-constrained，LTR 下 left 胜出
-    // 会把浮窗钉到左缘；先例全屏 inset-0 无此问题，本例右上角定位必须杀 left）
+    // text-foreground 杀 UA color:canvastext（头部 h3 无显式色类，显式主题与系统偏好
+    // 相反时对比度才不出错，对齐先例）；left-auto 必加（UA 设 left:0，与 top-2 right-2
+    // over-constrained，LTR 下 left 胜出会把浮窗钉到左缘；先例全屏 inset-0 无此问题，
+    // 本例右上角定位必须杀 left）
     <dialog
       ref={rootRef}
       open
       tabIndex={-1}
       data-testid="file-preview-popover"
-      className="absolute top-2 right-2 left-auto z-20 m-0 flex max-h-[70vh] w-120 max-w-none flex-col overflow-hidden rounded-lg border bg-card p-0 shadow-lg outline-none"
+      className="absolute top-2 right-2 left-auto z-20 m-0 flex max-h-[70vh] w-120 max-w-none flex-col overflow-hidden rounded-lg border bg-card p-0 text-foreground shadow-lg outline-none"
       aria-label={`${info.name}.md`}
     >
       <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
