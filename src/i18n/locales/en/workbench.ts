@@ -5,6 +5,8 @@ const workbench: Dict['workbench'] = {
   settings: 'Settings',
   toLibrary: 'Back to desk',
   scanning: 'Scanning work directory…',
+  // Directory-level IO failure placeholder (M3 desk overview): distinct from per-file failedBar
+  scanFailed: 'Overview scan failed; retry or check console for details',
   // 标点入词条：en 侧不渗全角冒号/顿号（正字法随语言，分隔符在调用侧按 i18n.language 取）
   failedBar: '{{count}} map(s) failed to load: ',
   createFailed: 'Failed to create work directory',

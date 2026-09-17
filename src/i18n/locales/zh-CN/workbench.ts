@@ -4,6 +4,8 @@ export default {
   settings: '设置',
   toLibrary: '去案头',
   scanning: '正在聚合工作目录…',
+  // 目录级 IO 故障占位（M3 案头总览）：区别于 failedBar 的单文件失败，console 线索在调用侧
+  scanFailed: '总览扫描失败，请重试或查看控制台线索',
   // 冒号收进词条（zh 全角 / en 半角+空格）：调用侧只拼 names，标点不硬编码在 JSX
   failedBar: '{{count}} 张图读取失败：',
   createFailed: '创建工作目录失败',
