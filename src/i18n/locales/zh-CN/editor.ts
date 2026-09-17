@@ -192,5 +192,8 @@ export default {
   // Markdown 视图（2026-09 画布三态）
   markdown: {
     viewName: 'Markdown 视图',
+    // 序列化失败占位（毒节点家族：换行/列表层正文断言）
+    renderFailTitle: 'Markdown 渲染失败',
+    renderFailBody: '当前导图数据无法序列化为文档，请回导图检查节点内容（如文本中含换行）',
   },
 }

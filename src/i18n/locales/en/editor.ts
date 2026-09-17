@@ -194,6 +194,9 @@ const editor: Dict['editor'] = {
   // Markdown view (2026-09 canvas tri-state)
   markdown: {
     viewName: 'Markdown view',
+    // Serialize-failure placeholder (poison-node family: newline / body-in-list assertion)
+    renderFailTitle: 'Markdown render failed',
+    renderFailBody: 'Current map data cannot be serialized; check node text (e.g. embedded line breaks) in mind map view',
   },
 }
 export default editor
