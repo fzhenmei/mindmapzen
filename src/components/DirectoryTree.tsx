@@ -3,7 +3,7 @@ import { useRef, useState, type DragEvent, type JSX } from 'react'
 import { useTranslation } from 'react-i18next'
 import { filterTree, isUnderDir, type DirNode } from '../services/desk'
 import type { LibrarySort } from '../types/files'
-import type { MapAction } from './DetailActions'
+import type { MapAction } from '../hooks/useLibraryDialogs'
 import {
   Collapsible,
   CollapsibleContent,
@@ -37,7 +37,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from './ui/sidebar'
-import { IconFolder, IconMarkdown, IconOpen, IconPencil, IconPlus, IconSort, IconStar, IconTrash } from './icons'
+import { IconCopy, IconFolder, IconMarkdown, IconOpen, IconPaste, IconPencil, IconPlus, IconSort, IconStar, IconTrash } from './icons'
 
 /** 树中导图文件行（M5d）：由 store maps 派生（name 不含扩展名；relDir 相对工作区，''=根） */
 export interface TreeFile { name: string; relDir: string }
@@ -66,6 +66,10 @@ interface Props {
   onOpenFile: (f: TreeFile) => void
   /** 文件行右键菜单操作（2026-09）：移动/重命名/删除，对话框流在 LibraryView 统一管理 */
   onFileAction(a: MapAction, f: TreeFile): void
+  /** 文件行右键「复制路径」（2026-09 画布三态 M2：DetailActions 退役，操作收敛树菜单） */
+  onCopyPath(f: TreeFile): void
+  /** 文件行右键「复制为公众号格式」（承接同上；全链在 LibraryView，失败走 error 横幅） */
+  onCopyWechat(f: TreeFile): void
   /** 目录行右键「在此新建导图」（rel = 目标目录相对路径，''=根） */
   onCreateMapIn(rel: string): void
   /** 目录行右键「新建子目录」（rel = 父目录相对路径，''=根） */
@@ -94,7 +98,8 @@ interface Props {
  *  箭头 = 折叠/展开（2026-09 资源管理器式：CollapsibleTrigger 独立按钮居于图标左侧，
  *  与行面选中解耦——点已展开目录不会误收起子树；空目录/文件行以等宽占位对齐图标列）。
  *  全部 defaultOpen（进案头即全树展开，延续旧行为）。
- *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/收藏/移动/重命名/删除；目录行 = 在此
+ *  右键菜单（2026-09 资源管理器惯例）：文件行 = 打开/收藏/移动/重命名/删除 + 复制路径/
+ *  复制为公众号格式（2026-09 画布三态 M2，DetailActions 退役承接）；目录行 = 在此
  *  新建导图/新建子目录/删除目录；树根 = 同目录行但无删除（工作区本体不删）。ctx-*
  *  testid 与详情页首同名钮区分避严格模式撞名。右键即选中（VSCode 惯例）——文件行切
  *  预览、目录行切选中态。
@@ -112,6 +117,8 @@ export default function DirectoryTree({
   onSelectFile,
   onOpenFile,
   onFileAction,
+  onCopyPath,
+  onCopyWechat,
   onCreateMapIn,
   onCreateDirIn,
   onDeleteDir,
@@ -184,7 +191,9 @@ export default function DirectoryTree({
     selectedFile !== null && selectedFile.name === f.name && selectedFile.relDir === f.relDir
 
   /** 文件行右键菜单（对话框流在 LibraryView；条目 ctx-* testid 与详情页首同名钮区分）。
-   *  2026-09 收藏：「打开」下增收藏切换（按行级收藏态换文案） */
+   *  2026-09 收藏：「打开」下增收藏切换（按行级收藏态换文案）。
+   *  2026-09 画布三态 M2：删除后隔线补「复制路径/复制为公众号格式」（DetailActions
+   *  退役承接，图标与词条沿用详情页首同名钮） */
   const fileMenu = (f: TreeFile) => (
     <ContextMenuContent data-testid={`ctx-menu-file-${f.name}`} aria-label={t('library.dirTree.fileMenuLabel', { name: f.name })}>
       <ContextMenuItem data-testid="ctx-btn-open" onClick={() => onOpenFile(f)}>
@@ -202,6 +211,13 @@ export default function DirectoryTree({
       </ContextMenuItem>
       <ContextMenuItem data-testid="ctx-btn-delete" variant="destructive" onClick={() => onFileAction('delete', f)}>
         <IconTrash />{t('common.delete')}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem data-testid="ctx-btn-copy-path" onClick={() => onCopyPath(f)}>
+        <IconCopy />{t('library.fileDetail.copyPath')}
+      </ContextMenuItem>
+      <ContextMenuItem data-testid="ctx-btn-copy-wechat" onClick={() => onCopyWechat(f)}>
+        <IconPaste />{t('library.fileDetail.copyWechat')}
       </ContextMenuItem>
     </ContextMenuContent>
   )
@@ -245,6 +261,7 @@ export default function DirectoryTree({
           <ContextMenuTrigger asChild>
             <div
               className={`group/frow flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
+              data-tree-file-row
               draggable
               onDragStart={startDrag({ kind: 'file', file: f }, key)}
               onDragEnd={endDrag}

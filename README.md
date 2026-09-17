@@ -13,7 +13,7 @@ A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-
 
 ### Desk (map library)
 
-- Directory-tree navigation, filter by level, outline preview (single click selects, double click opens)
+- Directory-tree navigation, filter by level, floating preview (single click previews, double click opens)
 - Create, rename, delete (to recycle bin), move maps, create folders, tree context menu
 - Import `.xmind` and `.md` (with ignored-block preview confirmation)
 - "Copy as WeChat Official Account format": turn the whole Markdown document into rich text ready to paste into WeChat's editor (inline syntax-highlighted code blocks, mermaid diagrams as images)

@@ -18,8 +18,7 @@ import { cloneWorkspace, repoNameFromUrl } from '../services/gitClone'
 import { joinPath } from '../services/workspace'
 import AppLogo from '../components/AppLogo'
 import DirectoryTree, { type TreeFile } from '../components/DirectoryTree'
-import FileDetail from '../components/FileDetail'
-import DetailActions, { detailMeta, detailTitle } from '../components/DetailActions'
+import FilePreviewPopover from '../components/FilePreviewPopover'
 import { IconImport, IconPlus, IconSettings } from '../components/icons'
 import { HideSidebarAction, ShowSidebarTab, SIDEBAR_ICON_BTN } from '../components/SidebarToggles'
 import { Button } from '../components/ui/button'
@@ -49,16 +48,18 @@ interface Props {
   writeHtmlClipboard: WriteHtmlClipboard
 }
 
-/** 案头（2026-09 主区纯预览化）：SidebarProvider + inset 骨架；主区两态——
- *  未选文件（idle/选中目录）→ 欢迎页；详情态（容器合并改版：页首即详情卡头——
- *  md 标题 + 动作钮上移，主区即预览面板）。主区只承担 markdown 预览，文件浏览与
- *  导航全部由左树承担（目录下直列文件行）；文件操作（移动/重命名/删除）收敛到
- *  详情页首动作钮。交互语义：树目录行单击=选中目录（主区欢迎页），树文件行
- *  单击=选中进详情，双击=进纸面 */
+/** 案头（2026-09 画布三态 M2 主区单态）：SidebarProvider + inset 骨架；主区收敛
+ *  单态——工作区空 → 全局空态，其余（idle/选中目录/选中文件）→ 欢迎页。详情态
+ *  （FileDetail + 页首动作组）退役：树文件行单击 = 右区右上悬浮预览
+ *  （FilePreviewPopover，spec §4.2），双击 = 进纸面；文件操作（星标/打开/移动/
+ *  重命名/删除/复制路径/公众号复制）收敛左树（行尾收藏钮 + 右键菜单）。树目录行
+ *  单击 = 选中目录（主区仍欢迎页） */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard, writeHtmlClipboard }: Readonly<Props>) {
   const { t, i18n } = useTranslation()
   const { workspaceDir, maps, error, selectedDir, favorites, librarySort } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
+  // App 级对话框开合（设置/历史）：作浮窗挂载门——开着时卸载浮窗，防一次 Esc 双关
+  const appDialog = useAppStore((s) => s.appDialog)
   // 最近打开清单 → 导图信息（已删/移出工作区的宽容剔除，最多 8 条）
   const recent = recentOpened
     .map((p) => maps.find((m) => m.mdPath === p) ?? null)
@@ -191,10 +192,13 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   const selectedInfo = maps.find((m) => m.mdPath === selectedMap) ?? null
   const mdPathOf = (f: TreeFile): string | undefined =>
     maps.find((m) => m.name === f.name && m.relDir === f.relDir)?.mdPath
+  /** 关闭悬浮预览：清选中回落欢迎页（树高亮随 selectedInfo 派生同步清） */
+  const closePreview = useCallback(() => setSelectedMap(null), [])
   const selectFile = (f: TreeFile) => {
     const p = mdPathOf(f)
     if (p !== undefined) {
-      setSelectedMap(p)
+      // 再点同一文件：浮窗开→关、关→开（spec §4.1 关窗路径之一；其余关窗路在浮窗组件内）
+      setSelectedMap((cur) => (cur === p ? null : p))
       setIdle(false)
     }
   }
@@ -216,9 +220,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   }
   const workspaceName = workspaceDir ? trimSeparators(workspaceDir).split(/[\\/]/).pop() ?? '' : ''
 
-  /** 右侧内容（2026-09 两态）：工作区空 → 全局空态；详情态（选中文件）→ FileDetail
-   *  （容器合并：动作钮/标题在页首，主区即预览面板）；其余（idle/选中目录）→ 欢迎页。
-   *  主区不再承担文件列表——文件浏览与导航全在左树 */
+  /** 右侧内容（2026-09 画布三态 M2 单态）：工作区空 → 全局空态；其余（idle/选中
+   *  目录/选中文件）→ 欢迎页——文件预览由悬浮浮窗承担（挂载见 main 内）。主区不再
+   *  承担文件列表——文件浏览与导航全在左树 */
   const renderRight = () => {
     if (maps.length === 0)
       return (
@@ -233,8 +237,6 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           </Button>
         </div>
       )
-    // 详情态（容器合并）：动作钮/标题在页首（见 header），主区只剩预览面板
-    if (selectedInfo !== null) return <FileDetail info={selectedInfo} />
     // 欢迎页（v2.5 纵轴轮）：独立组件 WelcomePane（品牌头 + 居中双按钮 + 行列表）；
     // overview 槽位挂案头总览（2026-09 画布三态 M3：工作台并入，页首 btn-workbench 已退役）
     return (
@@ -304,9 +306,28 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             onSelectFile={selectFile}
             onOpenFile={openFile}
             onFileAction={(a, f) => {
-              // 右键菜单操作：TreeFile 按 name+relDir 反查 MapInfo（对话框流与详情页首同源）
+              // 右键菜单操作：TreeFile 按 name+relDir 反查 MapInfo（对话框流统一入口）
               const m = maps.find((x) => x.name === f.name && x.relDir === f.relDir)
               if (m !== undefined) dlg.openMapAction(a, m)
+            }}
+            onCopyPath={(f) => {
+              // 复制路径（管线迁自原页首 DetailActions）：TreeFile 反查 mdPath 后写剪贴板端口
+              const m = maps.find((x) => x.name === f.name && x.relDir === f.relDir)
+              if (m !== undefined) void writeClipboard(m.mdPath)
+            }}
+            onCopyWechat={(f) => {
+              // 公众号格式复制（管线迁自原页首 DetailActions）：TreeFile 反查 mdPath，
+              // 全链失败（读盘/渲染/剪贴板）走 error 横幅显式出口，成功静默（与复制路径惯例一致）
+              const m = maps.find((x) => x.name === f.name && x.relDir === f.relDir)
+              if (m === undefined) return
+              void copyAsWechatHtml(
+                useAppStore.getState().adapter,
+                workspaceDir,
+                m.mdPath,
+                writeHtmlClipboard,
+              ).catch((e: unknown) =>
+                store.setError(t('library.fileDetail.copyWechatFailed', { reason: String(e) })),
+              )
             }}
             onCreateMapIn={dlg.openNewMap}
             onCreateDirIn={dlg.openNewDir}
@@ -351,50 +372,14 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         <ShowSidebarTab />
         <SidebarInset>
           {/* 页首（官方 SiteHeader 模式，border-b 恢复——M15 验收：要的是柔和线不是没有线；
-              线色走 --border 令牌，夜航令牌已调亮非黑）：标题 … 动作钮（折叠钮 2026-09
-              重定位移出页首——可见态在侧栏底栏、隐藏态在左缘浮签，见 SidebarToggles；
-              主题钮 2026-09 移出页首，与纸面统一挂右下角 theme-fab，见下方 main 后）。
-              容器合并改版：@container 承担详情动作收纳（页首宽 = SidebarInset 宽，随窗体/
-              侧栏折叠变化，容器查询比视口断点更准）；详情态标题换 md 文件名（truncate 截断
-              加 …），元信息并入 title 悬停。无固定高（零固定）——内部控件全 h-8 档撑出
-              行高 32px+1px 线，与侧栏搜索框（32px）同高对齐 */}
-          <header className="@container flex shrink-0 items-center gap-2 border-b px-4">
-            <h1
-              className="truncate text-sm font-semibold tracking-wide text-foreground"
-              title={selectedInfo === null ? undefined : `${detailTitle(selectedInfo)}\n${detailMeta(selectedInfo)}`}
-            >
-              {selectedInfo === null ? workspaceName : detailTitle(selectedInfo)}
-            </h1>
+              线色走 --border 令牌，夜航令牌已调亮非黑）。2026-09 画布三态 M2 详情态退役：
+              标题恒工作区名（@container 容器查询与页首动作组随 DetailActions 一并退役），
+              仅余新建/导入常驻钮（折叠钮在侧栏底栏/左缘浮签，主题钮挂右下 theme-fab）。
+              无固定高（零固定）——内部控件全 h-8 档撑出行高 32px+1px 线，与侧栏搜索框
+              （32px）同高对齐 */}
+          <header className="flex shrink-0 items-center gap-2 border-b px-4">
+            <h1 className="truncate text-sm font-semibold tracking-wide text-foreground">{workspaceName}</h1>
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              {selectedInfo !== null && (
-                <DetailActions
-                  info={selectedInfo}
-                  favorite={favMdPaths.has(selectedInfo.mdPath)}
-                  onToggleFavorite={() => void store.toggleFavorite(selectedInfo.mdPath)}
-                  onBack={() => {
-                    // 关闭预览：清文件选中即回落欢迎页
-                    setSelectedMap(null)
-                  }}
-                  onAction={(a, m) => {
-                    // 与资源管理器 tile 悬停操作同流（对话框在 LibraryView 统一管理）
-                    dlg.openMapAction(a, m)
-                  }}
-                  onCopyPath={(p) => void writeClipboard(p)}
-                  onCopyWechat={() => {
-                    // 公众号格式复制（2026-09 发布复制）：全链失败（读盘/渲染/剪贴板）走
-                    // error 横幅显式出口，成功静默（与复制路径惯例一致）
-                    void copyAsWechatHtml(
-                      useAppStore.getState().adapter,
-                      workspaceDir,
-                      selectedInfo.mdPath,
-                      writeHtmlClipboard,
-                    ).catch((e: unknown) =>
-                      store.setError(t('library.fileDetail.copyWechatFailed', { reason: String(e) })),
-                    )
-                  }}
-                  onOpen={(m) => void store.openMap(m.mdPath)}
-                />
-              )}
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧）。工作台钮退役（2026-09 画布
                   三态 M3）：案头总览并入欢迎页 overview 槽位，入口随钮删除 */}
@@ -403,10 +388,16 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
             </div>
           </header>
           {error && <div className="error-banner">{error}</div>}
-          {/* 主区（官方 p-6）：两态（欢迎页 / 详情态预览面板）；详情态 p-0——容器
-              合并后预览区 edge-to-edge 铺满 SidebarInset（bg-muted 贴圆角边） */}
-          <main className={selectedInfo !== null ? 'flex min-h-0 flex-1 p-0' : 'flex min-h-0 flex-1 p-6'}>
+          {/* 主区（官方 p-6）：单态（欢迎页/空态）；relative 供悬浮预览浮窗 absolute 锚定 */}
+          <main className="relative flex min-h-0 flex-1 p-6">
             {renderRight()}
+            {/* 悬浮预览（2026-09 画布三态 M2）：单击文件行浮现右区右上，双击照旧开纸面；
+                详情态（FileDetail/页首动作钮）退役，主区收敛欢迎页单态。appDialog 挂载门
+                （Task 1 评审 Esc 双关核对）：App 级对话框开着时卸载浮窗——一次 Esc 只关
+                对话框（浮窗 keydown 监听随卸载移除），双关结构性消除 */}
+            {selectedInfo !== null && appDialog === null && (
+              <FilePreviewPopover info={selectedInfo} onClose={closePreview} />
+            )}
           </main>
           {/* 右下主题钮（2026-09 三态统一）：SidebarInset 自身 relative，锚点即圆角浮层右下角 */}
           <ThemeFab />

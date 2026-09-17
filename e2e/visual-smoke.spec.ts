@@ -158,7 +158,7 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
   expect(tipPad).toBe('6px 12px')
 
   // ④ 圆角令牌锁：资源管理器 tile 退役后改锁 :root 阶梯令牌（--radius 0.5rem），
-  //    消费面断言移交详情态容器（⑤ 同段）
+  //    消费面断言移交悬浮预览浮窗容器（⑤ 同段）
   const radiusToken = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--radius').trim(),
   )
@@ -167,13 +167,14 @@ test('视觉冒烟 4：M14 官方默认回归锁——浮签/对话框/侧栏/�
 
   // ⑤ 边框色回归锁（M15 根因修复）：Tailwind v4 裸 border 类不设颜色（默认 currentColor
   //    =文字色≈黑），官方靠 theme.css base 层通配重置回 --border——曾漏抄致全 app 边框
-  //    近黑（「纯黑线条」反馈真源）。锁计算值：树文件行单击进详情态，容器边框必须等于令牌色
+  //    近黑（「纯黑线条」反馈真源）。锁计算值：树文件行单击开悬浮预览浮窗（M2 详情态
+  //    退役迁锚），浮窗容器边框必须等于令牌色
   await page.locator('[data-testid^="file-node-"]').first().click()
-  const detail = page.getByTestId('file-detail')
-  await expect(detail).toBeVisible()
-  const detailBorder = await page.evaluate(
+  const popover = page.getByTestId('file-preview-popover')
+  await expect(popover).toBeVisible()
+  const popoverBorder = await page.evaluate(
     (el) => getComputedStyle(el).borderColor,
-    await detail.elementHandle(),
+    await popover.elementHandle(),
   )
-  expect(detailBorder).toBe('rgb(228, 231, 230)') // #E4E7E6（晨松 --border）
+  expect(popoverBorder).toBe('rgb(228, 231, 230)') // #E4E7E6（晨松 --border）
 })

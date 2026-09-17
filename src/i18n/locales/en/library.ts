@@ -36,18 +36,15 @@ const library: Dict['library'] = {
     newDirTooltipIn: 'Create a folder in “{{dir}}”',
     settings: 'Settings',
   },
+  // fileDetail (M2 2026-09 cleanup): only keys still used by the preview popover
+  // and the tree context menu remain (outline/open/more/meta died with FileDetail)
   fileDetail: {
     previewFailedTitle: 'Cannot preview this file',
     previewFailedBody: 'It may have been moved, deleted, or is not accessible',
-    showOutline: 'Show outline',
-    hideOutline: 'Hide outline',
     closePreview: 'Close preview',
     copyPath: 'Copy file path',
     copyWechat: 'Copy for WeChat',
     copyWechatFailed: 'Failed to copy for WeChat: {{reason}}',
-    openMap: 'Open map',
-    moreActions: 'More actions',
-    meta: '{{size}} · Created {{created}} · Modified {{modified}}',
   },
   dialogs: {
     rename: { title: 'Rename map' },
