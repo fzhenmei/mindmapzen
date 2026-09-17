@@ -1,8 +1,8 @@
 // src/services/workbench.test.ts
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import type { FsAdapter } from '../types/files'
-import { scanWorkTasks, WORK_DIR } from './workbench'
+import { scanWorkTasks, scanWorkTasksCached, WORK_DIR } from './workbench'
 
 let fs: MemoryFsAdapter
 beforeEach(() => {
@@ -43,5 +43,61 @@ describe('scanWorkTasks', () => {
     expect(r.failed).toEqual(['坏图'])
     expect(r.tasks.map((t) => t.text)).toEqual(['任务'])
     expect(r.maps.map((m) => m.mapName).sort()).toEqual(['坏图', '好图']) // sort 按 UTF-16 码元：坏(U+574F) < 好(U+597D)
+  })
+})
+
+describe('scanWorkTasksCached mtime 指纹缓存', () => {
+  beforeEach(() => {
+    // MemoryFsAdapter 的 mtime 取 Date.now() 毫秒墙钟——同毫秒内连续重写同一文件 mtime
+    // 不变，会让"内容变了但指纹没变"偶发误命中；冻结假钟逐步推进，写入 mtime 严格递增
+    vi.useFakeTimers({ toFake: ['Date'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('缓存命中：mtime 全等时第二次调用零文件读取', async () => {
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/a.md`, '# a\n\n## t1 @todo\n')
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/子/b.md`, '# b\n\n## t2 @doing\n')
+    const first = await scanWorkTasksCached(fs, '/ws')
+    expect(first.tasks.map((x) => x.text)).toEqual(['t1', 't2'])
+    const readSpy = vi.spyOn(fs, 'readTextFile')
+    const second = await scanWorkTasksCached(fs, '/ws')
+    expect(second).toBe(first) // 同引用 = 缓存直返
+    expect(readSpy).not.toHaveBeenCalled()
+  })
+
+  test('mtime 变化 / 文件增删：指纹不符重扫', async () => {
+    vi.setSystemTime(1000)
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/a.md`, '# a\n\n## t1 @todo\n')
+    await scanWorkTasksCached(fs, '/ws')
+    vi.setSystemTime(2000)
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/a.md`, '# a\n\n## 改 @done\n') // 内容变（mtime 变）
+    const r1 = await scanWorkTasksCached(fs, '/ws')
+    expect(r1.tasks[0]!.status).toBe('done')
+    vi.setSystemTime(3000)
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/new.md`, '# n\n\n## t3 @blocked\n') // 增文件（@wait 非项目状态词，brief 笔误改 @blocked）
+    const r2 = await scanWorkTasksCached(fs, '/ws')
+    expect(r2.tasks.map((x) => x.text)).toContain('t3')
+    await fs.remove(`/ws/${WORK_DIR}/new.md`) // 删文件（键集合变）
+    const r3 = await scanWorkTasksCached(fs, '/ws')
+    expect(r3.tasks.map((x) => x.text)).not.toContain('t3')
+  })
+
+  test('工作目录不存在：返回空扫且清缓存（下次创建后能扫到）', async () => {
+    await fs.writeTextFileAtomic('/ws/其他/x.md', '# x\n')
+    const r = await scanWorkTasksCached(fs, '/ws')
+    expect(r.dirExists).toBe(false)
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/a.md`, '# a\n\n## t1 @todo\n')
+    const r2 = await scanWorkTasksCached(fs, '/ws')
+    expect(r2.tasks).toHaveLength(1)
+  })
+
+  test('换工作区：缓存不串（wsDir 不等即重扫）', async () => {
+    await fs.writeTextFileAtomic(`/ws/${WORK_DIR}/a.md`, '# a\n\n## t1 @todo\n')
+    const r = await scanWorkTasksCached(fs, '/ws1') // 同 fs 不同 wsDir（dirExists false 场景）
+    expect(r.dirExists).toBe(false)
+    const r2 = await scanWorkTasksCached(fs, '/ws2')
+    expect(r2.dirExists).toBe(false)
   })
 })
