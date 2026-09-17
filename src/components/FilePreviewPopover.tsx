@@ -55,9 +55,13 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     }
   }, [info.mdPath])
 
-  // 关窗①：mousedown 落浮窗外（点左树文件行会先关再由 click 选中重开=内容切换语义）
+  // 关窗①：mousedown 落浮窗外。左树文件行豁免（spec §4.1 真实事件序，2026-09 评审
+  // 修复）：文件行真实点击 = mousedown→click，若此处先关（清选中），随后的 click 里
+  // toggle 落在 null 上必重开——「再点同一文件关窗」在真机失效。豁免后关窗语义交给
+  // 随后的 click：同文件 = selectFile toggle 关、异文件 = 内容切换
   useEffect(() => {
     const onDown = (e: MouseEvent): void => {
+      if (e.target instanceof Element && e.target.closest('[data-tree-file-row]') !== null) return
       const root = rootRef.current
       if (root !== null && e.target instanceof Node && !root.contains(e.target)) onClose()
     }

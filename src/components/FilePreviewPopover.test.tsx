@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import FilePreviewPopover from './FilePreviewPopover'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { renderVditorPreview } from '../services/vditorPreview'
 import type { MapInfo } from '../types/files'
 
 // jsdom 不执行 vditor 注入的子资源脚本（渲染 promise 永不 resolve），真实渲染归 e2e；
@@ -52,6 +53,37 @@ describe('FilePreviewPopover', () => {
     render(<FilePreviewPopover info={makeInfo({ mdPath: '/ws/缺.md', name: '缺' })} onClose={() => {}} />)
     await waitFor(() => expect(screen.getByTestId('file-preview-error')).toBeInTheDocument())
     expect(screen.getByTestId('file-preview-error').textContent).toContain('缺.md')
+  })
+
+  // Windows 路径出口（迁自 FileDetail.test）：给人看的错误路径归一为原生 '\'
+  test('Windows 下错误路径分隔符归一为反斜杠', async () => {
+    Object.defineProperty(navigator, 'platform', { value: 'Win32', configurable: true })
+    try {
+      render(<FilePreviewPopover info={makeInfo({ mdPath: 'C:\\ws\\docs\\甲/a.md' })} onClose={() => {}} />)
+      expect(await screen.findByText('C:\\ws\\docs\\甲\\a.md')).toBeInTheDocument()
+    } finally {
+      Reflect.deleteProperty(navigator, 'platform')
+    }
+  })
+
+  // 正文引用块行中图片换 dataURL（迁自 FileDetail.test，收集口径全文化）：
+  // collectMdImageSrcs 超集口径，行中图（`> 前置 ![](a) 后置`）行尾口径收不到
+  test('正文引用块行中图片换 dataURL（收集口径全文化）', async () => {
+    const fs = new MemoryFsAdapter()
+    useAppStore.setState({ adapter: fs })
+    await fs.writeTextFileAtomic('/ws/甲.md', '# 甲\n\n> 前置 ![中图](assets/mid.png) 后置\n')
+    await fs.writeBytes('/ws/assets/mid.png', new Uint8Array([7]))
+    vi.mocked(renderVditorPreview).mockImplementationOnce(async (el: HTMLElement) => {
+      const img = document.createElement('img')
+      img.src = 'assets/mid.png'
+      el.append(img)
+    })
+    render(<FilePreviewPopover info={makeInfo({})} onClose={() => {}} />)
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid="md-preview"] img')!.getAttribute('src')).toBe(
+        'data:image/png;base64,Bw==',
+      ),
+    )
   })
 
   test('Esc 关窗（非输入域）；关闭钮关窗', () => {

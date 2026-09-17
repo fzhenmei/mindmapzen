@@ -932,6 +932,27 @@ describe('悬浮预览浮窗装配（画布三态 M2）', () => {
     expect(await screen.findByTestId('md-preview')).toHaveTextContent('乙')
   })
 
+  // 评审修复（真实鼠标链路，spec §4.1 契约）：文件行真实点击 = mousedown（浮窗外点）
+  // → click（selectFile toggle）。无豁免时外点先清选中、click 的 toggle 落在 null 上
+  // 必重开——真机上「再点同一文件关窗」失效（上例纯 click 序掩盖了偏差）。修法：
+  // 外点判定豁免左树文件行（data-tree-file-row 标记），关窗语义交随后的 click
+  test('真实事件序（mousedown+click）：再点同一文件行 → 浮窗关；点异文件行 → 内容切换', async () => {
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('file-node-想法A'))
+    expect(await screen.findByTestId('file-preview-popover')).toBeInTheDocument()
+    // 真实事件序再点同一文件行：mousedown 豁免不关，click toggle 关——终态=关（回欢迎页）
+    fireEvent.mouseDown(screen.getByTestId('file-node-想法A'))
+    fireEvent.click(screen.getByTestId('file-node-想法A'))
+    await waitFor(() => expect(screen.queryByTestId('file-preview-popover')).not.toBeInTheDocument())
+    expect(screen.getByTestId('desk-idle')).toBeInTheDocument()
+    // 真实事件序点异文件行：浮窗不关不叠加，内容切换为乙
+    fireEvent.mouseDown(await screen.findByTestId('file-node-乙'))
+    fireEvent.click(screen.getByTestId('file-node-乙'))
+    const pop = await screen.findByTestId('file-preview-popover')
+    expect(pop).toHaveTextContent('乙.md')
+    expect(await screen.findByTestId('md-preview')).toHaveTextContent('乙')
+  })
+
   // Task 1 评审移交的 Esc 双关核对落地：App 级对话框（设置/历史）开着时浮窗卸载
   // （挂载门 appDialog===null）——对话框期间一次 Esc 只关对话框（浮窗 keydown 监听
   // 随卸载移除），双关结构性消除；关对话框后选中仍在则浮窗回归

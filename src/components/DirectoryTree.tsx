@@ -261,6 +261,7 @@ export default function DirectoryTree({
           <ContextMenuTrigger asChild>
             <div
               className={`group/frow flex min-w-0 flex-1 items-center ${dragging === key ? 'opacity-50' : ''}`}
+              data-tree-file-row
               draggable
               onDragStart={startDrag({ kind: 'file', file: f }, key)}
               onDragEnd={endDrag}
