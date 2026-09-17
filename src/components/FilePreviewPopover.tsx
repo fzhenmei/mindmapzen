@@ -69,10 +69,14 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     return () => document.removeEventListener('mousedown', onDown)
   }, [onClose])
 
-  // 关窗②：Esc 非输入域（守卫同编辑器快捷键族——案头搜索框的 Esc 不被截获）
+  // 关窗②：Esc 非输入域（守卫同编辑器快捷键族——案头搜索框的 Esc 不被截获）。
+  // !defaultPrevented 承重守卫勿删（同 KanbanView/MarkdownView 先例）：Radix
+  // DismissableLayer（右键菜单等）在 ownerDocument capture 阶段消费 Escape 时调原生
+  // preventDefault()，事件仍冒泡到本 window 监听——浮窗与 Radix 浮层同开按 Esc 只关其一，
+  // 已被消费的 Esc 不在此误关
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || e.defaultPrevented) return
       const tgt = e.target
       if (tgt instanceof Element && tgt.closest('input, textarea, [contenteditable="true"]')) return
       onClose()

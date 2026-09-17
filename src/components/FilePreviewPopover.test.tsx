@@ -1,7 +1,7 @@
 // src/components/FilePreviewPopover.test.tsx —— 案头悬浮预览（2026-09 画布三态 M2，
 // FileDetail 详情态退役承接）：单击文件行在右区右上角浮现的预览小窗。
 // 读取管线迁自 FileDetail（真实 md + 插图 dataURL + 失败兜底），轻量无大纲。
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import FilePreviewPopover from './FilePreviewPopover'
 import { useAppStore } from '../store/appStore'
@@ -107,6 +107,23 @@ describe('FilePreviewPopover', () => {
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
     input.remove()
+  })
+
+  test('Radix 已消费的 Esc（defaultPrevented）不关窗；未 prevent 的 Esc 照常关', () => {
+    // I-1 回归钉（仿 KanbanView.test 同名先例）：Radix DismissableLayer（右键菜单等）
+    // 在 ownerDocument capture 阶段对 Escape 调原生 preventDefault()（其 dist 源码：
+    // addEventListener('keydown', handleKeyDown, { capture: true })），事件仍冒泡到本窗
+    // 的 window keydown 监听。此处构造 defaultPrevented=true 的 keyDown 派发到 window，
+    // 模拟 Radix capture 层的最终效果；!defaultPrevented 守卫承重，误删则本用例转红。
+    // 随后未 prevent 的 Esc 为对照锚：正常关窗
+    const onClose = vi.fn()
+    render(<FilePreviewPopover info={makeInfo({})} onClose={onClose} />)
+    const event = createEvent.keyDown(window, { key: 'Escape' })
+    Object.defineProperty(event, 'defaultPrevented', { value: true })
+    fireEvent(window, event)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   test('点浮窗外部关窗；点浮窗内部不关', () => {
