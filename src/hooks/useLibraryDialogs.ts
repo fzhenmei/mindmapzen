@@ -10,10 +10,13 @@ import { commitImport } from '../services/importMap'
 import { createDir, deleteDir } from '../services/desk'
 import { parse } from '../services/mdTree'
 import { parseXmind } from '../services/xmindImport'
-import type { MapAction } from '../components/DetailActions'
 import type { ImportPreview } from '../components/ImportPreviewDialog'
 import type { MapInfo } from '../types/files'
 import type { IgnoredBlock, ZenNode } from '../types/tree'
+
+/** 详情态对话框流操作三态（LibraryView 统一管理对话框；第三迁：FileExplorer →
+ *  DetailActions → 本 hook——2026-09 画布三态 M2 详情态退役，消费方剩对话框流与树右键） */
+export type MapAction = 'move' | 'rename' | 'delete'
 
 /** 导入源统一载荷（M21：md 文本 / xmind 字节双流，一个对话框入口按 kind 分流；
  *  可辨识联合——分支内 text/bytes 精确收窄） */

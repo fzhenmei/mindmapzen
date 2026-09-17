@@ -35,18 +35,15 @@ export default {
     newDirTooltipIn: '在「{{dir}}」下新建目录',
     settings: '设置',
   },
+  // fileDetail（2026-09 画布三态 M2 清理）：详情态退役后仅存浮窗与树右键菜单在用词条
+  // （大纲/打开/更多/元信息类随 FileDetail/DetailActions 删除）
   fileDetail: {
     previewFailedTitle: '无法预览此文件',
     previewFailedBody: '文件可能已被移动、删除或没有访问权限',
-    showOutline: '显示大纲',
-    hideOutline: '隐藏大纲',
     closePreview: '关闭预览',
     copyPath: '复制文件路径',
     copyWechat: '复制为公众号格式',
     copyWechatFailed: '复制为公众号格式失败：{{reason}}',
-    openMap: '打开导图',
-    moreActions: '更多操作',
-    meta: '{{size}} · 创建 {{created}} · 修改 {{modified}}',
   },
   dialogs: {
     rename: { title: '重命名导图' },

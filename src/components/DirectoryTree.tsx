@@ -3,7 +3,7 @@ import { useRef, useState, type DragEvent, type JSX } from 'react'
 import { useTranslation } from 'react-i18next'
 import { filterTree, isUnderDir, type DirNode } from '../services/desk'
 import type { LibrarySort } from '../types/files'
-import type { MapAction } from './DetailActions'
+import type { MapAction } from '../hooks/useLibraryDialogs'
 import {
   Collapsible,
   CollapsibleContent,
