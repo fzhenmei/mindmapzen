@@ -10,6 +10,9 @@ import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersio
 import { isE2eMode } from '../services/e2eMode'
 import type { GitClone, GitRun } from '../types/ports'
 
+/** 视图模式（2026-09 画布三态）：导图 / Markdown / 看板 */
+export type ViewMode = 'mindmap' | 'markdown' | 'kanban'
+
 interface AppState {
   route: 'library' | 'editor' | 'workbench' // workbench=工作台（2026-09 跨图总览，spec 2026-09-13-workbench §2）
   /** 进入编辑器前的出发空间(2026-09 导航系统 spec §3 R1「返回=回来路」):openMap/
@@ -54,12 +57,10 @@ interface AppState {
   /** 编辑器重挂载序号（外部变更冲突 reload 用）：App 层 EditorView key 拼接此值，
    *  递增即强制重挂载当前图（丢弃内存编辑、从磁盘重载）——同路径 openMap 不变 key 无法重开 */
   editorSeq: number
-  /** 视图模式（2026-09 看板模式）：导图 ⇄ 看板浮层。内存态不落盘——重启恒回导图
-   *  （导图是规划期默认形态，看板是会话内临时视角，符合生命周期心智）；切换是视图
-   *  导航非内容编辑，不置脏不触发保存链 */
-  viewMode: 'mindmap' | 'kanban'
+  /** 视图模式（2026-09 画布三态）：导图 / Markdown / 看板浮层。内存态不落盘——重启恒回导图（导图是默认形态，Markdown/看板是会话内视角）；切换是视图导航非内容编辑，不置脏不触发保存链 */
+  viewMode: ViewMode
   /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
-  setViewMode: (v: 'mindmap' | 'kanban') => void
+  setViewMode: (v: ViewMode) => void
   /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器
    * { mapPath, path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
    * mapPath 绑定目标图（终审 Important-1）：openMap 失败（文件被删/坏档）时寻址器残留，

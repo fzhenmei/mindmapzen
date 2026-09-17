@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ZenBar from './ZenBar'
 import { TooltipProvider } from './ui/tooltip'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, type ViewMode } from '../store/appStore'
 import { DEFAULT_COPY_SETTINGS, type CopySettingKey } from '../types/files'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import type { UndoRedo } from '../hooks/useUndoRedo'
@@ -26,8 +26,12 @@ function renderBar(overrides: {
   onSwitchLayout?: (kind: LayoutKind) => void
   bodyActive?: boolean
   onBodyClick?: () => void
-  viewMode?: 'mindmap' | 'kanban'
-  onSwitchView?: (v: 'mindmap' | 'kanban') => void
+  viewMode?: ViewMode
+  onSwitchView?: (v: ViewMode) => void
+  outlineVisible?: boolean
+  onToggleOutline?: () => void
+  kanbanArchiveOpen?: boolean
+  onToggleKanbanArchive?: () => void
   backTarget?: 'library' | 'workbench'
   onWorkbenchClick?: () => void
   onSettingsClick?: () => void
@@ -56,6 +60,10 @@ function renderBar(overrides: {
         onSwitchLayout={overrides.onSwitchLayout ?? noop}
         viewMode={overrides.viewMode ?? 'mindmap'}
         onSwitchView={overrides.onSwitchView ?? noop}
+        outlineVisible={overrides.outlineVisible ?? false}
+        onToggleOutline={overrides.onToggleOutline ?? noop}
+        kanbanArchiveOpen={overrides.kanbanArchiveOpen ?? false}
+        onToggleKanbanArchive={overrides.onToggleKanbanArchive ?? noop}
         backTarget={overrides.backTarget ?? 'library'}
         onWorkbenchClick={overrides.onWorkbenchClick ?? noop}
         onSettingsClick={overrides.onSettingsClick ?? noop}
@@ -168,12 +176,12 @@ describe('ZenBar 更多布局下拉', () => {
   })
 })
 
-// ---- 视图切换组（2026-09 看板模式）：导图/看板两钮（布局组同款 ToggleGroup 语言）----
+// ---- 视图切换组（2026-09 看板模式）：导图/Markdown/看板三钮（布局组同款 ToggleGroup 语言）----
 
 describe('ZenBar 视图切换组', () => {
   afterEach(cleanup)
 
-  test('两 testid 常驻：导图态导图钮点亮；点击看板钮回调 onSwitchView("kanban")', () => {
+  test('三 testid 常驻：导图态导图钮点亮；点击看板钮回调 onSwitchView("kanban")', () => {
     const onSwitchView = vi.fn()
     renderBar({ viewMode: 'mindmap', onSwitchView })
     expect(screen.getByTestId('btn-view-mindmap')).toHaveAttribute('data-state', 'on')
@@ -234,5 +242,87 @@ describe('砚栏导航钮(2026-09 导航系统)', () => {
     expect(onWorkbenchClick).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByTestId('btn-editor-settings'))
     expect(onSettingsClick).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---- 三态矩阵（2026-09 画布三态）：视图组三钮 + 按 viewMode 显隐各段 + 大纲/归档两枚专有钮 ----
+// 显隐约定（task-5 brief）：Markdown 态藏 撤销重做/正文/导出/缩放/布局，露大纲钮；
+// 看板态藏 布局/缩放（撤销重做在），露归档钮；导图态全量在、两专有钮不在。
+
+const T = (id: string) => screen.queryByTestId(id)
+
+describe('ZenBar 三态矩阵', () => {
+  afterEach(cleanup)
+
+  test('导图态：全量按钮在（布局/缩放/正文/导出/撤销重做），大纲与归档钮不在', () => {
+    renderBar({ viewMode: 'mindmap' })
+    for (const id of ['layout-mindmap', 'btn-zoom-in', 'btn-body', 'btn-export', 'btn-undo', 'btn-copy', 'btn-save', 'btn-back']) {
+      expect(T(id)).not.toBeNull()
+    }
+    expect(T('btn-outline-toggle')).toBeNull()
+    expect(T('btn-kanban-archive')).toBeNull()
+  })
+
+  test('Markdown 态：撤销/重做/正文/导出/缩放/布局隐藏，大纲钮在，复制/保存/返回在', () => {
+    renderBar({ viewMode: 'markdown' })
+    for (const id of ['btn-undo', 'btn-redo', 'btn-body', 'btn-export', 'btn-zoom-in', 'layout-mindmap', 'btn-layout-more']) {
+      expect(T(id)).toBeNull()
+    }
+    for (const id of ['btn-outline-toggle', 'btn-copy', 'btn-save', 'btn-back', 'btn-switch', 'btn-new']) {
+      expect(T(id)).not.toBeNull()
+    }
+  })
+
+  test('看板态：撤销/重做在，布局/缩放隐藏，归档钮在', () => {
+    renderBar({ viewMode: 'kanban' })
+    expect(T('btn-undo')).not.toBeNull()
+    expect(T('btn-kanban-archive')).not.toBeNull()
+    expect(T('layout-mindmap')).toBeNull()
+    expect(T('btn-outline-toggle')).toBeNull()
+  })
+
+  test('视图组三钮：markdown 钮存在', () => {
+    renderBar({ viewMode: 'markdown' })
+    expect(T('btn-view-mindmap')).not.toBeNull()
+    expect(T('btn-view-markdown')).not.toBeNull()
+    expect(T('btn-view-kanban')).not.toBeNull()
+  })
+})
+
+// ---- 专有钮点亮语言（同 btn-body：data-active 通道 + aria-pressed），点击走各自回调 ----
+
+describe('ZenBar 大纲/归档专有钮', () => {
+  afterEach(cleanup)
+
+  test('大纲钮：显时点亮（data-active + aria-pressed=true、提示「隐藏大纲」），隐时常态；点击回调 onToggleOutline', () => {
+    const onToggleOutline = vi.fn()
+    renderBar({ viewMode: 'markdown', outlineVisible: false, onToggleOutline })
+    const hidden = screen.getByTestId('btn-outline-toggle')
+    expect(hidden).not.toHaveAttribute('data-active')
+    expect(hidden).toHaveAttribute('aria-pressed', 'false')
+    expect(hidden).toHaveAttribute('aria-label', '显示大纲')
+    fireEvent.click(hidden)
+    expect(onToggleOutline).toHaveBeenCalledTimes(1)
+    cleanup()
+    renderBar({ viewMode: 'markdown', outlineVisible: true })
+    const lit = screen.getByTestId('btn-outline-toggle')
+    expect(lit).toHaveAttribute('data-active', '')
+    expect(lit).toHaveAttribute('aria-pressed', 'true')
+    expect(lit).toHaveAttribute('aria-label', '隐藏大纲')
+  })
+
+  test('归档钮：开时点亮、关时常态；点击回调 onToggleKanbanArchive', () => {
+    const onToggleKanbanArchive = vi.fn()
+    renderBar({ viewMode: 'kanban', kanbanArchiveOpen: false, onToggleKanbanArchive })
+    const closed = screen.getByTestId('btn-kanban-archive')
+    expect(closed).not.toHaveAttribute('data-active')
+    expect(closed).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(closed)
+    expect(onToggleKanbanArchive).toHaveBeenCalledTimes(1)
+    cleanup()
+    renderBar({ viewMode: 'kanban', kanbanArchiveOpen: true })
+    const lit = screen.getByTestId('btn-kanban-archive')
+    expect(lit).toHaveAttribute('data-active', '')
+    expect(lit).toHaveAttribute('aria-pressed', 'true')
   })
 })

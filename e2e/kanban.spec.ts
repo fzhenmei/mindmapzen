@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test'
 // copyRenderTree）、从未落引擎活树 renderer.renderTree——重渲后节点不可寻址、挂起回调
 // 因无后续渲染事件永不再触发。单测 fake 的 getData 返回同引用掩盖了这一分歧行为，
 // 此用例以真实引擎守卫（copyRenderTree 语义单元层无法复现）。
-test('批量归档含收起分支：done 列清空、归档条计数为三', async ({ page }) => {
+test('批量归档含收起分支：done 列清空、归档列三卡在场', async ({ page }) => {
   test.setTimeout(30_000)
   const pageErrors: string[] = []
   page.on('pageerror', (e) => pageErrors.push(String(e)))
@@ -26,7 +26,8 @@ test('批量归档含收起分支：done 列清空、归档条计数为三', asy
   await page.locator('.smm-expand-btn').first().click()
   await expect(page.getByText('任务一').first()).toHaveCount(0)
 
-  await page.keyboard.press('Control+Shift+K')
+  // Ctrl+3 直达看板（2026-09 画布三态：Ctrl+1 导图 / Ctrl+2 Markdown / Ctrl+3 看板）
+  await page.keyboard.press('Control+3')
   await expect(page.getByTestId('kanban-view')).toBeVisible()
   const done = page.getByTestId('kanban-col-done')
   await expect(done.getByText('任务一')).toBeVisible()
@@ -36,7 +37,11 @@ test('批量归档含收起分支：done 列清空、归档条计数为三', asy
   await page.getByTestId('btn-kanban-archive-all').click()
   // done 列清空：挂起回调经真实渲染事件（node_tree_render_end）落命令后重投影
   await expect(done.getByText('暂无任务')).toBeVisible({ timeout: 10_000 })
-  // 收起条计数 = 3（含收起分支下的两张）
-  await expect(page.getByTestId('kanban-archive-collapsed')).toHaveText(/3/)
+  // 归档去向（2026-09 画布三态：收起条已退役）：点砚栏归档钮展开归档列，
+  // 三张卡在场（含收起分支下的两张——挂起回调不丢）
+  await page.getByTestId('btn-kanban-archive').click()
+  await expect(page.getByTestId('kanban-col-archived').getByText('任务一')).toBeVisible()
+  await expect(page.getByTestId('kanban-col-archived').getByText('任务二')).toBeVisible()
+  await expect(page.getByTestId('kanban-col-archived').getByText('明面任务')).toBeVisible()
   expect(pageErrors).toEqual([])
 })

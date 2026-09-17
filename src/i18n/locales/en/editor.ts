@@ -43,12 +43,16 @@ const editor: Dict['editor'] = {
       timeline: 'Timeline',
       fishbone: 'Fishbone',
     },
-    // View toggle group (2026-09 kanban mode): map <-> kanban overlay (Ctrl+Shift+K equivalent)
-    viewToggle: 'View (Ctrl+Shift+K)',
+    // View toggle group (2026-09 kanban mode -> canvas tri-state): map / Markdown / kanban overlay (Ctrl+1/2/3 equivalents)
+    viewToggle: 'View (Ctrl+1/2/3)',
     views: {
       mindmap: 'Map',
+      markdown: 'Markdown',
       kanban: 'Kanban',
     },
+    outlineShow: 'Show outline',
+    outlineHide: 'Hide outline',
+    archiveToggle: 'Archive column',
   },
   canvas: {
     loading: 'Opening…',
@@ -186,6 +190,13 @@ const editor: Dict['editor'] = {
     // Sub-item badge (2026-09 subtree cards): {{n}} = statusless descendants in card scope
     children: '{{n}} sub-items',
     cardHint: 'Double-click to rename',
+  },
+  // Markdown view (2026-09 canvas tri-state)
+  markdown: {
+    viewName: 'Markdown view',
+    // Serialize-failure placeholder (poison-node family: newline / body-in-list assertion)
+    renderFailTitle: 'Markdown render failed',
+    renderFailBody: 'Current map data cannot be serialized; check node text (e.g. embedded line breaks) in mind map view',
   },
 }
 export default editor

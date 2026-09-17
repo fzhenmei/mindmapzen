@@ -81,7 +81,15 @@ function makeMm() {
   }
 }
 
-function renderKanban(mm: MindMapHandle): { props: KanbanViewProps; unmount: () => void } {
+function renderKanban(
+  mm: MindMapHandle,
+  overrides: Partial<KanbanViewProps> = {},
+): {
+  props: KanbanViewProps
+  unmount: () => void
+  /** 宿主重渲下发（砚栏看板态专有钮 toggle 后 EditorView 重渲同款路径），验证 props 驱动显隐 */
+  rerender: (overrides?: Partial<KanbanViewProps>) => void
+} {
   const mmRef: RefObject<MindMapHandle | null> = { current: mm }
   const props: KanbanViewProps = {
     mmRef,
@@ -92,14 +100,27 @@ function renderKanban(mm: MindMapHandle): { props: KanbanViewProps; unmount: () 
     onLocate: vi.fn(),
     onCopyCard: vi.fn(),
     onClose: vi.fn(),
+    // 归档列显隐上浮（2026-09 画布三态 M1）：宿主持有，默认收起
+    archiveOpen: false,
+    onSetArchiveOpen: vi.fn(),
+    ...overrides,
   }
   // 渲染脚手架：EditorView 根有 TooltipProvider（卡片子孙浮层依赖其上下文），此处同构包裹
-  const { unmount } = render(
+  const view = render(
     <TooltipProvider>
       <KanbanView {...props} />
     </TooltipProvider>,
   )
-  return { props, unmount }
+  return {
+    props,
+    unmount: view.unmount,
+    rerender: (o: Partial<KanbanViewProps> = {}) =>
+      view.rerender(
+        <TooltipProvider>
+          <KanbanView {...props} {...o} />
+        </TooltipProvider>,
+      ),
+  }
 }
 
 describe('KanbanView（看板模式浮层）', () => {
@@ -554,29 +575,49 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1)
   })
 
-  test('归档卡不进四列：收起条在场带计数，未展开不可见（2026-09 看板治理）', () => {
+  test('归档卡不进四列：收起态无收起条（已退役）无归档列，卡不可见（2026-09 看板治理）', () => {
     const { mm } = makeMm()
     renderKanban(mm)
-    expect(screen.getByTestId('kanban-archive-collapsed')).toHaveTextContent('1')
+    // 收起条退役（画布三态 M1 显隐上浮）：展开入口移砚栏，板内无此 testid
+    expect(screen.queryByTestId('kanban-archive-collapsed')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
     // 四列内无归档卡（列循环走 BOARD_STATUSES）
     expect(screen.queryByText('翻篇任务')).not.toBeInTheDocument()
   })
 
-  test('归档列展开/收起：点收起条展开成标准列，列头收起钮回落收起条', () => {
+  test('归档列显隐走 props：收起条退役，宿主经 archiveOpen 驱动、板内无展开入口', () => {
     const { mm } = makeMm()
-    renderKanban(mm)
-    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    const { props, rerender } = renderKanban(mm)
+    // 收起条退役：无此 testid；板内没有任何入口能调 onSetArchiveOpen(true)（砚栏钮，后续任务接）
+    expect(screen.queryByTestId('kanban-archive-collapsed')).toBeNull()
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
+    expect(props.onSetArchiveOpen).not.toHaveBeenCalled()
+    // 宿主下发 archiveOpen=true → 归档列现形（过滤强制展开叠加逻辑另测）
+    rerender({ archiveOpen: true })
     expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
     expect(screen.getByText('翻篇任务')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('btn-kanban-archive-collapse'))
+    // 宿主收回 → 列退场
+    rerender({ archiveOpen: false })
     expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
-    expect(screen.getByTestId('kanban-archive-collapsed')).toBeInTheDocument()
+  })
+
+  test('归档列展开/收起：宿主 archiveOpen=true 渲染标准列，列头收起钮回调 onSetArchiveOpen(false)', () => {
+    const { mm } = makeMm()
+    const { props, rerender } = renderKanban(mm, { archiveOpen: true })
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    expect(screen.getByText('翻篇任务')).toBeInTheDocument()
+    // 收起钮 = 请求宿主收起（就近入口与砚栏钮同一状态）：回调上行，列不自发卸载
+    fireEvent.click(screen.getByTestId('btn-kanban-archive-collapse'))
+    expect(props.onSetArchiveOpen).toHaveBeenCalledWith(false)
+    expect(screen.getByTestId('kanban-col-archived')).toBeInTheDocument()
+    // 宿主落实收起后列退场
+    rerender({ archiveOpen: false })
+    expect(screen.queryByTestId('kanban-col-archived')).not.toBeInTheDocument()
   })
 
   test('归档列拖出到 todo 列恢复：changeStatus 管线复用（徽章合成 + onDataChanged）', () => {
     const { mm, ta } = makeMm()
-    const { props } = renderKanban(mm)
-    fireEvent.click(screen.getByTestId('kanban-archive-collapsed'))
+    const { props } = renderKanban(mm, { archiveOpen: true })
     const dt = { setData: vi.fn(), getData: (k: string) => (k === 'text/kanban-uid' ? 'ta' : '') }
     fireEvent.dragStart(screen.getByTestId('kanban-card-ta'), { dataTransfer: dt })
     fireEvent.drop(screen.getByTestId('kanban-col-todo'), { dataTransfer: dt })

@@ -29,10 +29,10 @@ A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-
 
 ### Kanban mode
 
-- One tree, two views: plan on the canvas, execute on the board — nodes carry a trailing `@status` marker (six states, including archived)
+- One tree, three views: plan on the canvas, read as Markdown, execute on the board — nodes carry a trailing `@status` marker (six states, including archived)
 - Full-featured board: drag between columns, inline editing, add at column bottom, convert back to a plain node
 - Whole subtrees become cards, hover to peek at descendants, copy a card and paste it to AI
-- Header filter (title/path/tag), bulk-archive the done column; `Ctrl+Shift+K` to toggle
+- Header filter (title/path/tag), bulk-archive the done column; `Ctrl+1/2/3` to switch between mind map, Markdown and kanban views
 
 ### AI chat
 
