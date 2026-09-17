@@ -10,6 +10,9 @@ test('批量归档含收起分支：done 列清空、归档列三卡在场', asy
   const pageErrors: string[] = []
   page.on('pageerror', (e) => pageErrors.push(String(e)))
   await page.goto('/?e2e=1')
+  await expect
+    .poll(() => page.evaluate(() => Boolean((window as unknown as { __zenE2e?: object }).__zenE2e)))
+    .toBe(true) // harness 异步装配(main.tsx 顶层 await),早于其就绪的 evaluate 拿不到 __zenE2e
   await page.evaluate(async () => {
     const w = window as unknown as { __zenE2e: { writeFile(p: string, t: string): Promise<void> } }
     await w.__zenE2e.writeFile(
