@@ -140,8 +140,10 @@ export default function KanbanColumn({ status, cards, onAdd, filterActive = fals
           {cards.length}
         </span>
       </header>
-      {/* 卡片区原生列表语义（Sonar S6819：卡片 li 须挂 ul 下） */}
-      <ul className="flex list-none flex-col gap-2 overflow-y-auto">
+      {/* 卡片区原生列表语义（Sonar S6819：卡片 li 须挂 ul 下）。p-1.5 双职责（2026-09-18
+          验收）：细滚动条与卡片留间隙 + 卡片 ring/悬停效果外扩不被 padding box 裁剪——
+          ring 画在元素边界外，零 padding 时上下首尾卡与滚动条侧的高亮边会被静默裁掉 */}
+      <ul className="flex list-none flex-col gap-2 overflow-y-auto p-1.5">
         {cards.map((c) => (
           <KanbanCard key={c.uid} card={c} highlight={highlightUid === c.uid} {...cardCallbacks} />
         ))}
