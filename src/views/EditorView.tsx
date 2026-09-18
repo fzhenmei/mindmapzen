@@ -37,7 +37,7 @@ import EditorCaption from '../components/EditorCaption'
 import EditorCanvasArea, { type OpenFailInfo } from './EditorCanvasArea'
 import KanbanView from './KanbanView'
 import MarkdownView from './MarkdownView'
-import { centerNodeOnRender, consumePendingLocate, expandToUid, nodeStatusOf } from '../services/statusOps'
+import { centerNodeOnRender, consumePendingLocate, expandToUid, nodeStatusOf, type KanbanLocate } from '../services/statusOps'
 import { TooltipProvider } from '../components/ui/tooltip'
 import NodeActions from '../components/NodeActions'
 import MultiSelectBar from '../components/MultiSelectBar'
@@ -105,6 +105,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [mdOutlineVisible, setMdOutlineVisible] = useState(false) // Markdown 态大纲实际显隐（MarkdownView 上报，ZenBar 钮 pressed 信号）
   const [aiOpen, setAiOpen] = useState(false) // AI 对话面板开合（2026-09 AI Agent v1）：右栏常驻槽
   const [aiDragPx, setAiDragPx] = useState<number | null>(null) // AI 面板拖拽暂存宽；null = 未在拖（松手 onCommit 落盘）
+  // 案头跳看板定位（2026-09）：消费 view:'kanban' 寻址器时暂存下发 KanbanView 高亮；消费即清
+  const [kanbanLocate, setKanbanLocate] = useState<KanbanLocate | null>(null)
+  // 引擎就绪门（2026-09 案头跳看板）：docReady 只保证文档解析——viewMode 先行置位（案头
+  // openTask）时 docReady 翻转即挂浮层会赶在 onReady/mmRef 赋值前，refresh 静默空转成
+  // 空板；onCanvasReady 才翻真（MarkdownView 同门共享，viewMode 残留路径同病同防）
+  const [engineReady, setEngineReady] = useState(false)
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -469,15 +475,18 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           resolvedTheme={resolvedTheme}
           mmRef={mmRef}
           onCanvasReady={(mm) => {
+            setEngineReady(true) // 浮层挂载门（mmRef 此刻已赋值——EditorCanvasArea onReady 先赋 ref 再上调）
             purify(mm) // 连线净化（M5d Task 2）：首帧后建注册表 → 剥显示文本 → 落初始连线
             undoRedo.bind(mm) // 回退/重做（v1.1）：订阅 back_forward 历史态（基线种子随净化尾部播入）
             // 工作台跨图定位（2026-09 spec §5 文本寻址）：引擎就绪即消费 pendingLocate——
-            // 消费即清（不残留误定位）；目标图校验 + path+text 全量树寻址 + 居中编排
-            // 在 statusOps.consumePendingLocate（协议与挂点裁定的完整注释见彼处）
+            // 消费即清（不残留误定位）；目标图校验 + view 分派（缺省 path+text 全量树
+            // 寻址居中 / kanban 切看板态下发高亮）在 statusOps.consumePendingLocate
+            // （协议与挂点裁定的完整注释见彼处）
             const locate = useAppStore.getState().pendingLocate
             if (locate !== null) {
               useAppStore.getState().setPendingLocate(null)
-              consumePendingLocate(mm, mdPath, locate, locateNode)
+              // toKanban 分派（案头已前置置看板态，setViewMode 为 idempotent 冗余保险）
+              consumePendingLocate(mm, mdPath, locate, locateNode, (loc) => { useAppStore.getState().setViewMode('kanban'); setKanbanLocate(loc) })
             }
           }}
           onDataChange={(data) => {
@@ -502,9 +511,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             落画布区右上角、不随引擎缩放平移；面板开时 canvas-host 右缘内收，签同步让位不被遮 */}
         <AiTurnBadge />
         {/* 看板浮层（2026-09 看板模式）：不卸载引擎画布（防 0×0 resize 污染 + 保 undo 栈 +
-            免重挂净化链），不透明浮层盖满 canvas-host；关闭即卸载浮层本体。挂载门含 docReady
-            ——引擎未就绪时 mmRef 为 null，卡片读写无处落 */}
-        {docReady && viewMode === 'kanban' && (
+            免重挂净化链），不透明浮层盖满 canvas-host；关闭即卸载浮层本体。挂载门 engineReady
+            （onReady 后 mmRef 已赋值，卡片读写有落点；docReady 门会被 viewMode 先行置位赶过） */}
+        {engineReady && viewMode === 'kanban' && (
           <KanbanView
             mmRef={mmRef}
             onDataChanged={() => pipeline.onTreeDataChange()}
@@ -518,12 +527,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             // 归档列显隐上浮（2026-09 画布三态 M1）：宿主持有用户态，砚栏看板态专有钮 toggle
             archiveOpen={kanbanArchiveOpen}
             onSetArchiveOpen={setKanbanArchiveOpen}
+            locate={kanbanLocate}
+            onLocateConsumed={() => { setKanbanLocate(null) }}
             onClose={() => switchView('mindmap')}
           />
         )}
         {/* Markdown 浮层（2026-09 画布三态 M1）：协议同看板——引擎不卸载、盖满、
-            Esc 回导图；只读（数据源内存树完整序列化，见组件头注释） */}
-        {docReady && viewMode === 'markdown' && (
+            Esc 回导图；只读（数据源内存树完整序列化，见组件头注释）。挂载门同看板
+            engineReady（viewMode 残留先行置位路径同防早挂空转） */}
+        {engineReady && viewMode === 'markdown' && (
           <MarkdownView
             mmRef={mmRef}
             registry={registry}

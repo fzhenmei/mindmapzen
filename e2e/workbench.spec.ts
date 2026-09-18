@@ -32,10 +32,14 @@ test('案头总览聚合与跨图定位', async ({ page }) => {
   // 建议区：R1 doing（任务乙）与 R2 blocked（任务丙）至少各一条
   await expect(page.getByTestId('workbench-suggestion').filter({ hasText: '任务乙' })).toBeVisible()
   await expect(page.getByTestId('workbench-suggestion').filter({ hasText: '任务丙' })).toBeVisible()
-  // 跨图定位：点任务丙行 → 进纸面 → 节点可见（真实引擎链路）
+  // 跨图跳看板（2026-09 案头跳看板）：点任务丙行 → 该图以看板态打开 + 命中卡滚动高亮
+  // （真实引擎链路：openTask 先置 viewMode+view:'kanban' 寻址器 → onReady 消费分派 →
+  // KanbanView 按 path+text 匹配命中卡）；断言须赶在限时淡出窗（2.5s）内
   await rowBlocked.getByTestId('workbench-card').filter({ hasText: '任务丙' }).click()
-  await expect(page.getByText('图B').first()).toBeVisible()
-  await expect(page.getByText('任务丙').first()).toBeVisible()
+  await expect(page.getByTestId('kanban-view')).toBeVisible()
+  const cardC = page.getByTestId('kanban-col-blocked').locator('li', { hasText: '任务丙' })
+  await expect(cardC).toBeVisible()
+  await expect(cardC).toHaveClass(/ring-2/)
   expect(pageErrors).toEqual([])
 })
 

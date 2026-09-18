@@ -202,20 +202,47 @@ export function centerNodeOnRender(mm: MindMapHandle, uid: string, expanded: boo
   }
 }
 
+/** 跨图跳转寻址器（工作台 spec §5 文本寻址）：md 不序列化 uid（引擎开图 uuidv4 现发），
+ *  扫描期任何 uid 引擎侧必失配——path+text 是唯一稳定寻址口径。appStore.pendingLocate
+ *  与本模块消费签名共用本类型 */
+export interface PendingLocate {
+  /** 目标图绑定（终审 Important-1 错图消费防线）：openMap 失败残留后切图，消费前校验 */
+  mapPath: string
+  /** 父链文本（根→父，不含自身） */
+  path: string[]
+  text: string
+  /** 落点视图（2026-09 案头跳看板）：缺省 = 导图定位（现行语义）；'kanban' = 看板态
+   *  挂载 + 命中卡高亮（工作计划条目天然是看板卡片，回导图定位经看板卡菜单仍可达） */
+  view?: 'kanban'
+}
+
+/** 看板侧定位载荷（toKanban 分派后）：mapPath/view 已在 EditorView 消费完毕，
+ *  KanbanView 只需卡片寻址两字段 */
+export interface KanbanLocate {
+  path: string[]
+  text: string
+}
+
 /** 工作台跨图定位消费(2026-09 spec §5 文本寻址,自 EditorView 下沉):寻址器由调用方
- *  消费即清(不残留误定位),此处只做目标图校验 + 寻址 + 居中。mapPath 与当前图不符
+ *  消费即清(不残留误定位),此处只做目标图校验 + 分派。mapPath 与当前图不符
  *  (openMap 失败寻址器残留后切图,path+text 碰巧同名会误定位错图节点——终审
- *  Important-1)即弃置仅 warn;寻址 miss(图被外部改动)静默进图不清屏。挂点必须在
- *  onCanvasReady——useOpenDocument.onReady 触发时画布未挂载、mmRef 恒 null,挂它必
- *  「清而不定位」。 */
+ *  Important-1)即弃置仅 warn,两分支共用此防线;寻址 miss(图被外部改动)静默进图
+ *  不清屏。挂点必须在 onCanvasReady——useOpenDocument.onReady 触发时画布未挂载、
+ *  mmRef 恒 null,挂它必「清而不定位」。view:'kanban' 分派 toKanban(切看板态 +
+ *  载荷下发 KanbanView 高亮);缺省走导图寻址 + center 居中。 */
 export function consumePendingLocate(
   mm: MindMapHandle,
   mdPath: string,
-  locate: { mapPath: string; path: string[]; text: string },
+  locate: PendingLocate,
   center: (uid: string) => void,
+  toKanban: (loc: KanbanLocate) => void,
 ): void {
   if (locate.mapPath !== mdPath) {
     console.warn('工作台定位目标图与当前图不符，弃置寻址器（目标图打开失败后切图）', locate)
+    return
+  }
+  if (locate.view === 'kanban') {
+    toKanban({ path: locate.path, text: locate.text })
     return
   }
   try {

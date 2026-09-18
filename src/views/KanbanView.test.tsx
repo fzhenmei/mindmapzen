@@ -103,6 +103,9 @@ function renderKanban(
     // 归档列显隐上浮（2026-09 画布三态 M1）：宿主持有，默认收起
     archiveOpen: false,
     onSetArchiveOpen: vi.fn(),
+    // 案头跳入定位（2026-09）：默认无定位——命中/miss 用例经 overrides 注入
+    locate: null,
+    onLocateConsumed: vi.fn(),
     ...overrides,
   }
   // 渲染脚手架：EditorView 根有 TooltipProvider（卡片子孙浮层依赖其上下文），此处同构包裹
@@ -721,5 +724,60 @@ describe('KanbanView（看板模式浮层）', () => {
     expect(d1.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
     expect(d2.setIcon).toHaveBeenCalledWith(['zen_status-archived'])
     expect(props.onDataChanged).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ── 案头跳入定位（2026-09：view:'kanban' 寻址器消费）── 命中滚动+高亮限时淡出 / miss 出口 / 空板挂起 ──
+describe('KanbanView 案头跳入定位（2026-09）', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    cleanup()
+  })
+
+  test('命中：滚动可见 + 描边高亮 + 消费即清；限时淡出摘除高亮', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const { mm } = makeMm()
+    const { props, rerender } = renderKanban(mm)
+    // jsdom 未实现 scrollIntoView：目标卡元素直接挂桩断言滚动（两轴 nearest 最小滚动）
+    const card = screen.getByTestId('kanban-card-t1')
+    const scrollSpy = vi.fn()
+    card.scrollIntoView = scrollSpy
+    rerender({ archiveOpen: true, locate: { path: [], text: '修滚动条' } })
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
+    expect(card.className).toContain('ring-2') // 命中卡描边
+    // 只亮命中卡：归档列展开在场（顺带覆盖第二处 KanbanColumn 的 highlightUid 接线）
+    expect(screen.getByTestId('kanban-card-ta').className).not.toContain('ring-2')
+    expect(props.onLocateConsumed).toHaveBeenCalledTimes(1) // 消费即清（上报宿主）
+    // 限时淡出（验收口径：定位感强不留持久噪音）
+    act(() => vi.advanceTimersByTime(2500))
+    expect(screen.getByTestId('kanban-card-t1').className).not.toContain('ring-2')
+  })
+
+  test('miss：console.warn 线索 + 消费即清，无卡高亮（图与扫描时已不同）', () => {
+    const { mm } = makeMm()
+    const { props, rerender } = renderKanban(mm)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      rerender({ locate: { path: [], text: '扫描后被改名' } })
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('未命中卡片'), expect.objectContaining({ text: '扫描后被改名' }))
+      expect(props.onLocateConsumed).toHaveBeenCalledTimes(1)
+      expect(screen.getByTestId('kanban-card-t1').className).not.toContain('ring-2')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  test('空板挂起：无卡可匹配时不消费（无害挂起，随宿主卸载消亡）', () => {
+    const root: FakeNode = { data: { text: '根', uid: 'r' }, children: [] }
+    const mm = {
+      getData: () => root,
+      on: vi.fn(),
+      off: vi.fn(),
+      renderer: {},
+      execCommand: vi.fn(),
+    }
+    const { props, rerender } = renderKanban(mm as unknown as MindMapHandle)
+    rerender({ locate: { path: [], text: '任何任务' } })
+    expect(props.onLocateConsumed).not.toHaveBeenCalled()
   })
 })

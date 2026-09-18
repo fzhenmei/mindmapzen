@@ -80,10 +80,13 @@ export interface KanbanCardProps {
   onLocate(uid: string): void
   /** 复制卡片（2026-09 子树卡片）：子树 md 管线在宿主 EditorView（doCopy 同源） */
   onCopyCard(uid: string): void
+  /** 案头跳入高亮（2026-09）：KanbanView 定位消费命中时置真——描边 + 阴影过渡，
+   *  限时淡出由 KanbanView 计时摘除（transition 常驻，摘除即平滑消退） */
+  highlight?: boolean
 }
 
 export default function KanbanCard({
-  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard,
+  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard, highlight,
 }: Readonly<KanbanCardProps>) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -163,9 +166,9 @@ export default function KanbanCard({
           onFocus={(e) => e.preventDefault()}
           title={t('editor.kanban.cardHint')}
           tabIndex={editing ? -1 : 0}
-          className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing ${
+          className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing transition-shadow duration-500 ${
             dragging ? 'opacity-50' : ''
-          }`}
+          } ${highlight ? 'ring-2 ring-primary' : ''}`}
         >
           {/* 父链小字同正文放开截断（信息完整优先，长路径换行也接受） */}
           <p className="break-words text-[10px] leading-tight text-muted-foreground">

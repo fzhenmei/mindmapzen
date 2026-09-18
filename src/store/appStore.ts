@@ -7,6 +7,7 @@ import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../service
 import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
+import type { PendingLocate } from '../services/statusOps'
 import type { GitClone, GitRun } from '../types/ports'
 
 /** 视图模式（2026-09 画布三态）：导图 / Markdown / 看板 */
@@ -56,14 +57,15 @@ interface AppState {
   viewMode: ViewMode
   /** 视图模式切换（EditorView 砚栏视图组 / 快捷键 / 看板关闭钮共用） */
   setViewMode: (v: ViewMode) => void
-  /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器
-   * { mapPath, path, text }——md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
+  /** 工作台待定位节点（2026-09 工作台 spec §5）：跨图跳转携带的文本寻址器——
+   * md 不序列化 uid，扫描期 uid 在引擎侧必然失配（spec §11 Ruling）；
    * mapPath 绑定目标图（终审 Important-1）：openMap 失败（文件被删/坏档）时寻址器残留，
    * 用户切到别图后 EditorView 消费前须校验目标——mapPath 与当前图不符即弃置（console.warn
    * 线索），杜绝「错图消费」误定位；EditorView 引擎 onReady 后消费（locateNode 定位）
-   * 并即刻清空——消费即清，避免切图残留误定位 */
-  pendingLocate: { mapPath: string; path: string[]; text: string } | null
-  setPendingLocate: (v: { mapPath: string; path: string[]; text: string } | null) => void
+   * 并即刻清空——消费即清，避免切图残留误定位。view:'kanban'（2026-09 案头跳看板）：
+   * 消费分派看板态挂载 + KanbanView 卡片高亮（类型与语义见 statusOps.PendingLocate） */
+  pendingLocate: PendingLocate | null
+  setPendingLocate: (v: PendingLocate | null) => void
   /** 返回案头(2026-09 画布三态 M3,两空间收敛:来路恒案头):清编辑态 + refreshMaps。
    *  入口须经 leaveTo 安全链 */
   exitEditor(): Promise<void>

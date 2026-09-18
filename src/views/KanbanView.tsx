@@ -16,7 +16,7 @@ import type { MindMapHandle } from '../types/engine'
 import { BOARD_STATUSES, type TaskStatus } from '../services/statusMarkers'
 import { buildKanbanCards, type KanbanCard as KanbanCardData } from '../services/kanban'
 import { engineTreeToZen } from '../services/mdTree'
-import { execOnRenderNode, mergeStatusBadge, nodeStatusOf } from '../services/statusOps'
+import { execOnRenderNode, mergeStatusBadge, nodeStatusOf, type KanbanLocate } from '../services/statusOps'
 import { findByUid } from '../hooks/useIconPicker'
 import KanbanColumn from '../components/KanbanColumn'
 
@@ -31,6 +31,13 @@ const matchesFilter = (c: KanbanCardData, filterText: string): boolean => {
     c.tags.some((tg) => tg.toLowerCase().includes(q))
   )
 }
+
+/** 案头跳入高亮停留时长（ms）：描边停留后淡出——定位感强又不留持久视觉噪音（验收口径） */
+const LOCATE_HIGHLIGHT_MS = 2500
+
+/** 父链逐元素相等（案头跳入寻址口径同 findUidByPathText：全等才算命中，同名取首） */
+const samePath = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((p, i) => p === b[i])
 
 export interface KanbanViewProps {
   mmRef: RefObject<MindMapHandle | null>
@@ -50,17 +57,25 @@ export interface KanbanViewProps {
    *  跨浮层挂载保持；过滤强制展开仍在本组件内叠加 */
   archiveOpen: boolean
   onSetArchiveOpen(open: boolean): void
+  /** 案头跳入定位（2026-09，宿主 onCanvasReady 消费 view:'kanban' 寻址器后下发）：
+   *  cards 就绪后按 path+text 匹配首卡 → 滚动可见 + 描边高亮限时淡出 */
+  locate: KanbanLocate | null
+  /** 定位消费上报（同 pendingLocate 消费即清）：重开看板不重放旧定位 */
+  onLocateConsumed(): void
   onClose(): void
 }
 
 export default function KanbanView({
   mmRef, onDataChanged, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard,
-  archiveOpen, onSetArchiveOpen, onClose,
+  archiveOpen, onSetArchiveOpen, locate, onLocateConsumed, onClose,
 }: Readonly<KanbanViewProps>) {
   const { t } = useTranslation()
   const [cards, setCards] = useState<KanbanCardData[]>([])
   const [filterText, setFilterText] = useState('')
   const filterActive = filterText.trim() !== ''
+  // 案头跳入高亮卡（2026-09）：限时淡出；timer 供重定位/卸载 clearTimeout
+  const [highlightUid, setHighlightUid] = useState<string | null>(null)
+  const highlightTimerRef = useRef<number>(0)
   // 归档列展开态（2026-09 看板治理 spec §2.3/§4；2026-09 画布三态 M1 上浮为 props）：
   // 宿主持有的用户态 || 过滤强制——过滤清空回落用户态（archiveOpen 不被过滤清空改写，
   // spec §4「清空后保持当前展开态」的实现形态：强制项消失即回落）
@@ -92,6 +107,31 @@ export default function KanbanView({
   useEffect(() => {
     rootRef.current?.focus()
   }, [])
+
+  // 案头跳入定位消费（2026-09）：cards 就绪才匹配（挂载首帧恒 []，refresh 提交后本
+  // effect 随 cards 变化重跑）；命中 → 先滚动可见（卡片已在 DOM，两轴 nearest 最小
+  // 滚动）再描边高亮限时淡出；miss → console.warn 线索（图与扫描时已不同，同导图
+  // 定位兜底口径）。消费即清经 onLocateConsumed 上报宿主——重开看板不重放旧定位。
+  // 空板（任务全部归档等）不消费挂起：无卡可高亮也无害，随宿主卸载自然消亡。
+  // scrollIntoView 可选调用：jsdom 未实现该 API，测试环境缺席不炸
+  useEffect(() => {
+    if (locate === null || cards.length === 0) return
+    const hit = cards.find((c) => c.text === locate.text && samePath(c.path, locate.path))
+    if (hit === undefined) {
+      console.warn('案头跳入看板定位未命中卡片（图可能与扫描时已不同）', locate)
+    } else {
+      rootRef.current
+        ?.querySelector(`[data-testid="kanban-card-${hit.uid}"]`)
+        ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+      setHighlightUid(hit.uid)
+      window.clearTimeout(highlightTimerRef.current)
+      highlightTimerRef.current = window.setTimeout(() => setHighlightUid(null), LOCATE_HIGHLIGHT_MS)
+    }
+    onLocateConsumed()
+  }, [cards, locate, onLocateConsumed])
+
+  // 卸载清高亮定时器：切视图关板后不得越界 setState（同 KanbanCard 删除确认窗口径）
+  useEffect(() => () => window.clearTimeout(highlightTimerRef.current), [])
 
   /** 渲染节点寻址（收起分支任务的常规可达路径）：共享实现在 statusOps.execOnRenderNode
    *  （2026-09 审查 Important-2 提升——useIconPicker/useTagPicker 桥接同款路径），此处
@@ -243,6 +283,7 @@ export default function KanbanView({
             status={s}
             cards={cards.filter((c) => c.status === s && matchesFilter(c, filterText))}
             filterActive={filterActive}
+            highlightUid={highlightUid}
             onArchiveAll={s === 'done' ? archiveAllDone : undefined}
             onStatusChange={changeStatus}
             onTextChange={changeText}
@@ -263,6 +304,7 @@ export default function KanbanView({
             status="archived"
             cards={cards.filter((c) => c.status === 'archived' && matchesFilter(c, filterText))}
             filterActive={filterActive}
+            highlightUid={highlightUid}
             onCollapse={() => onSetArchiveOpen(false)}
             onStatusChange={changeStatus}
             onTextChange={changeText}
