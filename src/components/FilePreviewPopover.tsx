@@ -1,6 +1,8 @@
 // src/components/FilePreviewPopover.tsx —— 案头悬浮预览小窗（2026-09 画布三态 M2）：
-// FileDetail 详情态退役后的轻量承接——单击文件行浮现于右区右上角（不锚定文件行：
-// 侧栏可滚动，动态锚定复杂且易遮左树），双击照旧开画布（导图态起步，交互在树行）。
+// FileDetail 详情态退役后的轻量承接——单击文件行浮现于主区左上角、紧贴左树右缘
+// （不锚定文件行：侧栏可滚动，动态锚定复杂且易遮左树），双击照旧开画布（导图态起步，
+// 交互在树行）。左上角口径为 2026-09-18 用户验收调整：原右上角（右区）窗口一宽就贴到
+// 屏幕最右、离左树太远，贴左缘后与左树相邻。
 // 读取管线迁自 FileDetail（真实 md + 插图 dataURL + 失败兜底），轻量无大纲——大纲
 // 唯一入口在画布 Markdown 态（spec §4.2）。关窗三路：Esc（非输入域守卫——案头搜索
 // 框的 Esc 属搜索框）/ document mousedown 落浮窗外 / 头部关闭钮；选中其他文件由
@@ -101,20 +103,21 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
   }
 
   return (
-    // 右区右上角：挂 main（宿主已加 relative）；w-120=480px / max-h-[70vh]（spec §4.2）。
+    // 主区左上角、紧贴左树（未折叠时留白即侧栏右缘）：挂 main（宿主已加 relative）；
+    // w-120=480px / max-h-[70vh]（spec §4.2）。
     // z-20 高于内容与 ThemeFab（右下角，不冲突），低于 App 级 Radix portal 对话框。
     // 原生 <dialog open> 非模态（S6819，同 KanbanView/MarkdownView 先例）：不抢焦点、
     // 不触发原生 cancel；UA 默认样式须压平——m-0/p-0/max-w-none 杀边距与自适应宽，
     // text-foreground 杀 UA color:canvastext（头部 h3 无显式色类，显式主题与系统偏好
-    // 相反时对比度才不出错，对齐先例）；left-auto 必加（UA 设 left:0，与 top-2 right-2
-    // over-constrained，LTR 下 left 胜出会把浮窗钉到左缘；先例全屏 inset-0 无此问题，
-    // 本例右上角定位必须杀 left）
+    // 相反时对比度才不出错，对齐先例）；right-auto 必加（UA 设 right:0，与 left-2 双定
+    // over-constrained——LTR 下虽 left 胜出结果相同，但依赖过约束解算太隐晦；对称于原
+    // 右上角版本的 left-auto 坑）
     <dialog
       ref={rootRef}
       open
       tabIndex={-1}
       data-testid="file-preview-popover"
-      className="absolute top-2 right-2 left-auto z-20 m-0 flex max-h-[70vh] w-120 max-w-none flex-col overflow-hidden rounded-lg border bg-card p-0 text-foreground shadow-lg outline-none"
+      className="absolute top-2 left-2 right-auto z-20 m-0 flex max-h-[70vh] w-120 max-w-none flex-col overflow-hidden rounded-lg border bg-card p-0 text-foreground shadow-lg outline-none"
       aria-label={`${info.name}.md`}
     >
       <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">

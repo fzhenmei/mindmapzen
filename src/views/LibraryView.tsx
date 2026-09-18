@@ -50,7 +50,7 @@ interface Props {
 
 /** 案头（2026-09 画布三态 M2 主区单态）：SidebarProvider + inset 骨架；主区收敛
  *  单态——工作区空 → 全局空态，其余（idle/选中目录/选中文件）→ 欢迎页。详情态
- *  （FileDetail + 页首动作组）退役：树文件行单击 = 右区右上悬浮预览
+ *  （FileDetail + 页首动作组）退役：树文件行单击 = 主区左上悬浮预览（紧贴左树）
  *  （FilePreviewPopover，spec §4.2），双击 = 进纸面；文件操作（星标/打开/移动/
  *  重命名/删除/复制路径/公众号复制）收敛左树（行尾收藏钮 + 右键菜单）。树目录行
  *  单击 = 选中目录（主区仍欢迎页） */
@@ -391,7 +391,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           {/* 主区（官方 p-6）：单态（欢迎页/空态）；relative 供悬浮预览浮窗 absolute 锚定 */}
           <main className="relative flex min-h-0 flex-1 p-6">
             {renderRight()}
-            {/* 悬浮预览（2026-09 画布三态 M2）：单击文件行浮现右区右上，双击照旧开纸面；
+            {/* 悬浮预览（2026-09 画布三态 M2）：单击文件行浮现主区左上、紧贴左树，双击照旧开纸面；
                 详情态（FileDetail/页首动作钮）退役，主区收敛欢迎页单态。appDialog 挂载门
                 （Task 1 评审 Esc 双关核对）：App 级对话框开着时卸载浮窗——一次 Esc 只关
                 对话框（浮窗 keydown 监听随卸载移除），双关结构性消除 */}

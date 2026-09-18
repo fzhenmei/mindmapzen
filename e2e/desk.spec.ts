@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 // 案头用例走 ?desk=1 预置（见 e2eHarness）：/ws/项目/项目图.md + /ws/根图.md，
-// 工作区已设为 /ws。2026-09 画布三态 M2：主区恒欢迎页（单态），树文件行单击 → 右区
-// 右上悬浮预览浮窗（file-preview-popover，FileDetail 详情态退役）；双击照旧进纸面。
+// 工作区已设为 /ws。2026-09 画布三态 M2：主区恒欢迎页（单态），树文件行单击 → 主区
+// 左上（紧贴左树）悬浮预览浮窗（file-preview-popover，FileDetail 详情态退役）；双击照旧进纸面。
 // 文件浏览与导航全在左树（目录下直列文件行），文件操作收敛树右键（ctx-* 菜单）
 test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移动', async ({ page }) => {
   test.setTimeout(30_000)
@@ -19,7 +19,7 @@ test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移�
   await expect(page.getByTestId('desk-idle')).toBeVisible()
   await expect(page.getByTestId('file-preview-popover')).toHaveCount(0)
 
-  // 树文件行单击 = 右区右上悬浮预览浮窗（md 预览在浮窗体内）
+  // 树文件行单击 = 主区左上（紧贴左树）悬浮预览浮窗（md 预览在浮窗体内）
   await page.getByTestId('file-node-根图').click()
   const popover = page.getByTestId('file-preview-popover')
   await expect(popover).toBeVisible()
@@ -64,12 +64,12 @@ test('案头：目录选中主区欢迎页、树文件行开悬浮预览与移�
 // 容器合并「窄窗详情动作收纳」用例随 DetailActions 退役删除（M2）：@container 分流与
 // more-* 浮层不复存在，浮窗关闭钮 btn-preview-close 单路恒显（无视口分支），由下例覆盖
 
-// 2026-09 交互语义（M2 悬浮预览）：树文件行单击=右区右上悬浮预览浮窗，双击=进纸面
+// 2026-09 交互语义（M2 悬浮预览）：树文件行单击=主区左上（紧贴左树）悬浮预览浮窗，双击=进纸面
 test('案头：树文件行单击出悬浮预览、双击进纸面', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')
 
-  // 单击根图文件行：右区右上浮窗（头部文件名 + markdown 预览）；主区仍是欢迎页
+  // 单击根图文件行：主区左上（紧贴左树）浮窗（头部文件名 + markdown 预览）；主区仍是欢迎页
   await page.getByTestId('file-node-根图').click()
   const popover = page.getByTestId('file-preview-popover')
   await expect(popover).toBeVisible()

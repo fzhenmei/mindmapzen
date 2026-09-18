@@ -1,5 +1,5 @@
 // src/components/FilePreviewPopover.test.tsx —— 案头悬浮预览（2026-09 画布三态 M2，
-// FileDetail 详情态退役承接）：单击文件行在右区右上角浮现的预览小窗。
+// FileDetail 详情态退役承接）：单击文件行在主区左上角（紧贴左树）浮现的预览小窗。
 // 读取管线迁自 FileDetail（真实 md + 插图 dataURL + 失败兜底），轻量无大纲。
 import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'

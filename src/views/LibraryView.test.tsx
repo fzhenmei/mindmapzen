@@ -386,7 +386,7 @@ describe('案头三区与交互（M5d）', () => {
     expect(root).toHaveAttribute('title', '/ws')
   })
 
-  test('树文件行单击 = 浮窗预览（右区右上，含文件名与正文），页首标题恒工作区名，不进纸面', async () => {
+  test('树文件行单击 = 浮窗预览（主区左上，含文件名与正文），页首标题恒工作区名，不进纸面', async () => {
     const writeClipboard = vi.fn(async () => {})
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={writeClipboard} writeHtmlClipboard={vi.fn(async () => {})} />)
     expect(screen.queryByTestId('file-preview-popover')).not.toBeInTheDocument()
