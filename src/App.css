@@ -68,6 +68,10 @@ html, body { overflow: hidden; }
    值全走 theme.css 语义令牌，夜航同键切换零额外规则。覆盖面＝全部 .vditor-reset 渲染
    容器（案头 md 视图/AI 对话/文件预览/画布悬停窗/正文弹窗预览）；公众号复制不受影响
    （wechatCopy TAG_STYLE 以 cssText 内联覆写，inline 恒胜 class） */
+/* 基字色锚应用令牌（2026-09 暗色文字不可见修复的纵深层）：bundle 内 vditor index.css
+   硬编码 .vditor-reset{color:#24292e}（GitHub 墨），content-theme 未随主题切时夜航下
+   即暗底墨字——基字不再信任 vditor 配色，亮色顺带从 #24292e 归青松墨 #1F2328 */
+[data-theme] .vditor-reset { color: var(--foreground); }
 [data-theme] .vditor-reset a { color: var(--primary); }
 /* 标题墨字 + 绿细节（用户裁定）：h1/h2 下边线从灰换松绿灰（25% primary 调 border） */
 [data-theme] .vditor-reset h1, [data-theme] .vditor-reset h2 {

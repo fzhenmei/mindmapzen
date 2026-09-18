@@ -12,17 +12,17 @@ const mocked = vi.mocked(Vditor.preview)
 describe('renderVditorPreview:VDitor.preview 参数契约', () => {
   beforeEach(() => mocked.mockClear())
 
-  test('传容器与原文,cdn 指向本地 vendor,light 主题映射 mode', async () => {
+  test('传容器与原文,cdn 指向本地 vendor,light 主题映射 mode 与 content-theme', async () => {
     const el = document.createElement('div')
     await renderVditorPreview(el, '# 标题', 'light')
-    expect(mocked).toHaveBeenCalledWith(el, '# 标题', expect.objectContaining({ cdn: VDITOR_CDN, mode: 'light' }))
+    expect(mocked).toHaveBeenCalledWith(el, '# 标题', expect.objectContaining({ cdn: VDITOR_CDN, mode: 'light', theme: { current: 'light' } }))
     expect(VDITOR_CDN).toBe('vendor/vditor')
   })
 
-  test('dark 主题映射 mode=dark', async () => {
+  test('dark 主题映射 mode=dark 且 content-theme=dark(暗色文字可见性命门:vditor 静态 preview 的 mode 只喂图渲染器,content-theme 才管文字配色,不传则恒 light.css)', async () => {
     const el = document.createElement('div')
     await renderVditorPreview(el, 'x', 'dark')
-    expect(mocked).toHaveBeenCalledWith(el, 'x', expect.objectContaining({ mode: 'dark' }))
+    expect(mocked).toHaveBeenCalledWith(el, 'x', expect.objectContaining({ mode: 'dark', theme: { current: 'dark' } }))
   })
 })
 
