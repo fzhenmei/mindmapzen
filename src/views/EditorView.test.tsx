@@ -164,6 +164,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     // 圈选多选镜像（2026-09）：桩对外仍收单 uid/null，转发时包装为 uid 数组（新契约，空数组 = 无选中）
     ;(globalThis as unknown as Record<string, unknown>).__emitActive = (uid: string | null) =>
       onActiveChange?.(uid ? [uid] : [])
+    // 多选上报镜像（2026-09-18 多选复制）：直接以 uid 数组驱动（圈选/Ctrl 多选上报形态）
+    ;(globalThis as unknown as Record<string, unknown>).__emitActiveList = (uids: string[]) =>
+      onActiveChange?.(uids)
     // 正文角标悬停上报镜像（2026-09-09 修复）：生产经 customNoteContentShow.show 第四参
     // （悬停节点实例）提取 uid，hide 清 null（真实链路见 MindMapCanvas 装配）
     ;(globalThis as unknown as Record<string, unknown>).__emitNoteHover = (uid: string | null) =>
@@ -606,6 +609,106 @@ test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async ()
   fireEvent.click(screen.getByTestId('btn-copy'))
   await waitFor(() => expect(writes).toHaveLength(1))
   expect(writes[0]).toBe('# 新分支\n')
+})
+
+test('复制多选：圈选/Ctrl 多选时只写所选子树（逐棵从 H1 起，树间空行，2026-09-18）', async () => {
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      {
+        data: { text: '甲', expand: true, uid: 'a-uid' },
+        children: [{ data: { text: '甲一', expand: true, uid: 'a1-uid' }, children: [] }],
+      },
+      { data: { text: '乙', expand: true, uid: 'b-uid' }, children: [] },
+    ],
+  }
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uids: string[]) => void>).__emitActiveList!(['a-uid', 'b-uid'])
+  })
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  // 两棵选中子树并列（各从 H1 重计层级，标题前空行与整图复制同口径）；未选中的根与整图不进入产物
+  expect(writes[0]).toBe('# 甲\n\n## 甲一\n\n# 乙\n')
+})
+
+test('复制多选含嵌套：祖先与后代同选时后代不重复展开（内容只一份）', async () => {
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [
+      {
+        data: { text: '甲', expand: true, uid: 'a-uid' },
+        children: [{ data: { text: '甲一', expand: true, uid: 'a1-uid' }, children: [] }],
+      },
+      { data: { text: '乙', expand: true, uid: 'b-uid' }, children: [] },
+    ],
+  }
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uids: string[]) => void>).__emitActiveList!(['a1-uid', 'a-uid'])
+  })
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  // a1 是 a 的后代：只保留祖先 a 的子树一份（与上报顺序无关），不再单独展开 a1
+  expect(writes[0]).toBe('# 甲\n\n## 甲一\n')
+})
+
+test('复制多选全陈旧（uid 均未命中数据树）→ 回退整图（与单选陈旧口径一致）', async () => {
+  const writes: string[] = []
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={async (t) => {
+        writes.push(t)
+      }}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uids: string[]) => void>).__emitActiveList!(['ghost-1', 'ghost-2'])
+  })
+  fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(writes).toHaveLength(1))
+  expect(writes[0]).toBe('# 根\n\n## 新分支\n')
 })
 
 test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () => {
@@ -1720,6 +1823,22 @@ test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   // 陈旧 uid 兜底：复制未命中时清除选中态（缓期项清偿）
   ;(globalThis as unknown as Record<string, (uid: string | null) => void>).__emitActive!('ghost-uid')
   fireEvent.click(screen.getByTestId('btn-copy'))
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
+})
+
+test('复制按钮 data-scope 多选态为 multi（2026-09-18 多选复制，E2E 信号）', async () => {
+  render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage} />)
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uids: string[]) => void>).__emitActiveList!(['root-uid', 'child-uid'])
+  })
+  await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'multi'))
+  // 清空选中回整图
+  act(() => {
+    ;(globalThis as unknown as Record<string, (uids: string[]) => void>).__emitActiveList!([])
+  })
   await waitFor(() => expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full'))
 })
 

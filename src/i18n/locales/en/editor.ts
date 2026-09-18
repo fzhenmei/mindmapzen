@@ -18,6 +18,7 @@ const editor: Dict['editor'] = {
     undo: 'Undo (Ctrl+Z)',
     redo: 'Redo (Ctrl+Y)',
     copyBranchTip: 'Copy selected branch as Markdown (Ctrl+C)',
+    copyMultiTip: 'Copy selected branches as Markdown (Ctrl+C)',
     copyAllTip: 'Copy whole map as Markdown (Ctrl+C)',
     copyOptions: 'Copy options',
     copyIncludeLinks: 'Keep wikilink markers',

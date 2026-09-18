@@ -630,7 +630,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         copySettings={copySettings}
         onToggleCopySetting={(key) => void useAppStore.getState().setSetting(key, !copySettings[key])}
         onCopyPathClick={copyPath}
-        scope={selection.activeUid ? 'branch' : 'full'}
+        scope={selection.activeUid ? 'branch' : selection.activeCount > 1 ? 'multi' : 'full'}
         onSaveClick={() => void explicitSave()}
         onBodyClick={() => toggleBodyOrWarn(null)}
         bodyActive={bodyDialog.open}

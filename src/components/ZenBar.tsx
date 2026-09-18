@@ -75,8 +75,9 @@ interface Props {
   /** 复制文件路径（2026-09：发给 AI 直接读本文件；按钮紧邻复制 md 钮，
    *  IconRoute 路径图标与 IconCopy 形状区分） */
   onCopyPathClick(): void
-  /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / full=整图；同时驱动按钮提示 */
-  scope: 'full' | 'branch'
+  /** 复制范围信号（M4 E2E 观测点）：branch=选中分支 / multi=多选集合（2026-09-18 多选
+   *  复制）/ full=整图；同时驱动按钮提示 */
+  scope: 'full' | 'branch' | 'multi'
   /** 保存（Ctrl+S 的按钮路径） */
   onSaveClick(): void
   /** 正文弹窗开关（2026-09 写作；2026-09-08 弹窗化）：弹窗开/收（弹窗状态与防抖写回在
@@ -170,7 +171,13 @@ export default function ZenBar({
   // mapOnly=导图态（缩放/布局/正文/导出为画布专属，Markdown/看板两态不显）
   const mmView = viewMode === 'markdown'
   const mapOnly = viewMode === 'mindmap'
-  const copyLabel = scope === 'branch' ? t('editor.zenbar.copyBranchTip') : t('editor.zenbar.copyAllTip')
+  // 复制钮提示三态（scope 同源）：整图/选中分支/多选集合（2026-09-18 多选复制）
+  const copyLabels: Record<'full' | 'branch' | 'multi', string> = {
+    full: t('editor.zenbar.copyAllTip'),
+    branch: t('editor.zenbar.copyBranchTip'),
+    multi: t('editor.zenbar.copyMultiTip'),
+  }
+  const copyLabel = copyLabels[scope]
   // 返回钮文案（终审修复：Tip label 与 aria-label 两处同源）——两空间收敛后恒「返回案头」
   const backLabel = t('editor.zenbar.backToDesk')
   // 布局语义名（键集与 LayoutKind 一一对应）：常用钮/更多下拉/触发钮 aria 三处共用

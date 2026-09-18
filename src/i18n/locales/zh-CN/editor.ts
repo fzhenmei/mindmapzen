@@ -15,6 +15,7 @@ export default {
     undo: '回退（Ctrl+Z）',
     redo: '重做（Ctrl+Y）',
     copyBranchTip: '复制选中分支为 Markdown（Ctrl+C）',
+    copyMultiTip: '复制所选分支为 Markdown（Ctrl+C）',
     copyAllTip: '复制整图为 Markdown（Ctrl+C）',
     copyOptions: '复制选项',
     copyIncludeLinks: '保留双链标记',
