@@ -6,7 +6,7 @@
 // 读取管线迁自 FileDetail（真实 md + 插图 dataURL + 失败兜底），轻量无大纲——大纲
 // 唯一入口在画布 Markdown 态（spec §4.2）。关窗三路：Esc（非输入域守卫——案头搜索
 // 框的 Esc 属搜索框）/ document mousedown 落浮窗外 / 头部关闭钮；选中其他文件由
-// 宿主换 info 重读（内容切换非叠加）。不透明实底（可视性教训红线）。
+// 宿主换 info 重读（内容切换非叠加，滚动位置随之一并重置）。不透明实底（可视性教训红线）。
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
@@ -31,6 +31,7 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
   const [state, setState] = useState<DetailState>({ kind: 'loading' })
   const [imgMap, setImgMap] = useState<ReadonlyMap<string, string>>(new Map())
   const rootRef = useRef<HTMLDialogElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   // 读取与插图解析（迁自 FileDetail:51-74，口径不变：主读取失败出 error 占位；
   // 插图失败宽容空表——图挂了不出错误占位，img 原样占位）
@@ -38,6 +39,11 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     let cancelled = false
     setState({ kind: 'loading' })
     setImgMap(new Map())
+    // 换文件重置滚动（2026-09-18 验收）：滚动容器跨文件复用、内容原地替换，不重置
+    // 就停在上一个文件的滚动位置，用户得自己拉回顶部。此刻 DOM 还是旧内容（state
+    // 重置在本次 effect 之后才提交），旧内容高度足够，置顶一定生效；随后 loading→
+    // 新正文的替换不再改动 scrollTop
+    bodyRef.current?.scrollTo({ top: 0 })
     void (async () => {
       try {
         const { adapter, workspaceDir } = useAppStore.getState()
@@ -132,7 +138,7 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
           <IconWinClose size={14} />
         </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{renderBody()}</div>
+      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto">{renderBody()}</div>
     </dialog>
   )
 }

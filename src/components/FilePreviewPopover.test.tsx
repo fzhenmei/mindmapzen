@@ -142,4 +142,21 @@ describe('FilePreviewPopover', () => {
     await waitFor(() => expect(screen.getByText('标题乙')).toBeInTheDocument())
     expect(screen.queryByText('标题甲')).toBeNull()
   })
+
+  // 换文件重置滚动（2026-09-18 验收回归钉）：滚动容器跨文件复用、内容原地替换，
+  // 不重置就停在上一个文件的滚动位置（用户得自己拉回顶部）。jsdom 无滚动布局，
+  // 故以 Element.scrollTo 调用为观测面（jsdom 空桩见 test/setup.ts）——真实滚动
+  // 归浏览器核对。首挂也调一次（此时本就 0），故先 clear 再 rerender，只钉切换
+  test('切换目标文件：滚动容器滚回顶部', async () => {
+    const spy = vi.spyOn(Element.prototype, 'scrollTo').mockImplementation(() => {})
+    try {
+      const { rerender } = render(<FilePreviewPopover info={makeInfo({})} onClose={() => {}} />)
+      await waitFor(() => expect(screen.getByText('标题甲')).toBeInTheDocument())
+      spy.mockClear()
+      rerender(<FilePreviewPopover info={makeInfo({ mdPath: '/ws/乙.md', name: '乙' })} onClose={() => {}} />)
+      expect(spy).toHaveBeenCalledWith({ top: 0 })
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
