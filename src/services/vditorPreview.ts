@@ -23,6 +23,12 @@ export function renderVditorPreview(el: HTMLElement, markdown: string, theme: 'l
   return Vditor.preview(el as HTMLDivElement, markdown, {
     cdn: VDITOR_CDN,
     mode: theme === 'dark' ? 'dark' : 'light',
+    // content-theme 必须显式随主题切(2026-09 暗色文字不可见修复):静态 preview 的
+    // mode 只喂 mermaid/chart 等图渲染器,文字/表格配色由 setContentTheme(theme.current)
+    // 驱动且默认恒 'light'——不传则夜航下加载 light.css,bundle 内 vditor index.css 的
+    // .vditor-reset{color:#24292e} 压场,暗底墨字不可见(此前被 light.css 白底行半遮)。
+    // path 由 mergeOptions 依 cdn 自动补全
+    theme: { current: theme === 'dark' ? 'dark' : 'light' },
     // preview 的 hljs 开关在顶层选项(md2html 的 lute 配置才是 markdown.*),深合并
     hljs: { enable: false },
   })
