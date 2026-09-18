@@ -14,7 +14,7 @@ beforeEach(() => {
   fs = new MemoryFsAdapter()
   // aiAdvice 必须逐用例重置：测试夹具任务集相同 → 指纹相同，前用例存档会让
   // 后续用例的「问问 AI」缓存命中跳过请求（2026-09-14 缓存引入的跨用例泄漏）
-  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'library', error: null, aiAdvice: null })
+  useAppStore.setState({ adapter: fs, workspaceDir: '/ws', currentMdPath: null, route: 'library', error: null, aiAdvice: null, viewMode: 'mindmap' })
 })
 
 describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵向形态）', () => {
@@ -51,11 +51,32 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(rowDoing.textContent).toContain('任务乙')
     expect(screen.getByTestId('workbench-row-blocked').textContent).toContain('任务丙')
     // 点击任务丙行（跨图）：openMap 收到图B路径 + pendingLocate 已置文本寻址器——
-    // mapPath 绑定目标图（终审 Important-1：错图消费防线的数据源），path+text 寻址
+    // mapPath 绑定目标图（终审 Important-1：错图消费防线的数据源），path+text 寻址；
+    // 2026-09 跳看板：寻址器带 view:'kanban' + 先置看板态（openMap 不重置 viewMode）
     const card = screen.getAllByTestId('workbench-card').find((el) => el.textContent?.includes('任务丙'))!
     await card.click()
     expect(openMap).toHaveBeenCalledWith('/ws/工作/图B.md')
-    expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图B.md', text: '任务丙' })
+    expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图B.md', text: '任务丙', view: 'kanban' })
+    expect(useAppStore.getState().viewMode).toBe('kanban')
+  })
+
+  test('跳看板失败回收：openMap 拒绝 → 寻址器清空 + 看板态复位导图（viewMode 残留防线）', async () => {
+    await fs.writeTextFileAtomic('/ws/工作/图A.md', '# 图A\n\n## 任务甲 @todo\n')
+    const openMap = vi.fn().mockRejectedValue(new Error('disk error'))
+    useAppStore.setState({ openMap: openMap as never, pendingLocate: null })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<DeskOverview />)
+      const card = (await screen.findAllByTestId('workbench-card'))[0]!
+      await card.click()
+      // 失败显式出口（不吞异常红线）：console 线索 + 跳转态回收——否则 viewMode 残留
+      // kanban 会把用户下一次开图误落看板态
+      await waitFor(() => expect(useAppStore.getState().pendingLocate).toBeNull())
+      expect(useAppStore.getState().viewMode).toBe('mindmap')
+      expect(errSpy).toHaveBeenCalledWith('案头总览跳转打开失败', expect.any(Error))
+    } finally {
+      errSpy.mockRestore()
+    }
   })
 
   test('聚合行信息密度：来源徽标 + 路径段 + 子任务计数（承接 WorkbenchCard.test 退役口径）', async () => {
@@ -102,7 +123,9 @@ describe('DeskOverview 总览区（原工作台 spec §4/§6/§8 迁移 + M3 纵
     expect(sug[0]!.textContent).toContain('进行中事')
     await sug[0]!.click()
     expect(openMap).toHaveBeenCalledWith('/ws/工作/图A.md')
-    expect(useAppStore.getState().pendingLocate).not.toBeNull()
+    // task 级建议与聚合行同链路（openTask）：跳看板 + 带视图寻址器
+    expect(useAppStore.getState().pendingLocate).toMatchObject({ mapPath: '/ws/工作/图A.md', view: 'kanban' })
+    expect(useAppStore.getState().viewMode).toBe('kanban')
   })
 
   test('纵向聚合：每状态一段（无卡状态不渲染段），段内全宽行列表', async () => {

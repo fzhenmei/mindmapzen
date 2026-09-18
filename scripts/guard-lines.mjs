@@ -65,12 +65,17 @@
 // 净 +11 升限至 775，实测 770 + 5 行余量——功能性拆分与三态新功能面并存，无腐化。
 // 2026-09（画布三态 M3）：WorkbenchView 退役（并入案头 DeskOverview），条目移除。
 // 2026-09（画布三态 M3）：DeskOverview 承接 WorkbenchView（条目随其退役移除），新条目防承接组件腐化。
+// 2026-09-18（案头跳看板批）：775→790（kanbanLocate/engineReady 两态 + 消费分派接线 +
+//   两浮层挂载门 docReady→engineReady（viewMode 先行置位早挂空板修复），实测 781 +
+//   9 行余量；高亮消费本体在 KanbanView.tsx（无护栏）——功能性增长，无腐化。
+// 2026-09-18（案头跳看板批）：DeskOverview 440→460（openTask 跳看板改写：view 字段 +
+//   先置 viewMode + 开图失败回收三件协议注释，实测 451 + 9 行余量——功能性增长，无腐化。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 775 },
+  { path: '../src/views/EditorView.tsx', limit: 790 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
-  { path: '../src/components/DeskOverview.tsx', limit: 440 },
+  { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]
 
 // 与 wc -l 口径一致：末行换行不计

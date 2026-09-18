@@ -223,6 +223,7 @@ beforeEach(async () => {
     sessionRecent: [],
     mapTabs: [], // 顶部胶囊条（2026-09）：数据源逐用例重置，防跨用例泄漏
     pendingLocate: null, // 工作台跨图定位（2026-09 spec §5）：消费型字段逐用例重置，防泄漏误定位
+    viewMode: 'mindmap', // 案头 openTask 现写看板态（2026-09 跳看板）：逐用例重置防泄漏误挂看板浮层
     appDialog: null, // App 级设置/历史框（终审修复进 anyDialog 总线）：逐用例重置，防开框用例泄漏闩死后续快捷键
     settings: { copyIncludeLinks: true, copyIncludeBody: true, copyIncludeIconStatus: false },
     // 布局偏好隔离（M14）：早先用例点击布局组会经 setPreferredLayout 落 store；
@@ -1538,10 +1539,12 @@ test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 v
       readClipboardImage={stubReadClipboardImage} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 锁定 emit 时实例断言（onCanvasReady 置 engineReady 会重渲、工厂每渲重建 fakeHandle）
+  const handle = fakeHandle
   fireEvent.click(screen.getByTestId('btn-zoom-out'))
-  expect(fakeHandle.view.narrow).toHaveBeenCalledTimes(1)
+  expect(handle.view.narrow).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByTestId('btn-zoom-in'))
-  expect(fakeHandle.view.enlarge).toHaveBeenCalledTimes(1)
+  expect(handle.view.enlarge).toHaveBeenCalledTimes(1)
   // 假画布 renderer 无 root：根居中/适配走守卫早退，不崩溃即可（数学见 viewOps.test）
   fireEvent.click(screen.getByTestId('btn-center-root'))
   fireEvent.click(screen.getByTestId('btn-fit'))
@@ -2897,11 +2900,14 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     el.getBoundingClientRect = () => rect
     renderEditor()
     expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    // 锁定 emit 时实例断言（onCanvasReady 置 engineReady 会重渲、工厂每渲重建 fakeHandle）：
+    // el 注入与 resize 断言必须同实例——mmRef 只收 emit 时实例，重渲后的模块级变量已换新
+    const handle = fakeHandle
     act(() => {
-      ;(fakeHandle as { el: HTMLElement | null }).el = el
+      ;(handle as { el: HTMLElement | null }).el = el
       ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     })
-    const resize = vi.mocked(fakeHandle.resize)
+    const resize = vi.mocked(handle.resize)
     fireEvent.click(screen.getByTestId('ai-toggle'))
     expect(resize).toHaveBeenCalled() // 正常 rect：开面板即补偿一次
     resize.mockClear()
@@ -3292,6 +3298,36 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
     } finally {
       warnSpy.mockRestore()
     }
+  })
+
+  test("pendingLocate 带 view:'kanban'（案头跳看板）：消费分派看板态挂载 + 命中卡高亮", async () => {
+    // 案头 openTask 前置形态：viewMode 已置看板态 + 寻址器带 view 字段——消费分派
+    // toKanban（切看板 + 载荷下发 KanbanView），不走 locateNode 居中
+    fakeTree = kanbanTree()
+    await fs.writeTextFileAtomic('/ws/a.md', '# 根\n\n## 任务\n')
+    useAppStore.setState({ viewMode: 'kanban', pendingLocate: { mapPath: '/ws/a.md', path: [], text: '任务', view: 'kanban' } })
+    render(
+      <EditorView
+        mdPath="/ws/a.md"
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    expect(useAppStore.getState().pendingLocate).toBeNull() // 消费即清
+    expect(useAppStore.getState().viewMode).toBe('kanban') // 看板态保持（toKanban idempotent 保险）
+    // 看板浮层挂载且命中卡（child-uid，path=[] 直挂根）描边高亮——挂载门是引擎就绪
+    // （engineReady）：早挂（docReady 即挂）时 mmRef 尚 null，refresh 静默空转成空板
+    const card = await screen.findByTestId('kanban-card-child-uid')
+    await waitFor(() => expect(card.className).toContain('ring-2'))
   })
 })
 

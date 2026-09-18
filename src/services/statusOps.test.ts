@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { execOnRenderNode, expandToUid, findUidByPathText, mergeStatusBadge, nodeStatusOf } from './statusOps'
+import { consumePendingLocate, execOnRenderNode, expandToUid, findUidByPathText, mergeStatusBadge, nodeStatusOf } from './statusOps'
 import type { MindMapHandle } from '../types/engine'
 
 describe('statusOps（徽章互保协议）', () => {
@@ -134,5 +134,46 @@ describe('findUidByPathText（工作台跨图定位文本寻址，spec §5）', 
   })
   test('miss 返回 null（图被外部改动）', () => {
     expect(findUidByPathText(tree, ['不存在'], '任务甲')).toBeNull()
+  })
+})
+
+describe('consumePendingLocate（跨图定位消费分派；2026-09 案头跳看板扩 view 字段）', () => {
+  const mm = {
+    getData: () => ({
+      data: { text: '根', uid: 'r' },
+      children: [
+        { data: { text: '分支', uid: 'b' }, children: [{ data: { text: '任务甲', uid: 't1' }, children: [] }] },
+      ],
+    }),
+  } as unknown as MindMapHandle
+
+  test('缺省 view：寻址命中经 center 居中（现行导图语义不回归）', () => {
+    const center = vi.fn()
+    const toKanban = vi.fn()
+    consumePendingLocate(mm, '/ws/a.md', { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲' }, center, toKanban)
+    expect(center).toHaveBeenCalledWith('t1')
+    expect(toKanban).not.toHaveBeenCalled()
+  })
+
+  test("view:'kanban'：分派 toKanban 载荷（path+text），不走导图寻址居中", () => {
+    const center = vi.fn()
+    const toKanban = vi.fn()
+    consumePendingLocate(mm, '/ws/a.md', { mapPath: '/ws/a.md', path: ['分支'], text: '任务甲', view: 'kanban' }, center, toKanban)
+    expect(toKanban).toHaveBeenCalledWith({ path: ['分支'], text: '任务甲' })
+    expect(center).not.toHaveBeenCalled()
+  })
+
+  test('mapPath 不符：两分支共用防线，弃置仅 warn（终审 Important-1）', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const center = vi.fn()
+      const toKanban = vi.fn()
+      consumePendingLocate(mm, '/ws/a.md', { mapPath: '/ws/图B.md', path: [], text: '任务甲', view: 'kanban' }, center, toKanban)
+      expect(toKanban).not.toHaveBeenCalled()
+      expect(center).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('目标图与当前图不符'), expect.objectContaining({ mapPath: '/ws/图B.md' }))
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })

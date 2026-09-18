@@ -22,20 +22,23 @@ export const STATUS_DOT: Record<TaskStatus, string> = {
   archived: 'bg-muted-foreground/30',
 }
 
-interface Props extends Omit<KanbanCardProps, 'card'> {
+interface Props extends Omit<KanbanCardProps, 'card' | 'highlight'> {
   status: TaskStatus
   cards: KanbanCardData[]
   /** 列底新增（回车提交；落列状态由本列 status 定义，挂根在 KanbanView） */
   onAdd(text: string): void
   /** 过滤激活态（2026-09 看板治理）：空列占位文案切换——过滤后空 = 「无匹配」 */
   filterActive?: boolean
+  /** 案头跳入高亮卡（2026-09）：KanbanView 定位消费命中的卡片 uid——列内换算逐卡
+   *  highlight 布尔（不进 cardCallbacks 透传：那是全卡同值的回调面）；null = 无高亮 */
+  highlightUid?: string | null
   /** 归档列收起（2026-09 看板治理）：仅归档列传入——列头收起钮回落看板收起条 */
   onCollapse?(): void
   /** done 列批量归档（2026-09 看板治理 spec §2.3）：仅 done 列传入 */
   onArchiveAll?(): void
 }
 
-export default function KanbanColumn({ status, cards, onAdd, filterActive = false, onCollapse, onArchiveAll, ...cardCallbacks }: Readonly<Props>) {
+export default function KanbanColumn({ status, cards, onAdd, filterActive = false, highlightUid, onCollapse, onArchiveAll, ...cardCallbacks }: Readonly<Props>) {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -137,10 +140,12 @@ export default function KanbanColumn({ status, cards, onAdd, filterActive = fals
           {cards.length}
         </span>
       </header>
-      {/* 卡片区原生列表语义（Sonar S6819：卡片 li 须挂 ul 下） */}
-      <ul className="flex list-none flex-col gap-2 overflow-y-auto">
+      {/* 卡片区原生列表语义（Sonar S6819：卡片 li 须挂 ul 下）。p-1.5 双职责（2026-09-18
+          验收）：细滚动条与卡片留间隙 + 卡片 ring/悬停效果外扩不被 padding box 裁剪——
+          ring 画在元素边界外，零 padding 时上下首尾卡与滚动条侧的高亮边会被静默裁掉 */}
+      <ul className="flex list-none flex-col gap-2 overflow-y-auto p-1.5">
         {cards.map((c) => (
-          <KanbanCard key={c.uid} card={c} {...cardCallbacks} />
+          <KanbanCard key={c.uid} card={c} highlight={highlightUid === c.uid} {...cardCallbacks} />
         ))}
         {cards.length === 0 && !adding && (
           <li

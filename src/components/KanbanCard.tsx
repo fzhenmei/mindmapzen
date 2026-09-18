@@ -80,10 +80,13 @@ export interface KanbanCardProps {
   onLocate(uid: string): void
   /** 复制卡片（2026-09 子树卡片）：子树 md 管线在宿主 EditorView（doCopy 同源） */
   onCopyCard(uid: string): void
+  /** 案头跳入高亮（2026-09）：KanbanView 定位消费命中时置真——描边 + 阴影过渡，
+   *  限时淡出由 KanbanView 计时摘除（transition 常驻，摘除即平滑消退） */
+  highlight?: boolean
 }
 
 export default function KanbanCard({
-  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard,
+  card, onStatusChange, onTextChange, onDelete, onOpenBody, onEditIcons, onEditTags, onLocate, onCopyCard, highlight,
 }: Readonly<KanbanCardProps>) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -163,9 +166,12 @@ export default function KanbanCard({
           onFocus={(e) => e.preventDefault()}
           title={t('editor.kanban.cardHint')}
           tabIndex={editing ? -1 : 0}
-          className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing ${
+          // 双高亮口径（2026-09-18 验收）：悬停=中性淡底（hover:bg-accent/50，随手反馈）；
+          // 案头跳入定位=主色描边+主色淡底（highlight，与悬停可区分）。transition 常驻
+          // 覆盖颜色与阴影——定位高亮 2.5s 摘除时描边与底色同步平滑消退
+          className={`list-none cursor-grab rounded-md border bg-card p-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring active:cursor-grabbing transition duration-300 hover:bg-accent/50 ${
             dragging ? 'opacity-50' : ''
-          }`}
+          } ${highlight ? 'ring-2 ring-primary bg-primary/10' : ''}`}
         >
           {/* 父链小字同正文放开截断（信息完整优先，长路径换行也接受） */}
           <p className="break-words text-[10px] leading-tight text-muted-foreground">

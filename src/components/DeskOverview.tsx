@@ -375,13 +375,24 @@ export default function DeskOverview() {
     })
   }
 
-  /** 跨图跳转（原工作台 spec §5 逐字迁移，文本寻址）：先置 pendingLocate 再 openMap
-   *  ——EditorView onReady 消费定位；寻址器用 path+text（md 不序列化 uid，扫描期 uid
-   *  引擎侧必失配）；mapPath 绑定目标图（终审 Important-1 错图消费修复）；顺序不可反
-   *  （openMap 后组件卸载，后续 set 无害但语义上定位先声明） */
+  /** 跨图跳转（原工作台 spec §5 文本寻址，2026-09 跳看板）：先置 pendingLocate（带
+   *  view:'kanban'）+ viewMode 再 openMap——openMap 不重置 viewMode，编辑器直接以
+   *  看板态挂载，EditorView onReady 消费时把载荷下发 KanbanView 高亮命中卡；回导图
+   *  定位经看板卡菜单仍可达，能力不丢。寻址器用 path+text（md 不序列化 uid，扫描期
+   *  uid 引擎侧必失配）；mapPath 绑定目标图（终审 Important-1 错图消费修复）；顺序
+   *  不可反（openMap 后组件卸载，后续 set 无害但语义上定位先声明）。失败回收：开图
+   *  失败时弃置寻址器 + 看板态复位导图（错图防线本会兜，显式清更自洽——viewMode
+   *  残留会把下一次开图误落看板态） */
   const openTask = (task: WorkTask): void => {
-    useAppStore.getState().setPendingLocate({ mapPath: task.mapPath, path: task.path, text: task.text })
-    openMapQuietly(task.mapPath)
+    const st = useAppStore.getState()
+    st.setViewMode('kanban')
+    st.setPendingLocate({ mapPath: task.mapPath, path: task.path, text: task.text, view: 'kanban' })
+    Promise.resolve(st.openMap(task.mapPath)).catch((e: unknown) => {
+      console.error('案头总览跳转打开失败', e)
+      const s = useAppStore.getState()
+      s.setPendingLocate(null)
+      s.setViewMode('mindmap')
+    })
   }
 
   /** map 级建议跳转：只进图不定位（原工作台 spec §5——图级建议不带 uid） */
