@@ -71,6 +71,8 @@ const library: Dict['library'] = {
     newMap: {
       title: 'New map',
       titleIn: 'New map in “{{dir}}”',
+      dirSelect: 'Save to',
+      rootDir: 'Root folder',
       templateSelect: 'Select template',
       confirm: 'Create',
     },

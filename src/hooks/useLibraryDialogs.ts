@@ -51,15 +51,18 @@ export interface LibraryDialogsApi {
   /** 删除目录对话框目标（rel 相对工作区，name 末段显示名） */
   readonly dirTarget: { rel: string; name: string } | null
   readonly importPreview: ImportPreview | null
-  /** 新建导图目标目录（''=工作区根） */
-  readonly newMapDir: string
+  /** 新建导图初始目录（2026-09 目录选择）：undefined = 常驻入口（对话框回退上次选择）；
+   *  ''=树根右键（显式根）；'a/b'=树右键目标目录。仅作对话框 initialDir——用户框内
+   *  可改，落盘目录以 confirmCreateMap 第三参为准 */
+  readonly newMapDir: string | undefined
   /** 新建目录的父目录（''=工作区根） */
   readonly dirParent: string
   /** 关框全清（target/dirTarget 同清；对无目标的框等价于仅关框——互斥态下无副作用） */
   closeDialog(): void
   closeImportPreview(): void
-  /** 打开新建导图对话框（rel = 目标目录；常驻入口传 ''，树右键传所在目录） */
-  openNewMap(rel: string): void
+  /** 打开新建导图对话框（rel = 初始目录；常驻入口传 undefined 回退上次选择，树右键传
+   *  所在目录、''=树根——显式指定不被上次选择覆盖） */
+  openNewMap(rel: string | undefined): void
   openNewDir(rel: string): void
   /** 文件行右键/详情页首动作：带目标导图开对应框 */
   openMapAction(a: MapAction, m: MapInfo): void
@@ -68,7 +71,9 @@ export interface LibraryDialogsApi {
    *  有未映射内容先预览确认（md 解析忽略块 / xmind 游离主题等摘要，同一通道） */
   startImport(): Promise<void>
   confirmImport(): Promise<void>
-  confirmCreateMap(name: string, templateContent: string): Promise<void>
+  /** 新建导图确认（2026-09 目录选择）：relDir = 对话框「保存位置」选中目录（''=根），
+   *  createAndOpen 记入 lastNewMapDir（下次默认选中） */
+  confirmCreateMap(name: string, templateContent: string, relDir: string): Promise<void>
   /** 新建目录（desk.createDir 递归，'/' 分隔逐段校验）。M16 抛错语义：错误抛给
    *  NameDialog 框内显示，成功路径才关框 */
   confirmCreateDir(name: string): Promise<void>
@@ -91,7 +96,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
   const [dirTarget, setDirTarget] = useState<{ rel: string; name: string } | null>(null)
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
   const [dirParent, setDirParent] = useState('')
-  const [newMapDir, setNewMapDir] = useState('')
+  const [newMapDir, setNewMapDir] = useState<string | undefined>(undefined)
 
   const closeDialog = () => {
     setDialog(null)
@@ -145,8 +150,8 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
     }
   }
 
-  const confirmCreateMap = async (name: string, templateContent: string) => {
-    await useAppStore.getState().createAndOpen(name, templateContent, newMapDir)
+  const confirmCreateMap = async (name: string, templateContent: string, relDir: string) => {
+    await useAppStore.getState().createAndOpen(name, templateContent, relDir)
     setDialog(null)
   }
 
@@ -216,7 +221,7 @@ export function useLibraryDialogs(deps: Readonly<LibraryDialogsDeps>): LibraryDi
     void deps.reloadTree()
   }
 
-  const openNewMap = (rel: string) => {
+  const openNewMap = (rel: string | undefined) => {
     setNewMapDir(rel)
     setDialog('new')
   }

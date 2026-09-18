@@ -28,12 +28,12 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
   const { dialog, target, dirTarget, importPreview, newMapDir, dirParent } = api
   return (
     <>
-      {/* 新建导图（M16 换 NewMapDialog）：名称 + 模板选择；四个入口（页首 btn-new/
+      {/* 新建导图（M16 换 NewMapDialog）：名称 + 保存位置 + 模板选择；四个入口（页首 btn-new/
           空态 library-empty-new/欢迎页 desk-idle-new/树目录行右键 ctx-btn-new-map）
-          共用本对话框——右键入口带目标目录（标题示目录、落盘建在彼处） */}
+          共用本对话框——右键入口带初始目录（标题示目录、默认选中），常驻入口回退上次选择 */}
       {dialog === 'new' && (
         <NewMapDialog
-          inDirLabel={newMapDir === '' ? undefined : newMapDir}
+          initialDir={newMapDir}
           onCancel={api.closeDialog}
           onConfirm={api.confirmCreateMap}
         />
@@ -79,7 +79,7 @@ export default function LibraryDialogs({ api, maps, tree }: Readonly<Props>) {
           tree={tree}
           fromRel={target.relDir}
           onCancel={api.cancelMove}
-          onMove={(toRel) => void api.moveTarget(toRel)}
+          onMove={(toRel) => { void api.moveTarget(toRel) }}
         />
       )}
       {importPreview && (

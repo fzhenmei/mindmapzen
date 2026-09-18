@@ -557,6 +557,17 @@ describe('案头三区与交互（M5d）', () => {
     expect(await fs.exists('/ws/项目/项目新图.md')).toBe(true)
   })
 
+  // 2026-09 目录选择主用户故事：常驻入口（页首 btn-new）默认选中上次选择的目录并落盘彼处
+  test('页首新建：默认选中上次目录并落盘（常驻入口回退上次选择）', async () => {
+    useAppStore.setState({ lastNewMapDir: '项目' })
+    render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
+    fireEvent.click(await screen.findByTestId('btn-new'))
+    fireEvent.input(screen.getByTestId('input-name'), { target: { value: '上次目录新图' } })
+    fireEvent.click(screen.getByTestId('btn-confirm'))
+    await waitFor(() => expect(useAppStore.getState().route).toBe('editor'))
+    expect(await fs.exists('/ws/项目/上次目录新图.md')).toBe(true)
+  })
+
   test('右键目录行：新建子目录落在该目录下', async () => {
     render(<LibraryView pickDirectory={vi.fn()} pickImportFile={vi.fn()} writeClipboard={vi.fn(async () => {})} writeHtmlClipboard={vi.fn(async () => {})} />)
     fireEvent.contextMenu(await screen.findByTestId('dir-node-项目'), { button: 2 })

@@ -7,7 +7,7 @@ import { loadConfig, saveConfig } from './config'
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', ...over,
 })
 
 describe('配置读写', () => {
@@ -176,6 +176,21 @@ describe('favorites + librarySort（收藏置顶与列表排序）', () => {
     expect((await loadConfig(fs, '/cfg.json')).librarySort).toBe('modified')
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({}))
     expect((await loadConfig(fs, '/cfg.json')).librarySort).toBe('modified')
+  })
+})
+
+describe('lastNewMapDir（新建导图目录选择：记住上次）', () => {
+  test('合法值往返', async () => {
+    const fs = new MemoryFsAdapter()
+    await saveConfig(fs, '/cfg.json', cfg({ lastNewMapDir: '项目' }))
+    expect((await loadConfig(fs, '/cfg.json')).lastNewMapDir).toBe('项目')
+  })
+  test('非字符串与缺失回退空串（旧配置兼容；空串 = 工作区根）', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', lastNewMapDir: 42 }))
+    expect((await loadConfig(fs, '/cfg.json')).lastNewMapDir).toBe('')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    expect((await loadConfig(fs, '/cfg.json')).lastNewMapDir).toBe('')
   })
 })
 

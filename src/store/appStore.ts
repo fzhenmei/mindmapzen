@@ -73,6 +73,9 @@ interface AppState {
   adapter: FsAdapter
   /** 用户偏好的默认布局（init 自配置；切换布局时更新并持久化） */
   preferredLayout: LayoutKind
+  /** 新建导图上次选择的目录（2026-09 目录选择；init 自配置，createAndOpen 更新并
+   *  持久化）：新建对话框默认选中（树右键入口的 initialDir 优先） */
+  lastNewMapDir: string
   /** 主题三态偏好（auto/亮/暗；init 自配置，切换时持久化） */
   themePref: ThemePref
   /** 预览大纲三态偏好（2026-09 大纲面板；auto = 跟随预览主区宽，显式 on/off 记住手动开关） */
@@ -221,6 +224,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   configPath: '/cfg.json',
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
   preferredLayout: 'mindmap',
+  /** 新建导图上次选择的目录（2026-09 目录选择）：新建对话框默认选中（initialDir 优先） */
+  lastNewMapDir: '',
   themePref: 'auto',
   languagePref: 'auto',
   previewOutline: 'auto',
@@ -260,7 +265,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -312,9 +317,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ currentMdPath: info.mdPath, route: 'editor', error: null, sessionRecent: [info.mdPath, ...get().sessionRecent.filter((p) => p !== info.mdPath)], mapTabs: appendTab(get().mapTabs, info.mdPath) })
     // 新建即最近（v2.5）：与 openMap 同款 MRU 维护——新图立即可达快速切换浮层与案头欢迎页
     const recentOpened = [info.mdPath, ...get().recentOpened.filter((p) => p !== info.mdPath)].slice(0, 10)
-    set({ recentOpened })
+    // 记住本次选择的目录（2026-09 目录选择）：下次新建对话框默认选中（含根 ''）
+    set({ recentOpened, lastNewMapDir: relDir })
     const cfg = await loadConfig(adapter, configPath)
-    await saveConfig(adapter, configPath, { ...cfg, recentOpened })
+    await saveConfig(adapter, configPath, { ...cfg, recentOpened, lastNewMapDir: relDir })
   },
 
   /** 记住用户偏好的默认布局（新建/导入/无 sidecar 导图的初始布局），持久化到应用配置 */
