@@ -1,6 +1,6 @@
 // src/hooks/useSubtreeCopy.ts —— 复制 md 管线（2026-09 子树卡片拆自 EditorView，行数护栏，
-// 同 useExportFlow 动因）：子树→md→剪贴板公共管线 + 两个入口（整图/选中子树的 doCopy、
-// 看板卡片子树的 copyKanbanCard），行为与拆出前零变化。
+// 同 useExportFlow 动因）：子树→md→剪贴板公共管线 + 两个入口（整图/选中子树集合的 doCopy、
+// 看板卡片子树的 copyKanbanCard）。
 import { useCallback } from 'react'
 import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -12,7 +12,7 @@ import { truncateCardSubtree } from '../services/kanban'
 import type { WriteClipboard } from '../services/clipboard'
 import type { ActiveSelection } from './useActiveSelection'
 import type { LinkRegistry } from '../editor/linkRegistry'
-import type { MindMapHandle } from '../types/engine'
+import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ZenNode } from '../types/tree'
 
 interface SubtreeCopyDeps {
@@ -29,21 +29,28 @@ export function useSubtreeCopy({
 }: Readonly<SubtreeCopyDeps>): { doCopy(): void; copyKanbanCard(uid: string): void } {
   const { t } = useTranslation()
 
-  /** 子树→md→剪贴板公共管线（doCopy 与看板卡片复制共用零分叉）：正文按 settings 树层
-   *  剥除（终审 C1，先于序列化——md 层正则剥 `> ` 行会误伤正文代码块/引用行）；图标与
-   *  看板状态同层树剥（2026-09 粘 AI 防干扰，copyIncludeIconStatus 默认 false——字段剥除
-   *  即无行尾 ::icon/@status 注入）；md 层后处理仅剩双链括号（getState 取实时值）。
+  /** 子树集合→md→剪贴板公共管线（doCopy 与看板卡片复制共用零分叉）：逐棵序列化后拼接
+   *  （各从 H1 重计层级，树间空行——parse 口径「多余 H1 成为根的一级子节点」，粘回导图
+   *  安全）；正文按 settings 树层剥除（终审 C1，先于序列化——md 层正则剥 `> ` 行会误伤
+   *  正文代码块/引用行）；图标与看板状态同层树剥（2026-09 粘 AI 防干扰，
+   *  copyIncludeIconStatus 默认 false——字段剥除即无行尾 ::icon/@status 注入）；md 层
+   *  后处理仅剩双链括号（getState 取实时值，全局正则对拼接串等价）。
    *  尾段图片引用相对→绝对（2026-09）：须在剥正文之后——头注引用行不能被一并剥掉。
    *  序列化同步段 try 兜底（2026-09-07 回归：Word 粘贴携 \r\n 致 assert 抛错曾无声失败），
    *  异步段 then 同口径 */
   const copyMdToClipboard = useCallback(
-    (zen: ZenNode, kind: 'copied-md' | 'copied-node'): void => {
+    (trees: readonly ZenNode[], kind: 'copied-md' | 'copied-node'): void => {
       let md: string
       try {
         const settings = useAppStore.getState().settings
-        const bodyApplied = settings.copyIncludeBody ? zen : stripTreeBody(zen)
-        const markerApplied = settings.copyIncludeIconStatus ? bodyApplied : stripTreeIconStatus(bodyApplied)
-        md = applyCopySettings(serialize(markerApplied, registry.byUid), settings)
+        md = trees
+          .map((zen) => {
+            const bodyApplied = settings.copyIncludeBody ? zen : stripTreeBody(zen)
+            const markerApplied = settings.copyIncludeIconStatus ? bodyApplied : stripTreeIconStatus(bodyApplied)
+            return serialize(markerApplied, registry.byUid)
+          })
+          .join('\n')
+        md = applyCopySettings(md, settings)
       } catch (e) {
         setError(t('errors.copyMdFailed', { reason: e instanceof Error ? e.message : String(e) }))
         return
@@ -58,16 +65,24 @@ export function useSubtreeCopy({
     [registry, writeClipboard, flashCopy, setError, t],
   )
 
-  /** 复制范围解析：有选中节点→该 uid 子树（从 H1 重计层级）；否则整图；陈旧 uid（未命中
-   *  渲染树，如撤销删除）清选中回退整图 */
+  /** 复制范围解析（2026-09-18 多选）：无选中→整图；有选中→全部选中子树集合（单选即一棵；
+   *  多选逐棵拼接）。祖先与后代同选时后代不重复展开（其内容已含于祖先子树）；陈旧 uid
+   *  （未命中数据树，如撤销删除）逐个跳过，全陈旧回退整图（与单选口径一致） */
   const doCopy = useCallback((): void => {
     const mm = mmRef.current
     if (!mm) return
     const full = mm.getData()
     selection.clearStaleIfMissing(full)
-    const uid = selection.activeUidRef.current
-    const active = uid ? findSubtreeByUid(full, uid) : null
-    copyMdToClipboard(engineTreeToZen(active ?? full).tree, 'copied-md')
+    const hit = selection.activeUidsRef.current
+      .map((uid): { uid: string; node: EngineNode | null } => ({ uid, node: findSubtreeByUid(full, uid) }))
+      .filter((x): x is { uid: string; node: EngineNode } => x.node !== null)
+    const tops = hit.filter(
+      ({ uid }) => !hit.some((o) => o.uid !== uid && findSubtreeByUid(o.node, uid) !== null),
+    )
+    copyMdToClipboard(
+      tops.length > 0 ? tops.map(({ node }) => engineTreeToZen(node).tree) : [engineTreeToZen(full).tree],
+      'copied-md',
+    )
   }, [mmRef, selection, copyMdToClipboard])
 
   /** 看板卡片复制（2026-09 子树卡片）：该卡追踪范围的子树 md（截断口径——带状态后代是
@@ -82,7 +97,7 @@ export function useSubtreeCopy({
         console.error('看板卡片复制失败：数据树中无此节点', uid)
         return
       }
-      copyMdToClipboard(truncateCardSubtree(engineTreeToZen(sub).tree), 'copied-md')
+      copyMdToClipboard([truncateCardSubtree(engineTreeToZen(sub).tree)], 'copied-md')
     },
     [mmRef, copyMdToClipboard],
   )
