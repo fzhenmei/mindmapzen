@@ -222,6 +222,45 @@ test('案头：树右键菜单——文件行重命名、目录行在此新建�
   expect(md).toBe('# 项目新图\n')
 })
 
+// 2026-09 目录选择：新建对话框「保存位置」下拉可选目录（Radix Select 点选交互只有真浏览器
+// 能驱动，jsdom 盲区）；选中落盘彼处，且下次常驻入口新建默认记住（lastNewMapDir）
+test('案头：页首新建可选保存目录，落盘所选目录并记住上次选择', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1&desk=1')
+
+  // 页首常驻入口开框：默认保存位置 = 根目录（首启无上次）
+  await page.getByTestId('btn-new').click()
+  await expect(page.getByTestId('dir-select')).toHaveText(/根目录/)
+
+  // 点开保存位置下拉，选「项目」
+  await page.getByTestId('dir-select').click()
+  await page.getByRole('option', { name: '项目' }).click()
+  await expect(page.getByTestId('dir-select')).toHaveText(/项目/)
+
+  await page.getByTestId('input-name').fill('选目录图')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('选目录图').first()).toBeVisible() // 创建即打开进编辑器
+  const md = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/项目/选目录图.md',
+    ),
+  )
+  expect(md).toBe('# 选目录图\n')
+
+  // 记住上次：返回案头再新建，保存位置直显「项目」（无需重选），再建一张仍落彼处
+  await page.getByTestId('btn-back').click()
+  await page.getByTestId('btn-new').click()
+  await expect(page.getByTestId('dir-select')).toHaveText(/项目/)
+  await page.getByTestId('input-name').fill('第二张图')
+  await page.getByTestId('btn-confirm').click()
+  const md2 = await page.evaluate(() =>
+    (window as unknown as { __zenE2e: { readFile(p: string): Promise<string> } }).__zenE2e.readFile(
+      '/ws/项目/第二张图.md',
+    ),
+  )
+  expect(md2).toBe('# 第二张图\n')
+})
+
 test('案头：文件树折叠扳机收起子树、行面选中不折叠', async ({ page }) => {
   test.setTimeout(30_000)
   await page.goto('/?e2e=1&desk=1')

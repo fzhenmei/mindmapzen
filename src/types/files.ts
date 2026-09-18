@@ -128,6 +128,9 @@ export interface AppConfig {
   aiChatWidth: number | null
   /** 工作台 AI 建议缓存（2026-09-14 双条件：24h 内且任务指纹一致才复用）；null = 无 */
   aiAdvice: AiAdvice | null
+  /** 新建导图上次选择的目录（2026-09 目录选择；相对工作区，'' = 根）。
+   *  新建对话框默认选中它（树右键入口的 initialDir 优先）；目录已删由对话框回退根 */
+  lastNewMapDir: string
 }
 
 /** 工作台 AI 建议缓存（cfg.json 持久化）：只有正常完成（done）的回复入档——
@@ -217,6 +220,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   ai: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
   aiAdvice: null,
+  lastNewMapDir: '',
 }
 
 /** 宽容解析 AI 建议缓存（旧配置无字段兼容）：任一字段失型即弃（null，下次重新问） */

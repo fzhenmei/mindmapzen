@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null, lastNewMapDir: '' })
 })
 
 describe('appStore', () => {
@@ -71,6 +71,18 @@ describe('appStore', () => {
     await useAppStore.getState().setWorkspace('/ws')
     await expect(useAppStore.getState().createAndOpen('已有')).rejects.toThrow('已存在同名导图')
     expect(useAppStore.getState().route).toBe('library')
+  })
+
+  // 2026-09 新建导图目录选择：createAndOpen 记住 relDir（含根 ''），cfg.json 持久化，init 装载
+  test('createAndOpen relDir 记入 lastNewMapDir 并持久化，init 装载（重启仍记得）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json' })
+    await useAppStore.getState().setWorkspace('/ws')
+    await fs.mkdir('/ws/项目')
+    await useAppStore.getState().createAndOpen('子图', undefined, '项目')
+    expect(useAppStore.getState().lastNewMapDir).toBe('项目')
+    expect(JSON.parse(await fs.readTextFile('/cfg.json')).lastNewMapDir).toBe('项目')
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().lastNewMapDir).toBe('项目')
   })
 
   test('markDirty/clearDirty 与 backToLibrary', async () => {

@@ -722,18 +722,19 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         // 新建导图对话框（2026-09 画布内入口）：互斥优先级同上（guarding > confirming > 新建）。
         // 确认即关框走 leaveTo 安全链——保存当前图成功才 createAndOpen 跳转；保存失败/未映射块
         // 确认挂起留在原图（与「返回案头」同款约定，确认后不自动续行）。创建失败（如重名）走横幅
-        // 提示不回框内（框已关，名字需重填——编辑器场景低频，可接受降级）
+        // 提示不回框内（框已关，名字需重填——编辑器场景低频，可接受降级）。
+        // relDir（2026-09 目录选择）：对话框「保存位置」选中目录随链透传
         newMap={
           newMapOpen && !guard.guarding && !flow.confirming
             ? {
                 onCancel: () => setNewMapOpen(false),
-                onConfirm: (name, templateContent) => {
+                onConfirm: (name, templateContent, relDir) => {
                   setNewMapOpen(false)
                   // AI 回合拦截（Task 12，spec §6）：leaveTo 会先保存再切图，整链包进
                   // guardAiTurn——回合期间不保存不切图，状态签脉冲提示（主出路：面板停止钮）
                   guardAiTurn(() => {
                     void quick
-                      .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent))
+                      .leaveTo(() => useAppStore.getState().createAndOpen(name, templateContent, relDir))
                       .catch((e) => setError(t('errors.createMapFailed', { reason: e instanceof Error ? e.message : String(e) })))
                   })
                 },

@@ -23,6 +23,7 @@ export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig
       ai: parseAiConfig(parsed.ai),
       aiChatWidth: parsePanelWidth(parsed.aiChatWidth),
       aiAdvice: parseAiAdvice(parsed.aiAdvice),
+      lastNewMapDir: typeof parsed.lastNewMapDir === 'string' ? parsed.lastNewMapDir : '',
     }
   } catch {
     return DEFAULT_CONFIG

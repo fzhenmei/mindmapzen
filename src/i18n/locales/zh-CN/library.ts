@@ -64,7 +64,7 @@ export default {
       newDirAdd: '新建',
       confirm: '移动',
     },
-    newMap: { title: '新建导图', titleIn: '在「{{dir}}」新建导图', templateSelect: '选择模板', confirm: '创建' },
+    newMap: { title: '新建导图', titleIn: '在「{{dir}}」新建导图', dirSelect: '保存位置', rootDir: '根目录', templateSelect: '选择模板', confirm: '创建' },
     importPreview: {
       title: '导入「{{name}}」',
       body: '{{count}} 个内容块未映射，这些内容不会出现在导图中：',

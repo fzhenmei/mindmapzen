@@ -232,7 +232,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
         >
           <AppLogo size={48} />
           <p className="text-sm">{t('library.library.emptyHint')}</p>
-          <Button size="sm" data-testid="library-empty-new" onClick={() => dlg.openNewMap('')}>
+          <Button size="sm" data-testid="library-empty-new" onClick={() => dlg.openNewMap(undefined)}>
             {t('library.library.newMap')}
           </Button>
         </div>
@@ -243,7 +243,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
       <WelcomePane
         recent={recent}
         overview={<DeskOverview />}
-        onNew={() => dlg.openNewMap('')}
+        onNew={() => dlg.openNewMap(undefined)}
         onImport={() => void dlg.startImport()}
         onOpen={(m) => void store.openMap(m.mdPath)}
       />
@@ -383,7 +383,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               {/* 动作钮顺序（2026-09）：新建在前、导入在后，与欢迎页居中双钮同序；
                   设置已移入侧栏底栏（居隐藏面板钮左侧）。工作台钮退役（2026-09 画布
                   三态 M3）：案头总览并入欢迎页 overview 槽位，入口随钮删除 */}
-              {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(''))}
+              {iconBtn(t('library.library.newMap'), 'btn-new', IconPlus, () => dlg.openNewMap(undefined))}
               {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>
           </header>
