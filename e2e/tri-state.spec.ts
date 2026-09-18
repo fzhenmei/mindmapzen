@@ -83,3 +83,42 @@ test('看板态归档钮：展开归档列', async ({ page }) => {
   await expect(page.getByTestId('kanban-col-archived')).toBeVisible()
   expect(pageErrors).toEqual([])
 })
+
+test('三态主题钮常驻：z-10 常驻件层不被 z-[9] 全屏视图盖住（2026-09 修复回归锁）', async ({ page }) => {
+  test.setTimeout(30_000)
+  const pageErrors: string[] = []
+  page.on('pageerror', (e) => pageErrors.push(String(e)))
+  await page.goto('/?e2e=1')
+  await seed(page)
+
+  // 导图态基准：可点且切夜航
+  await page.getByTestId('btn-theme').click()
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+    .toBe('dark')
+
+  // Markdown 态：按钮浮于 z-[9] 视图之上——可点（被盖时 click 会一直被拦截至超时）
+  await page.keyboard.press('Control+2')
+  await expect(page.getByTestId('markdown-view')).toBeVisible()
+  await page.getByTestId('btn-theme').click()
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+    .toBe('light')
+  // 按钮确实在视图上层（层叠断言，防「可见但被盖」的假绿）
+  const above = await page.evaluate(() => {
+    const fab = document.querySelector('.theme-fab')
+    const view = document.querySelector('[data-testid="markdown-view"]')
+    if (fab === null || view === null) return null
+    return parseInt(getComputedStyle(fab).zIndex, 10) > parseInt(getComputedStyle(view).zIndex, 10)
+  })
+  expect(above).toBe(true)
+
+  // 看板态：同款常驻
+  await page.keyboard.press('Control+3')
+  await expect(page.getByTestId('kanban-view')).toBeVisible()
+  await page.getByTestId('btn-theme').click()
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+    .toBe('dark')
+  expect(pageErrors).toEqual([])
+})
