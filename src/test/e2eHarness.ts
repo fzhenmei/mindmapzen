@@ -94,12 +94,14 @@ export async function installE2eHarness(): Promise<void> {
     await fs.writeTextFileAtomic('/ws/根图.md', '# 根图\n')
   }
   // 点子篮子用例（?basket=1，basket.spec）：预置篮子（根 + 两条点子）+ 可挂目标图
-  // （项目图多一个「待办」子节点供目标选择器选点）+ 一张非篮子图（文件层捕获路径的当前图）。
-  // 篮子根名与 cfg.basketPath 同源（'点子篮子.md'），否则 isBasket 判定落空、整理入口不出现
+  // + 一张非篮子图（文件层捕获路径的当前图）。篮子根名与 cfg.basketPath 同源
+  // （'点子篮子.md'），否则 isBasket 判定落空、整理入口不出现。
+  // 项目图给**两个**候选点（待办 / 归档）：单候选时「挂载无视选定节点、退化到首个节点」
+  // 的回归无法与正确行为区分（假通过），双候选 + 判别式断言才能钉住「挂到选定节点」语义
   if (new URLSearchParams(window.location.search).has('basket')) {
     await fs.mkdir('/ws/项目')
     await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 点子甲\n\n- 点子乙\n')
-    await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n\n## 待办\n')
+    await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n\n## 待办\n\n## 归档\n')
     await fs.writeTextFileAtomic('/ws/普通图.md', '# 普通图\n')
   }
   // 引导预设（2026-09 onboarding tour）：引导遮罩全屏拦截交互，既有用例（?e2e=1）

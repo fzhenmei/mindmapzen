@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
 // 点子篮子 M1 全链路 e2e（2026-09，spec §9）：?basket=1 预置见 src/test/e2eHarness.ts——
-// /ws/点子篮子.md（根 + 点子甲/点子乙）、/ws/项目/项目图.md（含可挂点「待办」）、/ws/普通图.md，
+// /ws/点子篮子.md（根 + 点子甲/点子乙）、/ws/项目/项目图.md（含可挂点「待办」「归档」两候选，
+// 供判别式断言排除「挂载无视选定节点」的假通过）、/ws/普通图.md，
 // 并按 cfg.basketPath 锚定篮子身份（isBasket 判定 / 徽章 / 整理入口共用该锚）。
 // 磁盘断言一律走 __zenE2e.readFile（内存 FS）。两条捕获路径分开钉：
 //   ① 当前图**非**篮子 → 捕获落文件层（写盘先于 toast，读完即定论）；
@@ -82,11 +83,22 @@ test('篮子全链路：快捷键捕获入篮（文件层）→ 整理挂载 →
   // 批量挂载 → 结果面板（挂载先写目标图，写毕才开面板）
   await page.getByTestId('sort-mount-selected').click()
   await expect(page.getByTestId('sort-result')).toBeVisible()
+  // 判别式断言：钉的是「挂到**选定节点**」语义，而非「目标图里出现过该条」——预置两个候选点
+  // （待办 / 归档），故须「落在待办下」且「归档下为空」两条合起来才排除假通过：
+  // 挂载无视选定节点退化到根 → 点子甲升为深度 2 顶掉某行；退化到首个节点在此例同待办（等价），
+  // 但落到归档一律换位。`sort-row` 回显只证 UI 选择态，不证管线采纳
   const targetMd = await readFile(page, '/ws/项目/项目图.md')
-  expect(targetMd).toContain('点子甲')
+  const targetLines = mdLines(targetMd)
+  expect(targetLines[0]).toContain('项目图') // 首行 = 根
+  expect(targetLines[1]).toContain('待办')
+  expect(targetLines[2]).toContain('点子甲') // 选定节点「待办」的子节点位（深度 3）
+  expect(targetLines[3]).toContain('归档')
+  expect(targetLines).toHaveLength(4) // 归档下为空（挂错节点即换位/多行）
   expect(targetMd).not.toContain('点子乙') // 未选行不动
 
-  // 摘除篮子条目走「就近引擎」（当前图 = 篮子图）：内存态已摘、文件要等保存链冲刷
+  // 摘除篮子条目走「就近引擎」（当前图 = 篮子图）：内存态已摘、文件要等保存链冲刷。
+  // 前提：编辑器 Ctrl+S **不经** anyDialog 互斥（useEditorHotkeys 的互斥只包 Ctrl+C/三态/切换族）
+  // ——故结果浮层开着也能冲刷；将来若给 Ctrl+S 加对话框互斥，本行会立刻红（改走先关浮层再保存）
   expect(await readFile(page, '/ws/点子篮子.md')).toContain('点子甲')
   await page.keyboard.press('Control+s') // 显式保存冲刷（自动保存另有 5s 防抖）
   await expect
