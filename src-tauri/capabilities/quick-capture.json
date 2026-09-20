@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "quick-capture",
+  "description": "快速捕获小窗（点子篮子 M2）：事件/基础 + 自隐 + 拉起主窗 + 文件层读写（篮子与 cfg.json）",
+  "windows": ["quick-capture"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "fs:default",
+    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-read-file", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-write-text-file", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-write-file", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-read-dir", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-stat", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-rename", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-exists", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-mkdir", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-remove", "allow": [{ "path": "**" }] }
+  ]
+}

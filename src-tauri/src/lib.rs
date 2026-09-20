@@ -147,6 +147,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Manager;
             if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show(); // M2：主窗可能已隐藏到托盘（关窗隐藏），复启必须重新显示
                 let _ = win.unminimize();
                 let _ = win.set_focus();
             }
@@ -166,6 +167,9 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // 全局快捷键（2026-09 点子篮子 M2，spec §5.3）：插件级注册即可——键位与开关由
+        // 前端按配置动态 register/unregister（JS API），Rust 侧不预置任何键
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // 运行时窗口图标（v2.4 验收：任务栏先 logo 后变 Windows 默认）——Windows 任务栏
         // 图标查询窗口类/进程资源，显式 set_icon 钉住（icons/128x128.png 与应用图标同源）
         .setup(|app| {
