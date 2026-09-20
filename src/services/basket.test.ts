@@ -1,5 +1,5 @@
 // src/services/basket.test.ts —— 点子篮子数据层：路径约定 / 建篮 / 树操作与解析（T1）
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import { basketAbsPath, defaultBasketName, ensureBasket, insertIdeaIntoTree, parseBasketIdeas, parseBasketIdeasFromEngine, readBasketIdeas, resolveBasketRelPath } from './basket'
 import type { ZenNode } from '../types/tree'
@@ -27,6 +27,15 @@ describe('ensureBasket', () => {
     await ensureBasket(fs, '/ws', '点子篮子.md', '点子篮子')
     expect(await fs.readTextFile('/ws/点子篮子.md')).toContain('已有点子')
   })
+
+  test('嵌套 relPath：先建父目录再写（Tauri 写盘不建目录，内存 FS 抓不到），文件落正确绝对路径', async () => {
+    const fs = new MemoryFsAdapter()
+    const dirSpy = vi.spyOn(fs, 'ensureDir')
+    await ensureBasket(fs, '/ws', '子/篮.md', '篮')
+    expect(dirSpy).toHaveBeenCalledWith('/ws/子')
+    expect(await fs.readTextFile('/ws/子/篮.md')).toBe('# 篮\n')
+    dirSpy.mockRestore()
+  })
 })
 
 describe('树操作与解析', () => {
@@ -44,11 +53,16 @@ describe('树操作与解析', () => {
   })
 
   test('parseBasketIdeasFromEngine 读渲染节点实例的 nodeData 子节点（Task 9 调用口径：renderer.root）', () => {
-    const root = {
-      data: { text: '篮' },
-      nodeData: { children: [{ data: { text: 'a', body: '说明' } }, { data: { text: 'b', body: '' } }] },
-    } as unknown as EngineNode
+    const root = { nodeData: { children: [{ data: { text: 'a', body: '说明' } }, { data: { text: 'b', body: '' } }] } }
     expect(parseBasketIdeasFromEngine(root)).toEqual([{ text: 'a', body: '说明' }, { text: 'b' }])
+  })
+
+  test('parseBasketIdeasFromEngine：误传 renderTree 形态（无 nodeData）→ console.error 出口 + 空表，不静默', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const renderTree: EngineNode = { data: { text: '篮' }, children: [{ data: { text: 'a' } }] }
+    expect(parseBasketIdeasFromEngine(renderTree as never)).toEqual([])
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('nodeData'), renderTree)
+    errSpy.mockRestore()
   })
 })
 

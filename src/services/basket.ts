@@ -41,10 +41,14 @@ export async function readMapTree(fs: FsAdapter, mdPath: string): Promise<ZenNod
   }
 }
 
-/** 篮子不存在则按默认名创建（丢失重建语义，spec §3.3）；已存在不动 */
+/** 篮子不存在则按默认名创建（丢失重建语义，spec §3.3）；已存在不动。
+ *  嵌套 relPath（如 '子/篮.md'）父目录可能不存在——Tauri writeTextFile 不建目录，
+ *  故先 ensureDir（父目录 = 绝对路径去末段，同 saveConfig 口径；幂等，工作区根重复建无害）；
+ *  写失败不吞：不 catch，向上抛给调用方（Task 4 writeBasketFile）的 try/catch 出口 */
 export async function ensureBasket(fs: FsAdapter, wsDir: string, relPath: string, rootText: string): Promise<void> {
   const abs = basketAbsPath(wsDir, relPath)
   if (await fs.exists(abs)) return
+  await fs.ensureDir(abs.replace(/[\\/][^\\/]*$/, ''))
   await fs.writeTextFileAtomic(abs, `# ${rootText}\n`)
 }
 
@@ -59,9 +63,15 @@ export function parseBasketIdeas(tree: ZenNode): BasketIdea[] {
   return tree.children.map((c) => ({ text: c.text, ...(c.body !== undefined && c.body !== '' ? { body: c.body } : {}) }))
 }
 
-/** 引擎 renderTree 形态同口径（data.text / data.body） */
-export function parseBasketIdeasFromEngine(root: EngineNode): BasketIdea[] {
-  const children = (root as { nodeData?: { children?: EngineNode[] } }).nodeData?.children ?? []
+/** 引擎**渲染节点实例**（`renderer.root`）→ 点子列表：子节点在 `nodeData.children`，
+ *  数据字段 `data.text` / `data.body`。入参是节点实例形态——`renderTree` 是 EngineNode 形态
+ *  （无 nodeData），弱类型检测已挡住直接传入；万一被 cast 误传，走下方显式出口而非静默空表 */
+export function parseBasketIdeasFromEngine(root: { nodeData?: { children?: EngineNode[] } }): BasketIdea[] {
+  const children = root.nodeData?.children
+  if (children === undefined) {
+    console.error('篮子：引擎节点实例缺少 nodeData.children（应传 renderer.root，而非 renderTree）', root)
+    return []
+  }
   return children.map((c) => {
     const d = (c as { data?: { text?: string; body?: string } }).data
     const text = typeof d?.text === 'string' ? d.text : ''
