@@ -57,7 +57,7 @@ export default function QuickCapture({ open, onClose }: Readonly<Props>) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent aria-label={t('basket.capture.title')} className="max-w-md">
+      <DialogContent aria-label={t('basket.capture.title')} className="sm:max-w-md">
         <DialogTitle>{t('basket.capture.title')}</DialogTitle>
         <textarea
           data-testid="capture-input"
@@ -68,7 +68,9 @@ export default function QuickCapture({ open, onClose }: Readonly<Props>) {
           className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // 合成期（输入法确认候选）的 Enter 不入篮：Chromium/WebView2 下该 keydown 带
+            // isComposing:true，放行即"用户还没打完第一个词就被提交并关框"，且会干扰候选确认
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               void submit()
             }

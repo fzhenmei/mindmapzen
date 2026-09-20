@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
 import QuickCapture from './QuickCapture'
@@ -48,4 +48,16 @@ test('写失败：报错不关闭、内容保留', async () => {
   expect(await screen.findByTestId('capture-error')).toBeVisible()
   expect(onClose).not.toHaveBeenCalled()
   expect(screen.getByTestId('capture-input')).toHaveValue('会失败')
+})
+
+test('IME 合成期 Enter 不提交（输入法确认候选不误触发入篮）', async () => {
+  const onClose = vi.fn()
+  render(<QuickCapture open onClose={onClose} />)
+  await userEvent.type(screen.getByTestId('capture-input'), '未打完')
+  // 合成期 Enter：userEvent 直填 value、不走合成事件，须 fireEvent 直发 keydown 才能带 isComposing
+  fireEvent.keyDown(screen.getByTestId('capture-input'), { key: 'Enter', isComposing: true })
+  await new Promise((r) => setTimeout(r, 0)) // 冲刷提交链（若有）再断言，避免竞态假绿
+  expect(onClose).not.toHaveBeenCalled()
+  expect(await useAppStore.getState().adapter.exists('/ws/点子篮子.md')).toBe(false)
+  expect(screen.getByTestId('capture-input')).toHaveValue('未打完')
 })
