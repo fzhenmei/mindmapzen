@@ -1,0 +1,160 @@
+import { expect, test, type Page } from '@playwright/test'
+
+// 点子篮子 M1 全链路 e2e（2026-09，spec §9）：?basket=1 预置见 src/test/e2eHarness.ts——
+// /ws/点子篮子.md（根 + 点子甲/点子乙）、/ws/项目/项目图.md（含可挂点「待办」）、/ws/普通图.md，
+// 并按 cfg.basketPath 锚定篮子身份（isBasket 判定 / 徽章 / 整理入口共用该锚）。
+// 磁盘断言一律走 __zenE2e.readFile（内存 FS）。两条捕获路径分开钉：
+//   ① 当前图**非**篮子 → 捕获落文件层（写盘先于 toast，读完即定论）；
+//   ② 当前图即篮子 → 捕获走引擎端口（spec §4.2 就近引擎：只动内存态 + 撤销栈，
+//      落盘须保存链冲刷——故断言前显式 Ctrl+S / 等 leaveTo 的返回保存）
+
+/** 内存 FS 读盘（文件不存在即抛异常，与真实 FS 同义） */
+async function readFile(page: Page, path: string): Promise<string> {
+  return page.evaluate(
+    (p) => (window as unknown as { __zenE2e: { readFile(path: string): Promise<string> } }).__zenE2e.readFile(p),
+    path,
+  )
+}
+
+/** md 去空行行数组：serialize 逐节点一行、块间空行——[0] = 根标题，[1] = 根的第一子节点 */
+function mdLines(md: string): string[] {
+  return md
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '')
+}
+
+/** 等捕获浮层**完全退场**（Radix 退场动画 ~200ms 内浮层仍在 DOM：焦点滞留输入框、
+ *  遮罩仍拦指针——此时按 Undo 会被输入域守卫吞掉、点浮层下的按钮会被拦）。
+ *  与「提交已完成」无关：那是 toast 可见的语义 */
+function waitCaptureClosed(page: Page) {
+  return expect(page.getByTestId('capture-input')).toHaveCount(0)
+}
+
+test('篮子全链路：快捷键捕获入篮（文件层）→ 整理挂载 → 目标图/篮子断言 → 撤销', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.goto('/?e2e=1&basket=1')
+
+  // 案头预置齐备：篮子文件行带徽章（Task 10：徽章贴名称末尾）、普通图文件行
+  await expect(page.getByTestId('file-node-点子篮子')).toBeVisible()
+  await expect(page.getByTestId('file-node-普通图')).toBeVisible()
+  await expect(page.getByTestId('file-node-点子篮子').getByTestId('basket-badge')).toBeVisible()
+
+  // 打开普通图（非篮子图）：砚栏在场，整理入口不出现（篮子语义不外溢到普通导图）
+  await page.getByTestId('file-node-普通图').dblclick()
+  await expect(page.getByTestId('zen-bar')).toBeVisible()
+  await expect(page.getByTestId('btn-sort-basket')).toHaveCount(0)
+
+  // 应用内 Ctrl+Alt+I 捕获：当前图非篮子 → 文件层写入（captureIdea 落盘先于 toast，读完即断言）
+  await page.keyboard.press('Control+Alt+i')
+  await expect(page.getByTestId('capture-input')).toBeVisible()
+  await page.getByTestId('capture-input').fill('e2e 新点子')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('toast')).toBeVisible()
+
+  const afterCapture = await readFile(page, '/ws/点子篮子.md')
+  expect(afterCapture).toContain('e2e 新点子')
+  expect(mdLines(afterCapture)[1]).toContain('e2e 新点子') // 根的第一子节点（提首位语义）
+
+  // 回案头 → 打开篮子图：整理入口出现；胶囊条在列、篮子徽章贴篮子胶囊（Task 10）
+  await waitCaptureClosed(page)
+  await page.getByTestId('btn-back').click()
+  await expect(page.getByTestId('file-node-点子篮子')).toBeVisible()
+  await page.getByTestId('file-node-点子篮子').dblclick()
+  await expect(page.getByTestId('btn-sort-basket')).toBeVisible()
+  const tabs = page.getByTestId('map-tabs')
+  await expect(tabs.getByTestId('map-tab').filter({ hasText: '点子篮子' }).getByTestId('basket-badge')).toBeVisible()
+
+  // 整理浮层：清单 = 篮子当前内容（引擎根子节点），捕获的新点子在首位
+  await page.getByTestId('btn-sort-basket').click()
+  await expect(page.getByTestId('basket-sort')).toBeVisible()
+  await expect(page.getByTestId('sort-row')).toHaveCount(3)
+  await expect(page.getByTestId('sort-row').first()).toContainText('e2e 新点子')
+
+  // 给「点子甲」选目标：项目图 › 待办（sort-pick 按行取，首行不是它）
+  await page.getByTestId('sort-row').filter({ hasText: '点子甲' }).getByTestId('sort-pick').click()
+  await expect(page.getByTestId('basket-picker')).toBeVisible()
+  await page.getByTestId('picker-map-项目图').click()
+  await expect(page.getByTestId('picker-node-待办')).toBeVisible()
+  await page.getByTestId('picker-node-待办').click()
+  await expect(page.getByTestId('sort-row').filter({ hasText: '点子甲' })).toContainText('待办') // 选毕回显目标
+
+  // 批量挂载 → 结果面板（挂载先写目标图，写毕才开面板）
+  await page.getByTestId('sort-mount-selected').click()
+  await expect(page.getByTestId('sort-result')).toBeVisible()
+  const targetMd = await readFile(page, '/ws/项目/项目图.md')
+  expect(targetMd).toContain('点子甲')
+  expect(targetMd).not.toContain('点子乙') // 未选行不动
+
+  // 摘除篮子条目走「就近引擎」（当前图 = 篮子图）：内存态已摘、文件要等保存链冲刷
+  expect(await readFile(page, '/ws/点子篮子.md')).toContain('点子甲')
+  await page.keyboard.press('Control+s') // 显式保存冲刷（自动保存另有 5s 防抖）
+  await expect
+    .poll(async () => readFile(page, '/ws/点子篮子.md'), { timeout: 10_000 })
+    .not.toContain('点子甲')
+
+  // 撤销本次挂载：目标图摘除 + 篮子恢复（恢复同走引擎，再冲刷一次）
+  await page.getByTestId('sort-undo').click()
+  await expect
+    .poll(async () => readFile(page, '/ws/项目/项目图.md'), { timeout: 10_000 })
+    .not.toContain('点子甲')
+  await page.keyboard.press('Control+s')
+  await expect
+    .poll(async () => readFile(page, '/ws/点子篮子.md'), { timeout: 10_000 })
+    .toContain('点子甲')
+  // 撤销后清单按引擎现态重扫：点子甲回到首位，三条俱在
+  await expect(page.getByTestId('sort-row')).toHaveCount(3)
+  await expect(page.getByTestId('sort-row').first()).toContainText('点子甲')
+})
+
+test('篮子引擎路径：篮子图内捕获走引擎（不即时落盘）→ 返回保存后新点子在根的第一子节点位', async ({
+  page,
+}) => {
+  test.setTimeout(60_000)
+  await page.goto('/?e2e=1&basket=1')
+
+  // 打开篮子图：本图即篮子 → 整理入口出现（isBasket 判定）
+  await page.getByTestId('file-node-点子篮子').dblclick()
+  await expect(page.getByTestId('btn-sort-basket')).toBeVisible()
+
+  // 快捷键捕获：当前图 = 篮子图 → 走引擎端口（spec §4.2），只动内存态不写盘
+  await page.keyboard.press('Control+Alt+i')
+  await expect(page.getByTestId('capture-input')).toBeVisible()
+  await page.getByTestId('capture-input').fill('e2e 引擎点子')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('toast')).toBeVisible()
+  // 引擎路径的证据：此刻文件里没有该条（文件层路径的写盘先于 toast；自动保存 5s 防抖尚未到点）
+  expect(await readFile(page, '/ws/点子篮子.md')).not.toContain('e2e 引擎点子')
+
+  // 画布出现新节点（引擎内存态已改）
+  await expect(page.getByText('e2e 引擎点子').first()).toBeVisible()
+
+  // 撤销栈可用（Task 9 机制收口）：捕获入史后 btn-undo 转可用 → Ctrl+Z 撤销该条 → 画布消失。
+  // 须等浮层退场（见 waitCaptureClosed）：退场窗口内焦点在输入框，Ctrl+Z 被输入域守卫吞掉
+  await waitCaptureClosed(page)
+  await expect(page.getByTestId('btn-undo')).toBeEnabled()
+  await page.keyboard.press('Control+z')
+  await expect(page.getByText('e2e 引擎点子').first()).toBeHidden()
+
+  // 撤销后重来一次（同一条目再捕获），后续断言以这一次为准
+  await page.keyboard.press('Control+Alt+i')
+  await expect(page.getByTestId('capture-input')).toBeVisible()
+  await page.getByTestId('capture-input').fill('e2e 引擎点子')
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('e2e 引擎点子').first()).toBeVisible()
+  await waitCaptureClosed(page)
+
+  // 返回案头（leaveTo 安全链：显式保存成功才导航）→ 引擎内存态随保存落盘
+  await page.getByTestId('btn-back').click()
+  await expect(page.getByTestId('file-node-点子篮子')).toBeVisible()
+  await expect
+    .poll(async () => readFile(page, '/ws/点子篮子.md'), { timeout: 10_000 })
+    .toContain('e2e 引擎点子')
+
+  // 位置收口（Task 9「数据层 splice 提首位」）：新点子在根的第一个子节点位，既有条目不乱序
+  const md = await readFile(page, '/ws/点子篮子.md')
+  expect(mdLines(md)[0]).toContain('点子篮子') // 首行 = 根
+  expect(mdLines(md)[1]).toContain('e2e 引擎点子') // 次行 = 根的第一个子节点
+  expect(mdLines(md)[2]).toContain('点子甲')
+  expect(mdLines(md)[3]).toContain('点子乙')
+})

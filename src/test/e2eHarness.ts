@@ -27,7 +27,11 @@ function harnessPngBytes(): Uint8Array {
  *  仅 ?tour=1 时写 false——tour.spec 显式要求看引导；?tourdone=1 与默认等效（语义自述）。
  *  不预写 false 的原因同 ?desk=1：引导遮罩全屏拦截交互，既有 ?e2e=1 用例会被挡住
  *  ?lang=<pref> 预置 cfg.language（2026-09 i18n）：language-switch.spec「重启保持」用——
- *  harness 每次页面加载重建内存 FS，重启语义同 ?tourdone 以预置模拟 */
+ *  harness 每次页面加载重建内存 FS，重启语义同 ?tourdone 以预置模拟
+ *  ?basket=1 追加点子篮子预置（/ws/点子篮子.md + 可挂目标 /ws/项目/项目图.md + /ws/普通图.md）
+ *  并预写 cfg.basketPath 锚定篮子（basket.spec 全链路）：同 ?desk=1 须先于 setWorkspace
+ *  （篮子清单/左树在 setWorkspace 时生成），且预置内容与 ?desk 冲突（项目图内容不同）
+ *  ——故独立成参数而非并入，两参数不并用 */
 export async function installE2eHarness(): Promise<void> {
   const fs = new MemoryFsAdapter()
   useAppStore.getState().setAdapter(fs)
@@ -89,6 +93,15 @@ export async function installE2eHarness(): Promise<void> {
     await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n')
     await fs.writeTextFileAtomic('/ws/根图.md', '# 根图\n')
   }
+  // 点子篮子用例（?basket=1，basket.spec）：预置篮子（根 + 两条点子）+ 可挂目标图
+  // （项目图多一个「待办」子节点供目标选择器选点）+ 一张非篮子图（文件层捕获路径的当前图）。
+  // 篮子根名与 cfg.basketPath 同源（'点子篮子.md'），否则 isBasket 判定落空、整理入口不出现
+  if (new URLSearchParams(window.location.search).has('basket')) {
+    await fs.mkdir('/ws/项目')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 点子甲\n\n- 点子乙\n')
+    await fs.writeTextFileAtomic('/ws/项目/项目图.md', '# 项目图\n\n## 待办\n')
+    await fs.writeTextFileAtomic('/ws/普通图.md', '# 普通图\n')
+  }
   // 引导预设（2026-09 onboarding tour）：引导遮罩全屏拦截交互，既有用例（?e2e=1）
   // 启动即满足触发条件会被挡住——故无 ?tour 参数时默认预写 tourDone:true（既有用例
   // 零改动豁免）；仅 ?tour=1 显式要看引导时写 false（tour.spec 全流程/跳过/重看用）。
@@ -98,9 +111,14 @@ export async function installE2eHarness(): Promise<void> {
   // ?lang=<pref> 预置界面语言：模拟上一会话已落盘 language 的重启（language-switch.spec），
   // 语义同上 ?tourdone——真 reload 会重建内存 FS 丢配置，无法验证「重启保持」
   const lang = new URLSearchParams(window.location.search).get('lang')
+  // ?basket=1 预写 cfg.basketPath 锚定篮子身份（同 ?lang 语义：模拟上一会话已落盘的重启）。
+  // 须先于 setWorkspace 写盘——init 的 load-merge-save 从该文件读 basketPath 解析 basketRelPath
+  const cfgExtra: Record<string, unknown> = new URLSearchParams(window.location.search).has('basket')
+    ? { basketPath: '点子篮子.md' }
+    : {}
   await fs.writeTextFileAtomic(
     '/cfg.json',
-    JSON.stringify({ workspaceDir: null, tourDone, ...(lang ? { language: lang } : {}) }),
+    JSON.stringify({ workspaceDir: null, tourDone, ...(lang ? { language: lang } : {}), ...cfgExtra }),
   )
   if (!new URLSearchParams(window.location.search).has('nows')) {
     await useAppStore.getState().setWorkspace('/ws')
