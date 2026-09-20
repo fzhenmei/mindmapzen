@@ -223,14 +223,20 @@ describe('language（2026-09 i18n 界面语言）', () => {
   })
 })
 
-describe('parseQuickCapture（快速捕获设置宽容解析，spec §5.1）', () => {
-  test('缺失/非对象回退默认 false（旧配置无字段兼容）', () => {
-    expect(parseQuickCapture(undefined)).toEqual({ enabled: false })
-    expect(parseQuickCapture(null)).toEqual({ enabled: false })
-    expect(parseQuickCapture('x')).toEqual({ enabled: false })
+describe('parseQuickCapture（快速捕获设置宽容解析 + 拆分迁移，spec §5.1）', () => {
+  test('缺失/非对象回退双关（默认全关，2026-09 拆分裁定）', () => {
+    expect(parseQuickCapture(undefined)).toEqual({ shortcut: false, tray: false })
+    expect(parseQuickCapture(null)).toEqual({ shortcut: false, tray: false })
+    expect(parseQuickCapture('x')).toEqual({ shortcut: false, tray: false })
   })
-  test('字段类型非法回退默认；合法布尔保留', () => {
-    expect(parseQuickCapture({ enabled: 'yes' })).toEqual({ enabled: false })
-    expect(parseQuickCapture({ enabled: true })).toEqual({ enabled: true })
+  test('旧单开关迁移：显式开启过的用户保留选择 → 双开；关/失型 → 双关', () => {
+    expect(parseQuickCapture({ enabled: true })).toEqual({ shortcut: true, tray: true })
+    expect(parseQuickCapture({ enabled: false })).toEqual({ shortcut: false, tray: false })
+    expect(parseQuickCapture({ enabled: 'yes' })).toEqual({ shortcut: false, tray: false })
+  })
+  test('新字段独立解析（快捷键/托盘各自开闭）；失型项回退 false', () => {
+    expect(parseQuickCapture({ shortcut: true, tray: false })).toEqual({ shortcut: true, tray: false })
+    expect(parseQuickCapture({ shortcut: false, tray: true })).toEqual({ shortcut: false, tray: true })
+    expect(parseQuickCapture({ shortcut: true, tray: 'x', enabled: true })).toEqual({ shortcut: true, tray: false })
   })
 })

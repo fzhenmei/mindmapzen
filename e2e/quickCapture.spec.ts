@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-// 快速捕获 M2（spec §4.1/§5.1）：启用开关后应用内 Ctrl+Alt+I 让位给全局快捷键。
-// web e2e 无 Tauri（全局注册为守卫 no-op），本测试钉的是「让位门控」——
-// 开关 → 应用内监听挂/摘；全局链路的真机行为走 docs/notes/m2-manual-checklist.md
-test('快速捕获开关：启用后应用内 Ctrl+Alt+I 让位，关闭后恢复', async ({ page }) => {
+// 快速捕获 M2（spec §4.1/§5.1；2026-09 拆分为双开关）：快捷键开关开后应用内 Ctrl+Alt+I
+// 让位给全局快捷键。web e2e 无 Tauri（全局注册为守卫 no-op），本测试钉的是「让位门控」
+// 与「两开关独立」；全局链路的真机行为走 docs/notes/m2-manual-checklist.md
+test('快速捕获开关：快捷键启用后应用内 Ctrl+Alt+I 让位，关闭后恢复；托盘开关独立不受影响', async ({ page }) => {
   await page.goto('/?e2e=1')
   // 等案头就绪：boot 屏期间 App 的 Ctrl+Alt+I 监听尚未挂，直接按键会丢
   await expect(page.getByTestId('btn-settings')).toBeVisible()
@@ -17,20 +17,25 @@ test('快速捕获开关：启用后应用内 Ctrl+Alt+I 让位，关闭后恢�
   // 同 basket.spec 的 waitCaptureClosed 先例）：等完全卸载
   await expect(page.getByTestId('capture-input')).toHaveCount(0)
 
-  // 启用 → 让位（应用内监听摘除）：settings 开着按 Ctrl+Alt+I 浮层不出现
+  // 启用快捷键 → 让位（应用内监听摘除）；托盘开关独立存在且保持关（两开关互不影响）
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
-  await page.getByTestId('quickcapture-toggle').check()
+  const trayToggle = page.getByTestId('quickcapture-tray')
+  await expect(trayToggle).not.toBeChecked()
+  await trayToggle.check() // 先开托盘：不应影响快捷键让位语义
+  await page.getByTestId('quickcapture-shortcut').check()
   await page.keyboard.press('Control+Alt+i')
   await expect(page.getByTestId('capture-input')).not.toBeVisible()
+  await expect(trayToggle).toBeChecked() // 快捷键开关动作不碰托盘开关
   // 关 settings（此时唯一 Dialog，Esc 语义干净），为下一段清场
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('settings-dialog')).toHaveCount(0)
 
-  // 关闭 → 恢复：再开 settings 摘掉开关，应用内快捷键回来
+  // 关闭快捷键 → 恢复：再开 settings 摘掉快捷键开关，应用内快捷键回来；托盘仍开
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
-  await page.getByTestId('quickcapture-toggle').uncheck()
+  await page.getByTestId('quickcapture-shortcut').uncheck()
   await page.keyboard.press('Control+Alt+i')
   await expect(page.getByTestId('capture-input')).toBeVisible()
+  await expect(trayToggle).toBeChecked()
 })

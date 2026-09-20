@@ -54,9 +54,11 @@ const basket: Dict['basket'] = {
     aiRequestFailed: 'AI request failed; retry',
   },
   quickCapture: {
+    // Split into two toggles (2026-09, both off by default): shortcut & tray are independent
     title: 'Quick Capture',
-    toggle: 'Enable global shortcut (Ctrl+Alt+I) & tray',
-    hint: 'When on: press Ctrl+Alt+I anywhere to capture; tray icon appears; closing the main window hides it to tray (quit from the tray menu)',
+    shortcutToggle: 'Global shortcut (press Ctrl+Alt+I anywhere to capture)',
+    trayToggle: 'Tray icon (closing the main window hides it to tray; quit from the tray menu)',
+    hint: 'Both are off by default; enable as needed. Without the tray on, closing the window exits the app',
     shortcutFailed: 'Failed to register the global shortcut (it may be taken by another app)',
   },
   tray: {

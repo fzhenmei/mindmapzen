@@ -66,9 +66,10 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const [aiDraft, setAiDraft] = useState(aiConfig)
   const [aiSaved, setAiSaved] = useState(false)
   const [aiSaveError, setAiSaveError] = useState<string | null>(null)
-  // 快速捕获（2026-09 点子篮子 M2）：开关与全局快捷键注册失败说明
-  const quickCaptureEnabled = useAppStore((s) => s.quickCaptureEnabled)
-  const setQuickCaptureEnabled = useAppStore((s) => s.setQuickCaptureEnabled)
+  // 快速捕获（2026-09 点子篮子 M2；同年拆分）：快捷键/托盘双开关与快捷键注册失败说明
+  const quickCaptureShortcut = useAppStore((s) => s.quickCaptureShortcut)
+  const quickCaptureTray = useAppStore((s) => s.quickCaptureTray)
+  const setQuickCaptureConfig = useAppStore((s) => s.setQuickCaptureConfig)
   const quickCaptureShortcutError = useAppStore((s) => s.quickCaptureShortcutError)
   const { t } = useTranslation()
   const languagePref = useAppStore((s) => s.languagePref)
@@ -167,25 +168,36 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
               </>
             )}
           </div>
-          {/* 快速捕获（2026-09 点子篮子 M2，spec §5.1）：开关三绑定——全局快捷键+托盘+关窗隐藏 */}
+          {/* 快速捕获（2026-09 点子篮子 M2，spec §5.1；同年拆分为双开关，均默认关）：快捷键
+              与托盘各自独立开闭——绑定行为变更须用户知情自选，不捆绑强推 */}
           <div className="flex flex-col gap-2" data-testid="settings-quickcapture-section">
             <h3 className="text-sm font-medium">{t('basket.quickCapture.title')}</h3>
             <label className={SETTING_ROW}>
               <input
                 type="checkbox"
-                data-testid="quickcapture-toggle"
+                data-testid="quickcapture-shortcut"
                 className="cursor-pointer accent-primary"
-                checked={quickCaptureEnabled}
-                onChange={(e) => void setQuickCaptureEnabled(e.target.checked)}
+                checked={quickCaptureShortcut}
+                onChange={(e) => void setQuickCaptureConfig({ shortcut: e.target.checked })}
               />
-              <span>{t('basket.quickCapture.toggle')}</span>
+              <span>{t('basket.quickCapture.shortcutToggle')}</span>
             </label>
-            <p className="text-xs text-muted-foreground">{t('basket.quickCapture.hint')}</p>
             {quickCaptureShortcutError !== null && (
               <p data-testid="quickcapture-shortcut-error" role="alert" className="text-xs text-destructive">
                 {quickCaptureShortcutError}
               </p>
             )}
+            <label className={SETTING_ROW}>
+              <input
+                type="checkbox"
+                data-testid="quickcapture-tray"
+                className="cursor-pointer accent-primary"
+                checked={quickCaptureTray}
+                onChange={(e) => void setQuickCaptureConfig({ tray: e.target.checked })}
+              />
+              <span>{t('basket.quickCapture.trayToggle')}</span>
+            </label>
+            <p className="text-xs text-muted-foreground">{t('basket.quickCapture.hint')}</p>
           </div>
           {/* AI 对话（2026-09 AI Agent v1，spec §1 BYOK）：三项全填并保存后，编辑视图出现 AI 面板入口 */}
           <div className="flex flex-col gap-2" data-testid="settings-ai-section">

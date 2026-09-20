@@ -98,19 +98,29 @@ export function parseBasketPath(v: unknown): string | null {
   return typeof v === 'string' && v !== '' ? v : null
 }
 
-/** 快速捕获设置（2026-09 点子篮子 M2，spec §5.1）：enabled = 三件事绑定——注册全局快捷键 +
- *  出现托盘图标 + 关窗隐藏而非退出；关闭 = 全部还原。默认 false */
+/** 快速捕获设置（2026-09 点子篮子 M2，spec §5.1；同年拆分）：快捷键/托盘两个独立开关，
+ *  均默认关——绑定行为变更须用户知情自选，不捆绑强推。shortcut = 注册全局快捷键；
+ *  tray = 托盘图标 + 关窗隐藏进托盘（无托盘时关窗 = 退出，否则窗口藏了无处唤回） */
 export interface QuickCaptureConfig {
-  enabled: boolean
+  shortcut: boolean
+  tray: boolean
 }
 
-export const DEFAULT_QUICK_CAPTURE: QuickCaptureConfig = { enabled: false }
+export const DEFAULT_QUICK_CAPTURE: QuickCaptureConfig = { shortcut: false, tray: false }
 
-/** 宽容解析快速捕获设置：非对象/字段类型非法回退默认（旧配置无字段兼容） */
+/** 宽容解析快速捕获设置：非对象/字段失型回退默认。旧单开关迁移（拆分时）：无任何新字段
+ *  时按旧 enabled 双开/双关——显式开启过的用户保留选择（知情自选过的尊重其意愿）；
+ *  有任一新字段则以新字段为准（失型项回退 false） */
 export function parseQuickCapture(v: unknown): QuickCaptureConfig {
   if (typeof v !== 'object' || v === null) return DEFAULT_QUICK_CAPTURE
   const o = v as Record<string, unknown>
-  return { enabled: typeof o.enabled === 'boolean' ? o.enabled : false }
+  if (typeof o.shortcut !== 'boolean' && typeof o.tray !== 'boolean') {
+    return { shortcut: o.enabled === true, tray: o.enabled === true }
+  }
+  return {
+    shortcut: typeof o.shortcut === 'boolean' ? o.shortcut : false,
+    tray: typeof o.tray === 'boolean' ? o.tray : false,
+  }
 }
 
 export interface AppConfig {
