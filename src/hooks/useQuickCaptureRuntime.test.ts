@@ -11,6 +11,7 @@ const makePorts = () => ({
   registerLibraryCloseGuard: vi.fn().mockResolvedValue(() => {}),
   closeMainWindow: vi.fn(),
   setTray: vi.fn().mockResolvedValue(undefined),
+  listenBasketUpdated: vi.fn().mockResolvedValue(() => {}),
 })
 
 beforeEach(() => {
@@ -76,4 +77,19 @@ test('托盘联动：启用/禁用均调 setTray（actions 间接读 store，闭
   useAppStore.setState({ quickCaptureEnabled: false })
   rerender()
   await waitFor(() => expect(ports.setTray).toHaveBeenLastCalledWith(false, expect.any(Object)))
+})
+
+test('跨窗同步：篮子图干净 → editorSeq 递增（重挂重载）；脏 → toast', async () => {
+  let cb: ((mapPath: string) => void) | undefined
+  const ports = makePorts()
+  ports.listenBasketUpdated.mockImplementation(async (f) => { cb = f; return () => {} })
+  renderHook(() => useQuickCaptureRuntime(ports))
+  await waitFor(() => expect(cb).toBeDefined())
+  useAppStore.setState({ route: 'editor', currentMdPath: '/ws/b.md', dirty: false })
+  const seq0 = useAppStore.getState().editorSeq
+  act(() => cb!('/ws/b.md'))
+  expect(useAppStore.getState().editorSeq).toBe(seq0 + 1)
+  useAppStore.setState({ dirty: true })
+  act(() => cb!('/ws/b.md'))
+  expect(useAppStore.getState().editorSeq).toBe(seq0 + 1) // notify 不重载
 })

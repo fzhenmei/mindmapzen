@@ -1,7 +1,6 @@
-// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.2/§5.3）：
-// 快捷键注册/注销（失败双出口）+ 案头路由关窗拦截 + 托盘三键菜单与开关图标联动。
-// 跨窗同步监听（Task 9）后续任务并入本 hook。端口注入可测；生产端口全动态 import +
-// internals 守卫
+// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.2/§5.3/§5.5）：
+// 快捷键注册/注销（失败双出口）+ 案头路由关窗拦截 + 托盘三键菜单与开关图标联动 +
+// 跨窗同步监听（Task 9）。端口注入可测；生产端口全动态 import + internals 守卫
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
 import { i18n } from '../i18n'
@@ -10,6 +9,7 @@ import { showCaptureWindow } from '../services/captureWindow'
 import { closeOrHideMainWindow } from '../services/appClose'
 import { setTrayEnabled, type TrayActions } from '../services/quickCaptureTray'
 import { CAPTURE_WINDOW_LABEL } from '../captureWindow/detect'
+import { BASKET_UPDATED_EVENT, planBasketReload } from '../services/basketSync'
 
 /** 默认键位（spec §5.3）：Win/Linux Ctrl+Alt+I；mac Cmd+Option+I。
  *  mac 修饰符别名以注册失败出口实证（Win 为主验证平台，M2 plan R6） */
@@ -25,6 +25,8 @@ export interface QuickCapturePorts {
   closeMainWindow(): void
   /** 托盘开关联动 */
   setTray(enabled: boolean, actions: TrayActions): Promise<void>
+  /** 跨窗同步监听（小窗 emit basket-updated） */
+  listenBasketUpdated(cb: (mapPath: string) => void): Promise<() => void>
 }
 
 const tauriPorts: QuickCapturePorts = {
@@ -48,6 +50,10 @@ const tauriPorts: QuickCapturePorts = {
   },
   closeMainWindow: () => void closeOrHideMainWindow(),
   setTray: setTrayEnabled,
+  listenBasketUpdated: async (cb) => {
+    const { listen } = await import('@tauri-apps/api/event')
+    return await listen<{ mapPath: string }>(BASKET_UPDATED_EVENT, (ev) => cb(ev.payload.mapPath))
+  },
 }
 
 export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): void {
@@ -101,6 +107,26 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
       .catch((e) => console.error('案头关窗拦截注册失败', e))
     return () => { disposed = true; unref?.() }
   }, [route, ports])
+
+  // 跨窗同步（spec §5.5）：小窗写盘成功 emit → 主窗按 planBasketReload 决策
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return
+    let unref: (() => void) | undefined
+    let disposed = false
+    void ports
+      .listenBasketUpdated((mapPath) => {
+        const st = useAppStore.getState()
+        const action = planBasketReload(
+          { route: st.route, currentMdPath: st.currentMdPath, dirty: st.dirty },
+          { mapPath },
+        )
+        if (action === 'reload') st.reopenEditor()
+        else if (action === 'notify') showToast(i18n.t('basket.sync.updatedInBackground'))
+      })
+      .then((fn) => { if (disposed) fn(); else unref = fn })
+      .catch((e) => console.error('篮子更新监听失败', e))
+    return () => { disposed = true; unref?.() }
+  }, [ports])
 
   // 托盘三键（spec §5.2）：显示主窗 / 记点子 / 退出（退出走前端关闭链路——脏态守卫仍
   // 兜底，置 exitRequested 后关窗即真退出，M2 plan R4）
