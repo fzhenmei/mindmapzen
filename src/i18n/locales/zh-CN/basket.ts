@@ -39,4 +39,18 @@ export default {
     failRemoveBasket: '已挂载但篮子未清理',
     close: '关闭',
   },
+  quickCapture: {
+    title: '快速捕获',
+    toggle: '启用全局快捷键（Ctrl+Alt+I）与托盘',
+    hint: '开启后：任何应用里按 Ctrl+Alt+I 唤起记点子小窗；显示托盘图标；关闭主窗口改为隐藏到托盘（从托盘菜单退出）',
+    shortcutFailed: '全局快捷键注册失败（可能被其他应用占用）',
+  },
+  tray: {
+    showMain: '显示主窗口',
+    newIdea: '记点子',
+    quit: '退出',
+  },
+  sync: {
+    updatedInBackground: '篮子已在后台更新',
+  },
 }

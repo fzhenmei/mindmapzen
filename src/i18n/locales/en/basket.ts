@@ -41,5 +41,19 @@ const basket: Dict['basket'] = {
     failRemoveBasket: 'Mounted, but basket cleanup failed',
     close: 'Close',
   },
+  quickCapture: {
+    title: 'Quick Capture',
+    toggle: 'Enable global shortcut (Ctrl+Alt+I) & tray',
+    hint: 'When on: press Ctrl+Alt+I anywhere to capture; tray icon appears; closing the main window hides it to tray (quit from the tray menu)',
+    shortcutFailed: 'Failed to register the global shortcut (it may be taken by another app)',
+  },
+  tray: {
+    showMain: 'Show main window',
+    newIdea: 'Capture an idea',
+    quit: 'Quit',
+  },
+  sync: {
+    updatedInBackground: 'Idea basket updated in background',
+  },
 }
 export default basket
