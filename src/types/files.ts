@@ -93,6 +93,11 @@ export function parseSettings(v: unknown): CopySettings {
   }
 }
 
+/** 宽容解析篮子路径：非字符串/空串归 null（旧配置无此字段的兼容） */
+export function parseBasketPath(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null
+}
+
 export interface AppConfig {
   workspaceDir: string | null
   lastOpened: string | null
@@ -131,6 +136,8 @@ export interface AppConfig {
   /** 新建导图上次选择的目录（2026-09 目录选择；相对工作区，'' = 根）。
    *  新建对话框默认选中它（树右键入口的 initialDir 优先）；目录已删由对话框回退根 */
   lastNewMapDir: string
+  /** 点子篮子相对工作区路径（2026-09 点子篮子）：null = 未创建，首次使用时按语言默认名生成 */
+  basketPath: string | null
 }
 
 /** 工作台 AI 建议缓存（cfg.json 持久化）：只有正常完成（done）的回复入档——
@@ -221,6 +228,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   aiChatWidth: null,
   aiAdvice: null,
   lastNewMapDir: '',
+  basketPath: null,
 }
 
 /** 宽容解析 AI 建议缓存（旧配置无字段兼容）：任一字段失型即弃（null，下次重新问） */

@@ -7,7 +7,7 @@ import { loadConfig, saveConfig } from './config'
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, ...over,
 })
 
 describe('配置读写', () => {
@@ -191,6 +191,23 @@ describe('lastNewMapDir（新建导图目录选择：记住上次）', () => {
     expect((await loadConfig(fs, '/cfg.json')).lastNewMapDir).toBe('')
     await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
     expect((await loadConfig(fs, '/cfg.json')).lastNewMapDir).toBe('')
+  })
+})
+
+describe('basketPath（点子篮子：相对工作区路径）', () => {
+  test('合法值往返', async () => {
+    const fs = new MemoryFsAdapter()
+    await saveConfig(fs, '/cfg.json', cfg({ basketPath: '子/我的篮.md' }))
+    expect((await loadConfig(fs, '/cfg.json')).basketPath).toBe('子/我的篮.md')
+  })
+  test('非字符串/空串与缺失回退 null（旧配置兼容）', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', basketPath: 42 }))
+    expect((await loadConfig(fs, '/cfg.json')).basketPath).toBeNull()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', basketPath: '' }))
+    expect((await loadConfig(fs, '/cfg.json')).basketPath).toBeNull()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    expect((await loadConfig(fs, '/cfg.json')).basketPath).toBeNull()
   })
 })
 
