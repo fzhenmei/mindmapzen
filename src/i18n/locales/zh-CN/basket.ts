@@ -52,9 +52,11 @@ export default {
     aiRequestFailed: 'AI 请求失败，可重试',
   },
   quickCapture: {
+    // 2026-09 拆分为双开关（均默认关）：快捷键/托盘独立开闭，不捆绑
     title: '快速捕获',
-    toggle: '启用全局快捷键（Ctrl+Alt+I）与托盘',
-    hint: '开启后：任何应用里按 Ctrl+Alt+I 唤起记点子小窗；显示托盘图标；关闭主窗口改为隐藏到托盘（从托盘菜单退出）',
+    shortcutToggle: '全局快捷键（任何应用中按 Ctrl+Alt+I 记点子）',
+    trayToggle: '托盘图标（关闭主窗口改为隐藏到托盘，从托盘菜单退出）',
+    hint: '两项默认关闭，按需开启；未开托盘时关闭窗口即退出应用',
     shortcutFailed: '全局快捷键注册失败（可能被其他应用占用）',
   },
   tray: {

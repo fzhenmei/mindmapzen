@@ -324,11 +324,11 @@ export default function App() {
   useQuickCaptureRuntime()
 
   // 快速捕获（2026-09 点子篮子 M1）：应用内 Ctrl+Alt+I 唤起浮层（M2 启用全局快捷键后
-  // 由设置开关禁用此监听——单一捕获入口，见 spec §4.1）
+  // 由设置开关禁用此监听——单一捕获入口，见 spec §4.1；2026-09 拆分后只看快捷键开关）
   const [captureOpen, setCaptureOpen] = useState(false)
-  const quickCaptureEnabled = useAppStore((s) => s.quickCaptureEnabled)
+  const quickCaptureShortcut = useAppStore((s) => s.quickCaptureShortcut)
   useEffect(() => {
-    if (quickCaptureEnabled) return // M2 全局快捷键接管：单一捕获入口（spec §4.1）
+    if (quickCaptureShortcut) return // M2 全局快捷键接管：单一捕获入口（spec §4.1）
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault()
@@ -337,7 +337,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [quickCaptureEnabled])
+  }, [quickCaptureShortcut])
 
   // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
   // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间；DevBadge 开发版贴纸同随三态

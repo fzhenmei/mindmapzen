@@ -1,6 +1,7 @@
-// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.2/§5.3/§5.5）：
-// 快捷键注册/注销（失败双出口）+ 案头路由关窗拦截 + 托盘三键菜单与开关图标联动 +
-// 跨窗同步监听（Task 9）。端口注入可测；生产端口全动态 import + internals 守卫
+// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.2/§5.3/§5.5；
+// 2026-09 拆分为双开关）：快捷键注册/注销（失败双出口，随 shortcut）+ 案头路由关窗拦截
+// （随 tray）+ 托盘三键菜单与开关图标联动（随 tray）+ 跨窗同步监听（Task 9，常驻）。
+// 端口注入可测；生产端口全动态 import + internals 守卫
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
 import { i18n } from '../i18n'
@@ -57,13 +58,16 @@ const tauriPorts: QuickCapturePorts = {
 }
 
 export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): void {
-  const enabled = useAppStore((s) => s.quickCaptureEnabled)
+  // 2026-09 拆分：快捷键/托盘两个独立开关（均默认关）——快捷键只管全局注册，
+  // 托盘只管图标 + 关窗隐藏（关窗裁决见 appClose/EditorView/library guard，都读 tray）
+  const shortcutOn = useAppStore((s) => s.quickCaptureShortcut)
+  const trayOn = useAppStore((s) => s.quickCaptureTray)
   const route = useAppStore((s) => s.route)
 
   // 快捷键注册/注销（spec §5.3）：失败 toast + 设置内联双出口，不静默降级
   useEffect(() => {
     if (!('__TAURI_INTERNALS__' in window)) return
-    if (!enabled) {
+    if (!shortcutOn) {
       void (async () => {
         try {
           if (await ports.isShortcutRegistered(QUICK_CAPTURE_ACCELERATOR)) {
@@ -89,7 +93,7 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
       }
     })()
     return () => { disposed = true }
-  }, [enabled, ports])
+  }, [shortcutOn, ports])
 
   // 案头路由关窗拦截（spec §5.1）：编辑器路由由 useCloseGuard（hijackCleanClose）接管，
   // 案头无守卫——此处补位；路由切换经 effect 清理/重挂保证两监听器不并存
@@ -99,7 +103,7 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
     let disposed = false
     void ports
       .registerLibraryCloseGuard((e) => {
-        if (!useAppStore.getState().quickCaptureEnabled) return
+        if (!useAppStore.getState().quickCaptureTray) return // 关窗隐藏跟托盘走（2026-09 拆分）
         e.preventDefault()
         ports.closeMainWindow()
       })
@@ -155,11 +159,12 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
     [],
   )
 
-  // 托盘开关联动（spec §5.2）：禁用路径顺手销毁可能隐藏存活的捕获窗——
+  // 托盘开关联动（spec §5.2；2026-09 拆分只随 tray 开关）：两项全关时顺手销毁可能隐藏
+  // 存活的捕获窗——任一仍开（快捷键/托盘菜单）小窗仍可达，不销毁；
   // spec §5.1 关闭=全部还原 / Ruling T6-1 僵尸进程缺口
   useEffect(() => {
     if (!('__TAURI_INTERNALS__' in window)) return
-    if (!enabled) {
+    if (!shortcutOn && !trayOn) {
       void (async () => {
         try {
           const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
@@ -170,6 +175,6 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
         }
       })()
     }
-    void ports.setTray(enabled, trayActions).catch((e) => console.error('托盘设置失败', e))
-  }, [enabled, ports, trayActions])
+    void ports.setTray(trayOn, trayActions).catch((e) => console.error('托盘设置失败', e))
+  }, [shortcutOn, trayOn, ports, trayActions])
 }

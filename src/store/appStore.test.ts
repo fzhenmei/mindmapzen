@@ -752,14 +752,31 @@ describe('点子篮子：身份固定（spec §3.1）', () => {
   })
 })
 
-// 快速捕获 store 态（2026-09 点子篮子 M2，spec §5.1/§5.3）：开关持久化经 init 读回 +
-// 快捷键错误态 + 真退出标志；桩装配沿用本文件内存 fs 模式（beforeEach 已注入 adapter/configPath）
+// 快速捕获 store 态（2026-09 点子篮子 M2，spec §5.1/§5.3；同年拆分为双开关）：开关
+// 持久化经 init 读回 + 旧配置迁移 + 快捷键错误态 + 真退出标志；桩装配沿用本文件内存
+// fs 模式（beforeEach 已注入 adapter/configPath）
 describe('点子篮子 M2：快速捕获 store 态', () => {
-  test('setQuickCaptureEnabled 持久化并经 init 读回；requestExit/shortcutError 态（spec §5.1/§5.3）', async () => {
-    await useAppStore.getState().setQuickCaptureEnabled(true)
-    expect(useAppStore.getState().quickCaptureEnabled).toBe(true)
+  test('setQuickCaptureConfig patch 合并持久化并经 init 读回（快捷键/托盘独立）', async () => {
+    await useAppStore.getState().setQuickCaptureConfig({ shortcut: true })
+    expect(useAppStore.getState().quickCaptureShortcut).toBe(true)
+    expect(useAppStore.getState().quickCaptureTray).toBe(false) // patch 不碰未提字段
+    await useAppStore.getState().setQuickCaptureConfig({ tray: true })
+    expect(useAppStore.getState().quickCaptureShortcut).toBe(true)
+    expect(useAppStore.getState().quickCaptureTray).toBe(true)
     await useAppStore.getState().init() // init 重读 cfg.json
-    expect(useAppStore.getState().quickCaptureEnabled).toBe(true)
+    expect(useAppStore.getState().quickCaptureShortcut).toBe(true)
+    expect(useAppStore.getState().quickCaptureTray).toBe(true)
+  })
+
+  test('旧单开关配置迁移：enabled=true 经 init 读回双开（显式开启过的用户保留选择）', async () => {
+    const { adapter, configPath } = useAppStore.getState()
+    await adapter.writeTextFileAtomic(configPath, JSON.stringify({ quickCapture: { enabled: true } }))
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().quickCaptureShortcut).toBe(true)
+    expect(useAppStore.getState().quickCaptureTray).toBe(true)
+  })
+
+  test('requestExit/shortcutError 态（spec §5.1/§5.3）', () => {
     useAppStore.getState().setQuickCaptureShortcutError('x')
     expect(useAppStore.getState().quickCaptureShortcutError).toBe('x')
     useAppStore.getState().setQuickCaptureShortcutError(null)

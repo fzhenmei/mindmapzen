@@ -350,7 +350,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const guard = useCloseGuard({
     registerCloseGuard,
     exitApp,
-    hijackCleanClose: () => useAppStore.getState().quickCaptureEnabled,
+    hijackCleanClose: () => useAppStore.getState().quickCaptureTray, // 关窗隐藏跟托盘走（2026-09 拆分）
     dirtyRef,
     explicitSave,
     clearDirty,
