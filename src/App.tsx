@@ -6,6 +6,7 @@ import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, writeHtmlClipboardViaTauri, type WriteClipboard, type WriteHtmlClipboard } from './services/clipboard'
 import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import { describeBackendError } from './services/backendError'
+import { closeOrHideMainWindow } from './services/appClose'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -131,17 +132,10 @@ const registerCloseGuard: RegisterCloseGuard = (handler) => {
   }
 }
 
-/** 生产退出端口：强制销毁窗口（守卫已 preventClose，close() 会被再次拦截）。
- *  失败必须浮出：destroy 权限缺失/运行时异常若被静默吞掉，守卫会留下"已放弃但窗口还在"的僵尸态 */
+/** 退出/隐藏端口（M2 改造，spec §5.1）：快速捕获开启 → hide 驻留；否则 destroy。
+ *  裁决逻辑集中 services/appClose（托盘退出/案头拦截共用） */
 const exitApp = (): void => {
-  void (async () => {
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window')
-      await getCurrentWindow().destroy()
-    } catch (e) {
-      useAppStore.getState().setError(i18n.t('errors.exitFail', { detail: String(e) }))
-    }
-  })()
+  void closeOrHideMainWindow()
 }
 
 /** 剪贴板端口：E2E web 模式无 Tauri 剪贴板 → 记录到 harness 桩（__zenE2e.lastCopied），生产走 Tauri */
