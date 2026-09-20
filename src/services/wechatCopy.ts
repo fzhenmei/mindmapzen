@@ -102,18 +102,21 @@ export function stripMermaid(md: string): string {
  *  公众号白名单只认元素内联 style,故逐标签写死 CSS 串(不做主题系统) */
 const FONT_BODY = `-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif`
 const FONT_MONO = `'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace`
-const ROOT_STYLE = `font-family:${FONT_BODY};font-size:15px;color:#3f3f3f;line-height:1.75;word-break:break-word`
+// 行高一律绝对 px(倍数×各级字号换算,视觉与无单位倍数等价):公众号后台内容
+// 结构检测把 line-height 当 px 字面值与 font-size 比较,无单位 1.75/1.4/1.6 会
+// 被判"行高小于字体大小、文字重叠"误报(2026-09-20 真机),px 值恒 ≥ 字号即不触发
+const ROOT_STYLE = `font-family:${FONT_BODY};font-size:15px;color:#3f3f3f;line-height:26.25px;word-break:break-word` // 15×1.75
 
-const HEADING_COLOR = 'color:#1f1f1f;line-height:1.4'
+const HEADING_COLOR = 'color:#1f1f1f'
 /** 微信链接色:保留的互链与剥成文字的外链共用(视觉与原文一致,只是后者不可点) */
 const A_STYLE = 'color:#576b95;text-decoration:none'
 const TAG_STYLE: Record<string, string> = {
-  H1: `margin:28px 0 14px;font-size:20px;font-weight:600;${HEADING_COLOR}`,
-  H2: `margin:24px 0 12px;font-size:18px;font-weight:600;${HEADING_COLOR}`,
-  H3: `margin:20px 0 10px;font-size:16px;font-weight:600;${HEADING_COLOR}`,
-  H4: `margin:18px 0 8px;font-size:15px;font-weight:600;${HEADING_COLOR}`,
-  H5: `margin:18px 0 8px;font-size:15px;font-weight:600;${HEADING_COLOR}`,
-  H6: `margin:18px 0 8px;font-size:15px;font-weight:600;${HEADING_COLOR}`,
+  H1: `margin:28px 0 14px;font-size:20px;font-weight:600;line-height:28px;${HEADING_COLOR}`,
+  H2: `margin:24px 0 12px;font-size:18px;font-weight:600;line-height:25.2px;${HEADING_COLOR}`,
+  H3: `margin:20px 0 10px;font-size:16px;font-weight:600;line-height:22.4px;${HEADING_COLOR}`,
+  H4: `margin:18px 0 8px;font-size:15px;font-weight:600;line-height:21px;${HEADING_COLOR}`,
+  H5: `margin:18px 0 8px;font-size:15px;font-weight:600;line-height:21px;${HEADING_COLOR}`,
+  H6: `margin:18px 0 8px;font-size:15px;font-weight:600;line-height:21px;${HEADING_COLOR}`,
   P: 'margin:12px 0',
   STRONG: 'font-weight:600;color:#1f1f1f',
   EM: 'font-style:italic',
@@ -122,7 +125,7 @@ const TAG_STYLE: Record<string, string> = {
   CODE: `background-color:#f5f5f5;padding:2px 5px;border-radius:4px;font-size:14px;font-family:${FONT_MONO}`,
   // white-space:pre(不折行,超宽由公众号代码组件横向滚动,doocs 同款);text-align:left
   // 显式压两端对齐——微信粘贴会继承 justify,代码行内空格被拉伸(真机实测)
-  PRE: `margin:16px 0;padding:14px;border-radius:6px;background-color:#f6f8fa;white-space:pre;text-align:left;font-size:13px;line-height:1.6;font-family:${FONT_MONO}`,
+  PRE: `margin:16px 0;padding:14px;border-radius:6px;background-color:#f6f8fa;white-space:pre;text-align:left;font-size:13px;line-height:20.8px;font-family:${FONT_MONO}`,
   UL: 'margin:12px 0;padding-left:1.6em',
   OL: 'margin:12px 0;padding-left:1.6em',
   LI: 'margin:6px 0',

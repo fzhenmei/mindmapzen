@@ -105,6 +105,21 @@ describe('applyWechatStyles:逐元素内联样式(公众号只认元素 style)',
     expect(root.querySelector<HTMLElement>('td')!.style.border).toContain('1px')
   })
 
+  test('行高绝对 px 化:各级 line-height = 字号×倍数换算值(公众号结构检测字面值口径)', () => {
+    const root = styled('<h1>一</h1><h2>二</h2><h3>三</h3><h4>四</h4><h5>五</h5><h6>六</h6><pre><code>x</code></pre>')
+    const [h1, h2, h3, h4, h5, h6, pre] = [...root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6,pre')]
+    // 公众号后台内容结构检测把 line-height 当 px 字面值与 font-size 比较:无单位倍数
+    // 1.4 < 20 会被误报"行高小于字体大小、文字重叠"(2026-09-20 真机);换算成
+    // 绝对 px(倍数×各级字号,视觉严格等价)后字面值恒 ≥ font-size,检测不再触发
+    expect(h1!.style.lineHeight).toBe('28px') // 20×1.4
+    expect(h2!.style.lineHeight).toBe('25.2px') // 18×1.4
+    expect(h3!.style.lineHeight).toBe('22.4px') // 16×1.4
+    expect(h4!.style.lineHeight).toBe('21px') // 15×1.4
+    expect(h5!.style.lineHeight).toBe('21px')
+    expect(h6!.style.lineHeight).toBe('21px')
+    expect(pre!.style.lineHeight).toBe('20.8px') // 13×1.6
+  })
+
   test('图片限宽居中;hr 换浅色上边线', () => {
     const root = styled('<img src="x.png"><hr>')
     expect(root.querySelector<HTMLElement>('img')!.style.maxWidth).toBe('100%')
@@ -177,6 +192,8 @@ describe('buildWechatHtml:渲染容器 → 可粘贴 HTML 串', () => {
     sink.innerHTML = html
     expect(sink.querySelector('section')).not.toBeNull()
     expect(sink.querySelector('section')!.style.fontSize).toBe('15px')
+    // 根行高同为绝对 px(15×1.75):无单位 1.75 会被结构检测当 1.75px < 15px 误报重叠
+    expect(sink.querySelector('section')!.style.lineHeight).toBe('26.25px')
     expect(sink.querySelector('h1')!.id).toBe('')
     expect(sink.querySelector('h1')!.style.fontSize).toBe('20px')
   })
