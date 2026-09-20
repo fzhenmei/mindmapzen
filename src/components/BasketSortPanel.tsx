@@ -29,6 +29,14 @@ interface RowState {
 /** 失败行：挂载失败原因 ∪「已挂载但篮子未清理」 */
 type FailRow = { text: string; reason: MountFailReason | 'removeBasket' }
 
+/** 已挂载条目（撤销的数据源）。basketCleared = 篮子条目确已摘除——false 表示该条**从未离开篮子**
+ *  （removeBasketIdeaByText 失败），撤销时只摘目标图、跳过 captureIdea，否则凭空多插一条重复 */
+interface MountedRow {
+  target: MountTarget
+  idea: BasketIdea
+  basketCleared: boolean
+}
+
 /** 失败原因词条 key（字面量联合）：消费端 t(...) 的 key 空间由此收紧（i18next 严格类型） */
 type FailLabelKey =
   | 'basket.sort.failTargetNotFound'
@@ -57,7 +65,7 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
   const [pickerFor, setPickerFor] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [failures, setFailures] = useState<FailRow[] | null>(null)
-  const [mounted, setMounted] = useState<Array<{ target: MountTarget; idea: BasketIdea }>>([])
+  const [mounted, setMounted] = useState<MountedRow[]>([])
   const [resultOpen, setResultOpen] = useState(false)
 
   // loadIdeas 是 EditorView 的内联箭头（每次渲染都是新身份）：触发只认 open，实现经 ref 取最新——
@@ -85,7 +93,7 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
     try {
       await backup()
       const fs = useAppStore.getState().adapter
-      const okRows: Array<{ target: MountTarget; idea: BasketIdea }> = []
+      const okRows: MountedRow[] = []
       const failRows: FailRow[] = []
       for (const row of selected) {
         const target = row.target
@@ -96,15 +104,16 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
           continue
         }
         // 先写目标图、成功后才删篮子（spec §4.5 执行顺序）；删除失败该条目标图已有、
-        // 仅篮子未清——记 removeBasket 显式告知，不静默
+        // 仅篮子未清——记 removeBasket 显式告知，不静默；basketCleared 供撤销决定是否恢复篮子
         const rm = await useAppStore.getState().removeBasketIdeaByText(row.idea.text)
         if (!rm.ok) failRows.push({ text: row.idea.text, reason: 'removeBasket' })
-        okRows.push({ target, idea: row.idea })
+        okRows.push({ target, idea: row.idea, basketCleared: rm.ok })
       }
       setMounted(okRows)
       setFailures(failRows)
-      // 成功行移出清单；失败行（含篮子未清）留在原位供用户处置
-      setRows((prev) => prev.filter((r) => r.target === null || failRows.some((f) => f.text === r.idea.text)))
+      // 已写入目标图的行一律移出清单（篮子清没清都算已挂载——留下会被「挂载全部已选」再挂一次，
+      // 目标图出现重复子节点）；只有**未写入**（挂载失败）的行留在原位供改选重试
+      setRows((prev) => prev.filter((r) => r.target === null || failRows.some((f) => f.text === r.idea.text && f.reason !== 'removeBasket')))
       setResultOpen(true)
     } catch (e) {
       // 出口：结果面板（写入失败行）+ 日志留线索。挂在 backup/mountIdea 的非预期抛出上——
@@ -118,34 +127,55 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
   }
 
   const undoAll = async (): Promise<void> => {
-    const fs = useAppStore.getState().adapter
-    const fails: FailRow[] = []
-    for (const m of mounted) {
-      const r = await unmountIdea(fs, m.target, m.idea)
-      if (!r.ok) {
-        fails.push({ text: m.idea.text, reason: r.reason })
-        continue
+    try {
+      const fs = useAppStore.getState().adapter
+      const fails: FailRow[] = []
+      const pending: MountedRow[] = [] // 摘除失败（目标图节点仍在）的条目：留在 mounted 供重试
+      for (const m of mounted) {
+        const r = await unmountIdea(fs, m.target, m.idea)
+        if (!r.ok) {
+          fails.push({ text: m.idea.text, reason: r.reason })
+          pending.push(m)
+          continue
+        }
+        // 篮子从没摘掉过的条目（basketCleared=false）**跳过**恢复：再 captureIdea 会凭空多插一条
+        //（captureIdea 无去重、removeBasketIdeaByText 只删首个 → 残留永久重复），它本就在篮子里即天然正确
+        if (!m.basketCleared) continue
+        // 篮子恢复走 §4.2 就近引擎管线；失败同列失败行——目标图节点已删而篮子没回来
+        // 就是「两边都没有」，必须显式告知而非静默（spec §4.6 逐条独立成败）
+        const back = await useAppStore.getState().captureIdea(m.idea)
+        if (!back.ok) fails.push({ text: m.idea.text, reason: 'writeFailed' })
       }
-      // 篮子恢复走 §4.2 就近引擎管线；失败同列失败行——目标图节点已删而篮子没回来
-      // 就是「两边都没有」，必须显式告知而非静默（spec §4.6 逐条独立成败）
-      const back = await useAppStore.getState().captureIdea(m.idea)
-      if (!back.ok) fails.push({ text: m.idea.text, reason: 'writeFailed' })
+      setMounted(pending)
+      setFailures(fails)
+      // 有失败即保持面板打开：逐条原因必须看得见（关掉就只剩 toast 的数量），
+      // 且 mounted 保住的条目可重试；全成功才关闭
+      setResultOpen(fails.length > 0)
+      showToast(fails.length === 0 ? t('basket.sort.undone') : t('basket.sort.resultFail', { n: fails.length }))
+      setRows(loadRef.current().map((idea) => ({ idea, target: null })))
+    } catch (e) {
+      // 出口：结果面板（写入失败行）+ 日志留线索。undoAll 经 void 即发即弃，不兜就是无声的
+      // unhandled rejection；管线契约上恒以结果对象返回，走到这里即 bug
+      console.error('篮子撤销挂载异常', e)
+      setFailures([{ text: '', reason: 'writeFailed' }])
+      setResultOpen(true)
     }
-    setMounted([])
-    setFailures(fails)
-    setResultOpen(false)
-    showToast(fails.length === 0 ? t('basket.sort.undone') : t('basket.sort.resultFail', { n: fails.length }))
-    setRows(loadRef.current().map((idea) => ({ idea, target: null })))
   }
 
   const discard = async (idea: BasketIdea): Promise<void> => {
-    const r = await useAppStore.getState().removeBasketIdeaByText(idea.text)
-    if (!r.ok) {
-      // 出口：日志留线索（失败串来自 §4.2 管线；行保持原样 = 本次丢弃未生效）
-      console.error('丢弃点子失败', idea.text, r.error)
-      return
+    try {
+      const r = await useAppStore.getState().removeBasketIdeaByText(idea.text)
+      if (!r.ok) {
+        // 出口：日志留线索（失败串来自 §4.2 管线；行保持原样 = 本次丢弃未生效）
+        console.error('丢弃点子失败', idea.text, r.error)
+        return
+      }
+      setRows((prev) => prev.filter((x) => x.idea.text !== idea.text))
+    } catch (e) {
+      // 出口：全局错误横幅 + 日志（同 void 即发即弃，不能无声）
+      console.error('丢弃点子异常', idea.text, e)
+      useAppStore.getState().setError(t('basket.errors.writeFailed'))
     }
-    setRows((prev) => prev.filter((x) => x.idea.text !== idea.text))
   }
 
   if (!open) return null
