@@ -10,6 +10,7 @@ const makePorts = () => ({
   isShortcutRegistered: vi.fn().mockResolvedValue(false),
   registerLibraryCloseGuard: vi.fn().mockResolvedValue(() => {}),
   closeMainWindow: vi.fn(),
+  setTray: vi.fn().mockResolvedValue(undefined),
 })
 
 beforeEach(() => {
@@ -60,4 +61,19 @@ test('案头路由：enabled 时拦截关窗（preventDefault + closeMainWindow�
   act(() => captured!({ preventDefault: prevent }))
   expect(prevent).toHaveBeenCalledTimes(1)
   expect(ports.closeMainWindow).toHaveBeenCalledTimes(1)
+})
+
+test('托盘联动：启用/禁用均调 setTray（actions 间接读 store，闭包安全）', async () => {
+  const ports = makePorts()
+  const { rerender } = renderHook(() => useQuickCaptureRuntime(ports))
+  useAppStore.setState({ quickCaptureEnabled: true })
+  rerender()
+  await waitFor(() => expect(ports.setTray).toHaveBeenCalledWith(true, expect.objectContaining({
+    onShowMain: expect.any(Function),
+    onNewIdea: expect.any(Function),
+    onQuit: expect.any(Function),
+  })))
+  useAppStore.setState({ quickCaptureEnabled: false })
+  rerender()
+  await waitFor(() => expect(ports.setTray).toHaveBeenLastCalledWith(false, expect.any(Object)))
 })

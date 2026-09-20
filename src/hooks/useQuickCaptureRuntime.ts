@@ -1,12 +1,15 @@
-// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.3）：
-// 快捷键注册/注销（失败双出口）+ 案头路由关窗拦截。托盘（Task 8）与跨窗同步监听
-// （Task 9）后续任务并入本 hook。端口注入可测；生产端口全动态 import + internals 守卫
-import { useEffect } from 'react'
+// src/hooks/useQuickCaptureRuntime.ts —— 快速捕获运行时接线（spec §5.1/§5.2/§5.3）：
+// 快捷键注册/注销（失败双出口）+ 案头路由关窗拦截 + 托盘三键菜单与开关图标联动。
+// 跨窗同步监听（Task 9）后续任务并入本 hook。端口注入可测；生产端口全动态 import +
+// internals 守卫
+import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../store/appStore'
 import { i18n } from '../i18n'
 import { showToast } from '../services/toast'
 import { showCaptureWindow } from '../services/captureWindow'
 import { closeOrHideMainWindow } from '../services/appClose'
+import { setTrayEnabled, type TrayActions } from '../services/quickCaptureTray'
+import { CAPTURE_WINDOW_LABEL } from '../captureWindow/detect'
 
 /** 默认键位（spec §5.3）：Win/Linux Ctrl+Alt+I；mac Cmd+Option+I。
  *  mac 修饰符别名以注册失败出口实证（Win 为主验证平台，M2 plan R6） */
@@ -20,6 +23,8 @@ export interface QuickCapturePorts {
   registerLibraryCloseGuard(handler: (e: { preventDefault(): void }) => void): Promise<() => void>
   /** 关窗执行（案头拦截路径；默认走 appClose 裁决） */
   closeMainWindow(): void
+  /** 托盘开关联动 */
+  setTray(enabled: boolean, actions: TrayActions): Promise<void>
 }
 
 const tauriPorts: QuickCapturePorts = {
@@ -42,6 +47,7 @@ const tauriPorts: QuickCapturePorts = {
     return await getCurrentWindow().onCloseRequested((e) => handler(e))
   },
   closeMainWindow: () => void closeOrHideMainWindow(),
+  setTray: setTrayEnabled,
 }
 
 export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): void {
@@ -70,6 +76,7 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
         if (!disposed) useAppStore.getState().setQuickCaptureShortcutError(null)
       } catch (e) {
         console.error('全局快捷键注册失败', QUICK_CAPTURE_ACCELERATOR, e)
+        if (disposed) return // 卸载后不再 setState/toast（日志出口保留）
         const msg = i18n.t('basket.quickCapture.shortcutFailed')
         useAppStore.getState().setQuickCaptureShortcutError(msg)
         showToast(msg)
@@ -94,4 +101,49 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
       .catch((e) => console.error('案头关窗拦截注册失败', e))
     return () => { disposed = true; unref?.() }
   }, [route, ports])
+
+  // 托盘三键（spec §5.2）：显示主窗 / 记点子 / 退出（退出走前端关闭链路——脏态守卫仍
+  // 兜底，置 exitRequested 后关窗即真退出，M2 plan R4）
+  const trayActions: TrayActions = useMemo(
+    () => ({
+      onShowMain: () => {
+        if (!('__TAURI_INTERNALS__' in window)) return
+        void import('@tauri-apps/api/window')
+          .then(async ({ getCurrentWindow }) => {
+            const w = getCurrentWindow()
+            await w.show()
+            await w.unminimize()
+            await w.setFocus()
+          })
+          .catch((e) => console.error('显示主窗失败', e))
+      },
+      onNewIdea: () => void showCaptureWindow(),
+      onQuit: () => {
+        useAppStore.getState().requestExit()
+        if (!('__TAURI_INTERNALS__' in window)) return
+        void import('@tauri-apps/api/window')
+          .then(({ getCurrentWindow }) => getCurrentWindow().close())
+          .catch((e) => console.error('托盘退出失败', e))
+      },
+    }),
+    [],
+  )
+
+  // 托盘开关联动（spec §5.2）：禁用路径顺手销毁可能隐藏存活的捕获窗——
+  // spec §5.1 关闭=全部还原 / Ruling T6-1 僵尸进程缺口
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return
+    if (!enabled) {
+      void (async () => {
+        try {
+          const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
+          const capture = await WebviewWindow.getByLabel(CAPTURE_WINDOW_LABEL)
+          if (capture !== null) await capture.destroy()
+        } catch (e) {
+          console.error('禁用快速捕获时销毁捕获窗失败', e)
+        }
+      })()
+    }
+    void ports.setTray(enabled, trayActions).catch((e) => console.error('托盘设置失败', e))
+  }, [enabled, ports, trayActions])
 }
