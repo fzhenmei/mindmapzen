@@ -64,6 +64,12 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
     expect(box).not.toBeNull()
     expect(Math.round(box!.x + box!.width)).toBe(vp.width - 5)
     expect(Math.round(box!.y + box!.height)).toBe(vp.height - 5)
+    // 留缝后四边补边框线（2026-09 视觉打磨）：原仅 border-l，上/右/下三边裸奔没形
+    const borders = await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector('[data-testid="ai-panel"]') as Element)
+      return { t: cs.borderTopWidth, r: cs.borderRightWidth, b: cs.borderBottomWidth }
+    })
+    expect(borders).toEqual({ t: '1px', r: '1px', b: '1px' })
   }
 
   // lute 预热：收尾文本走 MarkdownPreview(vditor lute 管线)。vditor addScript 存在
