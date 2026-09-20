@@ -95,7 +95,12 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent data-testid="settings-dialog" aria-label={title}>
+      <DialogContent
+        data-testid="settings-dialog"
+        aria-label={title}
+        className="max-h-[calc(100vh-4rem)] overflow-y-auto"
+      >
+        {/* M2 快捷捕获分区后内容超矮视口：限高+滚动保 footer 可达（e2e git.spec 实证）；细滚动条全局样式自动生效 */}
         <DialogTitle>{title}</DialogTitle>
         <div className="flex flex-col gap-2.5 text-sm">
           <div className="flex flex-col gap-2" data-testid="git-section">
