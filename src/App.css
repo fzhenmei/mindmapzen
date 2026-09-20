@@ -82,7 +82,11 @@ html, body { overflow: hidden; }
    即暗底墨字——基字不再信任 vditor 配色，亮色顺带从 #24292e 归青松墨 #1F2328 */
 [data-theme] .vditor-reset { color: var(--foreground); }
 [data-theme] .vditor-reset a { color: var(--primary); }
-/* 标题墨字 + 绿细节（用户裁定）：h1/h2 下边线从灰换松绿灰（25% primary 调 border） */
+/* 标题松绿 + 绿细节（2026-09 用户裁定修订：标题不用墨色，全级 h1-h6 换 primary，
+   与链接同源、h1/h2 下边线呼应）；h1/h2 下边线从灰换松绿灰（25% primary 调 border） */
+[data-theme] .vditor-reset h1, [data-theme] .vditor-reset h2,
+[data-theme] .vditor-reset h3, [data-theme] .vditor-reset h4,
+[data-theme] .vditor-reset h5, [data-theme] .vditor-reset h6 { color: var(--primary); }
 [data-theme] .vditor-reset h1, [data-theme] .vditor-reset h2 {
   border-bottom-color: color-mix(in srgb, var(--primary) 25%, var(--border)); }
 /* 引用块＝导图正文块（绿线+墨字+浅底，用户裁定）：文字从灰升墨（正文块是 md 视图主体，
