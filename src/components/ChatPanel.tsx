@@ -184,7 +184,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
           border-t 上移到容器（form 原自带），消息区 flex-1 自动让位。
           手柄 onCommit 不清拖拽暂存：持久层异步落盘（load-merge-save 磁盘 IO）窗口期内
           清了会闪回默认两行、落地后又跳回拖拽高——暂存保持到同值落地无感，双击重置才清 */}
-      <div className="shrink-0 border-t border-border" data-testid="ai-input-area">
+      <div className="relative shrink-0 border-t border-border" data-testid="ai-input-area">
         <InputResizer
           label={t('ai.panel.resizeInput')}
           title={t('ai.panel.inputResizeTitle')}
@@ -339,7 +339,9 @@ function InputResizer({ label, title, min, startOf, maxOf, onResize, onCommit, o
       data-testid="ai-input-resizer"
       title={title}
       className={cn(
-        'input-resizer relative h-2 w-full cursor-row-resize touch-none border-0',
+        // 骑线式（同 SplitResizer 的 -left-1 几何）：absolute -top-1 h-2 越过容器 border-t，
+        // 指示线（after top-1/2）正压边线，柄与边线零间隙；不占布局高（原流内 8px 死空隙已除）
+        'input-resizer absolute -top-1 left-0 right-0 z-20 h-2 cursor-row-resize touch-none border-0',
         // 横向指示线（after）左右各缩 20px，hover 浮现；拖拽中 App.css 常亮
         'after:absolute after:left-5 after:right-5 after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-border after:opacity-0 after:transition-opacity hover:after:opacity-100',
       )}

@@ -77,6 +77,14 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
       return { panel: panel.borderRadius, input: input.borderRadius }
     })
     expect(radii.panel).toBe(radii.input)
+    // 输入区拖高柄须骑住容器上边线（2026-09 间隙修复）：与面板左缘横向拖拽柄同款
+    // absolute -top-1 h-2 几何——柄体越过 border-t 线（top < 边线位置），不留间隙
+    const geo = await page.evaluate(() => {
+      const area = document.querySelector('[data-testid="ai-input-area"]')!.getBoundingClientRect()
+      const bar = document.querySelector('[data-testid="ai-input-resizer"]')!.getBoundingClientRect()
+      return { areaTop: area.top, barTop: bar.top }
+    })
+    expect(Math.round(geo.barTop)).toBeLessThan(Math.round(geo.areaTop) + 1)
   }
 
   // lute 预热：收尾文本走 MarkdownPreview(vditor lute 管线)。vditor addScript 存在
