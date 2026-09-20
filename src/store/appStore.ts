@@ -643,7 +643,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
     if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
     const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
-    if (basketEngine !== null && basketEngine.insertIdea(idea)) return { ok: true }
+    // 可选链：端口缺席（undefined）与引擎自陈让位（false）同为假值 → 落文件层
+    if (basketEngine?.insertIdea(idea)) return { ok: true }
     return writeBasketFile((tree) => insertIdeaIntoTree(tree, idea), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
   },
 
@@ -651,7 +652,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
     if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
     const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
-    if (basketEngine !== null && basketEngine.removeIdeaByText(text)) return { ok: true }
+    // 可选链：同 captureIdea（端口缺席 / 引擎让位 → 文件层）
+    if (basketEngine?.removeIdeaByText(text)) return { ok: true }
     return writeBasketFile((tree) => removeIdeaFromTree(tree, text), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
   },
 
