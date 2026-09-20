@@ -5,7 +5,6 @@
 import type { RefObject } from 'react'
 import BasketSortPanel from './BasketSortPanel'
 import { useAppStore } from '../store/appStore'
-import { checkAndBackup } from '../services/gitBackup'
 import { parseBasketIdeasFromEngine } from '../services/basket'
 import { showToast } from '../services/toast'
 import { i18n } from '../i18n'
@@ -37,9 +36,14 @@ export default function BasketSortLayer({ open, onClose, mmRef }: Readonly<Props
           | undefined
         return root === null || root === undefined ? [] : parseBasketIdeasFromEngine(root)
       }}
-      // 挂载前备份（一次提交一次；未启用版本管理时给会话级一次信息卡，不静默——spec §4.5）
+      // 挂载前备份（一次提交一次；未启用版本管理时给会话级一次信息卡，不静默——spec §4.5）。
+      // 备份是「能回滚」的支点：失败不阻断挂载（挂载本身逐条独立成败），但必须留痕。
+      // 落地走 store.backupNow（终审 M4）：checkAndBackup 以 BackupOutcome **结果对象**返回
+      // （不抛），此处直接调它等于丢弃结果——备份真失败时用户无提示、lastBackup 也无记录；
+      // backupNow 与设置页手动备份/定时器同通道，结果落 lastBackup + 刷新仓库状态，
+      // 启用判定也随之下沉到一处（这里只为「未启用」提示留判据）
       backup={async () => {
-        const { gitRun, gitConfig, workspaceDir } = useAppStore.getState()
+        const { gitRun, gitConfig, workspaceDir, backupNow } = useAppStore.getState()
         if (gitRun === null || !gitConfig.enabled || workspaceDir === null) {
           if (!gitNoticeShown) {
             gitNoticeShown = true
@@ -47,7 +51,7 @@ export default function BasketSortLayer({ open, onClose, mmRef }: Readonly<Props
           }
           return
         }
-        await checkAndBackup(workspaceDir, gitConfig, gitRun)
+        await backupNow()
       }}
     />
   )

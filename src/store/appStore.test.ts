@@ -716,3 +716,38 @@ describe('点子篮子：removeBasketIdeaByText', () => {
     }
   })
 })
+
+// 篮子身份固定（spec §3.1「创建即固定，之后切语言不影响」；终审 I1）：cfg.basketPath 是文件
+// 身份的唯一锚——产品代码原先只读不写，重启后 init 按**新语言**重算默认名（en↔zh 一次重启即
+// 命中），下次捕获另建空篮子并弹「篮子文件已重建」，还把原因指向错方向
+describe('点子篮子：身份固定（spec §3.1）', () => {
+  test('cfg.basketPath 有值：init 与 setWorkspace 均锚定该值，切语言不漂移', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', language: 'en', basketPath: 'my-basket.md' }))
+    useAppStore.setState({ adapter: fs, configPath: '/cfg.json', workspaceDir: null, basketRelPath: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().resolvedLanguage).toBe('en')
+    expect(useAppStore.getState().basketRelPath).toBe('my-basket.md') // 不按 en 重算成 'Idea Inbox.md'
+    await useAppStore.getState().setWorkspace('/ws') // 换工作区同期同步（同口径）
+    expect(useAppStore.getState().basketRelPath).toBe('my-basket.md')
+  })
+
+  test('首建即固定：basketPath 落盘 + 内存同步；重启切语言仍指向首建名', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    useAppStore.setState({ adapter: fs, configPath: '/cfg.json', workspaceDir: '/ws', basketRelPath: null, basketEngine: null, resolvedLanguage: 'en' })
+    expect(await useAppStore.getState().captureIdea({ text: '首条' })).toEqual({ ok: true })
+    expect(await fs.readTextFile('/ws/Idea Inbox.md')).toContain('首条') // 首建名取当时语言（en）
+    expect(useAppStore.getState().basketRelPath).toBe('Idea Inbox.md') // 内存同步：本次会话内 isBasket 即可判真
+    // 重启（内存态清空 + 界面语言已切 zh-CN）：身份仍锚首建名，不重算成「点子篮子.md」
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.basketPath).toBe('Idea Inbox.md')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ ...cfg, language: 'zh-CN' }))
+    useAppStore.setState({ basketRelPath: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().resolvedLanguage).toBe('zh-CN')
+    expect(useAppStore.getState().basketRelPath).toBe('Idea Inbox.md')
+  })
+})

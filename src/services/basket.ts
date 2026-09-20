@@ -22,8 +22,13 @@ export function resolveBasketRelPath(cfgPath: string | null, lang: UiLocale): st
   return cfgPath ?? `${defaultBasketName(lang)}.md`
 }
 
+/** 工作区 + 相对路径 → 篮子绝对路径。尾分隔符先归一（照 joinPath 先例）：
+ *  mdPath 恒由 joinPath（显式 trim 尾斜杠）产出，裸拼接在 wsDir 带尾斜杠时会产出
+ *  `ws//x.md`——与 mdPath 永不相等，isBasket 判定/徽章/选图排除**全部恒假**（静默失效） */
 export function basketAbsPath(wsDir: string, relPath: string): string {
-  return `${wsDir}/${relPath}`
+  let base = wsDir
+  while (base.endsWith('/')) base = base.slice(0, -1)
+  return `${base}/${relPath}`
 }
 
 /** 读图并 parse（目标选择器大纲/篮子文件层读取共用）；失败返回 null + console 线索（显式出口） */

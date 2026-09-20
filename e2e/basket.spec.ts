@@ -97,8 +97,9 @@ test('篮子全链路：快捷键捕获入篮（文件层）→ 整理挂载 →
   expect(targetMd).not.toContain('点子乙') // 未选行不动
 
   // 摘除篮子条目走「就近引擎」（当前图 = 篮子图）：内存态已摘、文件要等保存链冲刷。
-  // 前提：编辑器 Ctrl+S **不经** anyDialog 互斥（useEditorHotkeys 的互斥只包 Ctrl+C/三态/切换族）
-  // ——故结果浮层开着也能冲刷；将来若给 Ctrl+S 加对话框互斥，本行会立刻红（改走先关浮层再保存）
+  // 前提：编辑器 Ctrl+S **不经** anyDialog 互斥（useEditorHotkeys 的互斥只包切换族/正文面板/
+  // Alt+←；Ctrl+C 与三态直达刻意不进）——故结果浮层开着也能冲刷；将来若给 Ctrl+S 加对话框
+  // 互斥，本行不再由这次显式保存兑现（AUTOSAVE_MS=5s 的自动保存可能在 poll 窗内兜住）
   expect(await readFile(page, '/ws/点子篮子.md')).toContain('点子甲')
   await page.keyboard.press('Control+s') // 显式保存冲刷（自动保存另有 5s 防抖）
   await expect

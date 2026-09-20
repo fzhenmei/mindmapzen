@@ -223,6 +223,21 @@ interface AppState {
 const appendTab = (tabs: string[], mdPath: string): string[] =>
   tabs.includes(mdPath) ? tabs : [...tabs, mdPath].slice(-5)
 
+/** 篮子身份首次固定（spec §3.1「创建即固定，之后切语言不影响」）：首建时把实际 relPath
+ *  落进 cfg.basketPath。不落盘则重启后 init 按**新语言**重算默认名（en↔zh 一次重启即命中），
+ *  下次捕获会另建一个空篮子并弹「篮子文件已重建」，还把原因指向错方向。
+ *  load-merge-save 复用既有配置通道；失败只留线索、不阻断本次捕获（点子已写入，身份固定
+ *  降级为下次首建再试——残余窗口是「cfg 写不进去」这一异常态） */
+async function pinBasketPath(rel: string): Promise<void> {
+  const { adapter, configPath } = useAppStore.getState()
+  try {
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, basketPath: rel })
+  } catch (e) {
+    console.error('篮子路径落盘失败', rel, e)
+  }
+}
+
 /** 篮子文件层读改写（捕获/删除共用，spec §4.2 非引擎路径）：ensure → read → mutate → 原子写。
  *  篮子丢失即按默认名重建（§3.3：console 线索 + toast 双出口，不静默）；失败一律显式出口 */
 async function writeBasketFile(
@@ -236,6 +251,10 @@ async function writeBasketFile(
     if (!existed) {
       console.warn('篮子文件不存在，已按默认名重建', abs) // console 线索 + toast 双出口（spec §3.3）
       showToast(i18n.t('basket.basketRecreated'))
+      // 首建即固定身份（spec §3.1）：落盘 + 内存同步。内存不同步则本次会话内 isBasket 恒假
+      // （其口径要求 basketRelPath 非空）——徽章/整理入口要等重启才现身
+      await pinBasketPath(ctx.rel)
+      useAppStore.setState({ basketRelPath: ctx.rel })
     }
     const tree = await readMapTree(ctx.fs, abs)
     if (tree === null) return { ok: false, error: i18n.t('basket.errors.readFailed') }

@@ -127,6 +127,13 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
   }
 
   const undoAll = async (): Promise<void> => {
+    // 并发闸（终审 M3）：连点两次会并发跑两轮、共用同一 mounted 快照——第二轮 unmountIdea 报
+    // targetNotFound（面板停留显示假失败），且两轮各自 captureIdea → 篮子多出重复点子。
+    // busy 与「挂载全部已选」共用（同一时刻只有一个批量动作在跑）：按钮 disabled 是主闸
+    //（React 离散事件各自 flush，第二击必落在已重渲染的 disabled 钮上），此闸兜其他调用入口
+    //（同一 render 的闭包读到的 busy 仍是旧值，挡不住同一 tick 的重入——不依赖它）
+    if (busy) return
+    setBusy(true)
     try {
       const fs = useAppStore.getState().adapter
       const fails: FailRow[] = []
@@ -159,6 +166,8 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
       console.error('篮子撤销挂载异常', e)
       setFailures([{ text: '', reason: 'writeFailed' }])
       setResultOpen(true)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -183,7 +192,8 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
     <div data-testid="basket-sort" className="absolute inset-0 z-20 flex items-center justify-center bg-background/80">
       <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
         <DialogContent aria-label={t('basket.sort.title')} className="sm:max-w-2xl">
-          <DialogTitle>{t('basket.sort.title')}</DialogTitle>
+          {/* 标题带条数：「整理篮子 (N)」（spec §4.3 顶部要件） */}
+          <DialogTitle>{t('basket.sort.title')} ({rows.length})</DialogTitle>
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('basket.sort.empty')}</p>
           ) : (
@@ -197,13 +207,15 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
                     </Button>
                   ) : (
                     <>
-                      {/* 点目标列 = 重选（spec §4.3）；清除另设一键回到未选态 */}
+                      {/* 点目标列 = 重选（spec §4.3）；清除另设一键回到未选态。
+                          列内显示**节点路径**（spec §4.3「《图名》› 节点路径」）：target.path 含根文本
+                          （picker flatten 以 [tree.text] 起链），slice(1) 去根后拼上节点自身文本 */}
                       <button
                         type="button"
                         className="max-w-[40%] truncate text-xs text-muted-foreground hover:text-foreground"
                         onClick={() => setPickerFor(i)}
                       >
-                        《{basenameOf(row.target.mapPath)}》› {row.target.text}
+                        《{basenameOf(row.target.mapPath)}》› {[...row.target.path.slice(1), row.target.text].join(' › ')}
                       </button>
                       <Button
                         variant="ghost"
@@ -232,7 +244,8 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
               disabled={selected.length === 0 || busy}
               onClick={() => void mountAll()}
             >
-              {busy ? t('basket.sort.mounting') : t('basket.sort.mountSelected')}
+              {/* 底部钮带已选条数（spec §4.3「挂载全部已选 (M)」）；busy 态文案不变 */}
+              {busy ? t('basket.sort.mounting') : `${t('basket.sort.mountSelected')} (${selected.length})`}
             </Button>
           </div>
         </DialogContent>
@@ -265,7 +278,7 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
               )}
               <div className="mt-4 flex justify-end gap-2">
                 {mounted.length > 0 && (
-                  <Button variant="secondary" size="sm" data-testid="sort-undo" onClick={() => void undoAll()}>
+                  <Button variant="secondary" size="sm" data-testid="sort-undo" disabled={busy} onClick={() => void undoAll()}>
                     {t('basket.sort.undo')}
                   </Button>
                 )}

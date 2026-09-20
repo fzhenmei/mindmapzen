@@ -2,6 +2,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import { basketAbsPath, defaultBasketName, ensureBasket, insertIdeaIntoTree, parseBasketIdeas, parseBasketIdeasFromEngine, readBasketIdeas, resolveBasketRelPath } from './basket'
+import { joinPath } from './workspace'
 import type { ZenNode } from '../types/tree'
 import type { EngineNode } from '../types/engine'
 
@@ -14,6 +15,14 @@ describe('篮子路径约定', () => {
     expect(resolveBasketRelPath(null, 'zh-CN')).toBe('点子篮子.md')
     expect(resolveBasketRelPath('我的篮.md', 'en')).toBe('我的篮.md')
     expect(basketAbsPath('/ws', '子/篮.md')).toBe('/ws/子/篮.md')
+  })
+
+  // 终审 M5：wsDir 带尾分隔符时裸拼接会产出 'ws//x.md'——mdPath 恒由 joinPath（trim 尾斜杠）
+  // 产出，两者永不相等 → isBasket/徽章/选图排除全部静默恒假。归一后与 joinPath 严格同源
+  test('wsDir 尾分隔符先归一（与 joinPath 产出恒等）', () => {
+    expect(basketAbsPath('/ws/', '点子篮子.md')).toBe(joinPath('/ws', '点子篮子.md'))
+    expect(basketAbsPath('/ws///', '子/篮.md')).toBe('/ws/子/篮.md')
+    expect(basketAbsPath('/ws', '点子篮子.md')).toBe('/ws/点子篮子.md') // 无尾斜杠原样
   })
 })
 

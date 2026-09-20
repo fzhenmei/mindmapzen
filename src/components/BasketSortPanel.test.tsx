@@ -208,3 +208,55 @@ test('清除已选目标：该行回到未选态，不计入「挂载全部已�
   expect(await screen.findByTestId('sort-pick')).toBeVisible()
   expect(screen.getByTestId('sort-mount-selected')).toBeDisabled()
 })
+
+// spec §4.3 三处显示要件（终审 I2）：标题「整理篮子 (N)」、底部「挂载全部已选 (M)」、
+// 目标列「《图名》› 节点路径」（原实现只显示叶文本，多级同名时看不出选的是哪一条路径）
+test('显示要件：标题 (N) / 挂载钮 (M) / 目标列节点路径', async () => {
+  await fs.writeTextFileAtomic('/ws/目标.md', '# 目标\n\n## 甲\n\n- 乙\n')
+  render(<BasketSortPanel open onClose={() => {}} loadIdeas={() => [{ text: '点子一' }, { text: '点子二' }]} backup={async () => {}} />)
+  expect(screen.getByText('整理篮子 (2)')).toBeVisible()
+  expect(screen.getByTestId('sort-mount-selected')).toHaveTextContent('挂载全部已选 (0)')
+  await userEvent.click(screen.getAllByTestId('sort-pick')[0]!)
+  await userEvent.click(await screen.findByTestId('picker-map-目标'))
+  await userEvent.click(await screen.findByTestId('picker-node-乙'))
+  expect(screen.getAllByTestId('sort-row')[0]!).toHaveTextContent('《目标》› 甲 › 乙')
+  expect(screen.getByTestId('sort-mount-selected')).toHaveTextContent('挂载全部已选 (1)')
+})
+
+// 终审 M3：撤销无并发闸——连点两次并发跑两轮同一 mounted 快照：第二轮 unmountIdea 报
+// targetNotFound（面板停留显示假失败），两轮各自 captureIdea → 篮子多出重复点子。
+// 用挂起的读盘把第一轮钉在途，第二击必须被闸住（只跑一轮）
+test('撤销并发闸：连点只跑一轮（第二击被 busy 挡住）', async () => {
+  const origRead = fs.readTextFile.bind(fs)
+  let gate = false
+  let release: () => void = () => {}
+  const gated = new Promise<void>((r) => { release = r })
+  let targetReads = 0
+  fs.readTextFile = async (p: string): Promise<string> => {
+    if (gate && p === '/ws/目标.md') {
+      targetReads += 1
+      await gated
+    }
+    return origRead(p)
+  }
+  render(<BasketSortPanel open onClose={() => {}} loadIdeas={() => [{ text: '点子一' }]} backup={async () => {}} />)
+  await userEvent.click(screen.getAllByTestId('sort-pick')[0]!)
+  await userEvent.click(await screen.findByTestId('picker-map-目标'))
+  await userEvent.click(await screen.findByTestId('picker-node-甲'))
+  await userEvent.click(screen.getByTestId('sort-mount-selected'))
+  await screen.findByTestId('sort-result')
+  gate = true
+  const undo = screen.getByTestId('sort-undo')
+  await userEvent.click(undo)
+  await vi.waitFor(() => expect(targetReads).toBe(1)) // 第一轮已进「写入前读盘」并挂起
+  expect(undo).toBeDisabled() // 闸在 UI 上可见
+  await userEvent.click(undo) // 连点：不得再起一轮
+  expect(targetReads).toBe(1)
+  release()
+  await vi.waitFor(async () => {
+    expect(await origRead('/ws/目标.md')).not.toContain('点子一')
+  })
+  expect(targetReads).toBe(1) // 全程只有一轮读过目标图
+  // 篮子恢复恒一条：第二轮若跑起来会再 captureIdea 一次 → 篮子出现重复点子（M3 的真实危害）
+  expect((await fs.readTextFile('/ws/点子篮子.md')).match(/点子一/g)).toHaveLength(1)
+})
