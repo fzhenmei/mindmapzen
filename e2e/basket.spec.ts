@@ -17,6 +17,11 @@ async function readFile(page: Page, path: string): Promise<string> {
   )
 }
 
+/** AI fake transport 记录的两阶段 prompt（fake 在 window.__aiCalls 逐次追加，AI 场景专用） */
+async function aiCalls(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __aiCalls?: string[] }).__aiCalls ?? [])
+}
+
 /** md 去空行行数组：serialize 逐节点一行、块间空行——[0] = 根标题，[1] = 根的第一子节点 */
 function mdLines(md: string): string[] {
   return md
@@ -170,4 +175,94 @@ test('篮子引擎路径：篮子图内捕获走引擎（不即时落盘）→ �
   expect(mdLines(md)[1]).toContain('e2e 引擎点子') // 次行 = 根的第一个子节点
   expect(mdLines(md)[2]).toContain('点子甲')
   expect(mdLines(md)[3]).toContain('点子乙')
+})
+
+// AI 推荐全链路（M3，spec §6）：fake transport 双阶段回放（phase1 选图 → phase2 定位，
+// askPlacement 每阶段恰一次 transport.start，以调用序区分）→ 预填 → 白名单拒绝判别 →
+// 挂载落盘。?ai=1 仅点亮 AI 按钮（BYOK 预置见 e2eHarness），真实网络由本 fake 接管
+test('AI 推荐：两阶段 fake → 预填正确目标 → 白名单拒绝 → 挂载落盘', async ({ page }) => {
+  test.setTimeout(60_000)
+  // addInitScript 注入浏览器原样执行：保持纯 JS（类型标注不进序列化产物，按最保守口径书写）
+  await page.addInitScript(() => {
+    let i = 0
+    const w = window
+    w.__AI_TRANSPORT_FACTORY__ = () => ({
+      start(payload, onDelta) {
+        i++
+        // 记录两阶段 prompt 供白名单断言（phase1=选图清单、phase2=候选细大纲）
+        if (!Array.isArray(w.__aiCalls)) w.__aiCalls = []
+        w.__aiCalls.push(payload.body.messages[0].content)
+        const phase1 = JSON.stringify({
+          placements: [
+            // 双候选（项目图/普通图都在白名单）：供落盘判别排除「退化到首个候选」假通过
+            { idea: '点子甲', candidates: [{ mapPath: '/ws/项目/项目图.md' }, { mapPath: '/ws/普通图.md' }] },
+            // 清单外路径 → 白名单拒绝，该行必须保持未选（手选兜底口径）
+            { idea: '点子乙', candidates: [{ mapPath: '/etc/evil.md' }] },
+          ],
+        })
+        const phase2 = JSON.stringify({
+          placements: [
+            { idea: '点子甲', mapPath: '/ws/项目/项目图.md', path: ['项目图', '待办'] },
+            // 即便模型对被拒点子也硬回了定位，白名单+路径精确校验仍必须拒之门外
+            { idea: '点子乙', mapPath: '/etc/evil.md', path: ['x', 'y'] },
+          ],
+        })
+        // 回放必须包成 OpenAI chunk JSON：parseDeltaChunk 只认 choices[0].delta.content，
+        // 裸 JSON 串被静默丢弃 → 收成空文本 → parseFailed
+        onDelta(JSON.stringify({ choices: [{ delta: { content: i === 1 ? phase1 : phase2 } }] }))
+        return Promise.resolve({ endedWith: 'done' })
+      },
+      abort() {},
+    })
+  })
+  await page.goto('/?e2e=1&basket=1&ai=1')
+
+  // 打开篮子图 → 整理浮层（导航同场景一）
+  await page.getByTestId('file-node-点子篮子').dblclick()
+  await expect(page.getByTestId('btn-sort-basket')).toBeVisible()
+  await page.getByTestId('btn-sort-basket').click()
+  await expect(page.getByTestId('basket-sort')).toBeVisible()
+  await expect(page.getByTestId('sort-row')).toHaveCount(2)
+
+  // AI 一键整理（无目标行 = 全部两行）
+  await page.getByTestId('sort-ai-all').click()
+
+  // 判别式一（预填正确目标）：甲预填到「项目图›待办」——规范 MountTarget 显示口径
+  // （AI 链 ['项目图','待办'] → path 去根、显示拼节点自身 = 《项目图》› 待办）
+  await expect(page.getByText(/《项目图》› 待办/)).toBeVisible()
+  // 甲已有目标 → 行内 pick 钮消失（换为点目标列）
+  await expect(page.getByTestId('sort-row').filter({ hasText: '点子甲' }).getByTestId('sort-pick')).toHaveCount(0)
+  // 判别式二（白名单拒绝）：乙的候选 /etc/evil.md 不在喂给 AI 的图清单内 → 预填阶段被剔、
+  // phase2 硬回的定位也被 toMountTarget 拒 → 行保持未选（pick 在、无《evil》回显）
+  await expect(page.getByTestId('sort-row').filter({ hasText: '点子乙' }).getByTestId('sort-pick')).toBeVisible()
+  await expect(page.getByText(/《evil》/)).toHaveCount(0)
+
+  // 白名单旁证（spec §6.3 硬约束的喂入面）：两阶段 prompt 只含白名单图，篮子自身不入清单
+  const calls = await aiCalls(page)
+  expect(calls).toHaveLength(2)
+  expect(calls[0]).toContain('/ws/项目/项目图.md')
+  expect(calls[0]).toContain('/ws/普通图.md')
+  expect(calls[0]).not.toContain('点子篮子.md')
+  expect(calls[1]).toContain('/ws/项目/项目图.md')
+  expect(calls[1]).not.toContain('点子篮子.md')
+
+  // 挂载已选（仅甲）→ 落盘判别（同场景一口径：预置双候选点「待办/归档」钉「挂到选定节点」，
+  // 挂载无视选定节点退化到首个节点/根时必然换位或多行）
+  await page.getByTestId('sort-mount-selected').click()
+  await expect(page.getByTestId('sort-result')).toBeVisible()
+  const targetMd = await readFile(page, '/ws/项目/项目图.md')
+  const targetLines = mdLines(targetMd)
+  expect(targetLines[0]).toContain('项目图') // 首行 = 根
+  expect(targetLines[1]).toContain('待办')
+  expect(targetLines[2]).toContain('点子甲') // 选定节点「待办」的子节点位
+  expect(targetLines[3]).toContain('归档')
+  expect(targetLines).toHaveLength(4) // 归档下为空
+  expect(targetMd).not.toContain('点子乙') // 被拒行不落盘
+
+  // 篮子摘除走就近引擎（当前图 = 篮子图）：显式 Ctrl+S 冲刷（同场景一；结果浮层开着也能冲刷）
+  await page.keyboard.press('Control+s')
+  await expect
+    .poll(async () => readFile(page, '/ws/点子篮子.md'), { timeout: 10_000 })
+    .not.toContain('点子甲')
+  expect(await readFile(page, '/ws/点子篮子.md')).toContain('点子乙') // 未挂条目留篮
 })

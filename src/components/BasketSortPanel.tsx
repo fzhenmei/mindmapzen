@@ -10,7 +10,10 @@ import BasketTargetPicker from './BasketTargetPicker'
 import { useAppStore } from '../store/appStore'
 import { mountIdea, unmountIdea, type MountFailReason, type MountTarget } from '../services/basketMount'
 import { showToast } from '../services/toast'
-import type { BasketIdea } from '../services/basket'
+import { askPlacement, MAX_MAPS_FOR_AI } from '../services/ai/ideaPlacement'
+import { getTransport } from '../services/ai/client'
+import { basketAbsPath, type BasketIdea } from '../services/basket'
+import { i18n } from '../i18n'
 
 interface Props {
   open: boolean
@@ -68,6 +71,18 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
   const [mounted, setMounted] = useState<MountedRow[]>([])
   const [resultOpen, setResultOpen] = useState(false)
 
+  // ── AI 推荐（M3，spec §6）：AI 只读不写，产出仅预填目标，落盘仍走上面 M1 挂载管线 ──
+  const aiConfig = useAppStore((s) => s.aiConfig)
+  // BYOK 判定：三项全非空（同 DeskOverview 口径）；未配 → AI 钮全禁用 + 说明行，手动整理不受影响
+  const aiReady = aiConfig.baseUrl !== '' && aiConfig.apiKey !== '' && aiConfig.model !== ''
+  // aiBusy 独立于 busy：AI 运行中挂载钮/单行推荐禁用（防预填与挂载竞态），反之亦然
+  const [aiBusy, setAiBusy] = useState(false)
+  const aiAbortRef = useRef<(() => void) | null>(null)
+  // 最新已提交 rows 的镜像：runAi 是 async 回合，收尾时闭包里的 rows 是回合开始前的快照
+  //（AI 运行期间用户可能已手选/清除/丢弃）——预填的可填集与计数都以最新态计算
+  const rowsRef = useRef(rows)
+  rowsRef.current = rows
+
   // loadIdeas 是 EditorView 的内联箭头（每次渲染都是新身份）：触发只认 open，实现经 ref 取最新——
   // 否则宿主任何无关重渲染都会重扫清单，把用户已选的目标与结果面板一起冲掉
   // （spec §4.3「重开重扫」= 重开才扫，非每次渲染都扫）
@@ -84,6 +99,12 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
     setMounted([])
     setResultOpen(false)
   }, [open])
+
+  // 关闭/卸载兜底掐流（DeskOverview 先例）：浮层 close 与 unmount 都不再需要流，防孤儿流
+  useEffect(() => {
+    if (!open) aiAbortRef.current?.()
+  }, [open])
+  useEffect(() => () => aiAbortRef.current?.(), [])
 
   const selected = useMemo(() => rows.filter((r) => r.target !== null), [rows])
 
@@ -187,6 +208,66 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
     }
   }
 
+  /** AI 推荐并预填（spec §6.1/§6.3）：单行/一键共用。AI 只读不写——产出仅预填
+   *  target（不落盘），失败行不填留给手选；落盘仍由用户确认后的挂载管线执行 */
+  const runAi = async (ideas: BasketIdea[]): Promise<void> => {
+    if (aiBusy || busy || !aiReady || ideas.length === 0) return
+    const st = useAppStore.getState()
+    // 篮子自身不可作目标（同 picker 口径，按绝对路径排除）；maps 传绝对路径
+    //（st.maps 的 mdPath 恒绝对路径——台账契约：勿做相对拼接）
+    const basketAbs = st.workspaceDir !== null && st.basketRelPath !== null ? basketAbsPath(st.workspaceDir, st.basketRelPath) : null
+    const maps = st.maps.map((m) => m.mdPath).filter((m) => m !== basketAbs)
+    const transport = getTransport()
+    aiAbortRef.current = (): void => transport.abort()
+    setAiBusy(true)
+    try {
+      const r = await askPlacement(
+        { ideas, maps, ai: st.aiConfig, workspaceDir: st.workspaceDir!, fs: st.adapter },
+        { transport },
+      )
+      if (!r.ok) {
+        if (r.error === 'aborted') return // 本地掐流非故障（DeskOverview 先例），静默回 idle
+        // 出口：console 线索 + toast（可重试——按钮回 idle 即在）
+        console.error('AI 推荐失败', r.error, r.message ?? '')
+        if (r.error === 'tooManyMaps') showToast(i18n.t('basket.sort.aiTooManyMaps', { n: MAX_MAPS_FOR_AI }))
+        else if (r.error === 'parseFailed') showToast(i18n.t('basket.sort.aiParseFailed'))
+        else showToast(i18n.t('basket.sort.aiRequestFailed'))
+        return
+      }
+      const unmatched = r.rows.filter((x) => 'failed' in x).length
+      // 预填只进「当前仍无目标」的行（spec §6.3 预填语义，不覆盖手选）。可填集依 rowsRef
+      //（最新已提交 rows）在 updater 外算好：计数若放函数式 updater 里——React 异步渲染下
+      // 紧随其后的 toast 会读到 0，StrictMode 双调 updater 还会双计；updater 内再按 index+
+      // 文本复核，快照与实际行序若错位（期间丢弃等）宁可不填也不错位填
+      const cur = rowsRef.current
+      const fills = new Map<number, MountTarget>()
+      for (const row of r.rows) {
+        if (!('target' in row)) continue
+        const i = cur.findIndex((p) => p.idea.text === row.idea.text && p.target === null)
+        if (i !== -1) fills.set(i, row.target)
+      }
+      if (fills.size > 0) {
+        setRows((prev) =>
+          prev.map((p, j) => {
+            const target = fills.get(j)
+            return target !== undefined && p.target === null && cur[j]?.idea.text === p.idea.text ? { ...p, target } : p
+          }),
+        )
+      }
+      showToast(i18n.t('basket.sort.aiDone', { n: fills.size }))
+      if (unmatched > 0) showToast(i18n.t('basket.sort.aiUnmatched', { n: unmatched }))
+    } catch (e) {
+      // 出口：toast + console（runAi 经 void 即发即弃，兜非预期抛出——不兜就是无声 unhandled rejection）
+      console.error('AI 推荐异常', e)
+      showToast(i18n.t('basket.sort.aiRequestFailed'))
+    } finally {
+      // 回合收尾即摘除 abort 句柄（对齐 DeskOverview/ChatPanel 口径）：流已结束，
+      // close/卸载不再触发过期的 transport.abort()
+      aiAbortRef.current = null
+      setAiBusy(false)
+    }
+  }
+
   if (!open) return null
   return (
     <div data-testid="basket-sort" className="absolute inset-0 z-20 flex items-center justify-center bg-background/80">
@@ -202,9 +283,21 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
                 <li key={`${row.idea.text}-${i}`} data-testid="sort-row" className="flex items-center gap-2 border-b py-2 last:border-b-0">
                   <span className="min-w-0 flex-1 truncate text-sm">{row.idea.text}</span>
                   {row.target === null ? (
-                    <Button variant="ghost" size="sm" data-testid="sort-pick" onClick={() => setPickerFor(i)}>
-                      {t('basket.sort.pickTarget')}
-                    </Button>
+                    <>
+                      <Button variant="ghost" size="sm" data-testid="sort-pick" onClick={() => setPickerFor(i)}>
+                        {t('basket.sort.pickTarget')}
+                      </Button>
+                      {/* 单行推荐（spec §6.1）：仅无目标行显示；BYOK 未配/任一批量在跑时禁用 */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        data-testid="sort-ai-row"
+                        disabled={!aiReady || aiBusy || busy}
+                        onClick={() => void runAi([row.idea])}
+                      >
+                        {t('basket.sort.aiRow')}
+                      </Button>
+                    </>
                   ) : (
                     <>
                       {/* 点目标列 = 重选（spec §4.3）；清除另设一键回到未选态。
@@ -234,19 +327,47 @@ export default function BasketSortPanel({ open, onClose, loadIdeas, backup }: Re
               ))}
             </ul>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              {t('basket.sort.close')}
-            </Button>
-            <Button
-              size="sm"
-              data-testid="sort-mount-selected"
-              disabled={selected.length === 0 || busy}
-              onClick={() => void mountAll()}
-            >
-              {/* 底部钮带已选条数（spec §4.3「挂载全部已选 (M)」）；busy 态文案不变 */}
-              {busy ? t('basket.sort.mounting') : `${t('basket.sort.mountSelected')} (${selected.length})`}
-            </Button>
+          {/* BYOK 未配说明行（spec §6.1）：AI 钮全禁用时给出原因与去处，手动整理不受影响 */}
+          {!aiReady && rows.length > 0 && (
+            <p data-testid="sort-ai-disabled-note" className="text-xs text-muted-foreground">
+              {t('basket.sort.aiDisabledNote')}
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            {/* AI 区（spec §6.1）：idle 一键整理 / 运行中 [推荐中…] + 停止（互斥显示）。
+                一键只对无目标的行跑（有目标 = 用户手选，AI 不碰）；挂载运行中禁用（防预填与挂载竞态） */}
+            {aiBusy ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{t('basket.sort.aiRunning')}</span>
+                <Button variant="secondary" size="sm" data-testid="sort-ai-stop" onClick={() => aiAbortRef.current?.()}>
+                  {t('basket.sort.aiStop')}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="sort-ai-all"
+                disabled={!aiReady || busy}
+                onClick={() => void runAi(rows.filter((r) => r.target === null).map((r) => r.idea))}
+              >
+                {t('basket.sort.aiAll')}
+              </Button>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                {t('basket.sort.close')}
+              </Button>
+              <Button
+                size="sm"
+                data-testid="sort-mount-selected"
+                disabled={selected.length === 0 || busy || aiBusy}
+                onClick={() => void mountAll()}
+              >
+                {/* 底部钮带已选条数（spec §4.3「挂载全部已选 (M)」）；busy 态文案不变；AI 运行中禁用 */}
+                {busy ? t('basket.sort.mounting') : `${t('basket.sort.mountSelected')} (${selected.length})`}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
