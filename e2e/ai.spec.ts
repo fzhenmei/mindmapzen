@@ -99,3 +99,70 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   // 回合结束：回到发送态（停止钮消失）
   await expect(page.getByTestId('ai-send')).toBeVisible({ timeout: 15_000 })
 })
+
+// 输入区交互（2026-09 长内容输入批）：快捷键（Enter 发送/Shift+Enter 换行 + 常显提示）
+// 与拖高手柄（上缘拖拽扩高，消息区 flex 让位）。fake transport 同 beforeEach：首轮
+// tool_calls 真实落画布，第二轮纯文本收尾——本用例只关心回合走完回到发送态。
+test('AI 输入：Enter 发送 / Shift+Enter 换行 / 拖高手柄', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.goto('/?e2e=1')
+
+  await page.getByTestId('btn-settings').click()
+  await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
+  await page.getByTestId('set-ai-key').fill('sk-e2e')
+  await page.getByTestId('set-ai-model').fill('fake-model')
+  await page.getByTestId('set-ai-save').click()
+  await page.keyboard.press('Escape')
+
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('AI 输入测试')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('AI 输入测试').first()).toBeVisible()
+
+  await page.getByTestId('ai-toggle').click()
+  await expect(page.getByTestId('ai-panel')).toBeVisible()
+  // 快捷键提示常显（输入区底部）
+  await expect(page.getByTestId('ai-input-hint')).toHaveText(/Enter 发送/)
+
+  // lute 预热（同上用例：消除 vditor addScript 双 script 竞态噪音）
+  await page.evaluate(() => {
+    const LUTE = 'vendor/vditor/dist/js/lute/lute.min.js'
+    const ID = 'vditorLuteScript'
+    return new Promise<void>((resolve) => {
+      if (document.getElementById(ID) !== null) return resolve()
+      const s = document.createElement('script')
+      s.src = LUTE
+      s.onload = () => {
+        if (document.getElementById(ID) === null) s.id = ID
+        resolve()
+      }
+      s.onerror = () => resolve()
+      document.head.append(s)
+    })
+  })
+
+  const input = page.getByTestId('ai-input')
+  // Shift+Enter 换行：值含换行、不触发发送
+  await input.click()
+  await page.keyboard.type('第一行')
+  await page.keyboard.press('Shift+Enter')
+  await page.keyboard.type('第二行')
+  await expect(input).toHaveValue('第一行\n第二行')
+  await expect(page.getByTestId('ai-msg-user')).toHaveCount(0)
+
+  // Enter 发送：用户消息入流（原文含换行），回合走完回到发送态
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('ai-msg-user')).toHaveText('第一行\n第二行')
+  await expect(page.getByTestId('ai-send')).toBeVisible({ timeout: 15_000 })
+
+  // 拖高手柄：上缘向上拖 120px，输入框实际增高（消息区 flex-1 自动让位）
+  const before = await input.evaluate((el) => el.offsetHeight)
+  const box = await page.getByTestId('ai-input-resizer').boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box!.x + box!.width / 2, box!.y - 120, { steps: 5 })
+  await page.mouse.up()
+  const after = await input.evaluate((el) => el.offsetHeight)
+  expect(after - before).toBeGreaterThanOrEqual(100)
+})

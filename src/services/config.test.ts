@@ -7,7 +7,7 @@ import { loadConfig, saveConfig } from './config'
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, quickCapture: DEFAULT_QUICK_CAPTURE, ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiChatInputHeight: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, quickCapture: DEFAULT_QUICK_CAPTURE, ...over,
 })
 
 describe('配置读写', () => {

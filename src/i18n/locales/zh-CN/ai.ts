@@ -8,6 +8,10 @@ export default {
     send: '发送',
     stop: '停止',
     contextChip: '上下文：{{text}}',
+    // 输入区（2026-09 长内容输入）：快捷键常显提示 + 拖高手柄无障碍名/悬停提示
+    inputHint: 'Enter 发送，Shift + Enter 换行',
+    resizeInput: '调整输入框高度',
+    inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本、移动分支；AI 处理期间画布只读，随时可停。',
   },

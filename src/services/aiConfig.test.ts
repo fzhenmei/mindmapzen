@@ -31,8 +31,10 @@ test('loadConfig/saveConfig 往返保留 ai 与 aiChatWidth', async () => {
     ...(await loadConfig(fs, '/cfg.json')),
     ai: { baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-1', model: 'deepseek-chat' },
     aiChatWidth: 360,
+    aiChatInputHeight: 150,
   })
   const cfg = await loadConfig(fs, '/cfg.json')
   expect(cfg.ai).toEqual({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-1', model: 'deepseek-chat' })
   expect(cfg.aiChatWidth).toBe(360)
+  expect(cfg.aiChatInputHeight).toBe(150)
 })

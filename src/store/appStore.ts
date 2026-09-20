@@ -110,6 +110,8 @@ interface AppState {
   aiConfig: AiConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）：null = 默认 320；提交语义同 sidebarWidth */
   aiChatWidth: number | null
+  /** AI 输入框像素高（2026-09 长内容输入）：null = 默认两行；提交语义同 aiChatWidth */
+  aiChatInputHeight: number | null
   /** 工作台 AI 建议缓存（2026-09-14）：双条件复用（24h 内且任务指纹一致），
    *  init 自配置，setAiAdvice load-merge-save 持久化 */
   aiAdvice: AiAdvice | null
@@ -205,6 +207,8 @@ interface AppState {
   setAiConfig: (patch: Partial<AiConfig>) => Promise<void>
   /** AI 面板宽度提交（2026-09 拖拽）：null = 恢复默认宽 */
   setAiChatWidth: (w: number | null) => Promise<void>
+  /** AI 输入框高度提交（2026-09 长内容输入）：null = 恢复默认两行 */
+  setAiChatInputHeight: (h: number | null) => Promise<void>
   setSetting: (key: CopySettingKey, value: boolean) => Promise<void>
   /** 版本管理配置变更（M20）：即时生效 + load-merge-save 持久化 */
   setGitConfig: (patch: Partial<GitConfig>) => Promise<void>
@@ -320,6 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   outlineWidth: null,
   aiConfig: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
+  aiChatInputHeight: null,
   aiAdvice: null,
   resolvedTheme: 'light',
   resolvedLanguage: 'zh-CN',
@@ -355,7 +360,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone, quickCaptureEnabled: cfg.quickCapture.enabled })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiChatInputHeight: cfg.aiChatInputHeight, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone, quickCaptureEnabled: cfg.quickCapture.enabled })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -530,6 +535,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, aiChatWidth: w })
     set({ aiChatWidth: w })
+  },
+  /** AI 输入框高度提交（2026-09 长内容输入）：即时生效 + load-merge-save 持久化；
+   *  null = 恢复默认两行（双击手柄路径） */
+  setAiChatInputHeight: async (h) => {
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, aiChatInputHeight: h })
+    set({ aiChatInputHeight: h })
   },
 
   /** 工作台 AI 建议缓存提交（2026-09-14）：即时生效 + load-merge-save 持久化；

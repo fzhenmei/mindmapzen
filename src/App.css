@@ -24,6 +24,12 @@ html, body { overflow: hidden; }
 [data-split-resizing], [data-split-resizing] * {
   transition: none !important; user-select: none !important; cursor: col-resize !important; }
 [data-split-resizing] .split-resizer::after { opacity: 1 !important; }
+/* 输入区拖高（ChatPanel InputResizer 挂 html[data-row-resizing]，2026-09 长内容输入）：
+   语义同 data-split-resizing（禁过渡/锁选择/指示线常亮），光标换 row-resize——竖向
+   拖拽复用 split 的 col-resize 会显反光标 */
+[data-row-resizing], [data-row-resizing] * {
+  transition: none !important; user-select: none !important; cursor: row-resize !important; }
+[data-row-resizing] .input-resizer::after { opacity: 1 !important; }
 /* .app 类退役（2026-09 暗色修复）：App shell 根元素 M14 起未挂载本类，一直是死类；
    color/background/font-family 职责由 theme.css @layer base 的 body 规则（官方 v4 迁移
    补齐）与 @theme --font-sans 承担，此处保留档记防回潮 */

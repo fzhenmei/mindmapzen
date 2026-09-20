@@ -1,5 +1,5 @@
 // src/components/ChatPanel.test.tsx —— 面板渲染与编排接线（Task 11，spec §7）
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import ChatPanel from './ChatPanel'
@@ -36,6 +36,8 @@ beforeEach(() => {
     // v1.1 ② 安全网告知：git 备份默认关（真实默认），告知标记每用例重置防跨用例残留
     gitConfig: { enabled: false, remoteUrl: null, token: null },
     aiBackupNoticeShown: false,
+    // 输入框高度跨用例隔离（拖高用例会写入）
+    aiChatInputHeight: null,
   } as never)
   // fake transport：纯文本回答（走 window 注入点，验证 Task 8 的 getTransport 工厂）
   ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
@@ -196,4 +198,67 @@ test('终审 M3：工具轮第二轮 streaming 退回纯文本+光标分支，�
   expect(fin[fin.length - 1]!.rendered).toBe(true) // 定稿再挂 md
   expect(screen.getByTestId('md-preview')).toHaveTextContent('好的')
   expect(screen.queryByTestId('ai-msg-streaming')).not.toBeInTheDocument()
+})
+
+// ═══ 快捷键（2026-09 AI 对话输入优化）：Enter 发送 / Shift+Enter 换行 / IME 合成安全 ═══
+
+test('快捷键：Enter 直接发送——消息入流、输入清空', async () => {
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '你好{enter}')
+  expect(await screen.findByText(/收到/)).toBeInTheDocument() // fake transport 纯文本回合走完
+  expect(useChatStore.getState().messages.some((m) => m.role === 'user' && m.text === '你好')).toBe(true)
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).value).toBe('')
+})
+
+test('快捷键：Shift+Enter 换行不发送', async () => {
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '你好{shift>}{enter}{/shift}世界')
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).value).toBe('你好\n世界')
+  expect(useChatStore.getState().messages).toHaveLength(0) // 未触发发送
+})
+
+test('快捷键：输入法合成中的 Enter 不发送（选词确认回车）', () => {
+  mount()
+  fireEvent.change(screen.getByTestId('ai-input'), { target: { value: '你好' } })
+  fireEvent.keyDown(screen.getByTestId('ai-input'), { key: 'Enter', isComposing: true })
+  expect(useChatStore.getState().messages).toHaveLength(0)
+})
+
+test('提示：输入区常显快捷键提示文案', () => {
+  mount()
+  expect(screen.getByTestId('ai-input-hint')).toHaveTextContent('Enter 发送，Shift + Enter 换行')
+})
+
+// ═══ 输入区拖高手柄（2026-09 长内容）：向上拖增高、松手提交、双击回默认 ═══
+
+/** 拖高测试台：桩掉持久层 IO，但回显真实 setter 语义（setState）——
+ *  onCommit 清拖拽暂存后，高度靠 store 回显不闪回 */
+const mountForDrag = () => {
+  const commit = vi.fn(async (h: number | null) => {
+    useAppStore.setState({ aiChatInputHeight: h } as never)
+  })
+  useAppStore.setState({ setAiChatInputHeight: commit } as never)
+  mount()
+  return { commit, handle: screen.getByRole('separator', { name: '调整输入框高度' }) }
+}
+
+test('拖高手柄：向上拖增高（clamp 到上限），松手提交最终高度', () => {
+  const { commit, handle } = mountForDrag()
+  // jsdom clientHeight=0：起点高 0、上限 max(64+40, 0)=104——上移 150 后 clamp 到 104
+  fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 100, clientY: 300 })
+  fireEvent.pointerMove(window, { pointerId: 1, clientY: 250 })
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).style.height).toBe('64px') // 逐帧跟手（min clamp）
+  fireEvent.pointerMove(window, { pointerId: 1, clientY: 150 })
+  fireEvent.pointerUp(window, { pointerId: 1 })
+  expect(commit).toHaveBeenCalledTimes(1)
+  expect(commit).toHaveBeenCalledWith(104) // max clamp
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).style.height).toBe('104px')
+})
+
+test('拖高手柄：持久高度开面板即生效；双击提交 null 恢复默认', () => {
+  useAppStore.setState({ aiChatInputHeight: 180 } as never)
+  const { commit, handle } = mountForDrag()
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).style.height).toBe('180px')
+  fireEvent.dblClick(handle)
+  expect(commit).toHaveBeenCalledWith(null)
 })
