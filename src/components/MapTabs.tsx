@@ -4,6 +4,8 @@
 // 区别于设计稿「占位式」——占位需改 .editor/.canvas-host 核心布局，收益不敌风险，从简）。
 // 纯展示组件：候选（mapTabs 派生，useQuickSwitch）与切换链（switchTo）全经 props。
 import { useTranslation } from 'react-i18next'
+import { basketAbsPath } from '../services/basket'
+import { useAppStore } from '../store/appStore'
 import type { SwitchCandidate } from './QuickSwitchDialog'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -20,6 +22,12 @@ interface Props {
 /** 顶部导图胶囊条：仅 1 张时不渲染（无切换意义，保持沉浸） */
 export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>) {
   const { t } = useTranslation()
+  // 篮子徽章判据（Task 10）：绝对路径比对（同 EditorView isBasket 口径，同名不同目录不误标）。
+  // 读 store 不加 props——候选是 mdPath 列表，徽章纯派生，调用方零接线；两字段均可为 null，
+  // 判空在前。须在下方提前 return 之前调用（hooks 序恒定）
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+  const basketRelPath = useAppStore((s) => s.basketRelPath)
+  const basketAbs = workspaceDir !== null && basketRelPath !== null ? basketAbsPath(workspaceDir, basketRelPath) : null
   if (tabs.length < 2) return null
   return (
     <nav
@@ -44,6 +52,12 @@ export default function MapTabs({ tabs, currentMdPath, onPick }: Readonly<Props>
               {/* truncate 挂 span 不挂 Button：基类 inline-flex，text-overflow 对 flex 容器
                   无效（硬裁无省略号、文字贴边）；span 为 flex item，min-w-0 破除内容宽下限 */}
               <span className="min-w-0 truncate">{c.name}</span>
+              {/* 篮子徽章（Task 10）：◱ 贴名末、shrink-0 不挤压截断名、aria-hidden 纯装饰 */}
+              {c.mdPath === basketAbs && (
+                <span data-testid="basket-badge" aria-hidden className="ml-1 shrink-0 text-[10px] opacity-70">
+                  ◱
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>

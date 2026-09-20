@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import DirectoryTree, { type TreeFile } from './DirectoryTree'
 import { SidebarProvider } from './ui/sidebar'
+import { useAppStore } from '../store/appStore'
 import type { DirNode } from '../services/desk'
 
-// 案头左树（2026-09 收藏置顶 + 列表排序）：全注入 props 无 store 依赖，组件面行为在此覆盖；
+// 案头左树（2026-09 收藏置顶 + 列表排序）：行为经 props 注入覆盖（篮子徽章除外——判据读
+// store 的 workspaceDir/basketRelPath，仅该组内就地设态）；
 // favorites 派生（store∩maps 宽容剔除）与重命名/移动 relocate 接线归 LibraryView 面
 const tree: DirNode[] = [{ name: 'docs', path: 'docs', children: [] }]
 const files: TreeFile[] = [
@@ -190,5 +192,56 @@ describe('DirectoryTree 排序钮', () => {
     fireEvent.pointerDown(screen.getByTestId('dir-sort'), { button: 0 })
     await waitFor(() => expect(screen.getByTestId('sort-name').getAttribute('aria-checked')).toBe('true'))
     expect(screen.getByTestId('sort-modified').getAttribute('aria-checked')).toBe('false')
+  })
+})
+
+// 篮子徽章（Task 10）：篮子文件行一眼可认——◱ 贴名称末尾（shrink-0 不挤压截断名）、纯装饰
+// （aria-hidden）。判据 = 行内 TreeFile 反推 mdPath 与 basketAbsPath(ws, rel) 比对（同
+// EditorView isBasket 口径）：同名不同目录/无工作区不误标。行渲染两处（树内普通行 file-node-*
+// 与收藏组行 fav-node-*）共用 renderFile，徽章随之两处同时生效
+describe('DirectoryTree 篮子徽章', () => {
+  afterEach(() => useAppStore.setState({ workspaceDir: null, basketRelPath: null }))
+
+  const badgeIn = (testid: string) => screen.getByTestId(testid).querySelector('[data-testid="basket-badge"]')
+
+  test('篮子文件行带徽章，普通文件行不带', () => {
+    useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+    renderTree({ files: [{ name: '点子篮子', relDir: '' }, { name: '乙图', relDir: '' }] })
+    expect(screen.getAllByTestId('basket-badge')).toHaveLength(1)
+    expect(badgeIn('file-node-点子篮子')).not.toBeNull()
+    expect(badgeIn('file-node-点子篮子')?.getAttribute('aria-hidden')).toBe('true')
+    expect(badgeIn('file-node-乙图')).toBeNull()
+  })
+
+  test('收藏组行同样带徽章（树行 + 收藏行各一枚）', () => {
+    useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+    renderTree({ files: [{ name: '点子篮子', relDir: '' }], favorites: [{ name: '点子篮子', relDir: '' }] })
+    expect(screen.getAllByTestId('basket-badge')).toHaveLength(2)
+    expect(badgeIn('file-node-点子篮子')).not.toBeNull()
+    expect(badgeIn('fav-node-点子篮子')).not.toBeNull()
+  })
+
+  test('嵌套目录的篮子行按绝对路径命中（relDir 拼接）', () => {
+    useAppStore.setState({ workspaceDir: '/ws', basketRelPath: 'docs/篮子.md' })
+    renderTree({ files: [{ name: '篮子', relDir: 'docs' }] })
+    expect(badgeIn('file-node-篮子')).not.toBeNull()
+  })
+
+  test('同名不同目录不误标（按绝对路径而非名字判断）', () => {
+    useAppStore.setState({ workspaceDir: '/ws', basketRelPath: 'docs/点子篮子.md' })
+    renderTree({ files: [{ name: '点子篮子', relDir: '' }] })
+    expect(screen.queryByTestId('basket-badge')).toBeNull()
+  })
+
+  test('无工作区（workspaceDir null）不渲染徽章（判空防线）', () => {
+    useAppStore.setState({ workspaceDir: null, basketRelPath: '点子篮子.md' })
+    renderTree({ files: [{ name: '点子篮子', relDir: '' }] })
+    expect(screen.queryByTestId('basket-badge')).toBeNull()
+  })
+
+  test('篮子路径未定（basketRelPath null）不渲染徽章（判空防线）', () => {
+    useAppStore.setState({ workspaceDir: '/ws', basketRelPath: null })
+    renderTree({ files: [{ name: '点子篮子', relDir: '' }] })
+    expect(screen.queryByTestId('basket-badge')).toBeNull()
   })
 })

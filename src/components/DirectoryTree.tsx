@@ -1,7 +1,10 @@
 import { ChevronRight, Search } from 'lucide-react'
 import { useRef, useState, type DragEvent, type JSX } from 'react'
 import { useTranslation } from 'react-i18next'
+import { basketAbsPath } from '../services/basket'
 import { filterTree, isUnderDir, type DirNode } from '../services/desk'
+import { joinPath, resolveDir } from '../services/workspace'
+import { useAppStore } from '../store/appStore'
 import type { LibrarySort } from '../types/files'
 import type { MapAction } from '../hooks/useLibraryDialogs'
 import {
@@ -144,6 +147,16 @@ export default function DirectoryTree({
   const favSet = new Set(favorites.map(fileKey))
   const favFiles = searching ? favorites.filter((f) => f.name.toLowerCase().includes(q.toLowerCase())) : favorites
 
+  // 篮子徽章（Task 10）：篮子文件行一眼可认——行内 TreeFile 只有 name+relDir，按与 listMaps
+  //  同口径（resolveDir+joinPath）反推 mdPath 后与 basketAbsPath 比对（同 EditorView isBasket
+  //  的绝对路径口径）：同名不同目录不误标。读 store 不加 props——徽章纯派生，调用方零接线；
+  //  两字段均可为 null（未选工作区/篮子未定），判空在前
+  const workspaceDir = useAppStore((s) => s.workspaceDir)
+  const basketRelPath = useAppStore((s) => s.basketRelPath)
+  const basketAbs = workspaceDir !== null && basketRelPath !== null ? basketAbsPath(workspaceDir, basketRelPath) : null
+  const isBasketFile = (f: TreeFile): boolean =>
+    workspaceDir !== null && basketAbs !== null && joinPath(resolveDir(workspaceDir, f.relDir), `${f.name}.md`) === basketAbs
+
   // 拖拽态（2026-09）：drag ref 存载荷；dragging 标识被拖行（半透明）；dropTarget 高亮
   //  合法落点行。落点守卫：目录行/树根可落（isUnderDir 含自身——拖目录到自己上不高亮）；
   //  文件行不是落点。drop 后 dragend 前载荷即清，防串次拖拽
@@ -282,6 +295,13 @@ export default function DirectoryTree({
                 >
                   {favRow ? <IconStar /> : <IconMarkdown />}
                   <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  {/* 篮子徽章（Task 10）：贴名称末尾，shrink-0 不挤压截断名（flex-1 收缩在前，
+                      徽章恒可见），aria-hidden 纯装饰不占无障碍读序 */}
+                  {isBasketFile(f) && (
+                    <span data-testid="basket-badge" aria-hidden className="ml-1 shrink-0 text-[10px] opacity-70">
+                      ◱
+                    </span>
+                  )}
                 </button>
               </Btn>
               {/* 悬停收藏浮层：与行选中/双击解耦（兄弟节点不冒泡进行按钮）；钮上禁拖拽

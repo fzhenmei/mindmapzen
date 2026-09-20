@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import MapTabs from './MapTabs'
 import { TooltipProvider } from './ui/tooltip'
+import { useAppStore } from '../store/appStore'
 import type { SwitchCandidate } from './QuickSwitchDialog'
 
 // 顶部导图胶囊条（2026-09 鼠标流切换）：最近打开常驻平铺、当前图高亮、点选即切。
@@ -83,5 +84,42 @@ describe('MapTabs（顶部导图胶囊条）', () => {
     const pill = screen.getAllByTestId('map-tab')[0]
     expect(pill.className).toContain('aria-[current=page]:bg-accent')
     expect(pill.className).not.toContain('aria-current:')
+  })
+
+  // 篮子徽章（Task 10）：篮子图在胶囊条上一眼可认——◱ 贴名称末尾、shrink-0 不挤压截断名、
+  // 纯装饰（aria-hidden）。判据 = 绝对路径比对（mdPath === basketAbsPath(ws, rel)，同 EditorView
+  // isBasket 口径）：同名不同目录/无工作区不误标。store 两字段均可为 null，判空在前
+  describe('篮子徽章', () => {
+    afterEach(() => useAppStore.setState({ workspaceDir: null, basketRelPath: null }))
+
+    test('篮子图的胶囊带徽章，普通图不带', () => {
+      useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+      renderTabs([cand('/ws/点子篮子.md', '点子篮子'), cand('/ws/普通.md', '普通')], '/ws/点子篮子.md')
+      expect(screen.getAllByTestId('basket-badge')).toHaveLength(1)
+      const pills = screen.getAllByTestId('map-tab')
+      const badge = pills[0].querySelector('[data-testid="basket-badge"]')
+      expect(badge).not.toBeNull()
+      expect(badge?.getAttribute('aria-hidden')).toBe('true')
+      expect(pills[1].querySelector('[data-testid="basket-badge"]')).toBeNull()
+    })
+
+    test('嵌套 relPath 的篮子按绝对路径命中', () => {
+      useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '子/点子篮子.md' })
+      renderTabs([cand('/ws/子/点子篮子.md', '点子篮子'), cand('/ws/点子篮子.md', '点子篮子')], '/ws/普通.md')
+      expect(screen.getAllByTestId('basket-badge')).toHaveLength(1)
+      expect(screen.getAllByTestId('map-tab')[0].querySelector('[data-testid="basket-badge"]')).not.toBeNull()
+    })
+
+    test('无工作区（workspaceDir null）不渲染徽章（判空防线）', () => {
+      useAppStore.setState({ workspaceDir: null, basketRelPath: '点子篮子.md' })
+      renderTabs([cand('/ws/点子篮子.md', '点子篮子'), cand('/ws/普通.md', '普通')], '/ws/点子篮子.md')
+      expect(screen.queryByTestId('basket-badge')).toBeNull()
+    })
+
+    test('篮子路径未定（basketRelPath null）不渲染徽章（判空防线）', () => {
+      useAppStore.setState({ workspaceDir: '/ws', basketRelPath: null })
+      renderTabs([cand('/ws/点子篮子.md', '点子篮子'), cand('/ws/普通.md', '普通')], '/ws/点子篮子.md')
+      expect(screen.queryByTestId('basket-badge')).toBeNull()
+    })
   })
 })
