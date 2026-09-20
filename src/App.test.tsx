@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App'
 
 // 无工作区（测试环境 adapter 未注入，init 失败不设工作区）→ 文库默认落在开屏页（M5d Task 3）
@@ -46,5 +46,17 @@ test('无工作区时不自动出现漫游引导', async () => {
   render(<App />)
   await screen.findByTestId('welcome-screen')
   expect(screen.queryByTestId('tour-overlay')).not.toBeInTheDocument()
+})
+
+// 点子篮子 M1（spec §4.1）：应用内 Ctrl+Alt+I 唤起捕获浮层（M2 启用系统级全局快捷键后
+// 由设置开关禁用此监听，单一捕获入口）。捕获不依赖工作区——App 层监听恒在，提交才需要工作区
+test('Ctrl+Alt+I 唤起捕获浮层，Esc 关闭', async () => {
+  render(<App />)
+  await screen.findByTestId('welcome-screen')
+  fireEvent.keyDown(window, { key: 'i', ctrlKey: true, altKey: true })
+  expect(await screen.findByTestId('capture-input')).toBeVisible()
+  // Esc 关闭：radix DismissableLayer 在 document 上收 keydown，body 冒泡可命中
+  fireEvent.keyDown(document.body, { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByTestId('capture-input')).toBeNull())
 })
 
