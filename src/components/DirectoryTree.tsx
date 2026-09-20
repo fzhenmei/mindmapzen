@@ -294,8 +294,11 @@ export default function DirectoryTree({
                   onDoubleClick={() => onOpenFile(f)}
                 >
                   {favRow ? <IconStar /> : <IconMarkdown />}
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  {/* 篮子徽章（Task 10）：贴名称末尾，shrink-0 不挤压截断名（flex-1 收缩在前，
+                  {/* 名称 span 不 flex-1（2026-09 审查裁定）：徽章「贴名称末尾」而非右对齐——
+                      与胶囊条同款观感。收缩仍由名称承担（min-w-0 + shrink 默认 1，长名照样截断），
+                      徽章/图标 shrink-0 恒显，行热区随 button（flex-1）不变 */}
+                  <span className="min-w-0 truncate">{f.name}</span>
+                  {/* 篮子徽章（Task 10）：贴名称末尾，shrink-0 不挤压既有布局（名称收缩在前，
                       徽章恒可见），aria-hidden 纯装饰不占无障碍读序 */}
                   {isBasketFile(f) && (
                     <span data-testid="basket-badge" aria-hidden className="ml-1 shrink-0 text-[10px] opacity-70">

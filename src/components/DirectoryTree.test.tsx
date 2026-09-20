@@ -208,8 +208,15 @@ describe('DirectoryTree 篮子徽章', () => {
     useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
     renderTree({ files: [{ name: '点子篮子', relDir: '' }, { name: '乙图', relDir: '' }] })
     expect(screen.getAllByTestId('basket-badge')).toHaveLength(1)
-    expect(badgeIn('file-node-点子篮子')).not.toBeNull()
-    expect(badgeIn('file-node-点子篮子')?.getAttribute('aria-hidden')).toBe('true')
+    const badge = badgeIn('file-node-点子篮子')
+    expect(badge).not.toBeNull()
+    expect(badge?.getAttribute('aria-hidden')).toBe('true')
+    // 布局承重项（2026-09 审查加护）：shrink-0 保徽章不被名称挤压（误删即红）；名称 span
+    // 无 flex-1 保徽章「贴名末」而非右对齐（误加即红），truncate 仍在（长名照截）
+    expect(badge?.className).toContain('shrink-0')
+    const nameSpan = screen.getByTestId('file-node-点子篮子').querySelector('span:not([data-testid])')
+    expect(nameSpan?.className).toContain('truncate')
+    expect(nameSpan?.className).not.toContain('flex-1')
     expect(badgeIn('file-node-乙图')).toBeNull()
   })
 

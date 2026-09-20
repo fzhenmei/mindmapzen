@@ -100,6 +100,8 @@ describe('MapTabs（顶部导图胶囊条）', () => {
       const badge = pills[0].querySelector('[data-testid="basket-badge"]')
       expect(badge).not.toBeNull()
       expect(badge?.getAttribute('aria-hidden')).toBe('true')
+      // 布局承重项（2026-09 审查加护）：shrink-0 保徽章不被截断名挤压（误删即红）
+      expect(badge?.className).toContain('shrink-0')
       expect(pills[1].querySelector('[data-testid="basket-badge"]')).toBeNull()
     })
 
