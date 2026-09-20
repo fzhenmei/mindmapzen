@@ -98,6 +98,21 @@ export function parseBasketPath(v: unknown): string | null {
   return typeof v === 'string' && v !== '' ? v : null
 }
 
+/** 快速捕获设置（2026-09 点子篮子 M2，spec §5.1）：enabled = 三件事绑定——注册全局快捷键 +
+ *  出现托盘图标 + 关窗隐藏而非退出；关闭 = 全部还原。默认 false */
+export interface QuickCaptureConfig {
+  enabled: boolean
+}
+
+export const DEFAULT_QUICK_CAPTURE: QuickCaptureConfig = { enabled: false }
+
+/** 宽容解析快速捕获设置：非对象/字段类型非法回退默认（旧配置无字段兼容） */
+export function parseQuickCapture(v: unknown): QuickCaptureConfig {
+  if (typeof v !== 'object' || v === null) return DEFAULT_QUICK_CAPTURE
+  const o = v as Record<string, unknown>
+  return { enabled: typeof o.enabled === 'boolean' ? o.enabled : false }
+}
+
 export interface AppConfig {
   workspaceDir: string | null
   lastOpened: string | null
@@ -138,6 +153,8 @@ export interface AppConfig {
   lastNewMapDir: string
   /** 点子篮子相对工作区路径（2026-09 点子篮子）：null = 未创建，首次使用时按语言默认名生成 */
   basketPath: string | null
+  /** 快速捕获（2026-09 点子篮子 M2）：enabled = 全局快捷键 + 托盘 + 关窗隐藏三绑定 */
+  quickCapture: QuickCaptureConfig
 }
 
 /** 工作台 AI 建议缓存（cfg.json 持久化）：只有正常完成（done）的回复入档——
@@ -229,6 +246,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   aiAdvice: null,
   lastNewMapDir: '',
   basketPath: null,
+  quickCapture: DEFAULT_QUICK_CAPTURE,
 }
 
 /** 宽容解析 AI 建议缓存（旧配置无字段兼容）：任一字段失型即弃（null，下次重新问） */

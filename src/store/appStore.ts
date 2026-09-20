@@ -162,6 +162,16 @@ interface AppState {
   captureIdea: (idea: BasketIdea) => Promise<CaptureResult>
   /** 挂载成功后从篮子删除条目（文本匹配根下首个）：引擎端口优先，否则文件层 */
   removeBasketIdeaByText: (text: string) => Promise<CaptureResult>
+  /** 快速捕获（2026-09 点子篮子 M2，spec §5.1）：init 自配置；运行时接线（快捷键/托盘/
+   *  关窗隐藏）在 hooks/useQuickCaptureRuntime，store 只存数据 */
+  quickCaptureEnabled: boolean
+  setQuickCaptureEnabled: (enabled: boolean) => Promise<void>
+  /** 全局快捷键注册失败信息（toast + 设置面板内联双出口，spec §5.3）；null = 无 */
+  quickCaptureShortcutError: string | null
+  setQuickCaptureShortcutError: (msg: string | null) => void
+  /** 真退出标志（spec §5.1 托盘「退出」置位）：关窗链路据此选 destroy 而非 hide */
+  exitRequested: boolean
+  requestExit: () => void
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -330,6 +340,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   tourDone: false,
   basketRelPath: null,
   basketEngine: null,
+  quickCaptureEnabled: false,
+  quickCaptureShortcutError: null,
+  exitRequested: false,
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -342,7 +355,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone, quickCaptureEnabled: cfg.quickCapture.enabled })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -657,6 +670,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setBasketEngine: (p) => set({ basketEngine: p }),
+
+  /** 快速捕获开关（2026-09 点子篮子 M2 spec §5.1）：即时生效 + load-merge-save 持久化；
+   *  快捷键/托盘/关窗行为的接线由 hooks/useQuickCaptureRuntime 订阅此状态完成 */
+  setQuickCaptureEnabled: async (enabled) => {
+    set({ quickCaptureEnabled: enabled })
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, quickCapture: { enabled } })
+  },
+
+  /** 快捷键注册失败信息（spec §5.3）：null = 清除（重试成功/关闭开关时） */
+  setQuickCaptureShortcutError: (msg) => set({ quickCaptureShortcutError: msg }),
+
+  /** 真退出标志（spec §5.1）：托盘「退出」置位，关窗链路据此选 destroy 而非 hide */
+  requestExit: () => set({ exitRequested: true }),
 
   captureIdea: async (idea) => {
     const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
