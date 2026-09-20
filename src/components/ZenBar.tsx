@@ -48,6 +48,7 @@ import {
   IconRoute,
   IconSave,
   IconSettings,
+  IconSort,
   IconSwitch,
   IconUndo,
 } from './icons'
@@ -63,6 +64,10 @@ interface Props {
   /** 新建导图（2026-09 画布内入口）：呼出新建对话框（名称+模板，复用案头组件）；
    *  确认后走 leaveTo 安全链保存当前图再跳转（逻辑在 EditorView） */
   onNewClick(): void
+  /** 当前图 = 点子篮子（2026-09 点子篮子 M1）：显示「整理篮子」按钮 */
+  isBasket: boolean
+  /** 整理篮子（spec §4.3）：呼出批量整理浮层（浮层挂载在 EditorView） */
+  onSortBasket(): void
   /** 回退/重做（v1.1，想法5）：引擎 BACK/FORWARD 命令 + back_forward 历史态驱动的禁用信号
    *  （状态与执行在 EditorView 的 useUndoRedo；键盘 Ctrl+Z/Y 走引擎原生与画布兜底，命令栏只是按钮路径） */
   undoRedo: UndoRedo
@@ -143,6 +148,8 @@ export default function ZenBar({
   onSettingsClick,
   onSwitchClick,
   onNewClick,
+  isBasket,
+  onSortBasket,
   undoRedo,
   onCopyClick,
   copySettings,
@@ -233,6 +240,22 @@ export default function ZenBar({
           <IconFilePlus />
         </Button>
       </Tip>
+      {/* 整理篮子（2026-09 点子篮子 M1，spec §4.3）：仅当前图 = 篮子图时出现——篮子语义
+       *  不外溢到普通导图；入口在砚栏（编辑器的主命令面），浮层本体由 EditorView 挂载 */}
+      {isBasket && (
+        <Tip label={t('editor.zenbar.sortBasket')}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="btn-sort-basket"
+            aria-label={t('editor.zenbar.sortBasket')}
+            onClick={onSortBasket}
+          >
+            <IconSort />
+          </Button>
+        </Tip>
+      )}
       {/* 撤销/重做段（含前置分隔线整段包裹，避免孤立分隔线）：Markdown 态隐藏
        *  （编辑走 vditor 自有历史），导图/看板两态在（引擎 back_forward 历史共享） */}
       {!mmView && (

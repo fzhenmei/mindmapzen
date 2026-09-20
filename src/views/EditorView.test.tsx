@@ -3511,3 +3511,80 @@ test('砚栏设置钮打开 App 级设置对话框', async () => {
   fireEvent.click(screen.getByTestId('btn-editor-settings'))
   await waitFor(() => expect(useAppStore.getState().appDialog).toBe('settings'))
 })
+
+// ── 点子篮子 M1（spec §4.2 就近引擎 / §4.3 整理入口）：当前图 = 篮子图时砚栏出现「整理篮子」钮
+//    且注册引擎端口（捕获/删除走引擎）；非篮子图不注册；卸载（切图）即置 null 让位文件层 ─────────
+describe('点子篮子：整理入口与引擎端口注册', () => {
+  beforeEach(() => {
+    // 篮子两态逐用例重置（全局 beforeEach 不含）：端口残留会让「非篮子图不注册」假阳/假阴
+    useAppStore.setState({ basketRelPath: null, basketEngine: null })
+  })
+
+  /** 渲染编辑器（篮子用例共用）：篮子文件先落盘 + store 篮子相对路径与本图 mdPath 对齐 */
+  const renderEditorFor = async (mdPath: string): Promise<void> => {
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n')
+    useAppStore.setState({ basketRelPath: '点子篮子.md' })
+    render(
+      <EditorView
+        mdPath={mdPath}
+        openInEditor={openInEditor}
+        writeClipboard={vi.fn(async () => {})}
+        exportPorts={stubExportPorts}
+        registerCloseGuard={noopRegister}
+        pickImageFile={stubPickImage}
+        readClipboardImage={stubReadClipboardImage}
+        exitApp={noopExitApp}
+      />,
+    )
+    await screen.findByTestId('fake-canvas')
+  }
+
+  /** 引擎就绪 + 假 root 补 nodeData 结构（真机 renderer.root 是渲染根实例，假画布不建：
+   *  用例内补齐，不动生产代码；emit 后 handle 实例会因 engineReady 重渲被换新，
+   *  断言必须锁定 emit 时这一个——mmRef 只收它） */
+  const readyWithRoot = (children: Array<{ text: string; uid: string; body?: string }>): MindMapHandle => {
+    const handle = fakeHandle
+    ;(handle.renderer as { root?: unknown }).root = { nodeData: { children: children.map((c) => ({ data: c })) } }
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    return handle
+  }
+
+  test('篮子图：砚栏出现整理钮，端口已注册且 insertIdea 走引擎命令', async () => {
+    await renderEditorFor('/ws/点子篮子.md')
+    expect(useAppStore.getState().basketEngine).not.toBeNull() // 挂载即注册（端口自陈让位，不等引擎就绪）
+    expect(await screen.findByTestId('btn-sort-basket')).toBeVisible()
+    const handle = readyWithRoot([])
+    const port = useAppStore.getState().basketEngine
+    expect(port).not.toBeNull()
+    expect(port!.insertIdea({ text: '端口测试' })).toBe(true)
+    expect(handle.execCommand).toHaveBeenCalledWith('INSERT_CHILD_NODE', false, [handle.renderer!.root], {
+      text: '端口测试',
+    })
+    expect(port!.removeIdeaByText('无此条')).toBe(false) // 假 root 无该文本：命中失败返回 false（不抛）
+  })
+
+  test('篮子图：点整理钮开浮层，清单扫描引擎根下点子（loadIdeas 走 renderer.root）', async () => {
+    await renderEditorFor('/ws/点子篮子.md')
+    readyWithRoot([{ text: '点子甲', uid: 'b1' }, { text: '点子乙', uid: 'b2', body: '正文' }])
+    fireEvent.click(await screen.findByTestId('btn-sort-basket'))
+    expect(await screen.findByTestId('basket-sort')).toBeInTheDocument()
+    expect(screen.getAllByTestId('sort-row')).toHaveLength(2)
+    expect(screen.getByText('点子甲')).toBeInTheDocument()
+  })
+
+  test('非篮子图：不注册端口、无整理钮（普通导图无篮子语义）', async () => {
+    await renderEditorFor('/ws/a.md')
+    expect(useAppStore.getState().basketEngine).toBeNull()
+    expect(screen.queryByTestId('btn-sort-basket')).not.toBeInTheDocument()
+  })
+
+  test('卸载（切图）：端口置 null 不残留（App 按图 key 重挂本视图，切走即让位文件层）', async () => {
+    await renderEditorFor('/ws/点子篮子.md')
+    readyWithRoot([])
+    expect(useAppStore.getState().basketEngine).not.toBeNull()
+    cleanup()
+    expect(useAppStore.getState().basketEngine).toBeNull()
+  })
+})

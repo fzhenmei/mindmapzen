@@ -33,6 +33,8 @@ function renderBar(overrides: {
   kanbanArchiveOpen?: boolean
   onToggleKanbanArchive?: () => void
   onSettingsClick?: () => void
+  isBasket?: boolean
+  onSortBasket?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
@@ -63,6 +65,8 @@ function renderBar(overrides: {
         kanbanArchiveOpen={overrides.kanbanArchiveOpen ?? false}
         onToggleKanbanArchive={overrides.onToggleKanbanArchive ?? noop}
         onSettingsClick={overrides.onSettingsClick ?? noop}
+        isBasket={overrides.isBasket ?? false}
+        onSortBasket={overrides.onSortBasket ?? noop}
       />
     </TooltipProvider>,
   )
@@ -314,5 +318,25 @@ describe('ZenBar 大纲/归档专有钮', () => {
     const lit = screen.getByTestId('btn-kanban-archive')
     expect(lit).toHaveAttribute('data-active', '')
     expect(lit).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+// ---- 整理篮子钮（2026-09 点子篮子 M1，spec §4.3）：仅当前图 = 篮子图时出现 ----
+
+describe('ZenBar 整理篮子钮', () => {
+  afterEach(cleanup)
+
+  test('isBasket=false（默认，普通导图）：钮不在——篮子语义不跨图外溢', () => {
+    renderBar()
+    expect(T('btn-sort-basket')).toBeNull()
+  })
+
+  test('isBasket=true：钮在、语义名「整理篮子」（aria-label 与浮签同源）；点击回调 onSortBasket', () => {
+    const onSortBasket = vi.fn()
+    renderBar({ isBasket: true, onSortBasket })
+    const btn = screen.getByTestId('btn-sort-basket')
+    expect(btn).toHaveAttribute('aria-label', '整理篮子')
+    fireEvent.click(btn)
+    expect(onSortBasket).toHaveBeenCalledTimes(1)
   })
 })

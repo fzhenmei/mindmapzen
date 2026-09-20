@@ -12,6 +12,8 @@ export default {
     settings: '设置',
     switchMap: '切换导图（Ctrl+P）',
     newMap: '新建导图',
+    // 整理篮子（2026-09 点子篮子 M1）：仅当前图 = 篮子图时出现的砚栏钮
+    sortBasket: '整理篮子',
     undo: '回退（Ctrl+Z）',
     redo: '重做（Ctrl+Y）',
     copyBranchTip: '复制选中分支为 Markdown（Ctrl+C）',

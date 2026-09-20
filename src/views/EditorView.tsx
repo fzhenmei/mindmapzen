@@ -11,6 +11,8 @@ import { toNativePath } from '../services/nativePath'
 import type { WriteClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
+import { createBasketEnginePort } from '../editor/basketEngine'
+import { basketAbsPath } from '../services/basket'
 import { useCanvasPaste } from '../hooks/useCanvasPaste'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { ExportPorts, RegisterCloseGuard } from '../types/ports'
@@ -45,6 +47,7 @@ import EditorDialogs from '../components/EditorDialogs'
 import BodyDialog from '../components/BodyDialog'
 import QuickSwitchDialog from '../components/QuickSwitchDialog'
 import MapTabs from '../components/MapTabs'
+import BasketSortLayer from '../components/BasketSortLayer'
 import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
@@ -111,6 +114,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // openTask）时 docReady 翻转即挂浮层会赶在 onReady/mmRef 赋值前，refresh 静默空转成
   // 空板；onCanvasReady 才翻真（MarkdownView 同门共享，viewMode 残留路径同病同防）
   const [engineReady, setEngineReady] = useState(false)
+  // 点子篮子（2026-09 M1，spec §3.1/§4.3）：篮子态订阅 + 本图是否即篮子图（同源比较，
+  // 与 QuickCapture/BasketTargetPicker 的判定口径一致）；sortOpen 为整理浮层开合（内存态）
+  const basketRelPath = useAppStore((s) => s.basketRelPath)
+  const isBasket = basketRelPath !== null && workspaceDir !== null && mdPath === basketAbsPath(workspaceDir, basketRelPath)
+  const [sortOpen, setSortOpen] = useState(false)
 
   const name = mdPath.split('/').pop()!.replace(/\.md$/, '')
 
@@ -384,7 +392,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // v2.5：切换浮层（搜索/轮换）同列互斥；轮换中的 Tab 由 useQuickSwitch 捕获接管不经此守卫
   // 2026-09：新建导图对话框同列互斥；2026-09-08 弹窗化：正文弹窗同列互斥（模态锁节点）
   // 2026-09 导航系统终审修复：App 级设置/历史框（appDialog）同列互斥——模态在开时 Alt+← 等让位（三态直达键 Ctrl+1/2/3 刻意不进，见 useEditorHotkeys）
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null
+  // 2026-09 点子篮子 M1：整理浮层（sortOpen）同列互斥——模态在开时 Shift+F2 不开第二个模态、浮动条让位
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null || sortOpen
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关 Shift+F2 / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -415,6 +424,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount 冲刷，saveNow 依赖 refs
   }, [])
+
+  // 篮子引擎端口（2026-09 点子篮子 M1，spec §4.2 就近引擎）：当前图 = 篮子图时注册——捕获/删除
+  // 走引擎（内存态同步、撤销栈可用）；非篮子图/卸载（切图经 App key 重挂本视图）必置 null 让位
+  // 文件层。注册不依赖引擎就绪：端口自陈让位（未就绪返回 false → T4 落文件层），故与挂载同拍登记
+  useEffect(() => {
+    if (!isBasket) return
+    useAppStore.getState().setBasketEngine(createBasketEnginePort(() => mmRef.current))
+    return () => useAppStore.getState().setBasketEngine(null)
+  }, [isBasket])
 
   // AI 面板开/关/定宽后画布让位重算：引擎只监听 window resize，容器收窄（canvas-host 内联 right）
   // 须宿主补调 resize()；拖拽暂存不进依赖——不逐帧重排，开合/onCommit/onReset 各触发一次。
@@ -625,6 +643,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onSettingsClick={() => useAppStore.getState().openAppDialog('settings')}
         onSwitchClick={() => guardAiTurn(quick.open)}
         onNewClick={() => setNewMapOpen(true)}
+        // 整理篮子（spec §4.3）：仅篮子图显示（isBasket），点开出批量整理浮层
+        isBasket={isBasket}
+        onSortBasket={() => setSortOpen(true)}
         undoRedo={undoRedo}
         onCopyClick={doCopy}
         copySettings={copySettings}
@@ -654,6 +675,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onToggleKanbanArchive={() => setKanbanArchiveOpen((v) => !v)}
       />
       )}
+      {/* 整理浮层（2026-09 点子篮子 M1，spec §4.3）：仅篮子图挂载；两端口（引擎树数据源 /
+          git 备份）组装在 BasketSortLayer（行数护栏，同 basketEngine 抽离动因） */}
+      {isBasket && <BasketSortLayer open={sortOpen} onClose={() => setSortOpen(false)} mmRef={mmRef} />}
       {/* 正文弹窗（2026-09-08 弹窗化）：模态大弹窗浮于画布，进 anyDialog 互斥总线；
           bodyDraft !== null 即开（渲染门兼卸载门，close 置 null 即整树摘除） */}
       {docReady && bodyDialog.bodyDraft !== null && (
