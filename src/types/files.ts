@@ -146,6 +146,8 @@ export interface AppConfig {
   ai: AiConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）；null = 默认 320 */
   aiChatWidth: number | null
+  /** AI 输入框像素高（2026-09 长内容输入）；null = 默认两行 */
+  aiChatInputHeight: number | null
   /** 工作台 AI 建议缓存（2026-09-14 双条件：24h 内且任务指纹一致才复用）；null = 无 */
   aiAdvice: AiAdvice | null
   /** 新建导图上次选择的目录（2026-09 目录选择；相对工作区，'' = 根）。
@@ -243,6 +245,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   outlineWidth: null,
   ai: DEFAULT_AI_CONFIG,
   aiChatWidth: null,
+  aiChatInputHeight: null,
   aiAdvice: null,
   lastNewMapDir: '',
   basketPath: null,

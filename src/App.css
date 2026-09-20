@@ -24,6 +24,12 @@ html, body { overflow: hidden; }
 [data-split-resizing], [data-split-resizing] * {
   transition: none !important; user-select: none !important; cursor: col-resize !important; }
 [data-split-resizing] .split-resizer::after { opacity: 1 !important; }
+/* 输入区拖高（ChatPanel InputResizer 挂 html[data-row-resizing]，2026-09 长内容输入）：
+   语义同 data-split-resizing（禁过渡/锁选择/指示线常亮），光标换 row-resize——竖向
+   拖拽复用 split 的 col-resize 会显反光标 */
+[data-row-resizing], [data-row-resizing] * {
+  transition: none !important; user-select: none !important; cursor: row-resize !important; }
+[data-row-resizing] .input-resizer::after { opacity: 1 !important; }
 /* .app 类退役（2026-09 暗色修复）：App shell 根元素 M14 起未挂载本类，一直是死类；
    color/background/font-family 职责由 theme.css @layer base 的 body 规则（官方 v4 迁移
    补齐）与 @theme --font-sans 承担，此处保留档记防回潮 */
@@ -60,7 +66,10 @@ html, body { overflow: hidden; }
 .body-dialog .vditor { border: none; border-radius: 0; background: transparent; font-size: var(--font-size-sm); }
 .body-dialog .vditor-toolbar { background: transparent; border-bottom: 1px solid var(--border); padding: 2px 8px; }
 .zen-note-tip .vditor-reset { font-size: 13px; line-height: 1.6; }
-.md-preview .vditor-reset { font-size: var(--font-size-sm); line-height: 1.7; }
+/* 复合选择器（同元素）：vditor 静态 preview 把 vditor-reset 加在容器自身（md-preview
+   即 vditor-reset），后代式 .md-preview .vditor-reset 永不命中——AI 总结/案头 md 视图
+   曾因此恒走 vditor 基线 16px（2026-09 AI 回复字号修复） */
+.md-preview.vditor-reset { font-size: var(--font-size-sm); line-height: 1.7; }
 /* 青松 md 皮肤（2026-09 色彩适配）：vditor 自带 light/dark content-theme 是 GitHub 系
    黑白灰（标题黑/引用灰/表格灰线，链接亮色下更被 preflight 打回继承墨色），此处一层
    覆写承接青松令牌。锚点 [data-theme]（theme.ts 恒写 html）多一档属性特异性——vditor

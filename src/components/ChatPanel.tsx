@@ -1,10 +1,11 @@
 // src/components/ChatPanel.tsx —— AI 对话面板（spec §7）：纯装配 + 回合编排（send/stop）。
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
-import { useEffect, useState, type RefObject, type SubmitEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
+import { cn } from '../lib/utils'
 import { i18n } from '../i18n'
 import { useAppStore } from '../store/appStore'
 import { useChatStore, type ChatMessage } from '../store/chatStore'
@@ -16,6 +17,10 @@ import { createTurnStop, runUserTurn } from '../services/ai/agentLoop'
 import type { MindMapHandle } from '../types/engine'
 
 export const AI_PANEL_DEFAULT_PX = 320
+
+/** 输入框拖高下限（≈默认两行）。上限拖时按面板实际高算（60%），并兜底 min+40：
+ *  jsdom clientHeight=0、极小窗口面板过矮时，输入框至少还能向上扩 40px */
+const AI_INPUT_MIN_PX = 64
 
 interface Props {
   mmRef: RefObject<MindMapHandle | null>
@@ -33,11 +38,29 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   const phase = useChatStore((s) => s.phase)
   const contextNode = useChatStore((s) => s.contextNode)
   const [input, setInput] = useState('')
+  // 输入框拖高（2026-09 长内容）：层级同面板宽（aiDragPx ?? aiChatWidth 先例），
+  // 但松手不清暂存——持久层异步落盘窗口期清了会闪回（见 InputResizer onCommit 注释），
+  // 暂存保持到同值落地；null = 默认两行（rows=2 自然高）
+  const savedInputH = useAppStore((s) => s.aiChatInputHeight)
+  const setSavedInputH = useAppStore((s) => s.setAiChatInputHeight)
+  const [inputDragPx, setInputDragPx] = useState<number | null>(null)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const inputH = inputDragPx ?? savedInputH ?? null
 
   // v1.1（2026-09-13）：卸载即中止回合——关面板 = 不再需要，防后台孤儿回合继续编辑导图
   // （用户失去观察入口却不知情）。走全局句柄（终审 I2/I3 架构不废，正是它让卸载 cleanup
   // 不依赖组件 ref）：idle 时句柄为 null 安全 no-op；切图路径无交集（回合中切图本就被拦）
   useEffect(() => () => { useChatStore.getState().stopRequest?.() }, [])
+
+  /** Enter 发送 / Shift+Enter 换行（2026-09 输入优化）：无 Shift 的 Enter 拦下走发送，
+   *  Shift+Enter 放行走原生换行；合成中放行——中文输入法选词的确认回车 isComposing=true，
+   *  拦了会吞候选确认。流式中 handleSend 自带 phase 守卫，Enter 天然 no-op（彼时发送位已是停止钮） */
+  function handleInputKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>): void {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    void handleSend()
+  }
 
   async function handleSend(e?: SubmitEvent): Promise<void> {
     e?.preventDefault()
@@ -130,9 +153,10 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
 
   return (
     <aside
+      ref={panelRef}
       data-testid="ai-panel"
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col rounded-md border border-border bg-background"
     >
       <SplitResizer side="left" width={width} min={240} max={520} label={t('ai.panel.title')} onResize={onResize} onCommit={onCommit} onReset={onReset} />
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
@@ -156,25 +180,52 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
           {t('ai.panel.contextChip', { text: (contextNode ?? selection)!.text })}
         </p>
       )}
-      <form onSubmit={(e) => void handleSend(e)} className="flex shrink-0 items-end gap-2 border-t border-border p-2">
-        <textarea
-          data-testid="ai-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={t('ai.panel.placeholder')}
-          rows={2}
-          className="min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent p-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+      {/* 输入区（2026-09 长内容输入）：上缘拖高手柄 + 表单 + 快捷键常显提示；
+          border-t 上移到容器（form 原自带），消息区 flex-1 自动让位。
+          手柄 onCommit 不清拖拽暂存：持久层异步落盘（load-merge-save 磁盘 IO）窗口期内
+          清了会闪回默认两行、落地后又跳回拖拽高——暂存保持到同值落地无感，双击重置才清 */}
+      <div className="relative shrink-0 border-t border-border" data-testid="ai-input-area">
+        <InputResizer
+          label={t('ai.panel.resizeInput')}
+          title={t('ai.panel.inputResizeTitle')}
+          min={AI_INPUT_MIN_PX}
+          startOf={() => taRef.current?.clientHeight ?? AI_INPUT_MIN_PX}
+          maxOf={() =>
+            Math.max(AI_INPUT_MIN_PX + 40, Math.round((panelRef.current?.clientHeight ?? 0) * 0.6))
+          }
+          onResize={setInputDragPx}
+          onCommit={(h) => void setSavedInputH(h)}
+          onReset={() => {
+            setInputDragPx(null)
+            void setSavedInputH(null)
+          }}
         />
-        {phase === 'idle' ? (
-          <button type="submit" data-testid="ai-send" aria-label={t('ai.panel.send')} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
-            <Send className="size-4" />
-          </button>
-        ) : (
-          <button type="button" data-testid="ai-stop" aria-label={t('ai.panel.stop')} onClick={handleStop} className="rounded-md bg-destructive p-2 text-destructive-foreground">
-            <Square className="size-4" />
-          </button>
-        )}
-      </form>
+        <form onSubmit={(e) => void handleSend(e)} className="flex items-end gap-2 p-2">
+          <textarea
+            ref={taRef}
+            data-testid="ai-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            placeholder={t('ai.panel.placeholder')}
+            rows={2}
+            style={inputH === null ? undefined : { height: inputH }}
+            className="min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent p-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {phase === 'idle' ? (
+            <button type="submit" data-testid="ai-send" aria-label={t('ai.panel.send')} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+              <Send className="size-4" />
+            </button>
+          ) : (
+            <button type="button" data-testid="ai-stop" aria-label={t('ai.panel.stop')} onClick={handleStop} className="rounded-md bg-destructive p-2 text-destructive-foreground">
+              <Square className="size-4" />
+            </button>
+          )}
+        </form>
+        <p data-testid="ai-input-hint" className="select-none px-3 pb-1.5 text-right text-[10px] text-muted-foreground">
+          {t('ai.panel.inputHint')}
+        </p>
+      </div>
     </aside>
   )
 }
@@ -235,4 +286,67 @@ function cardText(c: { kind: string; ok: boolean; text: string }): string {
   const key = CARD_LABEL_KEYS[c.kind as keyof typeof CARD_LABEL_KEYS]
   const label = key === undefined ? c.text : i18n.t(key, { text: c.text })
   return c.ok ? label : `${label}${i18n.t('ai.card.failed')}`
+}
+
+/** 输入区上缘拖高手柄（2026-09 长内容输入）：向上拖增高/向下拖回落，双击回默认两行。
+ *  机制同 SplitResizer（Pointer Events + setPointerCapture + window 兜底监听）但方向垂直；
+ *  起点高/上限高拖时实测——默认两行时无数值基准，读 textarea 实际 clientHeight；上限取
+ *  面板实际高的 60%（随窗口变）。html 挂 data-row-resizing：App.css 禁过渡/锁选择/
+ *  row-resize 光标 + 指示线常亮（data-split-resizing 写死 col-resize，复用会显反光标） */
+function InputResizer({ label, title, min, startOf, maxOf, onResize, onCommit, onReset }: Readonly<{
+  label: string
+  title: string
+  min: number
+  startOf(): number
+  maxOf(): number
+  onResize(h: number): void
+  onCommit(h: number): void
+  onReset(): void
+}>) {
+  const onPointerDown = (e: ReactPointerEvent<HTMLHRElement>) => {
+    if (e.button !== 0) return
+    const pid = e.pointerId
+    const d = { startY: e.clientY, startH: startOf(), last: min, moved: false }
+    const max = maxOf()
+    try {
+      e.currentTarget.setPointerCapture(pid)
+    } catch {
+      // jsdom 无 setPointerCapture 实现；window 兜底监听仍在（同 SplitResizer）
+    }
+    document.documentElement.dataset.rowResizing = ''
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return
+      // 上移（clientY 减小）为增量：拖上增高、拖下回落
+      d.last = Math.round(Math.min(max, Math.max(min, d.startH + (d.startY - ev.clientY))))
+      d.moved = true
+      onResize(d.last)
+    }
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      delete document.documentElement.dataset.rowResizing
+      if (d.moved) onCommit(d.last) // 纯点击不提交，双击路径留给 onReset（同 SplitResizer）
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+  }
+  return (
+    <hr
+      aria-orientation="horizontal"
+      aria-label={label}
+      data-testid="ai-input-resizer"
+      title={title}
+      className={cn(
+        // 骑线式（同 SplitResizer 的 -left-1 几何）：absolute -top-1 h-2 越过容器 border-t，
+        // 指示线（after top-1/2）正压边线，柄与边线零间隙；不占布局高（原流内 8px 死空隙已除）
+        'input-resizer absolute -top-1 left-0 right-0 z-20 h-2 cursor-row-resize touch-none border-0',
+        // 横向指示线（after）左右各缩 20px，hover 浮现；拖拽中 App.css 常亮
+        'after:absolute after:left-5 after:right-5 after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-border after:opacity-0 after:transition-opacity hover:after:opacity-100',
+      )}
+      onPointerDown={onPointerDown}
+      onDoubleClick={onReset}
+    />
+  )
 }

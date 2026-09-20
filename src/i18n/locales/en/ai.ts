@@ -8,6 +8,10 @@ export default {
     send: 'Send',
     stop: 'Stop',
     contextChip: 'Context: {{text}}',
+    // Input area (2026-09 long-content input): always-on shortcut hint + resize handle a11y name/tooltip
+    inputHint: 'Enter to send, Shift + Enter for newline',
+    resizeInput: 'Resize input box',
+    inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and move branches. The canvas is read-only while AI works; you can stop anytime.',
   },

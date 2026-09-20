@@ -22,6 +22,7 @@ export async function loadConfig(fs: FsAdapter, path: string): Promise<AppConfig
       outlineWidth: parsePanelWidth(parsed.outlineWidth),
       ai: parseAiConfig(parsed.ai),
       aiChatWidth: parsePanelWidth(parsed.aiChatWidth),
+      aiChatInputHeight: parsePanelWidth(parsed.aiChatInputHeight),
       aiAdvice: parseAiAdvice(parsed.aiAdvice),
       lastNewMapDir: typeof parsed.lastNewMapDir === 'string' ? parsed.lastNewMapDir : '',
       basketPath: parseBasketPath(parsed.basketPath),
