@@ -643,8 +643,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
     if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
     const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
-    // 可选链：端口缺席（undefined）与引擎自陈让位（false）同为假值 → 落文件层
-    if (basketEngine?.insertIdea(idea)) return { ok: true }
+    // 就近引擎（spec §4.2）：端口在位且写入成功即返回——可选链下「端口缺席（undefined）」
+    // 与「引擎自陈让位（false）」同为假值，落文件层。端口抛错即显式失败且**不落文件层**：
+    // 引擎可能已部分应用，回落会双写（审查 Important；与文件层的 {ok:false}+console 出口对称）
+    try {
+      if (basketEngine?.insertIdea(idea)) return { ok: true }
+    } catch (e) {
+      console.error('篮子引擎写入失败', e)
+      return { ok: false, error: i18n.t('basket.errors.writeFailed') }
+    }
     return writeBasketFile((tree) => insertIdeaIntoTree(tree, idea), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
   },
 
@@ -652,8 +659,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
     if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
     const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
-    // 可选链：同 captureIdea（端口缺席 / 引擎让位 → 文件层）
-    if (basketEngine?.removeIdeaByText(text)) return { ok: true }
+    // 同 captureIdea：端口缺席/让位 → 文件层；端口抛错即显式失败、不落文件层（避免双写）
+    try {
+      if (basketEngine?.removeIdeaByText(text)) return { ok: true }
+    } catch (e) {
+      console.error('篮子引擎删除失败', e)
+      return { ok: false, error: i18n.t('basket.errors.writeFailed') }
+    }
     return writeBasketFile((tree) => removeIdeaFromTree(tree, text), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
   },
 

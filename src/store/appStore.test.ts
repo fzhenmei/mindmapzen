@@ -644,6 +644,26 @@ describe('点子篮子：captureIdea', () => {
     const r = await useAppStore.getState().captureIdea(idea)
     expect(r.ok).toBe(false)
   })
+
+  // 引擎分支异常不得逃出 CaptureResult 边界（审查 Important）：与文件层对称——失败一律
+  // 转 {ok:false} + console.error 出口；且**不落文件层兜底**（引擎可能已部分应用，回落双写）
+  test('引擎端口抛错 → 显式失败且不落文件层（磁盘未动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n')
+    const before = await fs.readTextFile('/ws/点子篮子.md')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: () => { throw new Error('引擎故障') }, removeIdeaByText: vi.fn(() => true) } })
+      const r = await useAppStore.getState().captureIdea(idea)
+      expect(r.ok).toBe(false)
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('篮子引擎'), expect.any(Error))
+      expect(await fs.readTextFile('/ws/点子篮子.md')).toBe(before) // 文件层未被兜底写入
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
 })
 
 // 挂载成功后从篮子删除（spec §4.6 撤销链的一环）：与捕获同款就近引擎规则（§4.2），
@@ -676,5 +696,23 @@ describe('点子篮子：removeBasketIdeaByText', () => {
   test('未设工作区 → 显式失败', async () => {
     useAppStore.setState({ workspaceDir: null, basketEngine: null })
     expect((await useAppStore.getState().removeBasketIdeaByText('甲')).ok).toBe(false)
+  })
+
+  test('引擎端口抛错 → 显式失败且不落文件层（磁盘未动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n')
+    const before = await fs.readTextFile('/ws/点子篮子.md')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: vi.fn(() => true), removeIdeaByText: () => { throw new Error('引擎故障') } } })
+      const r = await useAppStore.getState().removeBasketIdeaByText('甲')
+      expect(r.ok).toBe(false)
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('篮子引擎'), expect.any(Error))
+      expect(await fs.readTextFile('/ws/点子篮子.md')).toBe(before)
+    } finally {
+      errSpy.mockRestore()
+    }
   })
 })
