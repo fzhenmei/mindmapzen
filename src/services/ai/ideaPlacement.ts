@@ -4,6 +4,9 @@
 // 本文件分四层：摘要构建（Task 1）→ 解析容错与校验（Task 2）→ 两阶段编排（Task 3）
 import type { ZenNode } from '../../types/tree'
 import type { MountTarget } from '../basketMount'
+import { getTransport, parseDeltaChunk, type AiTransport } from './client'
+import { readMapTree, type BasketIdea } from '../basket'
+import type { AiConfig, FsAdapter } from '../../types/files'
 
 /** 护栏常量（spec §6.4 初始建议值）：图数超限整批拒绝并显式提示；单图节点数超限细摘要截断标注 */
 export const MAX_MAPS_FOR_AI = 50
@@ -223,4 +226,174 @@ export function toMountTarget(p: AiPlacement, trees: Map<string, ZenNode>): Moun
     path: chain.length >= 2 ? chain.slice(0, -1) : chain,
     text,
   }
+}
+
+// ── 两阶段编排（Task 3，spec §6.1/§6.2）──
+// 编排语义：
+// 1. 护栏：图数超 MAX_MAPS_FOR_AI 整批拒绝（不截断不静默）；
+// 2. 读全部图树，读失败的图剔除出清单（AI 拿不到就推荐不到，无额外出口——数量在结果里体现）；
+// 3. phase1 粗摘要清单 + 点子列表 → 单次流式调用 → 解析失败整批 parseFailed；
+// 4. 候选归并：每点子取候选 ∩ 白名单（readTree 成功的 mapPath 集合），空 → 该行 noCandidate；
+// 5. phase2 全部候选图（去重）细摘要 → 单次流式调用（prompt 含每点子候选路径）→ 解析失败整批 parseFailed；
+// 6. 逐点子按 idea 文本（trim）对位 phase2 行 → toMountTarget（白名单+精确路径）→ null 即 targetNotFound
+//    （spec §6.3：白名单未命中与路径不匹配同口径，留给用户手选兜底）；
+// 7. transport endedWith=error → requestFailed（带 message）；aborted → aborted（本地掐流不是故障）；
+// 8. 两阶段共用注入的同一个 transport 实例（一次 abort 掐在途的那一轮）；每阶段流式文本收全再整体解析。
+
+export type PlacementFailure = 'tooManyMaps' | 'parseFailed' | 'requestFailed' | 'aborted'
+
+export type PlacementRow =
+  | { idea: BasketIdea; target: MountTarget; reason?: string }
+  | { idea: BasketIdea; failed: 'noCandidate' | 'targetNotFound' }
+
+export interface AskPlacementInput {
+  ideas: BasketIdea[]
+  maps: string[]
+  ai: AiConfig
+  workspaceDir: string
+  fs: FsAdapter
+}
+
+export interface AskPlacementPorts {
+  transport?: AiTransport
+  readTree?(mapPath: string): Promise<ZenNode | null>
+}
+
+// prompt 常量为模型面而非 UI 面——中文硬编码，不走 i18n
+/** phase1 选图 prompt：粗摘要清单 + 点子列表 */
+function phase1Prompt(summaries: CoarseMapSummary[], ideas: BasketIdea[]): string {
+  const lines = [
+    '你是导图整理助手。下面是工作区的导图清单（路径与摘要）和待整理的点子。',
+    '为每个点子从导图中选出 1~3 个最合适的挂载候选图（按合适程度排序）。',
+    '只输出 JSON，不要任何多余文本，格式：',
+    '{"placements":[{"idea":"<点子原文>","candidates":[{"mapPath":"<图路径原样照抄>","reason":"<一句理由>"}]}]}',
+    'mapPath 必须原样照抄清单中的路径。导图清单：',
+    ...summaries.map((s) => `- ${s.mapPath}《${s.name}》${s.summary}`),
+    '点子列表：',
+    ...ideas.map((i) => `- ${i.text}`),
+  ]
+  return lines.join('\n')
+}
+
+/** phase2 定位 prompt：候选图细摘要大纲 + 各点子的候选路径 */
+function phase2Prompt(fines: FineMapSummary[], ideas: BasketIdea[], candidatesByIdea: Map<string, string[]>): string {
+  const lines = [
+    '你是导图整理助手。为每个点子在其候选图中选出挂载节点（新点子将挂为该节点的子节点）。',
+    '输出该节点的完整文本路径 path：从根节点文本开始、到所选节点自身结束的每一级文本。',
+    '只输出 JSON，不要任何多余文本，格式：',
+    '{"placements":[{"idea":"<点子原文>","mapPath":"<图路径原样照抄>","path":["<根文本>",...,"<所选节点文本>"],"reason":"<一句理由>"}]}',
+    'path 必须与大纲中的节点文本逐字一致。候选图大纲：',
+    ...fines.map((f) => `## ${f.mapPath}\n${f.outline}`),
+    '点子列表（含各自候选图路径）：',
+    ...ideas.map((i) => `- ${i.text}（候选：${(candidatesByIdea.get(i.text.trim()) ?? []).join('、')}）`),
+  ]
+  return lines.join('\n')
+}
+
+/** 单阶段流式调用：收全量文本再返回（两阶段的输出都是一次性 JSON，无流式渲染需求） */
+async function askOnce(
+  transport: AiTransport,
+  ai: AiConfig,
+  prompt: string,
+): Promise<{ ok: true; text: string } | { ok: false; error: 'requestFailed' | 'aborted'; message?: string }> {
+  let base = ai.baseUrl
+  while (base.endsWith('/')) base = base.slice(0, -1)
+  let acc = ''
+  const outcome = await transport.start(
+    {
+      url: `${base}/chat/completions`,
+      apiKey: ai.apiKey,
+      body: { model: ai.model, messages: [{ role: 'user', content: prompt }], stream: true },
+    },
+    (data) => {
+      const parsed = parseDeltaChunk(data)
+      if (parsed?.text !== undefined) acc += parsed.text
+    },
+  )
+  if (outcome.endedWith === 'error') return { ok: false, error: 'requestFailed', message: outcome.errorMessage }
+  if (outcome.endedWith === 'aborted') return { ok: false, error: 'aborted' }
+  return { ok: true, text: acc }
+}
+
+/** 读全部图树建白名单（语义 2）：读失败的图剔除——AI 拿不到就推荐不到，数量在结果里体现 */
+async function readTrees(readTree: NonNullable<AskPlacementPorts['readTree']>, maps: string[]): Promise<Map<string, ZenNode>> {
+  const trees = new Map<string, ZenNode>()
+  for (const mapPath of maps) {
+    const tree = await readTree(mapPath)
+    if (tree !== null) trees.set(mapPath, tree)
+  }
+  return trees
+}
+
+/** 候选归并（语义 4）：每点子取候选 ∩ 白名单，产出候选路径表与待定位集合；对位键 = 点子文本 trim */
+function mergeCandidates(ideas: BasketIdea[], picks: AiPickRow[], trees: Map<string, ZenNode>): { candidatesByIdea: Map<string, string[]>; pendingSet: Set<BasketIdea> } {
+  const byIdea = new Map<string, AiPickRow>()
+  for (const row of picks) byIdea.set(row.idea.trim(), row)
+  const candidatesByIdea = new Map<string, string[]>()
+  const pendingSet = new Set<BasketIdea>()
+  for (const idea of ideas) {
+    const pick = byIdea.get(idea.text.trim())
+    const cands = (pick?.candidates ?? []).map((c) => c.mapPath).filter((m) => trees.has(m))
+    if (cands.length === 0) continue
+    candidatesByIdea.set(idea.text.trim(), cands)
+    pendingSet.add(idea)
+  }
+  return { candidatesByIdea, pendingSet }
+}
+
+/** 阶段② 定位（语义 5）：候选图（去重）细摘要 → 单次调用 → 按 trim 键建对位表；无待定点子空表直出；
+ *  失败原样上抛（requestFailed/aborted/parseFailed 整批口径） */
+async function runPhase2(
+  transport: AiTransport,
+  ai: AiConfig,
+  trees: Map<string, ZenNode>,
+  candidatesByIdea: Map<string, string[]>,
+  pending: BasketIdea[],
+): Promise<{ ok: true; placeByIdea: Map<string, AiPlacement> } | { ok: false; error: 'parseFailed' | 'requestFailed' | 'aborted'; message?: string }> {
+  const placeByIdea = new Map<string, AiPlacement>()
+  if (pending.length === 0) return { ok: true, placeByIdea }
+  const fineSet = new Set<string>()
+  for (const list of candidatesByIdea.values()) for (const m of list) fineSet.add(m)
+  const fines = [...fineSet].map((mapPath) => buildFineSummary(mapPath, trees.get(mapPath)!))
+  const p2 = await askOnce(transport, ai, phase2Prompt(fines, pending, candidatesByIdea))
+  if (!p2.ok) return p2
+  const places = parsePhase2(p2.text)
+  if (places === null) return { ok: false, error: 'parseFailed' }
+  for (const p of places) placeByIdea.set(p.idea.trim(), p)
+  return { ok: true, placeByIdea }
+}
+
+/** 按输入顺序组装 rows（语义 6）：noCandidate / targetNotFound / 成功同行同序 */
+function buildRows(ideas: BasketIdea[], pendingSet: Set<BasketIdea>, placeByIdea: Map<string, AiPlacement>, trees: Map<string, ZenNode>): PlacementRow[] {
+  return ideas.map((idea) => {
+    if (!pendingSet.has(idea)) return { idea, failed: 'noCandidate' as const }
+    const p = placeByIdea.get(idea.text.trim())
+    // 白名单 + 路径精确匹配（§6.3 硬约束）：p 缺席与 toMountTarget 为 null 同口径——一律
+    // targetNotFound，用户手选兜底（早退写法保住窄化，三元汇合流会让 p 回到 possibly undefined）
+    if (p === undefined) return { idea, failed: 'targetNotFound' as const }
+    const target = toMountTarget(p, trees)
+    if (target === null) return { idea, failed: 'targetNotFound' as const }
+    return { idea, target, reason: p.reason }
+  })
+}
+
+/** 两阶段编排入口：选图（phase1）→ 定位（phase2），rows 按输入序组装（成功/失败同行同序） */
+export async function askPlacement(
+  input: AskPlacementInput,
+  ports: AskPlacementPorts = {},
+): Promise<{ ok: true; rows: PlacementRow[] } | { ok: false; error: PlacementFailure; message?: string }> {
+  if (input.maps.length > MAX_MAPS_FOR_AI) return { ok: false, error: 'tooManyMaps' }
+  const transport = ports.transport ?? getTransport()
+  const readTree = ports.readTree ?? (async (mapPath) => readMapTree(input.fs, mapPath))
+  const trees = await readTrees(readTree, input.maps)
+  if (trees.size === 0) return { ok: true, rows: input.ideas.map((idea) => ({ idea, failed: 'noCandidate' as const })) }
+  // 阶段① 选图（语义 3）
+  const p1 = await askOnce(transport, input.ai, phase1Prompt([...trees.entries()].map(([mapPath, tree]) => buildCoarseSummary(mapPath, tree)), input.ideas))
+  if (!p1.ok) return p1
+  const picks = parsePhase1(p1.text)
+  if (picks === null) return { ok: false, error: 'parseFailed' }
+  const { candidatesByIdea, pendingSet } = mergeCandidates(input.ideas, picks, trees)
+  const p2 = await runPhase2(transport, input.ai, trees, candidatesByIdea, [...pendingSet])
+  if (!p2.ok) return p2
+  return { ok: true, rows: buildRows(input.ideas, pendingSet, p2.placeByIdea, trees) }
 }

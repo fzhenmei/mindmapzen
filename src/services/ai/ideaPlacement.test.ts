@@ -1,4 +1,5 @@
-// ideaPlacement 摘要层（spec §6.2/§6.4）：粗摘要=图名+根+一层子节点；细摘要=缩进大纲带节点上限
+// ideaPlacement 摘要层（spec §6.2/§6.4）：粗摘要=图名+根+一层子节点；细摘要=缩进大纲带节点上限；
+// 两阶段编排（Task 3）：askPlacement 选图→定位（fake transport 注入）
 import { test, expect } from 'vitest'
 import {
   buildCoarseSummary,
@@ -11,7 +12,10 @@ import {
   parsePhase2,
   collectPaths,
   toMountTarget,
+  askPlacement,
 } from './ideaPlacement'
+import type { AiTransport, ChatRequestPayload } from './client'
+import type { FsAdapter } from '../../types/files'
 import type { ZenNode } from '../../types/tree'
 
 const n = (text: string, children: ZenNode[] = []): ZenNode => ({ text, children })
@@ -104,4 +108,98 @@ test('collectPaths：全部节点链（含根链与深层链）', () => {
   expect(set.has('根›A')).toBe(true)
   expect(set.has('根›A›A1')).toBe(true)
   expect(set.size).toBe(3)
+})
+
+// 编排（spec §6.1/§6.2）：两阶段单次调用各一；护栏/解析失败/请求失败/中止的整批口径
+
+/** fake transport：按调用次序回放预置回复；记录收到的 prompt 供断言。
+ *  delta 须包成 OpenAI chunk 信封（与真实契约一致——askOnce 用 parseDeltaChunk 解包） */
+function fakeTransport(replies: Array<{ text: string; ended?: 'done' | 'error' | 'aborted' }>): AiTransport & { calls: string[] } {
+  const calls: string[] = []
+  let i = 0
+  return {
+    calls,
+    async start(payload: ChatRequestPayload, onDelta: (d: string) => void) {
+      calls.push((payload.body.messages as Array<{ content: string }>)[0].content)
+      const r = replies[Math.min(i, replies.length - 1)]
+      i++
+      if (r.ended === 'aborted') return { endedWith: 'aborted' }
+      if (r.ended === 'error') return { endedWith: 'error', errorMessage: 'HTTP 500' }
+      onDelta(JSON.stringify({ choices: [{ delta: { content: r.text } }] }))
+      return { endedWith: 'done' }
+    },
+    abort: () => {},
+  }
+}
+
+// readTree 全注入时 fs 不被消费——空桩即可（实现若实际消费再换内存桩）
+const noFs = {} as FsAdapter
+
+test('成功链：phase1 选图 → phase2 定位 → 产出规范 MountTarget', async () => {
+  const t = fakeTransport([
+    { text: JSON.stringify({ placements: [{ idea: '点子A', candidates: [{ mapPath: '/ws/a.md' }] }] }) },
+    { text: JSON.stringify({ placements: [{ idea: '点子A', mapPath: '/ws/a.md', path: ['根', '待办'] }] }) },
+  ])
+  const r = await askPlacement(
+    { ideas: [{ text: '点子A' }], maps: ['/ws/a.md', '/ws/b.md'], ai: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'm' }, workspaceDir: '/ws', fs: noFs },
+    { transport: t, readTree: async (p) => (p === '/ws/a.md' ? n('根', [n('待办')]) : n('别图', [n('杂')])) },
+  )
+  expect(r).toEqual({
+    ok: true,
+    rows: [{ idea: { text: '点子A' }, target: { mapPath: '/ws/a.md', path: ['根'], text: '待办' }, reason: undefined }],
+  })
+  expect(t.calls).toHaveLength(2) // 两阶段各一次
+  expect(t.calls[0]).toContain('/ws/a.md')
+  expect(t.calls[1]).toContain('候选')
+})
+
+test('白名单拒绝（spec §6.3 必办）：phase2 输出清单外 mapPath → targetNotFound，不构造 MountTarget', async () => {
+  const t = fakeTransport([
+    { text: JSON.stringify({ placements: [{ idea: '点子A', candidates: [{ mapPath: '/ws/a.md' }] }] }) },
+    { text: JSON.stringify({ placements: [{ idea: '点子A', mapPath: '/etc/evil.md', path: ['根', '待办'] }] }) },
+  ])
+  const r = await askPlacement(
+    { ideas: [{ text: '点子A' }], maps: ['/ws/a.md'], ai: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'm' }, workspaceDir: '/ws', fs: noFs },
+    { transport: t, readTree: async () => n('根', [n('待办')]) },
+  )
+  expect(r).toEqual({ ok: true, rows: [{ idea: { text: '点子A' }, failed: 'targetNotFound' }] })
+})
+
+test('护栏：图数超 MAX_MAPS_FOR_AI → tooManyMaps，零网络调用', async () => {
+  const t = fakeTransport([])
+  const maps = Array.from({ length: 51 }, (_, i) => `/ws/m${i}.md`)
+  const r = await askPlacement(
+    { ideas: [{ text: 'x' }], maps, ai: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'm' }, workspaceDir: '/ws', fs: noFs },
+    { transport: t },
+  )
+  expect(r).toEqual({ ok: false, error: 'tooManyMaps' })
+  expect(t.calls).toHaveLength(0)
+})
+
+test('解析失败 / 请求失败 / 中止：整批口径（可重试/非故障）', async () => {
+  const base = { ideas: [{ text: 'x' }], maps: ['/ws/a.md'], ai: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'm' }, workspaceDir: '/ws', fs: noFs }
+  const p1 = { transport: fakeTransport([{ text: '不是 JSON' }]), readTree: async () => n('根', [n('待办')]) }
+  expect(await askPlacement(base, p1)).toMatchObject({ ok: false, error: 'parseFailed' })
+  const p2 = { transport: fakeTransport([{ text: 'x', ended: 'error' }]), readTree: async () => n('根', [n('待办')]) }
+  expect(await askPlacement(base, p2)).toMatchObject({ ok: false, error: 'requestFailed' })
+  const p3 = { transport: fakeTransport([{ text: 'x', ended: 'aborted' }]), readTree: async () => n('根', [n('待办')]) }
+  expect(await askPlacement(base, p3)).toMatchObject({ ok: false, error: 'aborted' })
+})
+
+test('无候选：phase1 空候选 → noCandidate；idea 对位按 trim 文本；rows 顺序与输入一致', async () => {
+  const t = fakeTransport([
+    { text: JSON.stringify({ placements: [{ idea: '点子A', candidates: [] }, { idea: '点子B', candidates: [{ mapPath: '/ws/a.md' }] }] }) },
+    { text: JSON.stringify({ placements: [{ idea: '点子B', mapPath: '/ws/a.md', path: ['根', '待办'] }] }) },
+  ])
+  const r = await askPlacement(
+    { ideas: [{ text: ' 点子B ' }, { text: '点子A' }], maps: ['/ws/a.md'], ai: { baseUrl: 'https://x/v1', apiKey: 'k', model: 'm' }, workspaceDir: '/ws', fs: noFs },
+    { transport: t, readTree: async () => n('根', [n('待办')]) },
+  )
+  expect(r).toEqual({
+    ok: true,
+    rows: [
+      { idea: { text: ' 点子B ' }, target: { mapPath: '/ws/a.md', path: ['根'], text: '待办' }, reason: undefined },
+      { idea: { text: '点子A' }, failed: 'noCandidate' },
+    ],
+  })
 })
