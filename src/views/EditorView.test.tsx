@@ -3012,6 +3012,32 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     expect(useChatStore.getState().messages).toEqual([])
   })
 
+  test('拖宽松手落盘窗口期不闪回（拖拽暂存保持，2026-09 闪回修复）', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } as never })
+    // 持久层 deferred：setAiChatWidth 异步磁盘 IO（load-merge-save 后才回写 store），
+    // 若松手即清 aiDragPx，窗口期内 aiPanelPx 回落旧值/默认 320，落地后又跳回拖宽——
+    // 同输入框拖高闪回（ChatPanel onCommit 修复）的横向版
+    let release!: () => void
+    const commit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        }),
+    )
+    useAppStore.setState({ setAiChatWidth: commit as never } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('ai-toggle'))
+    // 面板左缘 SplitResizer（side=left：clientX 左移增宽）：320 + 150 = 470（clamp [240,520] 内）
+    const handle = screen.getByRole('separator', { name: 'AI 对话' })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 500 })
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 350 })
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    expect(commit).toHaveBeenCalledWith(470)
+    expect(screen.getByTestId('ai-panel').style.width).toBe('470px') // 落地前不闪回默认 320
+    release()
+  })
+
   test('面板开合触发画布补偿 resize；容器 0×0 时被门禁跳过（webview2 污染链路复刻）', async () => {
     useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
     const el = document.createElement('div')

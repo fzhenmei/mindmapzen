@@ -107,7 +107,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const [kanbanArchiveOpen, setKanbanArchiveOpen] = useState(false) // 归档列显隐（2026-09 画布三态上浮砚栏，跨浮层挂载保持）
   const [mdOutlineVisible, setMdOutlineVisible] = useState(false) // Markdown 态大纲实际显隐（MarkdownView 上报，ZenBar 钮 pressed 信号）
   const [aiOpen, setAiOpen] = useState(false) // AI 对话面板开合（2026-09 AI Agent v1）：右栏常驻槽
-  const [aiDragPx, setAiDragPx] = useState<number | null>(null) // AI 面板拖拽暂存宽；null = 未在拖（松手 onCommit 落盘）
+  // AI 面板拖拽暂存宽；松手不清（异步落盘窗口期清了会闪回，同输入框拖高修复），保持到 store 同值落地
+  const [aiDragPx, setAiDragPx] = useState<number | null>(null)
   // 案头跳看板定位（2026-09）：消费 view:'kanban' 寻址器时暂存下发 KanbanView 高亮；消费即清
   const [kanbanLocate, setKanbanLocate] = useState<KanbanLocate | null>(null)
   // 引擎就绪门（2026-09 案头跳看板）：docReady 只保证文档解析——viewMode 先行置位（案头
@@ -585,7 +586,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         </button>
       )}
       {/* AI 对话面板（spec §7）：右栏贴边常驻（absolute inset-y 全高），宽 = 拖拽暂存（每帧）→
-          松手 onCommit 落盘（setAiChatWidth）→ 双击 onReset 回默认；拖拽手柄在 ChatPanel 左缘 */}
+          松手 onCommit 落盘（setAiChatWidth）→ 双击 onReset 回默认；拖拽手柄在 ChatPanel 左缘。
+          onCommit 不清暂存：异步落盘窗口期清了会闪回（2026-09 闪回修复，同输入框拖高） */}
       {aiOpen && (
         <div className="absolute top-0 right-[5px] bottom-[5px] z-20 flex" style={{ width: aiPanelPx }}>
           <ChatPanel
@@ -594,7 +596,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
             width={aiPanelPx}
             onResize={setAiDragPx}
             onCommit={(w) => {
-              setAiDragPx(null)
               void useAppStore.getState().setAiChatWidth(w)
             }}
             onReset={() => {
