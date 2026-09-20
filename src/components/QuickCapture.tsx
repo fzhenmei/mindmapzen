@@ -59,9 +59,10 @@ export default function QuickCapture({ open, onClose }: Readonly<Props>) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent aria-label={t('basket.capture.title')} className="sm:max-w-md">
         <DialogTitle>{t('basket.capture.title')}</DialogTitle>
+        {/* 刻意不写 autoFocus（IDE Sonar S9379）：Radix Dialog 挂载期自动聚焦首个可聚焦元素（即本框），
+            实测行为中性；删除依据与探针见 task-5-report §7 */}
         <textarea
           data-testid="capture-input"
-          autoFocus
           rows={3}
           value={value}
           placeholder={t('basket.capture.placeholder')}
