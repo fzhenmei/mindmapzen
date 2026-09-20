@@ -31,7 +31,9 @@ function harnessPngBytes(): Uint8Array {
  *  ?basket=1 追加点子篮子预置（/ws/点子篮子.md + 可挂目标 /ws/项目/项目图.md + /ws/普通图.md）
  *  并预写 cfg.basketPath 锚定篮子（basket.spec 全链路）：同 ?desk=1 须先于 setWorkspace
  *  （篮子清单/左树在 setWorkspace 时生成），且预置内容与 ?desk 冲突（项目图内容不同）
- *  ——故独立成参数而非并入，两参数不并用 */
+ *  ——故独立成参数而非并入，两参数不并用
+ *  ?ai=1 预写 cfg.ai BYOK 配置（M3 AI 推荐，basket.spec AI 场景）：三项全非空仅点亮 AI 按钮，
+ *  真实网络由 e2e 的 __AI_TRANSPORT_FACTORY__ fake 接管；与 ?basket=1 组合使用 */
 export async function installE2eHarness(): Promise<void> {
   const fs = new MemoryFsAdapter()
   useAppStore.getState().setAdapter(fs)
@@ -114,10 +116,15 @@ export async function installE2eHarness(): Promise<void> {
   // 语义同上 ?tourdone——真 reload 会重建内存 FS 丢配置，无法验证「重启保持」
   const lang = new URLSearchParams(window.location.search).get('lang')
   // ?basket=1 预写 cfg.basketPath 锚定篮子身份（同 ?lang 语义：模拟上一会话已落盘的重启）。
-  // 须先于 setWorkspace 写盘——init 的 load-merge-save 从该文件读 basketPath 解析 basketRelPath
-  const cfgExtra: Record<string, unknown> = new URLSearchParams(window.location.search).has('basket')
-    ? { basketPath: '点子篮子.md' }
-    : {}
+  // 须先于 setWorkspace 写盘——init 的 load-merge-save 从该文件读 basketPath 解析 basketRelPath。
+  // 各参数互斥改对象合并（cfgExtra 单对象）：?basket=1&ai=1 组合（M3 AI 场景两预置齐备）
+  const cfgExtra: Record<string, unknown> = {}
+  if (new URLSearchParams(window.location.search).has('basket')) cfgExtra.basketPath = '点子篮子.md'
+  // ?ai=1 预写 BYOK 配置（模拟设置面板已保存；AI 推荐按钮的启用条件）。真实网络由
+  // e2e 的 __AI_TRANSPORT_FACTORY__ fake 接管，此三项仅点亮 UI
+  if (new URLSearchParams(window.location.search).has('ai')) {
+    cfgExtra.ai = { baseUrl: 'https://fake.local/v1', apiKey: 'k', model: 'm' }
+  }
   await fs.writeTextFileAtomic(
     '/cfg.json',
     JSON.stringify({ workspaceDir: null, tourDone, ...(lang ? { language: lang } : {}), ...cfgExtra }),
