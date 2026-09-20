@@ -9,8 +9,9 @@ import welcome from './locales/en/welcome'
 import tour from './locales/en/tour'
 import ai from './locales/en/ai'
 import workbench from './locales/en/workbench'
+import basket from './locales/en/basket'
 
-const en: Dict = { common, settings, errors, library, editor, welcome, tour, ai, workbench }
+const en: Dict = { common, settings, errors, library, editor, welcome, tour, ai, workbench, basket }
 export default en
 /** 契约类型再出口:en 侧子模块(locales/en/*)统一从此处取 Dict,免深层路径耦合 */
 export type { Dict }

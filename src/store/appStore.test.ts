@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null, lastNewMapDir: '' })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null, lastNewMapDir: '', basketRelPath: null, basketEngine: null })
 })
 
 describe('appStore', () => {
@@ -606,4 +606,75 @@ test('setViewMode 支持三态：markdown 直设', () => {
   expect(useAppStore.getState().viewMode).toBe('markdown')
   useAppStore.getState().setViewMode('mindmap')
   expect(useAppStore.getState().viewMode).toBe('mindmap')
+})
+
+describe('点子篮子：captureIdea', () => {
+  const idea = { text: '新点子', body: '说明' }
+
+  test('无引擎端口时文件层写入：新点子在根下首位；篮子丢失自动重建', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: null, resolvedLanguage: 'zh-CN' })
+    const r = await useAppStore.getState().captureIdea(idea)
+    expect(r).toEqual({ ok: true })
+    const md = await fs.readTextFile('/ws/点子篮子.md')
+    expect(md).toContain('# 点子篮子')
+    expect(md).toContain('新点子')
+    // 再记一条 → 新的在最上
+    await useAppStore.getState().captureIdea({ text: '第二条' })
+    const lines = (await fs.readTextFile('/ws/点子篮子.md')).split('\n')
+    expect(lines.findIndex((l) => l.includes('第二条'))).toBeLessThan(lines.findIndex((l) => l.includes('新点子')))
+  })
+
+  test('引擎端口存在时走引擎（文件不动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n')
+    const insertIdea = vi.fn(() => true)
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea, removeIdeaByText: vi.fn(() => true) } })
+    expect(await useAppStore.getState().captureIdea(idea)).toEqual({ ok: true })
+    expect(insertIdea).toHaveBeenCalledWith(idea)
+    expect(await fs.readTextFile('/ws/点子篮子.md')).not.toContain('新点子')
+  })
+
+  test('未设工作区 → 显式失败', async () => {
+    useAppStore.setState({ workspaceDir: null, basketEngine: null })
+    const r = await useAppStore.getState().captureIdea(idea)
+    expect(r.ok).toBe(false)
+  })
+})
+
+// 挂载成功后从篮子删除（spec §4.6 撤销链的一环）：与捕获同款就近引擎规则（§4.2），
+// 文本寻址根下首个命中（md 不序列化 uid，删除只能按文本）
+describe('点子篮子：removeBasketIdeaByText', () => {
+  test('无引擎端口时文件层删除：根下首个文本命中，余项保留', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n- 乙\n')
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: null, resolvedLanguage: 'zh-CN' })
+    expect(await useAppStore.getState().removeBasketIdeaByText('甲')).toEqual({ ok: true })
+    const md = await fs.readTextFile('/ws/点子篮子.md')
+    expect(md).not.toContain('甲')
+    expect(md).toContain('乙')
+  })
+
+  test('引擎端口存在时走引擎（文件不动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n')
+    const removeIdeaByText = vi.fn(() => true)
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: vi.fn(() => true), removeIdeaByText } })
+    expect(await useAppStore.getState().removeBasketIdeaByText('甲')).toEqual({ ok: true })
+    expect(removeIdeaByText).toHaveBeenCalledWith('甲')
+    expect(await fs.readTextFile('/ws/点子篮子.md')).toContain('甲')
+  })
+
+  test('未设工作区 → 显式失败', async () => {
+    useAppStore.setState({ workspaceDir: null, basketEngine: null })
+    expect((await useAppStore.getState().removeBasketIdeaByText('甲')).ok).toBe(false)
+  })
 })
