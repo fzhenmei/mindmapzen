@@ -485,8 +485,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   return (
     <div className="editor @container"><TooltipProvider>
       {/* AI 面板让位（2026-09 AI Agent v1）：开时 canvas-host 右缘内收面板宽（引擎容器真收窄，
-          非浮层遮挡——节点不漫游进面板下方）；关时恢复原 5px 留缝 */}
-      <div className="canvas-host" style={aiOpen ? { right: aiPanelPx } : undefined}>
+          非浮层遮挡——节点不漫游进面板下方）；+5 是面板自身右缘留缝（2026-09 视觉打磨，
+          对齐本类留缝先例），画布仍止于面板边线；关时恢复原 5px 留缝 */}
+      <div className="canvas-host" style={aiOpen ? { right: aiPanelPx + 5 } : undefined}>
         <EditorCanvasArea
           state={state}
           errorInfo={errorInfo}
@@ -586,7 +587,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
       {/* AI 对话面板（spec §7）：右栏贴边常驻（absolute inset-y 全高），宽 = 拖拽暂存（每帧）→
           松手 onCommit 落盘（setAiChatWidth）→ 双击 onReset 回默认；拖拽手柄在 ChatPanel 左缘 */}
       {aiOpen && (
-        <div className="absolute inset-y-0 right-0 z-20 flex" style={{ width: aiPanelPx }}>
+        <div className="absolute top-0 right-[5px] bottom-[5px] z-20 flex" style={{ width: aiPanelPx }}>
           <ChatPanel
             mmRef={mmRef}
             selection={aiSelectionNode}

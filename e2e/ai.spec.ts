@@ -56,6 +56,15 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   // 开 AI 面板 → 发送
   await page.getByTestId('ai-toggle').click()
   await expect(page.getByTestId('ai-panel')).toBeVisible()
+  // 面板与窗口右/下缘留 5px 缝（2026-09 视觉打磨，对齐 canvas-host 留缝先例：顶边平贴
+  // 标题栏、右下留缝）；面板贴死窗口右/下边框，圆角窗口下边框线会被裁进圆角
+  {
+    const vp = page.viewportSize()!
+    const box = await page.getByTestId('ai-panel').boundingBox()
+    expect(box).not.toBeNull()
+    expect(Math.round(box!.x + box!.width)).toBe(vp.width - 5)
+    expect(Math.round(box!.y + box!.height)).toBe(vp.height - 5)
+  }
 
   // lute 预热：收尾文本走 MarkdownPreview(vditor lute 管线)。vditor addScript 存在
   // 双 script 竞态（onload 后才挂 id，加载中二次调用会再建 script），回合内"空文本
