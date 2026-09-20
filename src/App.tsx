@@ -16,6 +16,7 @@ import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/t
 import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
 import DevBadge from './components/DevBadge'
+import ToastHost from './components/ToastHost'
 import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
 
@@ -332,6 +333,7 @@ export default function App() {
       <div className="min-h-0 flex-1">{children}</div>
       <AppDialogs />
       <DevBadge />
+      <ToastHost />
       <TourOverlay />
     </div>
   )
