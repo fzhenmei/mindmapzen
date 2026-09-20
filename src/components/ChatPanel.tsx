@@ -38,8 +38,9 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
   const phase = useChatStore((s) => s.phase)
   const contextNode = useChatStore((s) => s.contextNode)
   const [input, setInput] = useState('')
-  // 输入框拖高（2026-09 长内容）：拖拽暂存 → 松手落盘 → 双击回默认，层级同面板宽
-  // （aiDragPx ?? aiChatWidth 先例）；null = 默认两行（rows=2 自然高）
+  // 输入框拖高（2026-09 长内容）：层级同面板宽（aiDragPx ?? aiChatWidth 先例），
+  // 但松手不清暂存——持久层异步落盘窗口期清了会闪回（见 InputResizer onCommit 注释），
+  // 暂存保持到同值落地；null = 默认两行（rows=2 自然高）
   const savedInputH = useAppStore((s) => s.aiChatInputHeight)
   const setSavedInputH = useAppStore((s) => s.setAiChatInputHeight)
   const [inputDragPx, setInputDragPx] = useState<number | null>(null)
@@ -180,7 +181,9 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
         </p>
       )}
       {/* 输入区（2026-09 长内容输入）：上缘拖高手柄 + 表单 + 快捷键常显提示；
-          border-t 上移到容器（form 原自带），消息区 flex-1 自动让位 */}
+          border-t 上移到容器（form 原自带），消息区 flex-1 自动让位。
+          手柄 onCommit 不清拖拽暂存：持久层异步落盘（load-merge-save 磁盘 IO）窗口期内
+          清了会闪回默认两行、落地后又跳回拖拽高——暂存保持到同值落地无感，双击重置才清 */}
       <div className="shrink-0 border-t border-border" data-testid="ai-input-area">
         <InputResizer
           label={t('ai.panel.resizeInput')}
@@ -191,10 +194,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
             Math.max(AI_INPUT_MIN_PX + 40, Math.round((panelRef.current?.clientHeight ?? 0) * 0.6))
           }
           onResize={setInputDragPx}
-          onCommit={(h) => {
-            setInputDragPx(null)
-            void setSavedInputH(h)
-          }}
+          onCommit={(h) => void setSavedInputH(h)}
           onReset={() => {
             setInputDragPx(null)
             void setSavedInputH(null)

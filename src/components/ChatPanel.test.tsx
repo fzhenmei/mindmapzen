@@ -262,3 +262,25 @@ test('拖高手柄：持久高度开面板即生效；双击提交 null 恢复�
   fireEvent.dblClick(handle)
   expect(commit).toHaveBeenCalledWith(null)
 })
+
+test('拖高手柄：松手提交的落盘窗口期高度不闪回（拖拽暂存保持）', async () => {
+  // 持久层落盘是异步磁盘 IO（load-merge-save 后才回写 store）——若松手即清拖拽暂存，
+  // 窗口期内 inputH 回落旧值/默认两行，落地后又跳回拖拽高，一降一升即用户报的闪烁。
+  // 契约：暂存保持到落地（同值覆盖无感），只有双击重置才清
+  let release: (() => void) | null = null
+  const commit = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      }),
+  )
+  useAppStore.setState({ setAiChatInputHeight: commit as never } as never)
+  mount()
+  const handle = screen.getByRole('separator', { name: '调整输入框高度' })
+  fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 100, clientY: 300 })
+  fireEvent.pointerMove(window, { pointerId: 1, clientY: 200 })
+  fireEvent.pointerUp(window, { pointerId: 1 })
+  expect(commit).toHaveBeenCalledWith(100)
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).style.height).toBe('100px') // 落地前不闪回
+  release!()
+})
