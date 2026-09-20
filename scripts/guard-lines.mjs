@@ -70,10 +70,14 @@
 //   9 行余量；高亮消费本体在 KanbanView.tsx（无护栏）——功能性增长，无腐化。
 // 2026-09-18（案头跳看板批）：DeskOverview 440→460（openTask 跳看板改写：view 字段 +
 //   先置 viewMode + 开图失败回收三件协议注释，实测 451 + 9 行余量——功能性增长，无腐化。
+// 2026-09-20（点子篮子 M1 Task 9）：790→815（砚栏整理钮两 props 接线 + isBasket 判定/浮层开合态 +
+//   引擎端口注册/清理与浮层态收敛两 effect + 整理浮层一行挂载 + anyDialog 互斥项，实测 811 +
+//   4 行余量；端口本体已先抽出到 editor/basketEngine.ts、浮层两端口组装到
+//   components/BasketSortLayer.tsx（均无护栏）——功能性增长，无腐化。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 790 },
+  { path: '../src/views/EditorView.tsx', limit: 815 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
   { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]

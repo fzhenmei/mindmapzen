@@ -3,15 +3,29 @@ import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiAd
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
+import { basketAbsPath, defaultBasketName, ensureBasket, insertIdeaIntoTree, readMapTree, resolveBasketRelPath, type BasketIdea } from '../services/basket'
+import { serialize } from '../services/mdTree'
+import { showToast } from '../services/toast'
 import { applyDocumentTheme, resolveTheme, type ResolvedTheme } from '../services/theme'
 import { changeUiLanguage, i18n } from '../i18n'
 import { resolveUiLang, systemUiLanguage, type UiLocale } from '../i18n/resolve'
 import { checkAndBackup, gitDiffStat, gitHistory, gitStatusInfo, restoreToVersion, type BackupOutcome, type DiffFile, type GitStatusInfo, type HistoryEntry } from '../services/gitBackup'
 import type { PendingLocate } from '../services/statusOps'
 import type { GitClone, GitRun } from '../types/ports'
+import type { ZenNode } from '../types/tree'
 
 /** 视图模式（2026-09 画布三态）：导图 / Markdown / 看板 */
 export type ViewMode = 'mindmap' | 'markdown' | 'kanban'
+
+/** 篮子引擎端口：EditorView 在当前图 = 篮子图时注册（捕获/删除走引擎，撤销栈可用） */
+export interface BasketEnginePort {
+  /** true = 已插入（引擎可用）；false = 让位文件层（引擎尚未就绪等） */
+  insertIdea(idea: BasketIdea): boolean
+  /** true = 已按文本删除根下首个命中 */
+  removeIdeaByText(text: string): boolean
+}
+
+export type CaptureResult = { ok: true } | { ok: false; error: string }
 
 interface AppState {
   route: 'library' | 'editor' // 两空间（2026-09 画布三态 M3：工作台并入案头，spec §3.3）
@@ -139,6 +153,15 @@ interface AppState {
   setTourStep: (n: number) => void
   /** 完成或跳过同路径（spec §3.3：跳过即完成，不再骚扰）；幂等——重看后再 finish 仍落 true */
   finishTour: () => Promise<void>
+  /** 点子篮子相对路径（2026-09 点子篮子）：init/换工作区时按 cfg.basketPath 或语言默认名同步 */
+  basketRelPath: string | null
+  /** 篮子引擎端口（EditorView 在「当前图 = 篮子图」时注册；就近引擎写入用）：不持久化 */
+  basketEngine: BasketEnginePort | null
+  setBasketEngine: (p: BasketEnginePort | null) => void
+  /** 捕获点子（spec §4.2 就近引擎）：端口在位走引擎（内存态同步、撤销栈可用），否则文件层 */
+  captureIdea: (idea: BasketIdea) => Promise<CaptureResult>
+  /** 挂载成功后从篮子删除条目（文本匹配根下首个）：引擎端口优先，否则文件层 */
+  removeBasketIdeaByText: (text: string) => Promise<CaptureResult>
   setAdapter: (fs: FsAdapter) => void
   init: () => Promise<void>
   setWorkspace: (dir: string) => Promise<void>
@@ -200,6 +223,56 @@ interface AppState {
 const appendTab = (tabs: string[], mdPath: string): string[] =>
   tabs.includes(mdPath) ? tabs : [...tabs, mdPath].slice(-5)
 
+/** 篮子身份首次固定（spec §3.1「创建即固定，之后切语言不影响」）：首建时把实际 relPath
+ *  落进 cfg.basketPath。不落盘则重启后 init 按**新语言**重算默认名（en↔zh 一次重启即命中），
+ *  下次捕获会另建一个空篮子并弹「篮子文件已重建」，还把原因指向错方向。
+ *  load-merge-save 复用既有配置通道；失败只留线索、不阻断本次捕获（点子已写入，身份固定
+ *  降级为下次首建再试——残余窗口是「cfg 写不进去」这一异常态） */
+async function pinBasketPath(rel: string): Promise<void> {
+  const { adapter, configPath } = useAppStore.getState()
+  try {
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, basketPath: rel })
+  } catch (e) {
+    console.error('篮子路径落盘失败', rel, e)
+  }
+}
+
+/** 篮子文件层读改写（捕获/删除共用，spec §4.2 非引擎路径）：ensure → read → mutate → 原子写。
+ *  篮子丢失即按默认名重建（§3.3：console 线索 + toast 双出口，不静默）；失败一律显式出口 */
+async function writeBasketFile(
+  mutate: (tree: ZenNode) => ZenNode,
+  ctx: { fs: FsAdapter; wsDir: string; rel: string; rootText: string },
+): Promise<CaptureResult> {
+  const abs = basketAbsPath(ctx.wsDir, ctx.rel)
+  try {
+    const existed = await ctx.fs.exists(abs)
+    await ensureBasket(ctx.fs, ctx.wsDir, ctx.rel, ctx.rootText)
+    if (!existed) {
+      console.warn('篮子文件不存在，已按默认名重建', abs) // console 线索 + toast 双出口（spec §3.3）
+      showToast(i18n.t('basket.basketRecreated'))
+      // 首建即固定身份（spec §3.1）：落盘 + 内存同步。内存不同步则本次会话内 isBasket 恒假
+      // （其口径要求 basketRelPath 非空）——徽章/整理入口要等重启才现身
+      await pinBasketPath(ctx.rel)
+      useAppStore.setState({ basketRelPath: ctx.rel })
+    }
+    const tree = await readMapTree(ctx.fs, abs)
+    if (tree === null) return { ok: false, error: i18n.t('basket.errors.readFailed') }
+    await ctx.fs.writeTextFileAtomic(abs, serialize(mutate(tree)))
+    return { ok: true }
+  } catch (e) {
+    console.error('篮子写入失败', abs, e)
+    return { ok: false, error: i18n.t('basket.errors.writeFailed') }
+  }
+}
+
+/** 根下首个文本命中即删（不可变）；未命中原样返回——md 不序列化 uid，删除只能文本寻址 */
+function removeIdeaFromTree(tree: ZenNode, text: string): ZenNode {
+  const idx = tree.children.findIndex((c) => c.text === text)
+  if (idx === -1) return tree
+  return { ...tree, children: [...tree.children.slice(0, idx), ...tree.children.slice(idx + 1)] }
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   route: 'library',
   appDialog: null,
@@ -255,6 +328,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   tourActive: false,
   tourStep: 0,
   tourDone: false,
+  basketRelPath: null,
+  basketEngine: null,
 
   setAdapter: (fs) => set({ adapter: fs }),
 
@@ -273,6 +348,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (cfg.workspaceDir) {
       // mapTabs 初始 = 持久 MRU 序前 5（2026-09 顶部胶囊条）：重启后胶囊仍在，跨会话保留
       set({ workspaceDir: cfg.workspaceDir, recentOpened: cfg.recentOpened, mapTabs: cfg.recentOpened.slice(0, 5) })
+      // 篮子相对路径同期同步（spec §3.1/§3.3）：cfg.basketPath 为空时按语言默认名（创建即固定，不随 i18n 漂移）
+      set({ basketRelPath: resolveBasketRelPath(cfg.basketPath, locale) })
       await get().refreshMaps()
     }
     // 启动落点（2026-09 画布三态 M3：工作台并入案头）：恒落案头——跨图总览由欢迎页
@@ -286,6 +363,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 切换工作区时目录视图回「全部」：新工作区不含旧选中目录
     set({ workspaceDir: dir, selectedDir: '' })
     const cfg = await loadConfig(adapter, configPath)
+    // 篮子随工作区走（spec §3.3）：relPath 相对新工作区解析（cfg.basketPath 或语言默认名）
+    set({ basketRelPath: resolveBasketRelPath(cfg.basketPath, get().resolvedLanguage) })
     await saveConfig(adapter, configPath, { ...cfg, workspaceDir: dir, lastOpened: get().currentMdPath })
     await get().refreshMaps()
   },
@@ -575,6 +654,38 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('更换工作区失败', e)
       get().setError(i18n.t('errors.setWorkspaceFailed', { reason: String(e) }))
     }
+  },
+
+  setBasketEngine: (p) => set({ basketEngine: p }),
+
+  captureIdea: async (idea) => {
+    const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
+    if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
+    const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
+    // 就近引擎（spec §4.2）：端口在位且写入成功即返回——可选链下「端口缺席（undefined）」
+    // 与「引擎自陈让位（false）」同为假值，落文件层。端口抛错即显式失败且**不落文件层**：
+    // 引擎可能已部分应用，回落会双写（审查 Important；与文件层的 {ok:false}+console 出口对称）
+    try {
+      if (basketEngine?.insertIdea(idea)) return { ok: true }
+    } catch (e) {
+      console.error('篮子引擎写入失败', e)
+      return { ok: false, error: i18n.t('basket.errors.writeFailed') }
+    }
+    return writeBasketFile((tree) => insertIdeaIntoTree(tree, idea), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
+  },
+
+  removeBasketIdeaByText: async (text) => {
+    const { adapter, workspaceDir, basketRelPath, basketEngine, resolvedLanguage } = get()
+    if (workspaceDir === null) return { ok: false, error: i18n.t('basket.errors.noWorkspace') }
+    const rel = basketRelPath ?? resolveBasketRelPath(null, resolvedLanguage)
+    // 同 captureIdea：端口缺席/让位 → 文件层；端口抛错即显式失败、不落文件层（避免双写）
+    try {
+      if (basketEngine?.removeIdeaByText(text)) return { ok: true }
+    } catch (e) {
+      console.error('篮子引擎删除失败', e)
+      return { ok: false, error: i18n.t('basket.errors.writeFailed') }
+    }
+    return writeBasketFile((tree) => removeIdeaFromTree(tree, text), { fs: adapter, wsDir: workspaceDir, rel, rootText: defaultBasketName(resolvedLanguage) })
   },
 
   backToLibrary: async () => {

@@ -15,6 +15,8 @@ const editor: Dict['editor'] = {
     settings: 'Settings',
     switchMap: 'Switch map (Ctrl+P)',
     newMap: 'New map',
+    // Sort basket (2026-09 idea basket M1): ZenBar button shown only when the current map is the basket
+    sortBasket: 'Sort basket',
     undo: 'Undo (Ctrl+Z)',
     redo: 'Redo (Ctrl+Y)',
     copyBranchTip: 'Copy selected branch as Markdown (Ctrl+C)',

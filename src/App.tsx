@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from './store/appStore'
 import { i18n } from './i18n'
 import { tauriFsAdapter } from './services/fs/TauriFsAdapter'
@@ -16,6 +16,8 @@ import { applyDocumentTheme, resolveTheme, watchSystemTheme } from './services/t
 import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
 import DevBadge from './components/DevBadge'
+import ToastHost from './components/ToastHost'
+import QuickCapture from './components/QuickCapture'
 import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
 
@@ -323,6 +325,20 @@ export default function App() {
     useAppStore.getState().setPickDirPort(pickDirectory)
   }, [])
 
+  // 快速捕获（2026-09 点子篮子 M1）：应用内 Ctrl+Alt+I 唤起浮层（M2 启用全局快捷键后
+  // 由设置开关禁用此监听——单一捕获入口，见 spec §4.1）
+  const [captureOpen, setCaptureOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault()
+        setCaptureOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
   // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间；DevBadge 开发版贴纸同随三态
   // （release 构建组件自渲染 null）
@@ -332,6 +348,8 @@ export default function App() {
       <div className="min-h-0 flex-1">{children}</div>
       <AppDialogs />
       <DevBadge />
+      <ToastHost />
+      <QuickCapture open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <TourOverlay />
     </div>
   )

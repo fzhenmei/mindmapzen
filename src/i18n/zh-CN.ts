@@ -8,8 +8,9 @@ import welcome from './locales/zh-CN/welcome'
 import tour from './locales/zh-CN/tour'
 import ai from './locales/zh-CN/ai'
 import workbench from './locales/zh-CN/workbench'
+import basket from './locales/zh-CN/basket'
 
-const zh = { common, settings, errors, library, editor, welcome, tour, ai, workbench }
+const zh = { common, settings, errors, library, editor, welcome, tour, ai, workbench, basket }
 export default zh
 /** 词典结构契约:en 聚合以此类型强制同构(漏译/多译编译报错) */
 export type Dict = typeof zh

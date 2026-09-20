@@ -444,3 +444,39 @@
 - 批量删除：`REMOVE_NODE` 无参即删全部 `activeNodeList` 各连带子树（Render.js:1413-1461；选中含根=清空根的所有子树，一条撤销记录）；Del/Backspace 引擎原生注册（Render.js:406-409）+ 宿主 engineKeyboard 兜底，圈选后直接生效
 - 批量移动：Drag 插件按下激活节点时 `beingDragNodeList` = 激活列表的顶层祖先集合（Drag.js:258-273），`MOVE_NODE_TO`（reparent，Render.js:1589-1604）与 `INSERT_BEFORE/AFTER`（调序）均收数组——圈选后拖任一选中节点即批量移动
 - readonly 守卫：插件 onMousedown/onMousemove 对 `opt.readonly` 早退（本仓未启用 readonly）
+
+## 篮子写入核验（M1 点子篮子，`src/editor/basketEngine.ts` 引擎端口）
+
+点子篮子 M1 的引擎写入管线（`basketEngine.ts` 注释经整分支审查逐行核实）实证的五条引擎事实，路径相对 `node_modules/simple-mind-map`（版本 0.14.0-fix.3）。**结论先行：节点命令一律按「渲染节点实例」而非数据节点操作——`UP_NODE` 传数据节点是 TypeError，且新插入节点的实例要等下一次 render 才存在（spec 原述「插入后同步 UP_NODE」不可行）；反向的坑更隐蔽——`REMOVE_NODE` 传数据节点不报错而是「静默不删」，上层会误判成功。故写入走「命令建节点 + 数据层提序」与「文本 → uid → 实例 → 删除」两条路径，实例查不到（收起子树）即让位文件层。**
+
+### (a) `UP_NODE` 按渲染节点实例操作；新节点实例要等下一次 render —— 同步传数据节点不可行
+
+- 注册 `Render.js:272`（引擎快捷键 `Control+Up` 亦发此命令，:429-432）；实现 `upNode(appointNode)`（`Render.js:1066`）：首读 `node.isRoot`（:1072）与 `node.parent`（:1075），随后对**两侧**同步 splice——渲染侧 `parent.children`（:1082-1083）、数据侧 `parent.nodeData.children`（:1085-1086）——参数语义是渲染节点实例
+- 传数据节点在引擎里即 TypeError：数据节点无 `isRoot`（undefined，falsy，过了）也无 `parent`（`parent.children` 处抛）
+- 新插入节点的**实例**要等下一次 render 才存在：`render()` 走 `setTimeout(..., 0)` 去抖（`Render.js:553-559`），`_render` 内布局 `doLayout` 再经 `asyncRun`（`src/utils/index.js:308-324`，逐任务 `setTimeout 0` 分片）异步建实例——插入命令返回时新节点只有数据节点、没有实例
+
+### (b) 数据层 splice 与 `UP_NODE` 等价，且撤销仍是一条记录 —— 成立
+
+- **同一个数组**：`renderer.root.nodeData === renderer.renderTree`——`renderTree` 初值即传入数据本体（`Render.js:81` `this.renderTree = this.mindMap.opt.data`）；根节点构造 `new MindMapNode({ data })` → `this.nodeData = this.handleData(data)` **原样返回入参**（`MindMapNode.js:205-210`）；布局建节点亦复用同一 data 对象（`src/layouts/Base.js:240-254`）——故 `root.nodeData.children` 就是渲染源数组本身，与 `UP_NODE` 数据侧 splice 作用于同一数组
+- 因此「插入后在数据层 pop + unshift 到首位」（篮子新点子置顶）与 `UP_NODE` 的提序结果等价，由既有 render 按新序出图——**免 N 次整树重渲**
+- 撤销仍是「一条插入」：`exec` 尾部 `this.addHistory()`（`Command.js:71-80`）是**纯尾沿节流**（`utils/index.js:281-292`，窗口内后续调用整体丢弃），而 splice 同步执行、早于任何定时器回调 → 快照落地时已含提序结果，不产生第二条历史
+  - 口径说明：引擎默认 `addHistoryTime: 100`（`defaultOptions.js:189`），本仓已设 `1`（`MindMapCanvas.tsx:328`，见「v1.1 核验 (4)」）——窗口长短不改变本结论（同步代码先于定时器）
+
+### (c) `REMOVE_NODE` 传数据节点是**静默不删**，不是报错 —— 删除必须传实例
+
+- 注册 `Render.js:288`；实现 `removeNode(appointNodes = [])`（`Render.js:1413`）：首读 `node.isRoot`（:1422-1423）找根——数据节点上该字段 `undefined`（falsy）→ 走 else 分支
+- else 分支三步对数据节点全部静默放过：`getNextActiveNode(list)` 因 `findActiveNodeIndex` 对不在激活列表者返回 -1 而早退（`Render.js:1518-1522`）；`removeNodeFromActiveList(node)` 同样 -1 早退；`removeFromParentNodeData(node)` 首行 `if (!node || !node.parent) return`（`src/utils/index.js:1166-1171`）——数据节点无 `parent`，直接 return
+- **唯**恰好有编辑框开着时才抛 TypeError：else 分支内比对 `currentEditNode.getData('uid') === node.getData('uid')`（`Render.js:1434-1440`）——数据节点没有 `getData` 方法，`currentEditNode` 为真值即炸；无编辑框时短路无害
+- 后果：静默不删会让上层误判成功、文件层也不再兜底 → 删除必须「文本 → uid → `findNodeByUid` 实例 → `REMOVE_NODE [实例]`」；实例查不到（见下条）即让位文件层
+
+### (d) `findNodeByUid` 只遍历渲染树 —— 节点收起后其后代寻址 miss
+
+- 实现 `Render.js:2094+`：`walk(this.root, ...)` 遍历**渲染树**（`root` 为 null 时返回 `undefined`，未命中返回 `null`）——节点收起时其后代不在渲染树，uid 在数据里存在也查不到
+- 后果：删除路径「文本 → uid → 实例」在目标位于收起子树时拿不到实例，消费方必须**让位**（`basketEngine` 返回 false → 文件层兜底），不可当「节点不存在」处理
+- 对照：数据树（含收起子树）寻址走 `findSubtreeByUid`（本仓 `src/services/mdTree`，M3 核验 (4) 已备）；`renderer.root.nodeData` 即数据树根（见 (b)）
+
+### (e) `insertChildNode` 恒追加末尾，且强制展开目标节点 —— 成立，故插入后须自行提序
+
+- `Render.js:951`：`node.nodeData.children.push(newNode)`——**恒 push**（同一数组实例，即渲染源数组），新节点永远落在末位
+- 紧随其后的 `node.setData({ expand: true })`（`Render.js:953-955`）无条件展开目标节点（在收起节点下插子节点会被强制展开）
+- 与篮子「新点子在最上」（spec §3.2）的需求冲突 → 插入后须在数据层提序（见 (b)）

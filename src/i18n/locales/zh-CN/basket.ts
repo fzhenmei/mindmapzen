@@ -1,0 +1,42 @@
+// 点子篮子词条（spec 2026-09-20-idea-basket-design）：最小集（重建提示 + 错误域）+ 捕获浮层（Task 5）
+// + 目标选择器（Task 7）+ 整理浮层（Task 8）
+export default {
+  basketRecreated: '篮子文件已重建（原文件可能被改名或移动）',
+  gitOffNotice: '未启用版本管理：挂载后无法自动回滚（可在设置中开启）',
+  capture: {
+    title: '记个点子',
+    placeholder: '灵光一闪……',
+    hint: 'Enter 入篮 · Shift+Enter 换行 · Esc 取消',
+    submitted: '已入篮',
+    openBasket: '打开篮子',
+  },
+  picker: {
+    title: '选择挂载目标',
+    pickMap: '选择导图',
+    searchMap: '搜索导图',
+    searchNode: '搜索节点',
+    noMap: '没有可选导图',
+    loadFailed: '目标图读取失败',
+  },
+  errors: { noWorkspace: '请先设置工作区', readFailed: '篮子读取失败', writeFailed: '篮子写入失败' },
+  sort: {
+    title: '整理篮子',
+    empty: '篮子空空的——Ctrl+Alt+I 记一条',
+    pickTarget: '选择目标…',
+    clearTarget: '清除',
+    discard: '丢弃',
+    mountSelected: '挂载全部已选',
+    mounting: '挂载中…',
+    resultTitle: '挂载结果',
+    resultOk: '成功 {{n}} 条',
+    resultFail: '失败 {{n}} 条',
+    undo: '撤销本次挂载',
+    undone: '已撤销',
+    failTargetNotFound: '目标节点已不存在',
+    failMapMissing: '目标图已不存在',
+    failDepthTooDeep: '目标位置过深，正文无法携带',
+    failWriteFailed: '写入失败',
+    failRemoveBasket: '已挂载但篮子未清理',
+    close: '关闭',
+  },
+}

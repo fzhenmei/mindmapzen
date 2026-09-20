@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
@@ -10,7 +10,7 @@ beforeEach(async () => {
   await fs.writeTextFileAtomic('/ws/已有.md', '# 旧图\n')
   const s = useAppStore.getState()
   s.setAdapter(fs)
-  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null, lastNewMapDir: '' })
+  useAppStore.setState({ route: 'library', workspaceDir: null, maps: [], currentMdPath: null, dirty: false, error: null, themePref: 'auto', resolvedTheme: 'light', languagePref: 'auto', resolvedLanguage: 'zh-CN', settings: { ...DEFAULT_COPY_SETTINGS }, sessionRecent: [], recentOpened: [], mapTabs: [], favorites: [], librarySort: 'modified', tourActive: false, tourStep: 0, tourDone: false , aiAdvice: null, appDialog: null, pendingWorkspaceAction: null, pickDirPort: null, lastNewMapDir: '', basketRelPath: null, basketEngine: null })
 })
 
 describe('appStore', () => {
@@ -606,4 +606,148 @@ test('setViewMode 支持三态：markdown 直设', () => {
   expect(useAppStore.getState().viewMode).toBe('markdown')
   useAppStore.getState().setViewMode('mindmap')
   expect(useAppStore.getState().viewMode).toBe('mindmap')
+})
+
+describe('点子篮子：captureIdea', () => {
+  const idea = { text: '新点子', body: '说明' }
+
+  test('无引擎端口时文件层写入：新点子在根下首位；篮子丢失自动重建', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: null, resolvedLanguage: 'zh-CN' })
+    const r = await useAppStore.getState().captureIdea(idea)
+    expect(r).toEqual({ ok: true })
+    const md = await fs.readTextFile('/ws/点子篮子.md')
+    expect(md).toContain('# 点子篮子')
+    expect(md).toContain('新点子')
+    // 再记一条 → 新的在最上
+    await useAppStore.getState().captureIdea({ text: '第二条' })
+    const lines = (await fs.readTextFile('/ws/点子篮子.md')).split('\n')
+    expect(lines.findIndex((l) => l.includes('第二条'))).toBeLessThan(lines.findIndex((l) => l.includes('新点子')))
+  })
+
+  test('引擎端口存在时走引擎（文件不动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n')
+    const insertIdea = vi.fn(() => true)
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea, removeIdeaByText: vi.fn(() => true) } })
+    expect(await useAppStore.getState().captureIdea(idea)).toEqual({ ok: true })
+    expect(insertIdea).toHaveBeenCalledWith(idea)
+    expect(await fs.readTextFile('/ws/点子篮子.md')).not.toContain('新点子')
+  })
+
+  test('未设工作区 → 显式失败', async () => {
+    useAppStore.setState({ workspaceDir: null, basketEngine: null })
+    const r = await useAppStore.getState().captureIdea(idea)
+    expect(r.ok).toBe(false)
+  })
+
+  // 引擎分支异常不得逃出 CaptureResult 边界（审查 Important）：与文件层对称——失败一律
+  // 转 {ok:false} + console.error 出口；且**不落文件层兜底**（引擎可能已部分应用，回落双写）
+  test('引擎端口抛错 → 显式失败且不落文件层（磁盘未动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n')
+    const before = await fs.readTextFile('/ws/点子篮子.md')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: () => { throw new Error('引擎故障') }, removeIdeaByText: vi.fn(() => true) } })
+      const r = await useAppStore.getState().captureIdea(idea)
+      expect(r.ok).toBe(false)
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('篮子引擎'), expect.any(Error))
+      expect(await fs.readTextFile('/ws/点子篮子.md')).toBe(before) // 文件层未被兜底写入
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+})
+
+// 挂载成功后从篮子删除（spec §4.6 撤销链的一环）：与捕获同款就近引擎规则（§4.2），
+// 文本寻址根下首个命中（md 不序列化 uid，删除只能按文本）
+describe('点子篮子：removeBasketIdeaByText', () => {
+  test('无引擎端口时文件层删除：根下首个文本命中，余项保留', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n- 乙\n')
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: null, resolvedLanguage: 'zh-CN' })
+    expect(await useAppStore.getState().removeBasketIdeaByText('甲')).toEqual({ ok: true })
+    const md = await fs.readTextFile('/ws/点子篮子.md')
+    expect(md).not.toContain('甲')
+    expect(md).toContain('乙')
+  })
+
+  test('引擎端口存在时走引擎（文件不动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n')
+    const removeIdeaByText = vi.fn(() => true)
+    useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: vi.fn(() => true), removeIdeaByText } })
+    expect(await useAppStore.getState().removeBasketIdeaByText('甲')).toEqual({ ok: true })
+    expect(removeIdeaByText).toHaveBeenCalledWith('甲')
+    expect(await fs.readTextFile('/ws/点子篮子.md')).toContain('甲')
+  })
+
+  test('未设工作区 → 显式失败', async () => {
+    useAppStore.setState({ workspaceDir: null, basketEngine: null })
+    expect((await useAppStore.getState().removeBasketIdeaByText('甲')).ok).toBe(false)
+  })
+
+  test('引擎端口抛错 → 显式失败且不落文件层（磁盘未动）', async () => {
+    const { MemoryFsAdapter } = await import('../services/fs/MemoryFsAdapter')
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/ws/点子篮子.md', '# 点子篮子\n\n- 甲\n')
+    const before = await fs.readTextFile('/ws/点子篮子.md')
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      useAppStore.setState({ adapter: fs, workspaceDir: '/ws', basketRelPath: '点子篮子.md', basketEngine: { insertIdea: vi.fn(() => true), removeIdeaByText: () => { throw new Error('引擎故障') } } })
+      const r = await useAppStore.getState().removeBasketIdeaByText('甲')
+      expect(r.ok).toBe(false)
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('篮子引擎'), expect.any(Error))
+      expect(await fs.readTextFile('/ws/点子篮子.md')).toBe(before)
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+})
+
+// 篮子身份固定（spec §3.1「创建即固定，之后切语言不影响」；终审 I1）：cfg.basketPath 是文件
+// 身份的唯一锚——产品代码原先只读不写，重启后 init 按**新语言**重算默认名（en↔zh 一次重启即
+// 命中），下次捕获另建空篮子并弹「篮子文件已重建」，还把原因指向错方向
+describe('点子篮子：身份固定（spec §3.1）', () => {
+  test('cfg.basketPath 有值：init 与 setWorkspace 均锚定该值，切语言不漂移', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws', language: 'en', basketPath: 'my-basket.md' }))
+    useAppStore.setState({ adapter: fs, configPath: '/cfg.json', workspaceDir: null, basketRelPath: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().resolvedLanguage).toBe('en')
+    expect(useAppStore.getState().basketRelPath).toBe('my-basket.md') // 不按 en 重算成 'Idea Inbox.md'
+    await useAppStore.getState().setWorkspace('/ws') // 换工作区同期同步（同口径）
+    expect(useAppStore.getState().basketRelPath).toBe('my-basket.md')
+  })
+
+  test('首建即固定：basketPath 落盘 + 内存同步；重启切语言仍指向首建名', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.mkdir('/ws')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ workspaceDir: '/ws' }))
+    useAppStore.setState({ adapter: fs, configPath: '/cfg.json', workspaceDir: '/ws', basketRelPath: null, basketEngine: null, resolvedLanguage: 'en' })
+    expect(await useAppStore.getState().captureIdea({ text: '首条' })).toEqual({ ok: true })
+    expect(await fs.readTextFile('/ws/Idea Inbox.md')).toContain('首条') // 首建名取当时语言（en）
+    expect(useAppStore.getState().basketRelPath).toBe('Idea Inbox.md') // 内存同步：本次会话内 isBasket 即可判真
+    // 重启（内存态清空 + 界面语言已切 zh-CN）：身份仍锚首建名，不重算成「点子篮子.md」
+    const cfg = JSON.parse(await fs.readTextFile('/cfg.json'))
+    expect(cfg.basketPath).toBe('Idea Inbox.md')
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({ ...cfg, language: 'zh-CN' }))
+    useAppStore.setState({ basketRelPath: null })
+    await useAppStore.getState().init()
+    expect(useAppStore.getState().resolvedLanguage).toBe('zh-CN')
+    expect(useAppStore.getState().basketRelPath).toBe('Idea Inbox.md')
+  })
 })
