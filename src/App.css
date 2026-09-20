@@ -66,7 +66,10 @@ html, body { overflow: hidden; }
 .body-dialog .vditor { border: none; border-radius: 0; background: transparent; font-size: var(--font-size-sm); }
 .body-dialog .vditor-toolbar { background: transparent; border-bottom: 1px solid var(--border); padding: 2px 8px; }
 .zen-note-tip .vditor-reset { font-size: 13px; line-height: 1.6; }
-.md-preview .vditor-reset { font-size: var(--font-size-sm); line-height: 1.7; }
+/* 复合选择器（同元素）：vditor 静态 preview 把 vditor-reset 加在容器自身（md-preview
+   即 vditor-reset），后代式 .md-preview .vditor-reset 永不命中——AI 总结/案头 md 视图
+   曾因此恒走 vditor 基线 16px（2026-09 AI 回复字号修复） */
+.md-preview.vditor-reset { font-size: var(--font-size-sm); line-height: 1.7; }
 /* 青松 md 皮肤（2026-09 色彩适配）：vditor 自带 light/dark content-theme 是 GitHub 系
    黑白灰（标题黑/引用灰/表格灰线，链接亮色下更被 preflight 打回继承墨色），此处一层
    覆写承接青松令牌。锚点 [data-theme]（theme.ts 恒写 html）多一档属性特异性——vditor

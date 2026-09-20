@@ -94,6 +94,15 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   await expect(page.getByTestId(/^ai-card-/).filter({ hasText: 'AI 要点' })).toBeVisible()
   // 收尾文本走 MarkdownPreview 异步渲染，超时与全链路断言对齐（默认 5s 偶发不够）
   await expect(page.getByText(/已添加/).first()).toBeVisible({ timeout: 15_000 })
+  // 定稿消息字号对齐 md 正文令牌（2026-09 字号修复回潮护栏）：vditor 基线 16px 应被
+  // App.css 压到 --font-size-sm（13px）。该规则曾写成后代选择器永不命中——vditor 静态
+  // preview 把 vditor-reset 加在 md-preview 容器自身，AI 总结与案头 md 视图因此恒 16px
+  const summaryFont = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="ai-msg-md"] .vditor-reset')
+    if (el === null) throw new Error('定稿消息未渲染出 vditor-reset 容器')
+    return getComputedStyle(el).fontSize
+  })
+  expect(summaryFont).toBe('13px')
   // 全程无错误消息：web 模式无 Tauri invoke，工厂注入生效即不该出现 AI_TRANSPORT_UNAVAILABLE
   await expect(page.getByTestId('ai-msg-error')).toHaveCount(0)
   // 回合结束：回到发送态（停止钮消失）
