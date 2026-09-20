@@ -6,6 +6,7 @@ import { migrateOldConfig } from './services/migration'
 import { writeClipboardViaTauri, writeHtmlClipboardViaTauri, type WriteClipboard, type WriteHtmlClipboard } from './services/clipboard'
 import { pasteImageName, rgbaToPngBytes } from './services/pasteImage'
 import { describeBackendError } from './services/backendError'
+import { closeOrHideMainWindow } from './services/appClose'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -20,6 +21,7 @@ import ToastHost from './components/ToastHost'
 import QuickCapture from './components/QuickCapture'
 import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
+import { useQuickCaptureRuntime } from './hooks/useQuickCaptureRuntime'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -131,17 +133,10 @@ const registerCloseGuard: RegisterCloseGuard = (handler) => {
   }
 }
 
-/** 生产退出端口：强制销毁窗口（守卫已 preventClose，close() 会被再次拦截）。
- *  失败必须浮出：destroy 权限缺失/运行时异常若被静默吞掉，守卫会留下"已放弃但窗口还在"的僵尸态 */
+/** 退出/隐藏端口（M2 改造，spec §5.1）：快速捕获开启 → hide 驻留；否则 destroy。
+ *  裁决逻辑集中 services/appClose（托盘退出/案头拦截共用） */
 const exitApp = (): void => {
-  void (async () => {
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window')
-      await getCurrentWindow().destroy()
-    } catch (e) {
-      useAppStore.getState().setError(i18n.t('errors.exitFail', { detail: String(e) }))
-    }
-  })()
+  void closeOrHideMainWindow()
 }
 
 /** 剪贴板端口：E2E web 模式无 Tauri 剪贴板 → 记录到 harness 桩（__zenE2e.lastCopied），生产走 Tauri */
@@ -325,10 +320,15 @@ export default function App() {
     useAppStore.getState().setPickDirPort(pickDirectory)
   }, [])
 
+  // 快速捕获运行时（M2 spec §5）：快捷键/托盘/案头关窗/跨窗同步接线（hook 内端口注入）
+  useQuickCaptureRuntime()
+
   // 快速捕获（2026-09 点子篮子 M1）：应用内 Ctrl+Alt+I 唤起浮层（M2 启用全局快捷键后
   // 由设置开关禁用此监听——单一捕获入口，见 spec §4.1）
   const [captureOpen, setCaptureOpen] = useState(false)
+  const quickCaptureEnabled = useAppStore((s) => s.quickCaptureEnabled)
   useEffect(() => {
+    if (quickCaptureEnabled) return // M2 全局快捷键接管：单一捕获入口（spec §4.1）
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault()
@@ -337,7 +337,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [quickCaptureEnabled])
 
   // 顶部条壳（v2.5 自定义标题栏）：三态（boot/编辑器/案头）共用 TitleBar 承担标题栏
   // 职责（logo+品名/拖拽/窗口三键），内容区占余下空间；DevBadge 开发版贴纸同随三态

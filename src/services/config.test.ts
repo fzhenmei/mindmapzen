@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { DEFAULT_AI_CONFIG, DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AppConfig } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, DEFAULT_QUICK_CAPTURE, parseQuickCapture, type AppConfig } from '../types/files'
 import { loadConfig, saveConfig } from './config'
 
 /** 便捷构造完整配置对象（新字段补齐后各用例只写差异项） */
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, quickCapture: DEFAULT_QUICK_CAPTURE, ...over,
 })
 
 describe('配置读写', () => {
@@ -220,5 +220,17 @@ describe('language（2026-09 i18n 界面语言）', () => {
     expect((await loadConfig(fs, '/cfg.json')).language).toBe('en')
     await fs.writeTextFileAtomic('/cfg.json', '{"language":"xx"}')
     expect((await loadConfig(fs, '/cfg.json')).language).toBe('auto')
+  })
+})
+
+describe('parseQuickCapture（快速捕获设置宽容解析，spec §5.1）', () => {
+  test('缺失/非对象回退默认 false（旧配置无字段兼容）', () => {
+    expect(parseQuickCapture(undefined)).toEqual({ enabled: false })
+    expect(parseQuickCapture(null)).toEqual({ enabled: false })
+    expect(parseQuickCapture('x')).toEqual({ enabled: false })
+  })
+  test('字段类型非法回退默认；合法布尔保留', () => {
+    expect(parseQuickCapture({ enabled: 'yes' })).toEqual({ enabled: false })
+    expect(parseQuickCapture({ enabled: true })).toEqual({ enabled: true })
   })
 })

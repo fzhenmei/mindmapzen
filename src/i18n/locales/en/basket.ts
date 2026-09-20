@@ -11,6 +11,8 @@ const basket: Dict['basket'] = {
     hint: 'Enter to save · Shift+Enter for a new line · Esc to cancel',
     submitted: 'Saved to basket',
     openBasket: 'Open basket',
+    noWorkspace: 'Set a workspace in the main window first',
+    openMain: 'Open main window',
   },
   picker: {
     title: 'Choose a target',
@@ -20,7 +22,7 @@ const basket: Dict['basket'] = {
     noMap: 'No maps available',
     loadFailed: 'Failed to read the target map',
   },
-  errors: { noWorkspace: 'Set up a workspace first', readFailed: 'Failed to read the basket', writeFailed: 'Failed to write to the basket' },
+  errors: { noWorkspace: 'Set up a workspace first', readFailed: 'Failed to read the basket', writeFailed: 'Failed to write to the basket', windowCreateFailed: 'Failed to open the capture window' },
   sort: {
     title: 'Sort the basket',
     empty: 'Basket is empty — press Ctrl+Alt+I to capture',
@@ -40,6 +42,20 @@ const basket: Dict['basket'] = {
     failWriteFailed: 'Write failed',
     failRemoveBasket: 'Mounted, but basket cleanup failed',
     close: 'Close',
+  },
+  quickCapture: {
+    title: 'Quick Capture',
+    toggle: 'Enable global shortcut (Ctrl+Alt+I) & tray',
+    hint: 'When on: press Ctrl+Alt+I anywhere to capture; tray icon appears; closing the main window hides it to tray (quit from the tray menu)',
+    shortcutFailed: 'Failed to register the global shortcut (it may be taken by another app)',
+  },
+  tray: {
+    showMain: 'Show main window',
+    newIdea: 'Capture an idea',
+    quit: 'Quit',
+  },
+  sync: {
+    updatedInBackground: 'Idea basket updated in background',
   },
 }
 export default basket

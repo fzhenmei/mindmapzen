@@ -349,6 +349,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const guard = useCloseGuard({
     registerCloseGuard,
     exitApp,
+    hijackCleanClose: () => useAppStore.getState().quickCaptureEnabled,
     dirtyRef,
     explicitSave,
     clearDirty,

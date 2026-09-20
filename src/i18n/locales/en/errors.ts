@@ -42,7 +42,6 @@ const errors: Dict['errors'] = {
   pngEncodeFail: 'Failed to encode PNG',
   engineNoExportPlugin: 'Export plugin is not registered in the engine',
   initFail: 'Initialization failed: {{detail}}',
-  exitFail: 'Failed to exit: {{detail}}',
   ignoredType: {
     paragraph: 'Paragraph',
     code: 'Code block',

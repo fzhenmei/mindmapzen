@@ -66,6 +66,10 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const [aiDraft, setAiDraft] = useState(aiConfig)
   const [aiSaved, setAiSaved] = useState(false)
   const [aiSaveError, setAiSaveError] = useState<string | null>(null)
+  // 快速捕获（2026-09 点子篮子 M2）：开关与全局快捷键注册失败说明
+  const quickCaptureEnabled = useAppStore((s) => s.quickCaptureEnabled)
+  const setQuickCaptureEnabled = useAppStore((s) => s.setQuickCaptureEnabled)
+  const quickCaptureShortcutError = useAppStore((s) => s.quickCaptureShortcutError)
   const { t } = useTranslation()
   const languagePref = useAppStore((s) => s.languagePref)
   const setLanguagePref = useAppStore((s) => s.setLanguagePref)
@@ -91,7 +95,12 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   }
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent data-testid="settings-dialog" aria-label={title}>
+      <DialogContent
+        data-testid="settings-dialog"
+        aria-label={title}
+        className="max-h-[calc(100vh-4rem)] overflow-y-auto"
+      >
+        {/* M2 快捷捕获分区后内容超矮视口：限高+滚动保 footer 可达（e2e git.spec 实证）；细滚动条全局样式自动生效 */}
         <DialogTitle>{title}</DialogTitle>
         <div className="flex flex-col gap-2.5 text-sm">
           <div className="flex flex-col gap-2" data-testid="git-section">
@@ -156,6 +165,26 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                   </p>
                 )}
               </>
+            )}
+          </div>
+          {/* 快速捕获（2026-09 点子篮子 M2，spec §5.1）：开关三绑定——全局快捷键+托盘+关窗隐藏 */}
+          <div className="flex flex-col gap-2" data-testid="settings-quickcapture-section">
+            <h3 className="text-sm font-medium">{t('basket.quickCapture.title')}</h3>
+            <label className={SETTING_ROW}>
+              <input
+                type="checkbox"
+                data-testid="quickcapture-toggle"
+                className="cursor-pointer accent-primary"
+                checked={quickCaptureEnabled}
+                onChange={(e) => void setQuickCaptureEnabled(e.target.checked)}
+              />
+              <span>{t('basket.quickCapture.toggle')}</span>
+            </label>
+            <p className="text-xs text-muted-foreground">{t('basket.quickCapture.hint')}</p>
+            {quickCaptureShortcutError !== null && (
+              <p data-testid="quickcapture-shortcut-error" role="alert" className="text-xs text-destructive">
+                {quickCaptureShortcutError}
+              </p>
             )}
           </div>
           {/* AI 对话（2026-09 AI Agent v1，spec §1 BYOK）：三项全填并保存后，编辑视图出现 AI 面板入口 */}

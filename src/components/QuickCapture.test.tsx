@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
 import QuickCapture from './QuickCapture'
+import QuickCaptureForm from './QuickCaptureForm'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
@@ -60,4 +61,21 @@ test('IME 合成期 Enter 不提交（输入法确认候选不误触发入篮）
   expect(onClose).not.toHaveBeenCalled()
   expect(await useAppStore.getState().adapter.exists('/ws/点子篮子.md')).toBe(false)
   expect(screen.getByTestId('capture-input')).toHaveValue('未打完')
+})
+
+test('QuickCaptureForm 容器无关契约：失败保留草稿，成功清空并回调（spec §4.1）', async () => {
+  const onSubmitted = vi.fn()
+  useAppStore.setState({ captureIdea: async () => ({ ok: false, error: '写入失败' }) })
+  const { rerender } = render(<QuickCaptureForm onSubmitted={onSubmitted} />)
+  const input = screen.getByTestId('capture-input')
+  fireEvent.change(input, { target: { value: '第一条' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await waitFor(() => expect(screen.getByTestId('capture-error')).toBeVisible())
+  expect((input as HTMLTextAreaElement).value).toBe('第一条')
+  expect(onSubmitted).not.toHaveBeenCalled()
+  useAppStore.setState({ captureIdea: async () => ({ ok: true }) })
+  rerender(<QuickCaptureForm onSubmitted={onSubmitted} />)
+  fireEvent.keyDown(screen.getByTestId('capture-input'), { key: 'Enter' })
+  await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1))
+  expect((screen.getByTestId('capture-input') as HTMLTextAreaElement).value).toBe('')
 })

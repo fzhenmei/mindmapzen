@@ -24,6 +24,10 @@ export interface CloseGuardOpts {
   blockClose?: () => boolean
   /** blockClose 命中时的提示回调（EditorView 注入 chatStore.notifyBlocked） */
   onBlocked?: () => void
+  /** 干净关闭接管（2026-09 点子篮子 M2，spec §5.1）：返回 true 时 preventClose 走 exitApp
+   *  （快速捕获开启 → hide）。不能放行自然关闭：隐藏的捕获窗会驻留进程，自然关闭留下
+   *  僵尸应用（M2 plan R3）；脏态仍优先走三态框 */
+  hijackCleanClose?: () => boolean
 }
 
 export interface CloseGuard {
@@ -51,7 +55,13 @@ export function useCloseGuard(opts: CloseGuardOpts): CloseGuard {
         return
       }
       const flushed = flushPending?.() ?? false
-      if (!dirtyRef.current && !flushed) return
+      if (!dirtyRef.current && !flushed) {
+        if (opts.hijackCleanClose?.()) {
+          e.preventClose()
+          opts.exitApp()
+        }
+        return
+      }
       e.preventClose()
       setGuarding(true)
     })

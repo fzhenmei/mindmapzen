@@ -9,6 +9,8 @@ export default {
     hint: 'Enter 入篮 · Shift+Enter 换行 · Esc 取消',
     submitted: '已入篮',
     openBasket: '打开篮子',
+    noWorkspace: '请先在主窗口设置工作区',
+    openMain: '打开主窗口',
   },
   picker: {
     title: '选择挂载目标',
@@ -18,7 +20,7 @@ export default {
     noMap: '没有可选导图',
     loadFailed: '目标图读取失败',
   },
-  errors: { noWorkspace: '请先设置工作区', readFailed: '篮子读取失败', writeFailed: '篮子写入失败' },
+  errors: { noWorkspace: '请先设置工作区', readFailed: '篮子读取失败', writeFailed: '篮子写入失败', windowCreateFailed: '捕获小窗打开失败' },
   sort: {
     title: '整理篮子',
     empty: '篮子空空的——Ctrl+Alt+I 记一条',
@@ -38,5 +40,19 @@ export default {
     failWriteFailed: '写入失败',
     failRemoveBasket: '已挂载但篮子未清理',
     close: '关闭',
+  },
+  quickCapture: {
+    title: '快速捕获',
+    toggle: '启用全局快捷键（Ctrl+Alt+I）与托盘',
+    hint: '开启后：任何应用里按 Ctrl+Alt+I 唤起记点子小窗；显示托盘图标；关闭主窗口改为隐藏到托盘（从托盘菜单退出）',
+    shortcutFailed: '全局快捷键注册失败（可能被其他应用占用）',
+  },
+  tray: {
+    showMain: '显示主窗口',
+    newIdea: '记点子',
+    quit: '退出',
+  },
+  sync: {
+    updatedInBackground: '篮子已在后台更新',
   },
 }

@@ -751,3 +751,19 @@ describe('点子篮子：身份固定（spec §3.1）', () => {
     expect(useAppStore.getState().basketRelPath).toBe('Idea Inbox.md')
   })
 })
+
+// 快速捕获 store 态（2026-09 点子篮子 M2，spec §5.1/§5.3）：开关持久化经 init 读回 +
+// 快捷键错误态 + 真退出标志；桩装配沿用本文件内存 fs 模式（beforeEach 已注入 adapter/configPath）
+describe('点子篮子 M2：快速捕获 store 态', () => {
+  test('setQuickCaptureEnabled 持久化并经 init 读回；requestExit/shortcutError 态（spec §5.1/§5.3）', async () => {
+    await useAppStore.getState().setQuickCaptureEnabled(true)
+    expect(useAppStore.getState().quickCaptureEnabled).toBe(true)
+    await useAppStore.getState().init() // init 重读 cfg.json
+    expect(useAppStore.getState().quickCaptureEnabled).toBe(true)
+    useAppStore.getState().setQuickCaptureShortcutError('x')
+    expect(useAppStore.getState().quickCaptureShortcutError).toBe('x')
+    useAppStore.getState().setQuickCaptureShortcutError(null)
+    useAppStore.getState().requestExit()
+    expect(useAppStore.getState().exitRequested).toBe(true)
+  })
+})
