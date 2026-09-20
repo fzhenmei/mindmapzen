@@ -70,6 +70,13 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
       return { t: cs.borderTopWidth, r: cs.borderRightWidth, b: cs.borderBottomWidth }
     })
     expect(borders).toEqual({ t: '1px', r: '1px', b: '1px' })
+    // 面板最外层圆角与输入框一致（2026-09 视觉打磨）：同为 rounded-md（--radius-md = 6px）
+    const radii = await page.evaluate(() => {
+      const panel = getComputedStyle(document.querySelector('[data-testid="ai-panel"]') as Element)
+      const input = getComputedStyle(document.querySelector('[data-testid="ai-input"]') as Element)
+      return { panel: panel.borderRadius, input: input.borderRadius }
+    })
+    expect(radii.panel).toBe(radii.input)
   }
 
   // lute 预热：收尾文本走 MarkdownPreview(vditor lute 管线)。vditor addScript 存在

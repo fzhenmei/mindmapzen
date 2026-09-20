@@ -156,7 +156,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
       ref={panelRef}
       data-testid="ai-panel"
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col rounded-md border border-border bg-background"
     >
       <SplitResizer side="left" width={width} min={240} max={520} label={t('ai.panel.title')} onResize={onResize} onCommit={onCommit} onReset={onReset} />
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
