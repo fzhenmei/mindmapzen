@@ -3541,10 +3541,20 @@ describe('点子篮子：整理入口与引擎端口注册', () => {
 
   /** 引擎就绪 + 假 root 补 nodeData 结构（真机 renderer.root 是渲染根实例，假画布不建：
    *  用例内补齐，不动生产代码；emit 后 handle 实例会因 engineReady 重渲被换新，
-   *  断言必须锁定 emit 时这一个——mmRef 只收它） */
+   *  断言必须锁定 emit 时这一个——mmRef 只收它）。
+   *  execCommand 空桩按真机语义补 INSERT_CHILD_NODE 落表：端口按「数据子节点表是否增长」
+   *  判定成败（未增长即让位文件层），空桩会让合法插入被判成引擎早退 */
   const readyWithRoot = (children: Array<{ text: string; uid: string; body?: string }>): MindMapHandle => {
     const handle = fakeHandle
-    ;(handle.renderer as { root?: unknown }).root = { nodeData: { children: children.map((c) => ({ data: c })) } }
+    const root = { nodeData: { children: children.map((c) => ({ data: c })) } }
+    ;(handle.renderer as { root?: unknown }).root = root
+    vi.mocked(handle.execCommand).mockImplementation((cmd: string, ...args: unknown[]) => {
+      if (cmd !== 'INSERT_CHILD_NODE') return
+      const data = args[2] as { text: string; body?: string }
+      root.nodeData.children.push({
+        data: { text: data.text, uid: `fake-${root.nodeData.children.length + 1}`, ...(data.body !== undefined ? { body: data.body } : {}) },
+      })
+    })
     act(() => {
       ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     })
@@ -3578,6 +3588,26 @@ describe('点子篮子：整理入口与引擎端口注册', () => {
     await renderEditorFor('/ws/a.md')
     expect(useAppStore.getState().basketEngine).toBeNull()
     expect(screen.queryByTestId('btn-sort-basket')).not.toBeInTheDocument()
+  })
+
+  test('篮子归属变假（语言/设置重解析）：浮层卸载且 sortOpen 收敛——互斥让位恢复', async () => {
+    await renderEditorFor('/ws/点子篮子.md')
+    readyWithRoot([])
+    fireEvent.click(await screen.findByTestId('btn-sort-basket'))
+    expect(await screen.findByTestId('basket-sort')).toBeInTheDocument()
+    // 浮层在开 = anyDialog 真：多选浮条让位（互斥生效的观测点）
+    act(() => {
+      ;(globalThis as unknown as { __emitActiveList: (uids: string[]) => void }).__emitActiveList(['root-uid', 'child-uid'])
+    })
+    expect(screen.queryByTestId('multi-select-bar')).not.toBeInTheDocument()
+    // 篮子归属变假（本视图未重挂）：浮层随挂载门卸载，且 sortOpen 必须收敛——否则 anyDialog
+    // 恒真、浮动条与快捷键（Shift+F2/Ctrl+P/Ctrl+Tab）长期让位到切图才自愈
+    act(() => {
+      useAppStore.setState({ basketRelPath: null })
+    })
+    await waitFor(() => expect(screen.queryByTestId('basket-sort')).not.toBeInTheDocument())
+    expect(screen.queryByTestId('btn-sort-basket')).not.toBeInTheDocument()
+    expect(await screen.findByTestId('multi-select-bar')).toBeInTheDocument()
   })
 
   test('卸载（切图）：端口置 null 不残留（App 按图 key 重挂本视图，切走即让位文件层）', async () => {

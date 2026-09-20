@@ -33,7 +33,7 @@ export function createBasketEnginePort(getMm: () => MindMapHandle | null): Baske
       const ctx = rootCtx(getMm())
       if (ctx === null) return false
       // 新点子在篮子最上（spec §3.2），而引擎插入恒追加末尾（insertChildNode：
-      // node.nodeData.children.push，Render.js:893）——插入后把新节点在**数据层**提到首位。
+      // node.nodeData.children.push，Render.js:951）——插入后把新节点在**数据层**提到首位。
       // 不走 spec 原述的 UP_NODE：该命令按渲染节点实例操作（node.parent/node.isRoot，Render.js:1066），
       // 而新节点的实例要等下一次 render（render() 走 setTimeout 0 + 布局 asyncRun，Render.js:553）
       // 才存在，同步传数据节点在引擎里即 TypeError。数据层 splice 与 UP_NODE 对
@@ -45,16 +45,20 @@ export function createBasketEnginePort(getMm: () => MindMapHandle | null): Baske
         text: idea.text,
         ...(idea.body !== undefined ? { body: idea.body } : {}),
       })
-      // 长度未增（引擎静默早退）即不搬动：pop 会误摘既有条目
+      // 长度未增（引擎静默早退）即不搬动：pop 会误摘既有条目。此路返回 false 让位文件层——
+      // 报 true 会让 T4 以为已入篮而不再落文件，点子静默丢失（假成功）
       const created = ctx.children.length === before + 1 ? ctx.children.pop() : undefined
       if (created !== undefined) ctx.children.unshift(created)
-      return true
+      return created !== undefined
     },
     removeIdeaByText: (text: string): boolean => {
       const ctx = rootCtx(getMm())
       if (ctx === null) return false
       // 根下首个文本命中 → uid → 渲染实例：REMOVE_NODE 收实例（removeNode：node.isRoot/getData，
-      // Render.js:1413），传数据节点即 TypeError；实例查不到（根被收起，子节点不在渲染树）即让位文件层
+      // Render.js:1413）。传数据节点不会报错而是**静默不删**（removeFromParentNodeData 首行
+      // `if (!node || !node.parent) return`，utils/index.js:1166；唯恰有编辑框开在同一节点时才因
+      // getData 抛错，Render.js:1434）——静默不删会让上层误判成功、文件层也不再兜底，故必须取实例；
+      // 实例查不到（根被收起，子节点不在渲染树）即让位文件层
       const uid = ctx.children.find((c) => c.data?.text === text)?.data?.uid
       const node = typeof uid === 'string' ? ctx.mm.renderer?.findNodeByUid(uid) : null
       if (node === null || node === undefined) return false

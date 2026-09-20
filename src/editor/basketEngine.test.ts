@@ -127,6 +127,16 @@ describe('篮子引擎端口 insertIdea（spec §3.2 新点子在篮子最上）
     } as unknown as MindMapHandle
     expect(() => createBasketEnginePort(() => mm).insertIdea({ text: '乙' })).toThrow('引擎炸了')
   })
+
+  test('引擎静默早退（插入未增长）：返回 false 让位文件层，且不动既有条目（不假成功、不误摘）', () => {
+    const eng = fakeEngine([{ text: '旧一' }])
+    const mm = {
+      execCommand: () => {}, // 真机 insertChildNode 的唯一早退路径：数据子节点表纹丝不动
+      renderer: eng.mm.renderer,
+    } as unknown as MindMapHandle
+    expect(createBasketEnginePort(() => mm).insertIdea({ text: '甲' })).toBe(false)
+    expect(texts(eng.children)).toEqual(['旧一'])
+  })
 })
 
 describe('篮子引擎端口 removeIdeaByText', () => {

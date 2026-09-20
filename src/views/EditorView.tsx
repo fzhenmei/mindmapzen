@@ -434,6 +434,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     return () => useAppStore.getState().setBasketEngine(null)
   }, [isBasket])
 
+  // 篮子归属变假（语言/设置重解析 basketRelPath）时收敛浮层态：浮层挂载门是 isBasket 而 sortOpen
+  // 是独立 state——不收敛则浮层已卸载而 anyDialog 恒真，快捷键/浮动条长期让位到切图重挂才自愈
+  useEffect(() => {
+    if (!isBasket) setSortOpen(false)
+  }, [isBasket])
+
   // AI 面板开/关/定宽后画布让位重算：引擎只监听 window resize，容器收窄（canvas-host 内联 right）
   // 须宿主补调 resize()；拖拽暂存不进依赖——不逐帧重排，开合/onCommit/onReset 各触发一次。
   // 补偿调用必须复刻 MindMapCanvas safeResize 的 0×0 门禁（rect 校验+try/catch）：引擎
