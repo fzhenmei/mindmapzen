@@ -35,12 +35,16 @@ const tauriPorts: CaptureWindowPorts = {
     await emit(BASKET_UPDATED_EVENT, { mapPath })
   },
   showMainWindow: async () => {
-    const { Window } = await import('@tauri-apps/api/window')
-    const main = await Window.getByLabel('main')
-    if (main === null) return
-    await main.show()
-    await main.unminimize()
-    await main.setFocus()
+    try {
+      const { Window } = await import('@tauri-apps/api/window')
+      const main = await Window.getByLabel('main')
+      if (main === null) return
+      await main.show()
+      await main.unminimize()
+      await main.setFocus()
+    } catch (e) {
+      console.error('打开主窗口失败', e)
+    }
   },
   onFocusChanged: async (cb) => {
     const { getCurrentWindow } = await import('@tauri-apps/api/window')

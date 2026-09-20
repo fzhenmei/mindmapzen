@@ -45,7 +45,6 @@ export default {
   pngEncodeFail: 'PNG 编码失败',
   engineNoExportPlugin: '引擎未注册 Export 插件',
   initFail: '初始化失败：{{detail}}',
-  exitFail: '退出失败：{{detail}}',
   // 忽略块类型本地名(spec §3.5 横幅/确认/导入预览共用;中文键=xmind 数据原值,未知走 other)
   ignoredType: {
     paragraph: '段落',

@@ -6,17 +6,18 @@ import ReactDOM from 'react-dom/client'
 import { useAppStore } from '../store/appStore'
 import { tauriFsAdapter } from '../services/fs/TauriFsAdapter'
 import { loadConfig } from '../services/config'
-import { initI18n } from '../i18n'
+import { initI18n, changeUiLanguage } from '../i18n'
 import { resolveUiLang, systemUiLanguage } from '../i18n/resolve'
 import { resolveTheme, applyDocumentTheme } from '../services/theme'
 import CaptureWindowApp from './CaptureWindowApp'
 
 export async function renderCaptureWindow(): Promise<void> {
-  initI18n(resolveUiLang('auto', systemUiLanguage())) // 先按系统预热，cfg 读回后组件聚焦刷新校正
+  initI18n(resolveUiLang('auto', systemUiLanguage())) // 先按系统预热，cfg 读回后显式校正 UI 语言（initI18n 幂等换不了语言，与主窗 init 同口径）
   const { appDataDir, join } = await import('@tauri-apps/api/path')
   const configPath = await join(await appDataDir(), 'config.json')
   const cfg = await loadConfig(tauriFsAdapter, configPath) // 内置宽容回退，不抛
   const lang = resolveUiLang(cfg.language, systemUiLanguage())
+  changeUiLanguage(lang) // initI18n 幂等（isInitialized 即返回），cfg 读回须显式切换语言
   useAppStore.setState({
     adapter: tauriFsAdapter,
     configPath,
