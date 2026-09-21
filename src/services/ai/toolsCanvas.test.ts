@@ -83,6 +83,36 @@ describe('set_node_body', () => {
     expect(r.ok).toBe(false)
     expect(r.detail).toContain('set_node_expand')
   })
+
+  test('列表层节点(layerIndex≥6)拒绝写入正文,不落命令', () => {
+    const root = dataNode('root', {}, [dataNode('c1')])
+    const { mm, execCommand, findNodeByUid } = makeMm(root)
+    findNodeByUid.mockReturnValue({ layerIndex: 6 })
+    const r = executeAiTool(mm, 'set_node_body', { uid: 'c1', text: '正文' }, (fn) => fn())
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('列表层')
+    expect(execCommand).not.toHaveBeenCalled()
+  })
+
+  test('缺 text 参数显式拒绝(schema required 非硬保证),不落命令', () => {
+    const root = dataNode('root', {}, [dataNode('c1')])
+    const { mm, execCommand, findNodeByUid } = makeMm(root)
+    findNodeByUid.mockReturnValue({})
+    const r = executeAiTool(mm, 'set_node_body', { uid: 'c1' }, (fn) => fn())
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('text')
+    expect(execCommand).not.toHaveBeenCalled()
+  })
+
+  test('text:"" 显式清空仍放行(缺键才拒绝;空串=清空语义回归保护)', () => {
+    const root = dataNode('root', {}, [dataNode('c1')])
+    const { mm, execCommand, findNodeByUid } = makeMm(root)
+    findNodeByUid.mockReturnValue({})
+    const r = executeAiTool(mm, 'set_node_body', { uid: 'c1', text: '' }, (fn) => fn())
+    expect(r.ok).toBe(true)
+    expect(r.detail).toContain('清空')
+    expect(execCommand).toHaveBeenCalledWith('SET_NODE_DATA', expect.anything(), { body: undefined, note: undefined })
+  })
 })
 
 describe('set_node_icon', () => {

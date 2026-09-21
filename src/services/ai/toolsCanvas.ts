@@ -175,10 +175,19 @@ const handleGetNodeDetail = ({ renderer, uidOf }: ToolCtx): ToolCallResult => {
   return { ok: true, detail: JSON.stringify({ body, icons: dataIconNames(d), tags }) }
 }
 
-const handleSetNodeBody = ({ mm, renderer, uidOf, strOf, withAiCallFn }: ToolCtx): ToolCallResult => {
+const handleSetNodeBody = ({ mm, renderer, uidOf, strOf, has, withAiCallFn }: ToolCtx): ToolCallResult => {
   const uid = uidOf('uid')
   const node = findNode(renderer, uid)
   if (!node) return { ok: false, detail: `节点不存在:[${uid}]${COLLAPSED_HINT}` }
+  // 列表层门禁(useBodyDialog isListNode 同口径):layerIndex≥6(= mdTree 深度≥7)不支持
+  // 正文——放着写会让保存链 serialize 的 assertNoBodyInList 抛错、保存持续失败,前置显式
+  // 拒绝走 AI 自纠。layerIndex 结构探测窄化 cast 同 markerOf 先例
+  const layerIndex = (node as { layerIndex?: unknown }).layerIndex
+  if (typeof layerIndex === 'number' && layerIndex >= 6)
+    return { ok: false, detail: '列表层节点不支持正文(深度超过标题层,正文仅限 H1-H6 层节点)' }
+  // 缺参拒绝(strOf 缺参与空串同返 ''无法区分):schema required 非硬保证,缺 text 静默
+  // 清正文比写错更危险;空串=清空语义保留(与 add_node/update_node_text 缺 text 拒绝同族)
+  if (!has('text')) return { ok: false, detail: '缺 text 参数(空串才是清空正文)' }
   // 正文清洗只剥 \r(Word 毒节点教训,\r 进 serialize 断言抛错):markdown 段落空行/行尾空白
   // 有语义须保留,不走 ToolCtx.text 的 sanitizeText(那是节点单行文本口径:删空行+逐行 trimEnd)
   const text = strOf('text').replaceAll('\r\n', '\n').replaceAll('\r', '\n')

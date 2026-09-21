@@ -149,6 +149,8 @@ export interface ToolCtx {
   list(k: string): string[]
   /** 通用字符串参数(布局 kind 等;与 uidOf 同实现,语义命名) */
   strOf(k: string): string
+  /** 参数存在通道:缺参与空串语义分界(set_node_body 的 text 空串=清空,缺键须拒绝) */
+  has(k: string): boolean
   /** 布尔参数(expanded) */
   boolOf(k: string): boolean
   /** 数值参数(level 等;JSON 数值不能走字符串通道,原样返回由 handler 校验) */
@@ -251,6 +253,7 @@ export function executeAiTool(
     text: sanitizeText(args.text),
     uidOf: str,
     strOf: str,
+    has: (k) => k in args,
     list: (k) => (Array.isArray(args[k]) ? args[k].filter((v): v is string => typeof v === 'string') : []),
     boolOf: (k) => args[k] === true,
     num: (k) => args[k],
