@@ -46,6 +46,9 @@ const okAdd = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","functio
 const finishToolCalls = '{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}'
 const textHi = '{"choices":[{"delta":{"content":"已添加"}}]}'
 const finishStop = '{"choices":[{"delta":{},"finish_reason":"stop"}]}'
+// 备份分组(spec §1 裁定):内容编辑(含新工具)触发回合前 git 备份;视图操作豁免
+const okLayout = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"set_layout","arguments":"{\\"kind\\":\\"timeline\\"}"}}]}}]}'
+const okTags = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c2","function":{"name":"set_node_tags","arguments":"{\\"uid\\":\\"a\\",\\"tags\\":[]}"}' + '}]}}]}'
 
 type AgentTurnDepsLike = Parameters<typeof runUserTurn>[0]
 
@@ -182,4 +185,28 @@ test('非 Tauri 环境错误码 AI_TRANSPORT_UNAVAILABLE：专用文案（Ruling
   const { deps, on } = makeDeps(t)
   await runUserTurn(deps, createTurnStop(), INIT)
   expect(on.error).toHaveBeenCalledWith('当前环境不支持 AI 网络调用（需在桌面应用内使用）')
+})
+
+test('视图工具(set_layout)成功不触发回合前备份', async () => {
+  const t = scriptedTransport([[okLayout, finishToolCalls], [textHi, finishStop]])
+  const { deps, backup, on } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(on.card).toHaveBeenCalledOnce() // 卡片照发(UI 可见反馈)
+  expect(backup).not.toHaveBeenCalled() // 视图操作豁免
+})
+
+test('内容工具(set_node_tags)成功触发回合前备份恰一次', async () => {
+  const t = scriptedTransport([[okTags, finishToolCalls], [textHi, finishStop]])
+  const { deps, backup } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(backup).toHaveBeenCalledOnce()
+})
+
+test('排序工具(up_node)是内容编辑:触发备份', async () => {
+  const okUp = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c5","function":{"name":"up_node","arguments":"{\\"uid\\":\\"a\\"}"}}]}}]}'
+  const t = scriptedTransport([[okUp, finishToolCalls], [textHi, finishStop]])
+  const { deps, backup, on } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(on.card).toHaveBeenCalledOnce()
+  expect(backup).toHaveBeenCalledOnce()
 })

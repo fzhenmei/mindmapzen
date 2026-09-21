@@ -5,7 +5,7 @@ import { create } from 'zustand'
 export type ChatPhase = 'idle' | 'streaming' | 'executing'
 
 export interface ToolCardData {
-  kind: 'add' | 'update' | 'remove' | 'move'
+  kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink'
   ok: boolean
   text: string
 }
