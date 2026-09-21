@@ -9,6 +9,9 @@ import type { EngineNode } from '../../types/engine'
 /** 图标白名单 kebab 名(schema enum 与 handler 校验同源;导出供后续任务 schema 组装消费) */
 export const ICON_NAMES = Object.keys(CURATED_ICONS)
 
+/** 渲染树 miss 的统一拒绝文案:提示 AI 先展开(收起分支里的节点不在渲染树) */
+const COLLAPSED_HINT = '(节点可能位于收起分支,先调 set_node_expand 展开其所在分支后重试)'
+
 export const AI_CANVAS_TOOL_SCHEMAS = [
   {
     type: 'function',
@@ -19,6 +22,51 @@ export const AI_CANVAS_TOOL_SCHEMAS = [
         type: 'object',
         properties: { uid: { type: 'string' } },
         required: ['uid'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_node_body',
+      description: '改写指定节点的正文(markdown 长文,悬停可预览)。改前建议先 get_node_detail 读现有内容。',
+      parameters: {
+        type: 'object',
+        properties: {
+          uid: { type: 'string' },
+          text: { type: 'string', description: '新正文全文;空串 = 清空' },
+        },
+        required: ['uid', 'text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_node_icon',
+      description: '整组设置指定节点的图标(覆写现有用户图标)。names 只能取白名单 kebab 名。',
+      parameters: {
+        type: 'object',
+        properties: {
+          uid: { type: 'string' },
+          names: { type: 'array', items: { type: 'string', enum: ICON_NAMES }, description: '图标 kebab 名整组;空数组 = 清空' },
+        },
+        required: ['uid', 'names'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_node_tags',
+      description: '整组设置指定节点的标签(覆写现有标签,自由文本,最多 10 个)。空数组 = 清空。',
+      parameters: {
+        type: 'object',
+        properties: {
+          uid: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['uid', 'tags'],
       },
     },
   },
@@ -33,6 +81,11 @@ function findDataNode(root: EngineNode | null | undefined, uid: string): EngineN
     if (hit) return hit
   }
   return null
+}
+
+/** 渲染树寻址(写专用,tools.ts 同款一行):收起分支里的节点不在渲染树,miss 由调用方显式拒绝 */
+function findNode(renderer: ToolCtx['renderer'], uid: string): unknown {
+  return renderer.findNodeByUid(uid)
 }
 
 /** 从引擎节点 data 取用户图标 kebab 名(剥 zen_ 前缀滤徽章,prompt.ts 同口径) */
@@ -53,6 +106,44 @@ const handleGetNodeDetail = ({ renderer, uidOf }: ToolCtx): ToolCallResult => {
   return { ok: true, detail: JSON.stringify({ body, icons: dataIconNames(d), tags }) }
 }
 
+const handleSetNodeBody = ({ mm, renderer, uidOf, text, withAiCallFn }: ToolCtx): ToolCallResult => {
+  const uid = uidOf('uid')
+  const node = findNode(renderer, uid)
+  if (!node) return { ok: false, detail: `节点不存在:[${uid}]${COLLAPSED_HINT}` }
+  const next = text === '' ? undefined : text
+  withAiCallFn(() => mm.execCommand('SET_NODE_DATA', node, { body: next, note: next }))
+  // 角标/悬停即时增删(useBodyDialog 同款补重渲:裸命令不重渲染)
+  mm.renderer?.reRenderNodeCheckChange?.(node)
+  return { ok: true, detail: text === '' ? '正文已清空' : '正文已写入' }
+}
+
+const handleSetNodeIcon = ({ mm, renderer, uidOf, list, withAiCallFn }: ToolCtx): ToolCallResult => {
+  const uid = uidOf('uid')
+  const node = findNode(renderer, uid)
+  if (!node) return { ok: false, detail: `节点不存在:[${uid}]${COLLAPSED_HINT}` }
+  const names = list('names')
+  const bad = names.filter((n) => !ICON_NAMES.includes(n))
+  if (bad.length > 0) return { ok: false, detail: `非法图标名:${bad.join(', ')}(仅可用白名单:${ICON_NAMES.length} 个 kebab 名)` }
+  // 徽章互保(useIconPicker 同口径):覆写用户图标前保留 zen_status- 状态徽章
+  const cur = (node as { getData?(k: string): unknown }).getData?.('icon')
+  const badges = Array.isArray(cur) ? cur.filter((i): i is string => typeof i === 'string' && i.startsWith('zen_status-')) : []
+  withAiCallFn(() => mm.execCommandIcon?.(uid, [...badges, ...names.map((n) => `zen_${n}`)]))
+  return { ok: true, detail: names.length === 0 ? '图标已清空' : `图标已设:${names.join(',')}` }
+}
+
+const handleSetNodeTags = ({ mm, renderer, uidOf, list, withAiCallFn }: ToolCtx): ToolCallResult => {
+  const uid = uidOf('uid')
+  const node = findNode(renderer, uid)
+  if (!node) return { ok: false, detail: `节点不存在:[${uid}]${COLLAPSED_HINT}` }
+  const tags = list('tags')
+  if (tags.length > 10) return { ok: false, detail: `标签最多 10 个(maxTag 上限,与手动选择器一致)` }
+  withAiCallFn(() => mm.execCommandTag?.(uid, tags))
+  return { ok: true, detail: tags.length === 0 ? '标签已清空' : `标签已设:${tags.join('/')}` }
+}
+
 export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = {
   get_node_detail: handleGetNodeDetail,
+  set_node_body: handleSetNodeBody,
+  set_node_icon: handleSetNodeIcon,
+  set_node_tags: handleSetNodeTags,
 }
