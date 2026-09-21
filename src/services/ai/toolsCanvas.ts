@@ -106,10 +106,13 @@ const handleGetNodeDetail = ({ renderer, uidOf }: ToolCtx): ToolCallResult => {
   return { ok: true, detail: JSON.stringify({ body, icons: dataIconNames(d), tags }) }
 }
 
-const handleSetNodeBody = ({ mm, renderer, uidOf, text, withAiCallFn }: ToolCtx): ToolCallResult => {
+const handleSetNodeBody = ({ mm, renderer, uidOf, strOf, withAiCallFn }: ToolCtx): ToolCallResult => {
   const uid = uidOf('uid')
   const node = findNode(renderer, uid)
   if (!node) return { ok: false, detail: `节点不存在:[${uid}]${COLLAPSED_HINT}` }
+  // 正文清洗只剥 \r(Word 毒节点教训,\r 进 serialize 断言抛错):markdown 段落空行/行尾空白
+  // 有语义须保留,不走 ToolCtx.text 的 sanitizeText(那是节点单行文本口径:删空行+逐行 trimEnd)
+  const text = strOf('text').replaceAll('\r\n', '\n').replaceAll('\r', '\n')
   const next = text === '' ? undefined : text
   withAiCallFn(() => mm.execCommand('SET_NODE_DATA', node, { body: next, note: next }))
   // 角标/悬停即时增删(useBodyDialog 同款补重渲:裸命令不重渲染)

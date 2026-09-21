@@ -64,6 +64,17 @@ describe('set_node_body', () => {
     expect(execCommand).toHaveBeenCalledWith('SET_NODE_DATA', expect.anything(), { body: undefined, note: undefined })
   })
 
+  test('正文保留空行与行尾空白(markdown 段落语义),仅剥 \\r', () => {
+    const root = dataNode('root', {}, [dataNode('c1')])
+    const { mm, execCommand, findNodeByUid } = makeMm(root)
+    findNodeByUid.mockReturnValue({})
+    const r = executeAiTool(mm, 'set_node_body', { uid: 'c1', text: '段一\r\n\r\n段二  尾空格 \n' }, withAiCall)
+    expect(r.ok).toBe(true)
+    expect(execCommand).toHaveBeenCalledWith('SET_NODE_DATA', expect.anything(), {
+      body: '段一\n\n段二  尾空格 \n', note: '段一\n\n段二  尾空格 \n',
+    })
+  })
+
   test('渲染 miss(收起分支)显式拒绝并提示先展开', () => {
     const { mm } = makeMm(dataNode('root'))
     const r = executeAiTool(mm, 'set_node_body', { uid: 'x', text: 't' }, withAiCall)
