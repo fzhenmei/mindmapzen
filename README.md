@@ -9,6 +9,14 @@ A free, local-first mind-mapping desktop app: organize ideas on a familiar mind-
 - Kanban mode and AI chat built into the same tree
 - English / 简体中文 UI, Inkstone & Paper themes (with Night Ink)
 
+![Paper — the mind-map canvas](docs/images/hero.png)
+
+| Desk — map library, every map is one `.md` file | Kanban — the same tree executed as a board |
+|---|---|
+| ![Desk](docs/images/desk.png) | ![Kanban](docs/images/kanban.png) |
+| AI chat — edit the map through conversation | Night Ink — the dark theme |
+| ![AI chat](docs/images/ai.png) | ![Dark theme](docs/images/dark.png) |
+
 ## Feature overview (v2.18)
 
 ### Desk (map library)

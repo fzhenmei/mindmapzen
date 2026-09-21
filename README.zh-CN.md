@@ -9,6 +9,14 @@
 - 看板模式与 AI 对话内置于同一棵树
 - 中英双语界面，砚与纸双主题（含夜墨）
 
+![纸面——导图画布](docs/images/hero.png)
+
+| 案头——导图库，每张导图就是一个 `.md` 文件 | 看板——同一棵树，换一块板执行 |
+|---|---|
+| ![案头](docs/images/desk.png) | ![看板](docs/images/kanban.png) |
+| AI 对话——聊着天就把导图改了 | 夜墨——暗色主题 |
+| ![AI 对话](docs/images/ai.png) | ![夜墨](docs/images/dark.png) |
+
 ## 功能总览（v2.18）
 
 ### 案头（导图库）
