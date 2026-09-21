@@ -36,7 +36,18 @@ export async function setTrayEnabled(enabled: boolean, actions: TrayActions): Pr
           { id: 'quit', text: i18n.t('basket.tray.quit'), action: () => actions.onQuit() },
         ],
       })
-      tray = await TrayIcon.new({ id: 'zen-tray', icon: pngBytes(), tooltip: 'Mind Map Zen', menu })
+      // 左键 = 打开主窗（Windows 默认左键也弹菜单，显式关掉）；右键仍由 menu 承接。
+      // 双击会先来一次 Click 已触发显示，DoubleClick 事件无需处理
+      tray = await TrayIcon.new({
+        id: 'zen-tray',
+        icon: pngBytes(),
+        tooltip: 'Mind Map Zen',
+        menu,
+        showMenuOnLeftClick: false,
+        action: (ev) => {
+          if (ev.type === 'Click' && ev.button === 'Left') actions.onShowMain()
+        },
+      })
     } else {
       await tray.setIcon(pngBytes()) // 再启用：恢复图标（setIcon(null) 只摘图标）
     }
