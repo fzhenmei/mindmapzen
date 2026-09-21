@@ -19,6 +19,7 @@ function mount(mm: unknown = fakeMm) {
     <ChatPanel
       mmRef={{ current: mm as never }}
       selection={null}
+      aiEnv={null}
       width={320}
       onResize={() => {}}
       onCommit={() => {}}

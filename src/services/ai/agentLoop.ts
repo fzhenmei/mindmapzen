@@ -5,6 +5,7 @@ import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
 import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
 import { AI_TOOL_SCHEMAS } from './tools'
+import { AI_CANVAS_TOOL_SCHEMAS } from './toolsCanvas'
 import type { ToolCallResult } from './tools'
 
 /** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱） */
@@ -57,7 +58,21 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
   update_node_text: 'update',
   remove_node: 'remove',
   move_node: 'move',
+  up_node: 'move',
+  down_node: 'move',
+  set_node_body: 'body',
+  set_node_icon: 'icon',
+  set_node_tags: 'tag',
+  set_node_expand: 'expand',
+  expand_all: 'expand',
+  collapse_to_level: 'expand',
+  add_link: 'link',
+  remove_link: 'unlink',
+  set_layout: 'layout',
 }
+
+/** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义 */
+const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink'])
 
 /** OpenAI assistant tool_call 消息形态（assembleAssistantToolCalls 的产物） */
 type AssistantToolCall = ReturnType<typeof assembleAssistantToolCalls>[number]
@@ -105,7 +120,7 @@ async function backupOnceBeforeFirstEdit(
   kind: ToolCardData['kind'] | undefined,
   backupDone: { value: boolean },
 ): Promise<void> {
-  if (backupDone.value || !kind) return
+  if (backupDone.value || !kind || !EDIT_KINDS.has(kind)) return
   backupDone.value = true
   try {
     await deps.backupBeforeFirstEdit()
@@ -161,7 +176,7 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
         body: {
           model: init.model,
           messages: deps.buildMessages(history),
-          tools: [...AI_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
+          tools: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
           stream: true,
         },
       },

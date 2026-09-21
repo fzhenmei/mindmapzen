@@ -1,10 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import Vditor from 'vditor'
 import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
+import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CopySettings } from '../types/files'
@@ -20,7 +22,8 @@ const fakeRootNode = { uid: 'root-uid', layerIndex: 0, getData: () => undefined 
 const fakeChildNode = {
   uid: 'child-uid',
   layerIndex: 1,
-  getData: (k: string) => (k === 'body' ? '既有正文' : undefined),
+  // 返回注解放宽到 string：aiEnv 用例临时补 text 读值（marker 解析），字面量推断会拒宽赋值
+  getData: (k: string): string | undefined => (k === 'body' ? '既有正文' : undefined),
 }
 // 深层列表节点（layerIndex 6 = mdTree 深度 7）：正文面板深层门禁的空态样本
 const fakeDeepNode = { uid: 'deep-uid', layerIndex: 6, getData: () => undefined }
@@ -191,6 +194,20 @@ vi.mock('vditor', () => {
     return inst
   })
   return { default: Object.assign(Ctor, { preview: vi.fn().mockResolvedValue(undefined), __inst: inst }) }
+})
+
+// aiEnv 捕获（AI 全面修改 Task 8）：包装式 mock——透传渲染零行为差异（文件内其余 AI
+// 面板用例照常走真实 ChatPanel），仅把最近一次挂载收到的 aiEnv prop 暴露到全局
+// __lastAiEnv（经公开 props 通道捕获，不依赖 EditorView 内部句柄——任务书 spy 注入基准）；
+// vi.mock 工厂被提升，真实模块经 importOriginal 动态引入（同 MindMapCanvas 工厂注释）
+vi.mock('../components/ChatPanel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/ChatPanel')>()
+  const Real = actual.default
+  const Wrapped = (props: ComponentProps<typeof Real>) => {
+    ;(globalThis as unknown as Record<string, unknown>).__lastAiEnv = props.aiEnv
+    return Real(props)
+  }
+  return { ...actual, default: Wrapped }
 })
 
 let fs: MemoryFsAdapter
@@ -3059,6 +3076,53 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     rect = { width: 0, height: 0 } as DOMRect // 窄窗口下面板挤压画布至 0×0
     fireEvent.click(screen.getByTestId('ai-close'))
     expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
+  })
+
+  // ── aiEnv 注入（AI 全面修改 Task 8，spec §3）：连线/布局工具经 ChatPanel 通道生效 ──
+  // 基准写法（任务书）：不依赖 EditorView 内部句柄——aiEnv 经 ChatPanel 公开 props 通道
+  // 捕获（文件头包装式 mock 的 __lastAiEnv），再以 executeAiTool 驱动全链（与 handleSend
+  // 内 executeTool 同一执行器，只省去 agent loop 的网络轮次）
+  test('aiEnv 注入：连线/布局工具经 ChatPanel 通道生效', async () => {
+    useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
+    renderEditor()
+    expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+    const handle = fakeHandle // ready 时刻实例即 mmRef 所持（aiEnv.setLayout 经 mmRef 落引擎）
+    act(() => {
+      ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+    })
+    fireEvent.click(screen.getByTestId('ai-toggle'))
+    const env = (globalThis as unknown as Record<string, unknown>).__lastAiEnv as AiToolEnv | undefined
+    expect(env).toBeTruthy() // 通道已挂（registry 就绪即构造，非 null）
+    // 布局：set_layout 经 executeAiTool 全链——引擎重排 + React 布局态 + sidecar 即时落盘
+    let layoutRes: ReturnType<typeof executeAiTool> | undefined
+    act(() => {
+      layoutRes = executeAiTool(handle, 'set_layout', { kind: 'timeline' }, (fn) => fn(), env)
+    })
+    expect(layoutRes?.ok).toBe(true)
+    expect(handle.setLayout).toHaveBeenCalledWith(layoutToEngine('timeline')) // 引擎层（timeline 同名直映）
+    // React 态（ZenBar 激活）：timeline 是「更多布局」收起项——触发钮 data-active 点亮
+    expect(screen.getByTestId('btn-layout-more')).toHaveAttribute('data-active', '')
+    await act(async () => {}) // 排空 sidecar fire-and-forget 落盘微任务
+    const sc = JSON.parse(await fs.readTextFile('/ws/a.zen.json'))
+    expect(sc.layout).toBe('timeline') // 布局偏好即时落盘（否则重开丢布局）
+    expect(useAppStore.getState().dirty).toBe(false) // 布局切换不置脏（与手工切换同口径）
+    expect(useAppStore.getState().preferredLayout).toBe('mindmap') // AI 切布局不改用户默认偏好（无 setPreferredLayout）
+    // 连线：add_link → 注册表落条目 + 置脏回调触发（onDataChanged 走保存链）
+    // fakeChildNode 补 text 读值：marker 解析（disambiguatedTarget）需要目标节点文本
+    const origGet = fakeChildNode.getData
+    fakeChildNode.getData = (k: string) => (k === 'text' ? ('新分支' as string) : origGet(k))
+    try {
+      let linkRes: ReturnType<typeof executeAiTool> | undefined
+      act(() => {
+        linkRes = executeAiTool(handle, 'add_link', { fromUid: 'root-uid', toUid: 'child-uid' }, (fn) => fn(), env)
+      })
+      expect(linkRes?.ok).toBe(true)
+      expect(env!.registry.byUid.size).toBeGreaterThan(0) // 连线注册表有条目
+      expect(env!.registry.byUid.get('root-uid')).toContain('新分支')
+      expect(useAppStore.getState().dirty).toBe(true) // 置脏回调触发（保存链接管）
+    } finally {
+      fakeChildNode.getData = origGet
+    }
   })
 })
 

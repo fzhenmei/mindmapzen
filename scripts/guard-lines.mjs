@@ -74,10 +74,12 @@
 //   引擎端口注册/清理与浮层态收敛两 effect + 整理浮层一行挂载 + anyDialog 互斥项，实测 811 +
 //   4 行余量；端口本体已先抽出到 editor/basketEngine.ts、浮层两端口组装到
 //   components/BasketSortLayer.tsx（均无护栏）——功能性增长，无腐化。
+// 2026-09-21（AI 全面修改批）：815→840（aiEnv 组合通道构造 + ChatPanel aiEnv 传递接线，
+//   实测 830 + 10 行余量；工具本体在 services/ai/toolsCanvas.ts（无护栏）——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 815 },
+  { path: '../src/views/EditorView.tsx', limit: 840 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
   { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]

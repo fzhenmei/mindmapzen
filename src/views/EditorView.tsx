@@ -8,6 +8,7 @@ import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets
 import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
+import type { AiToolEnv } from '../services/ai/tools'
 import type { WriteClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
@@ -480,6 +481,20 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   const aiPanelPx = aiDragPx ?? aiChatWidth ?? AI_PANEL_DEFAULT_PX
   const aiSelectionNode = selection.activeUid ? { uid: selection.activeUid, text: nodeTextOf(mmRef.current, selection.activeUid) } : null
 
+  /** AI 画布域通道（spec §3）：连线经注册表+置脏（与桥接建线同款 onTreeDataChange）；
+   *  布局复用 switchLayout 语义但**不含 setPreferredLayout**（AI 切布局不改用户默认偏好，
+   *  sidecar 仍即时落盘否则重开丢布局）。每渲染新对象（无 memo 依赖负担，ChatPanel 未 memo） */
+  const aiEnv: AiToolEnv | null = registry ? {
+    registry,
+    onDataChanged: () => pipeline.onTreeDataChange(),
+    setLayout: (kind) => {
+      mmRef.current?.setLayout(layoutToEngine(kind))
+      layoutRef.current = kind
+      setLayout(kind)
+      void pipeline.persistLayoutSidecar()
+    },
+  } : null
+
   // @container：停泊栏避让的查询容器（UI评审P1，题签/主题钮 @max-[1150px] 上移基准）。
   // 2026-09-08 弹窗化：画布让位（.body-open 收窄右缘 + 延迟 resize）随常驻面板退役——
   // 模态弹窗浮于画布上，画布宽度恒定不再重排
@@ -593,6 +608,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           <ChatPanel
             mmRef={mmRef}
             selection={aiSelectionNode}
+            aiEnv={aiEnv}
             width={aiPanelPx}
             onResize={setAiDragPx}
             onCommit={(w) => {
