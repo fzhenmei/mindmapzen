@@ -11,7 +11,7 @@ import { useAppStore } from '../store/appStore'
 import { useChatStore, type ChatMessage } from '../store/chatStore'
 import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
-import { executeAiTool } from '../services/ai/tools'
+import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
 import { getTransport } from '../services/ai/client'
 import { createTurnStop, runUserTurn } from '../services/ai/agentLoop'
 import type { MindMapHandle } from '../types/engine'
@@ -25,6 +25,8 @@ const AI_INPUT_MIN_PX = 64
 interface Props {
   mmRef: RefObject<MindMapHandle | null>
   selection: { uid: string; text: string } | null
+  /** 画布域工具的宿主通道（Task 8，spec §3）：连线注册表/置脏/布局组合；null = 通道未挂（工具显式失败） */
+  aiEnv: AiToolEnv | null
   width: number
   onResize(w: number): void // 拖拽中每帧（内存态）
   onCommit(w: number): void // 松手落盘
@@ -32,7 +34,7 @@ interface Props {
   onClose(): void
 }
 
-export default function ChatPanel({ mmRef, selection, width, onResize, onCommit, onReset, onClose }: Readonly<Props>) {
+export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, onCommit, onReset, onClose }: Readonly<Props>) {
   const { t } = useTranslation()
   const messages = useChatStore((s) => s.messages)
   const phase = useChatStore((s) => s.phase)
@@ -118,7 +120,7 @@ export default function ChatPanel({ mmRef, selection, width, onResize, onCommit,
             { role: 'system', content: buildSystemPrompt(mm.renderer?.renderTree ?? null) },
             ...msgs,
           ],
-          executeTool: (name, args) => Promise.resolve(executeAiTool(mm, name, args, withAiCall)),
+          executeTool: (name, args) => Promise.resolve(executeAiTool(mm, name, args, withAiCall, aiEnv ?? undefined)),
           backupBeforeFirstEdit: async () => {
             await useAppStore.getState().backupNow()
           },
