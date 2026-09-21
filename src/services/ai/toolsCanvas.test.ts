@@ -229,3 +229,17 @@ describe('add_link / remove_link', () => {
     expect(executeAiTool(mm, 'add_link', { fromUid: 'a', toUid: 'a' }, (fn) => fn(), env).detail).toContain('自身')
   })
 })
+
+describe('set_layout', () => {
+  test('五值合法切换;非法值拒绝并列出可用值;缺 env 拒绝', () => {
+    const { mm } = makeMm(dataNode('root'))
+    const env = makeEnv()
+    const ok = executeAiTool(mm, 'set_layout', { kind: 'fishbone' }, withAiCall, env)
+    expect(ok.ok).toBe(true)
+    expect(env.setLayout).toHaveBeenCalledWith('fishbone')
+    const bad = executeAiTool(mm, 'set_layout', { kind: 'circle' }, withAiCall, env)
+    expect(bad.ok).toBe(false)
+    expect(bad.detail).toContain('mindmap/logic/org/timeline/fishbone')
+    expect(executeAiTool(mm, 'set_layout', { kind: 'org' }, withAiCall).ok).toBe(false)
+  })
+})

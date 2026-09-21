@@ -30,6 +30,12 @@ test('buildSystemPrompt(null)：空图不抛异常', () => {
   expect(buildSystemPrompt(null)).toContain('（空）')
 })
 
+test('工作纪律含新工具指引', () => {
+  const p = buildSystemPrompt(tree)
+  expect(p).toContain('get_node_detail')
+  expect(p).toContain('视图操作')
+})
+
 test('selectionLine', () => {
   expect(selectionLine(null)).toBeNull()
   expect(selectionLine({ uid: 'b8c1', text: '子节点 一' })).toBe('[b8c1] 子节点 一')

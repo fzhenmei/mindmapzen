@@ -127,6 +127,18 @@ export const AI_CANVAS_TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'set_layout',
+      description: '切换整图布局:mindmap(右向)/ logic(左右发散)/ org(向下组织)/ timeline(时间轴)/ fishbone(鱼骨)。',
+      parameters: {
+        type: 'object',
+        properties: { kind: { type: 'string', enum: ['mindmap', 'logic', 'org', 'timeline', 'fishbone'] } },
+        required: ['kind'],
+      },
+    },
+  },
 ] as const
 
 /** 数据树全量寻址(读专用:收起分支可读;renderTree 即 EngineNode 形状) */
@@ -273,6 +285,19 @@ const handleRemoveLink = ({ mm, renderer, uidOf, env }: ToolCtx): ToolCallResult
   return { ok: true, detail: '连线已删除' }
 }
 
+/** 布局五值(layoutMap.LayoutKind 同集);走宿主组合通道(引擎重排+React 态+sidecar),
+ *  不走命令层不置脏——与手工切换口径一致 */
+const LAYOUT_KINDS = ['mindmap', 'logic', 'org', 'timeline', 'fishbone'] as const
+
+const handleSetLayout = ({ strOf, env }: ToolCtx): ToolCallResult => {
+  if (!env) return { ok: false, detail: '布局通道未就绪' }
+  const kind = strOf('kind')
+  if (!(LAYOUT_KINDS as readonly string[]).includes(kind))
+    return { ok: false, detail: `非法布局:${kind}(可用:${LAYOUT_KINDS.join('/')})` }
+  env.setLayout(kind as (typeof LAYOUT_KINDS)[number])
+  return { ok: true, detail: `布局已切换为 ${kind}` }
+}
+
 export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = {
   get_node_detail: handleGetNodeDetail,
   set_node_body: handleSetNodeBody,
@@ -283,4 +308,5 @@ export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> =
   collapse_to_level: handleCollapseToLevel,
   add_link: handleAddLink,
   remove_link: handleRemoveLink,
+  set_layout: handleSetLayout,
 }
