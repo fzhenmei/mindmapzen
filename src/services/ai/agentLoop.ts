@@ -5,6 +5,7 @@ import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
 import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
 import { AI_TOOL_SCHEMAS } from './tools'
+import { AI_CANVAS_TOOL_SCHEMAS } from './toolsCanvas'
 import type { ToolCallResult } from './tools'
 
 /** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱） */
@@ -161,7 +162,7 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
         body: {
           model: init.model,
           messages: deps.buildMessages(history),
-          tools: [...AI_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
+          tools: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
           stream: true,
         },
       },

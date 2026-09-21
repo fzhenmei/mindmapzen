@@ -3,7 +3,10 @@
 // 持锁 token）。工具失败不抛异常——错误文本回传 AI 自纠（agent 标准容错）。
 // v1.1 表驱动：一工具一 handler（executeAiTurn 时代 if 链认知复杂度超 Sonar 阈值）。
 import type { EngineNode, MindMapHandle } from '../../types/engine'
+import type { LinkRegistry } from '../../editor/linkRegistry'
+import type { LayoutKind } from '../../types/files'
 import { treeToUidOutline } from './prompt'
+import { CANVAS_HANDLERS } from './toolsCanvas'
 
 export interface ToolCallResult {
   ok: boolean
@@ -11,6 +14,13 @@ export interface ToolCallResult {
   detail: string
   /** add_node 成功时的新节点 uid */
   uid?: string
+}
+
+/** 新工具的宿主通道(spec §3):连线(注册表+置脏)与布局(React 态+sidecar)不在引擎命令层 */
+export interface AiToolEnv {
+  registry: LinkRegistry
+  onDataChanged(): void
+  setLayout(kind: LayoutKind): void
 }
 
 /** 节点文本清洗：剥 \r（Word 粘贴毒节点教训，multiline.ts 同口径），压平换行。
@@ -129,12 +139,20 @@ function findNode(mm: NonNullable<MindMapHandle['renderer']>, uid: string): unkn
 }
 
 /** dispatch 备好的公共参数（各 handler 按需窄用） */
-interface ToolCtx {
+export interface ToolCtx {
   mm: MindMapHandle
   renderer: NonNullable<MindMapHandle['renderer']>
   text: string
   uidOf(k: string): string
   withAiCallFn: <T>(fn: () => T) => T
+  /** 数组参数清洗(icon names / tags):非字符串项静默滤除 */
+  list(k: string): string[]
+  /** 通用字符串参数(布局 kind 等;与 uidOf 同实现,语义命名) */
+  strOf(k: string): string
+  /** 布尔参数(expanded) */
+  boolOf(k: string): boolean
+  /** 宿主通道;连线/布局工具缺 env 显式失败 */
+  env?: AiToolEnv
 }
 
 const handleGetMindmap = ({ renderer }: ToolCtx): ToolCallResult => {
@@ -210,21 +228,30 @@ const HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = {
   down_node: (ctx) => handleOrderNode({ ...ctx, name: 'down_node' }),
 }
 
+/** 全量 handler 表：结构域(tools.ts)+ 画布域(toolsCanvas.ts) */
+const ALL_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = { ...HANDLERS, ...CANVAS_HANDLERS }
+
 export function executeAiTool(
   mm: MindMapHandle | null,
   name: string,
   argsRaw: unknown,
   withAiCallFn: <T>(fn: () => T) => T,
+  env?: AiToolEnv,
 ): ToolCallResult {
   if (!mm?.renderer) return { ok: false, detail: '引擎未就绪' }
-  const handler = HANDLERS[name]
+  const handler = ALL_HANDLERS[name]
   if (!handler) return { ok: false, detail: `未知工具：${name}` }
   const args = (typeof argsRaw === 'object' && argsRaw !== null ? argsRaw : {}) as Record<string, unknown>
+  const str = (k: string): string => (typeof args[k] === 'string' ? (args[k] as string) : '')
   return handler({
     mm,
     renderer: mm.renderer,
     text: sanitizeText(args.text),
-    uidOf: (k) => (typeof args[k] === 'string' ? (args[k] as string) : ''),
+    uidOf: str,
+    strOf: str,
+    list: (k) => (Array.isArray(args[k]) ? args[k].filter((v): v is string => typeof v === 'string') : []),
+    boolOf: (k) => args[k] === true,
     withAiCallFn,
+    env,
   })
 }
