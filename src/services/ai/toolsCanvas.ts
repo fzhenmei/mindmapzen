@@ -3,7 +3,9 @@
 // miss 显式拒绝并提示先 set_node_expand(withAiCall 只包同步调用,execOnRenderNode 异步
 // 重试链吃不到锁窗口——AI 有展开工具,多步自纠闭环)。
 import { CURATED_ICONS } from '../../editor/zenIcons'
-import type { ToolCtx, ToolCallResult } from './tools'
+import { disambiguatedTarget } from '../../editor/linkBridge'
+import { registryToLinks } from '../../editor/linkRegistry'
+import type { ToolCtx, ToolCallResult, AiToolEnv } from './tools'
 import type { EngineNode } from '../../types/engine'
 
 /** 图标白名单 kebab 名(schema enum 与 handler 校验同源;导出供后续任务 schema 组装消费) */
@@ -98,6 +100,30 @@ export const AI_CANVAS_TOOL_SCHEMAS = [
         type: 'object',
         properties: { level: { type: 'number', description: '展开到的层级,≥1 的整数' } },
         required: ['level'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_link',
+      description: '在两节点间添加关联线(曲线连接,表达非父子关系)。',
+      parameters: {
+        type: 'object',
+        properties: { fromUid: { type: 'string' }, toUid: { type: 'string' } },
+        required: ['fromUid', 'toUid'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_link',
+      description: '删除两节点间的关联线。',
+      parameters: {
+        type: 'object',
+        properties: { fromUid: { type: 'string' }, toUid: { type: 'string' } },
+        required: ['fromUid', 'toUid'],
       },
     },
   },
@@ -196,6 +222,57 @@ const handleCollapseToLevel = ({ mm, num, withAiCallFn }: ToolCtx): ToolCallResu
   return { ok: true, detail: `已展开到第 ${raw} 层` }
 }
 
+/** 注册表写 → 引擎 targets 同步(rebuildLinks)→ 置_dirty 走保存链(md 落 [[..]])。
+ *  rebuildLinks 同步写引擎现态,保存链 harvestRegistry 收割现态——v0.7.0 删线复活防线继承 */
+function commitRegistry(mm: ToolCtx['mm'], env: AiToolEnv): void {
+  const plain = mm.getData()
+  if (plain) mm.rebuildLinks?.(registryToLinks(plain, env.registry))
+  env.onDataChanged()
+}
+
+/** 解析 toUid 节点的消歧 marker(linkBridge 同规则:名称唯一裸名,否则路径/#n) */
+function markerOf(mm: ToolCtx['mm'], to: unknown): string | null {
+  const text = (to as { getData?(k: string): unknown } | null | undefined)?.getData?.('text')
+  if (typeof text !== 'string' || text === '') return null
+  return disambiguatedTarget(mm, to as Parameters<typeof disambiguatedTarget>[1], text)
+}
+
+const handleAddLink = ({ mm, renderer, uidOf, env }: ToolCtx): ToolCallResult => {
+  if (!env) return { ok: false, detail: '连线通道未就绪' }
+  const fromUid = uidOf('fromUid')
+  const toUid = uidOf('toUid')
+  const from = findNode(renderer, fromUid)
+  const to = findNode(renderer, toUid)
+  if (!from || !to) return { ok: false, detail: `节点不存在:[${!from ? fromUid : toUid}]` }
+  // 自环按 uid 判等(同 uid 即自环;不依赖引擎实例稳定性)
+  if (fromUid === toUid) return { ok: false, detail: '不能连接自身' }
+  const marker = markerOf(mm, to)
+  if (marker === null) return { ok: false, detail: '目标节点无文本,无法建线' }
+  const list = env.registry.byUid.get(fromUid) ?? []
+  if (list.includes(marker)) return { ok: false, detail: '连线已存在' }
+  env.registry.byUid.set(fromUid, [...list, marker])
+  commitRegistry(mm, env)
+  return { ok: true, detail: '连线已添加' }
+}
+
+const handleRemoveLink = ({ mm, renderer, uidOf, env }: ToolCtx): ToolCallResult => {
+  if (!env) return { ok: false, detail: '连线通道未就绪' }
+  const fromUid = uidOf('fromUid')
+  const toUid = uidOf('toUid')
+  const from = findNode(renderer, fromUid)
+  const to = findNode(renderer, toUid)
+  if (!from || !to) return { ok: false, detail: `节点不存在:[${!from ? fromUid : toUid}]` }
+  const marker = markerOf(mm, to)
+  if (marker === null) return { ok: false, detail: '目标节点无文本' }
+  const list = env.registry.byUid.get(fromUid)
+  if (!list || !list.includes(marker)) return { ok: false, detail: '连线不存在(可用 get_mindmap 查看现有连线)' }
+  const next = list.filter((m) => m !== marker)
+  if (next.length === 0) env.registry.byUid.delete(fromUid)
+  else env.registry.byUid.set(fromUid, next)
+  commitRegistry(mm, env)
+  return { ok: true, detail: '连线已删除' }
+}
+
 export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = {
   get_node_detail: handleGetNodeDetail,
   set_node_body: handleSetNodeBody,
@@ -204,4 +281,6 @@ export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> =
   set_node_expand: handleSetNodeExpand,
   expand_all: handleExpandAll,
   collapse_to_level: handleCollapseToLevel,
+  add_link: handleAddLink,
+  remove_link: handleRemoveLink,
 }

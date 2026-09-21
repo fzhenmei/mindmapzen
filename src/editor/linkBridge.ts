@@ -17,7 +17,7 @@ interface NodeLike {
  *  名称全树唯一 → 裸名（md 简洁、AI 可读）；不唯一 → 全路径（v1.1 消歧）；且为同路径孪生
  *  第 n（n>1）→ 追加 #n（同父同名路径也相同，序号才能精确指认）。桥接手里有精确节点实例
  *  与全树，序号按文档序可算。 */
-function disambiguatedTarget(mm: MindMapHandle, toNode: NodeLike, bareName: string): string {
+export function disambiguatedTarget(mm: MindMapHandle, toNode: NodeLike, bareName: string): string {
   const plain = mm.getData()
   const toUid = toNode.getData('uid')
   let nameCount = 0

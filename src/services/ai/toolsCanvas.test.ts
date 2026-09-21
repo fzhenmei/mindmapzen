@@ -3,6 +3,8 @@
 import { describe, expect, test, vi } from 'vitest'
 import { executeAiTool } from './tools'
 import { withAiCall } from './lock'
+import type { AiToolEnv } from './tools'
+import type { LinkRegistry } from '../../editor/linkRegistry'
 import type { EngineNode } from '../../types/engine'
 
 /** renderTree 上的数据形状节点 */
@@ -163,5 +165,67 @@ describe('折叠工具组', () => {
       expect(rej.ok).toBe(false)
       expect(rej.detail).toContain('level')
     }
+  })
+})
+
+// 连线工具组(注册表通道,非命令层):registryToLinks/rebuildLinks 真实链路
+// (linkBridge 同口径),mm.rebuildLinks mock 只断言调用
+const makeEnv = (): AiToolEnv & { registry: LinkRegistry } => ({
+  registry: { byUid: new Map() },
+  onDataChanged: vi.fn(),
+  setLayout: vi.fn(),
+})
+
+describe('add_link / remove_link', () => {
+  const twoNodes = () => {
+    // a、b 平铺挂 root 下(简化:直接平铺)
+    return { root: dataNode('root', {}, [dataNode('a'), dataNode('b')]) }
+  }
+
+  test('add_link:注册表 push + rebuildLinks + 置脏;重复拒绝', () => {
+    const { root } = twoNodes()
+    const { mm, findNodeByUid } = makeMm(root)
+    const a = { getData: (k: string) => (k === 'uid' ? 'a' : k === 'text' ? 'ta' : undefined) }
+    const b = { getData: (k: string) => (k === 'uid' ? 'b' : k === 'text' ? 'tb' : undefined) }
+    findNodeByUid.mockImplementation((uid: string) => (uid === 'a' ? a : uid === 'b' ? b : null))
+    mm.rebuildLinks = vi.fn()
+    const env = makeEnv()
+    const r = executeAiTool(mm, 'add_link', { fromUid: 'a', toUid: 'b' }, (fn) => fn(), env)
+    expect(r.ok).toBe(true)
+    expect(env.registry.byUid.get('a')).toEqual(['tb']) // 名称唯一 → 裸名 marker
+    expect(mm.rebuildLinks).toHaveBeenCalledTimes(1)
+    expect(env.onDataChanged).toHaveBeenCalledTimes(1) // 置脏走保存链(md 落 [[..]])
+    // 再次添加同一条 → 拒绝
+    const dup = executeAiTool(mm, 'add_link', { fromUid: 'a', toUid: 'b' }, (fn) => fn(), env)
+    expect(dup.ok).toBe(false)
+    expect(dup.detail).toContain('已存在')
+  })
+
+  test('remove_link:删 marker 后条目清空即删键;不存在拒绝', () => {
+    const { root } = twoNodes()
+    const { mm, findNodeByUid } = makeMm(root)
+    const a = { getData: (k: string) => (k === 'uid' ? 'a' : k === 'text' ? 'ta' : undefined) }
+    const b = { getData: (k: string) => (k === 'uid' ? 'b' : k === 'text' ? 'tb' : undefined) }
+    findNodeByUid.mockImplementation((uid: string) => (uid === 'a' ? a : uid === 'b' ? b : null))
+    mm.rebuildLinks = vi.fn()
+    const env = makeEnv()
+    env.registry.byUid.set('a', ['tb'])
+    const r = executeAiTool(mm, 'remove_link', { fromUid: 'a', toUid: 'b' }, (fn) => fn(), env)
+    expect(r.ok).toBe(true)
+    expect(env.registry.byUid.has('a')).toBe(false)
+    expect(mm.rebuildLinks).toHaveBeenCalledTimes(1)
+    const miss = executeAiTool(mm, 'remove_link', { fromUid: 'a', toUid: 'b' }, (fn) => fn(), env)
+    expect(miss.ok).toBe(false)
+    expect(miss.detail).toContain('不存在')
+  })
+
+  test('缺 env 显式失败;自环/节点不存在拒绝', () => {
+    const { root } = twoNodes()
+    const { mm, findNodeByUid } = makeMm(root)
+    findNodeByUid.mockReturnValue(null)
+    expect(executeAiTool(mm, 'add_link', { fromUid: 'a', toUid: 'b' }, (fn) => fn()).detail).toContain('通道未就绪')
+    const env = makeEnv()
+    findNodeByUid.mockImplementation((uid: string) => ({ getData: (k: string) => (k === 'uid' ? uid : k === 'text' ? 't' : undefined) }))
+    expect(executeAiTool(mm, 'add_link', { fromUid: 'a', toUid: 'a' }, (fn) => fn(), env).detail).toContain('自身')
   })
 })
