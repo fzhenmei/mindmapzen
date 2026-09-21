@@ -11,9 +11,43 @@ function nodeUid(node: EngineNode): string {
   return typeof node.data?.uid === 'string' ? node.data.uid : '?'
 }
 
+/** 快照轻量标记(spec §2):有则标无则省。图标剥 zen_ 前缀、滤 zen_status- 徽章
+ *  (内部保留名,useIconPicker 同口径);正文首行截 30 字(AI 靠摘要判断要不要
+ *  get_node_detail 读全文);连线尾标直读 data.associativeLineTargets(uid 形态,
+ *  rebuildEngineLinks 写入口——与 add_link/remove_link 参数寻址对齐,不经注册表) */
+const BODY_SUMMARY_LEN = 30
+
+function nodeMarkers(node: EngineNode): string {
+  const d = node.data as { tag?: unknown; icon?: unknown; body?: unknown; associativeLineTargets?: unknown }
+  let s = ''
+  if (Array.isArray(d.tag)) {
+    const tags = d.tag.filter((t): t is string => typeof t === 'string' && t !== '')
+    if (tags.length > 0) s += ` 🏷${tags.join('/')}`
+  }
+  if (Array.isArray(d.icon)) {
+    const icons = d.icon
+      .filter((i): i is string => typeof i === 'string' && i.startsWith('zen_') && !i.startsWith('zen_status-'))
+      .map((i) => i.slice(4))
+    if (icons.length > 0) s += ` ☰${icons.join(',')}`
+  }
+  if (typeof d.body === 'string' && d.body !== '') {
+    const firstLine = d.body.split('\n').find((l) => l.trim() !== '') ?? ''
+    s += ` 📝${firstLine.slice(0, BODY_SUMMARY_LEN)}`
+  }
+  if (Array.isArray(d.associativeLineTargets)) {
+    const targets = d.associativeLineTargets.filter((t): t is string => typeof t === 'string' && t !== '')
+    if (targets.length > 0) {
+      // uid 列表先拼好再入外层模板,避免模板字面量嵌套(Sonar S4624)
+      const uidList = targets.map((t) => `[${t}]`).join('')
+      s += ` →${uidList}`
+    }
+  }
+  return s
+}
+
 /** 数据树 → uid 缩进树行数组（含收起隐藏子树——renderTree 全量语义由调用方保证） */
 export function treeToUidOutline(node: EngineNode, depth = 0): string[] {
-  const line = `${'  '.repeat(depth)}- [${nodeUid(node)}] ${flatText(node)}`
+  const line = `${'  '.repeat(depth)}- [${nodeUid(node)}] ${flatText(node)}${nodeMarkers(node)}`
   return [line, ...(node.children ?? []).flatMap((c) => treeToUidOutline(c, depth + 1))]
 }
 
