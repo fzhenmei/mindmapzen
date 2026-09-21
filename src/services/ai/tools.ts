@@ -151,6 +151,8 @@ export interface ToolCtx {
   strOf(k: string): string
   /** 布尔参数(expanded) */
   boolOf(k: string): boolean
+  /** 数值参数(level 等;JSON 数值不能走字符串通道,原样返回由 handler 校验) */
+  num(k: string): unknown
   /** 宿主通道;连线/布局工具缺 env 显式失败 */
   env?: AiToolEnv
 }
@@ -251,6 +253,7 @@ export function executeAiTool(
     strOf: str,
     list: (k) => (Array.isArray(args[k]) ? args[k].filter((v): v is string => typeof v === 'string') : []),
     boolOf: (k) => args[k] === true,
+    num: (k) => args[k],
     withAiCallFn,
     env,
   })

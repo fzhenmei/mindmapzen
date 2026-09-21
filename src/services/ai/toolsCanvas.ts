@@ -70,6 +70,37 @@ export const AI_CANVAS_TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'set_node_expand',
+      description: '展开或折叠指定节点的子树(只改显示,内容保留)。',
+      parameters: {
+        type: 'object',
+        properties: {
+          uid: { type: 'string' },
+          expanded: { type: 'boolean', description: 'true 展开 / false 折叠' },
+        },
+        required: ['uid', 'expanded'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: { name: 'expand_all', description: '展开整图全部节点。', parameters: { type: 'object', properties: {}, required: [] } },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'collapse_to_level',
+      description: '整图展开到指定层级(更深层收起)。整理大图常用,如收两层 level=2。',
+      parameters: {
+        type: 'object',
+        properties: { level: { type: 'number', description: '展开到的层级,≥1 的整数' } },
+        required: ['level'],
+      },
+    },
+  },
 ] as const
 
 /** 数据树全量寻址(读专用:收起分支可读;renderTree 即 EngineNode 形状) */
@@ -144,9 +175,33 @@ const handleSetNodeTags = ({ mm, renderer, uidOf, list, withAiCallFn }: ToolCtx)
   return { ok: true, detail: tags.length === 0 ? '标签已清空' : `标签已设:${tags.join('/')}` }
 }
 
+const handleSetNodeExpand = ({ mm, renderer, uidOf, boolOf, withAiCallFn }: ToolCtx): ToolCallResult => {
+  const uid = uidOf('uid')
+  const node = findNode(renderer, uid)
+  if (!node) return { ok: false, detail: `节点不存在:[${uid}]` }
+  withAiCallFn(() => mm.execCommand('SET_NODE_EXPAND', node, boolOf('expanded')))
+  return { ok: true, detail: boolOf('expanded') ? '已展开' : '已折叠' }
+}
+
+const handleExpandAll = ({ mm, withAiCallFn }: ToolCtx): ToolCallResult => {
+  withAiCallFn(() => mm.execCommand('EXPAND_ALL'))
+  return { ok: true, detail: '已全部展开' }
+}
+
+const handleCollapseToLevel = ({ mm, num, withAiCallFn }: ToolCtx): ToolCallResult => {
+  const raw = num('level')
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1)
+    return { ok: false, detail: 'level 须为 ≥1 的整数' }
+  withAiCallFn(() => mm.execCommand('UNEXPAND_TO_LEVEL', raw))
+  return { ok: true, detail: `已展开到第 ${raw} 层` }
+}
+
 export const CANVAS_HANDLERS: Record<string, (ctx: ToolCtx) => ToolCallResult> = {
   get_node_detail: handleGetNodeDetail,
   set_node_body: handleSetNodeBody,
   set_node_icon: handleSetNodeIcon,
   set_node_tags: handleSetNodeTags,
+  set_node_expand: handleSetNodeExpand,
+  expand_all: handleExpandAll,
+  collapse_to_level: handleCollapseToLevel,
 }

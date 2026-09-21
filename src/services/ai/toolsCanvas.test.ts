@@ -131,3 +131,37 @@ describe('set_node_tags', () => {
     expect(bad.detail).toContain('10')
   })
 })
+
+describe('折叠工具组', () => {
+  test('set_node_expand:布尔参数落 SET_NODE_EXPAND;缺 expanded 按 false 折叠(语义安全)', () => {
+    const root = dataNode('root', {}, [dataNode('c1')])
+    const { mm, execCommand, findNodeByUid } = makeMm(root)
+    const inst = {}
+    findNodeByUid.mockReturnValue(inst)
+    const r = executeAiTool(mm, 'set_node_expand', { uid: 'c1', expanded: true }, (fn) => fn())
+    expect(r.ok).toBe(true)
+    expect(execCommand).toHaveBeenCalledWith('SET_NODE_EXPAND', inst, true)
+    const miss = executeAiTool(mm, 'set_node_expand', { uid: 'c1' }, (fn) => fn())
+    expect(miss.ok).toBe(true)
+    expect(execCommand).toHaveBeenLastCalledWith('SET_NODE_EXPAND', inst, false)
+  })
+
+  test('expand_all 落命令无参数', () => {
+    const { mm, execCommand } = makeMm(dataNode('root'))
+    const r = executeAiTool(mm, 'expand_all', {}, (fn) => fn())
+    expect(r.ok).toBe(true)
+    expect(execCommand).toHaveBeenCalledWith('EXPAND_ALL')
+  })
+
+  test('collapse_to_level:合法层级落命令;非正整数拒绝', () => {
+    const { mm, execCommand } = makeMm(dataNode('root'))
+    const r = executeAiTool(mm, 'collapse_to_level', { level: 2 }, (fn) => fn())
+    expect(r.ok).toBe(true)
+    expect(execCommand).toHaveBeenCalledWith('UNEXPAND_TO_LEVEL', 2)
+    for (const bad of [0, -1, 1.5, '2']) {
+      const rej = executeAiTool(mm, 'collapse_to_level', { level: bad }, (fn) => fn())
+      expect(rej.ok).toBe(false)
+      expect(rej.detail).toContain('level')
+    }
+  })
+})
