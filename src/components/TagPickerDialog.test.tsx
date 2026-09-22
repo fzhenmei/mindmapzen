@@ -37,6 +37,25 @@ describe('TagPickerDialog（节点标签选择器）', () => {
     expect((input as HTMLInputElement).value).toBe('')
   })
 
+  test('输入未回车直接点保存：合法草稿一并提交（保存即隐式回车）', () => {
+    const onConfirm = vi.fn()
+    render(<TagPickerDialog {...props({ onConfirm })} />)
+    fireEvent.change(screen.getByTestId('tag-input'), { target: { value: '周末' } })
+    fireEvent.click(screen.getByTestId('tag-save'))
+    expect(onConfirm).toHaveBeenCalledWith(['采购', '周末'])
+  })
+
+  test('未回车的草稿点保存仍走同一校验：空白/非法/重复不混入', () => {
+    const onConfirm = vi.fn()
+    render(<TagPickerDialog {...props({ onConfirm })} />)
+    fireEvent.change(screen.getByTestId('tag-input'), { target: { value: 'a#b' } })
+    fireEvent.click(screen.getByTestId('tag-save'))
+    expect(onConfirm).toHaveBeenCalledWith(['采购'])
+    fireEvent.change(screen.getByTestId('tag-input'), { target: { value: '采购' } }) // 重复
+    fireEvent.click(screen.getByTestId('tag-save'))
+    expect(onConfirm).toHaveBeenLastCalledWith(['采购'])
+  })
+
   test('确认回调带回当前全量标签；点已选 chip 即移除', () => {
     const onConfirm = vi.fn()
     render(<TagPickerDialog {...props({ onConfirm })} />)
