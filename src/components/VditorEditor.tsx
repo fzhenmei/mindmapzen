@@ -148,6 +148,10 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
       },
       after: () => {
         inited = true
+        // 打开即聚焦(2026-09-22):sv 的 textarea 异步 init 后才存在,autoFocus 属性挂不上;
+        // Radix 开弹窗默认聚焦内容区首个可聚焦元素(× 关闭钮)——init 完成瞬间把焦点
+        // 交给编辑器,用户开弹窗即可输入,无需先点一下编辑区
+        vd.focus()
       },
     })
     lastEmittedRef.current = value
