@@ -189,7 +189,7 @@ vi.mock('../editor/MindMapCanvas', async () => {
 // （vitest 4：箭头 mock 不可 new，function 实现构造恒返单例 inst——同 VditorEditor.test）。
 // 取值/输入走构造参数断言：options.value 为载入初值，options.input 回调模拟编辑器输入
 vi.mock('vditor', () => {
-  const inst = { setValue: vi.fn(), insertValue: vi.fn(), destroy: vi.fn() }
+  const inst = { setValue: vi.fn(), insertValue: vi.fn(), focus: vi.fn(), destroy: vi.fn() }
   const Ctor = vi.fn(function () {
     return inst
   })

@@ -7,7 +7,7 @@ import { subscribeToast } from '../services/toast'
 // 构造 options 暴露给测试(__opts):after 回调模拟 vditor 异步 init 完成(真浏览器
 // 里 i18n/lute 脚本加载后才 initUI;卸载 destroy 的就绪门控依赖它)
 vi.mock('vditor', () => {
-  const inst = { setValue: vi.fn(), insertValue: vi.fn(), destroy: vi.fn(), isDestroyed: false }
+  const inst = { setValue: vi.fn(), insertValue: vi.fn(), focus: vi.fn(), destroy: vi.fn(), isDestroyed: false }
   let lastOpts: Record<string, unknown> | null = null
   // 实现须用 function/class 才可 new(vitest 4:箭头函数实现不可构造,stderr 有警告);
   // 构造函数返回对象会替换 new 的 this,故 new Vditor(...) 恒得单例 inst
@@ -30,7 +30,7 @@ const resolveImagesStub = async (): Promise<Map<string, string>> => new Map()
 // mock 工厂注入的构造函数与单例 stub(类型断言经 unknown 中转,vi.mock 泛型对不上)
 const Ctor = vi.mocked(Vditor)
 const inst = (Vditor as unknown as {
-  __inst: { setValue: ReturnType<typeof vi.fn>; insertValue: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; isDestroyed: boolean }
+  __inst: { setValue: ReturnType<typeof vi.fn>; insertValue: ReturnType<typeof vi.fn>; focus: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn>; isDestroyed: boolean }
   __opts: () => Record<string, unknown> | null
 }).__inst
 const lastOpts = () => (Vditor as unknown as { __opts: () => Record<string, unknown> | null }).__opts()
@@ -38,6 +38,7 @@ const lastOpts = () => (Vditor as unknown as { __opts: () => Record<string, unkn
 afterEach(() => {
   Ctor.mockClear()
   inst.setValue.mockClear()
+  inst.focus.mockClear()
   inst.destroy.mockClear()
   inst.isDestroyed = false
 })
@@ -74,6 +75,14 @@ describe('VditorEditor:VDitor 薄包装契约', () => {
     expect(inst.setValue).not.toHaveBeenCalled() // b 是本组件回声,不回写
     rerender(<VditorEditor value="c" onChange={onChange} lang="en_US" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />)
     expect(inst.setValue).toHaveBeenCalledWith('c') // 外部真值变化才同步
+  })
+
+  test('init 完成即聚焦编辑器(after 调 focus:弹窗打开后直接可输入,无需点击)', () => {
+    // 2026-09-22 缺陷回归:sv 的 textarea 异步 init 后才存在,autoFocus 属性挂不上;
+    // Radix 开弹窗默认聚焦内容区首个可聚焦元素(× 关闭钮),此前无人把焦点交给编辑器
+    render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />)
+    ;(lastOpts()!.after as () => void)()
+    expect(inst.focus).toHaveBeenCalledTimes(1)
   })
 
   test('卸载销毁(init 完成后:after 回调已触发)', () => {
