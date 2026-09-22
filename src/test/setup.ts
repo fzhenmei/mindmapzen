@@ -33,6 +33,13 @@ if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = (): void => {}
 }
 
+// jsdom 未实现 scrollTo（连属性都不存在，直接调用会 TypeError）：浮窗换文件重置滚动
+// 调用之。守卫式空桩（不覆盖可能的真实实现），无滚动布局下空操作即可——滚动行为
+// 断言以调用为观测面（见 FilePreviewPopover.test 换文件重置滚动用例），真实滚动归浏览器核对
+if (typeof Element.prototype.scrollTo !== 'function') {
+  Element.prototype.scrollTo = (): void => {}
+}
+
 // jsdom 未实现 ResizeObserver：Radix Tooltip/Popper 系（ui/tooltip、select、dropdown 等
 // 官方源码）依赖其测量浮层。守卫式空桩（不覆盖可能的真实实现），回调永不触发。
 if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
