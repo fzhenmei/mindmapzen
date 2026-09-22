@@ -6,6 +6,9 @@
 // 节点在右/下缘时放不下——fixed+left 的收缩适应盒可用宽=视口-left,右缘锚点会把盒
 // 压窄(变形);右/下放不下时改贴锚点往左/上长(翻转),翻转后仍出界再钳视口兜底。
 // show 按实测尺寸放置,异步渲染(mermaid/插图换 dataURL)完成尺寸变化后再放一次。
+// 首帧防跳变(2026-09-22):空盒先放右侧、渲染后按真实宽翻转到左侧,两次放置间的
+// 可见状态即"先右后左闪现"——show 先 visibility 藏起(hidden 盒仍参与布局、量测
+// 不受影响,与 display:none 的恒 0 尺寸不同),place 定到最终位置后才显形。
 import { i18n } from '../i18n'
 import { clampOverlayPos } from '../lib/utils'
 import { renderVditorPreview } from '../services/vditorPreview'
@@ -90,6 +93,7 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       more.textContent = i18n.t('editor.noteTooltip.more')
       el.appendChild(more)
       placeFromAnchor()
+      el.style.visibility = 'visible' // 定到最终位置后才显形(防首帧跳变,见文件头)
     } catch (e) {
       // 渲染失败降级:源码保底展示 + 显式出口(禁止吞异常)
       if (seq !== showSeq) return
@@ -100,6 +104,7 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       pre.textContent = note
       el.appendChild(pre)
       placeFromAnchor()
+      el.style.visibility = 'visible' // 降级内容同样显形
     }
   }
 
@@ -109,8 +114,11 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       el.dataset.note = note
       anchorLeft = left
       anchorTop = top
-      // 先显形再放:display:none 时实测尺寸恒 0,右/下缘锚点会漏翻转
+      // 先显形再放:display:none 时实测尺寸恒 0,右/下缘锚点会漏翻转。显形但先藏
+      // (visibility:hidden 参与布局、量测不受影响):首帧空盒会先放右侧,渲染完成
+      // 按真实宽翻转到左侧,不藏则两次放置间有可见帧(先右后左闪现)
       el.style.display = 'block'
+      el.style.visibility = 'hidden'
       placeFromAnchor()
       void renderInto(note, showSeq)
     },

@@ -155,3 +155,62 @@ describe('noteTooltip:边缘锚点翻转+钳制(2026-09-22 边缘浮层修复)',
     tip.destroy()
   })
 })
+
+describe('noteTooltip:渲染完成前不可见(2026-09-22 首帧跳变修复)', () => {
+  // 真机现象:内容很多时首帧空盒放锚点右侧,渲染完成后按真实宽(60vw 封顶)翻转到
+  // 左侧,两次放置间的可见状态 = 用户看到"先右后左闪现"。治本:渲染完成前
+  // visibility 藏起(不同于 display:none,hidden 盒仍参与布局、offsetWidth 可量),
+  // place 定到最终位置后才显形——两次放置间无可见帧。
+  test('show 藏起、渲染完成 place 后才显形', async () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    tip.show('长文', 100, 100)
+    expect(el.style.display).toBe('block')
+    expect(el.style.visibility).toBe('hidden')
+    await vi.waitFor(() => expect(el.textContent).toContain('长文'))
+    expect(el.style.visibility).toBe('visible')
+    tip.destroy()
+  })
+
+  test('渲染失败降级路径同样显形(源码保底也得让用户看见)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocked.mockRejectedValueOnce(new Error('lute 加载失败'))
+    const tip = createNoteTooltip('light')
+    tip.show('失败正文', 0, 0)
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    await vi.waitFor(() => expect(el.querySelector('pre')!.textContent).toContain('失败正文'))
+    expect(el.style.visibility).toBe('visible')
+    errSpy.mockRestore()
+    tip.destroy()
+  })
+
+  test('渲染未完成即切目标:旧渲染迟到不得显形(seq 守卫),新 show 重走藏→显', async () => {
+    // A/B 渲染都挂起(手动放行),才能开住"旧渲染迟到"的观察窗:B 未完成前
+    // 窗口必为 hidden——A 先放行不得显形,再放行 B 才显形
+    let resolveA!: () => void
+    let resolveB!: () => void
+    mocked
+      .mockImplementationOnce(() => new Promise<void>((res) => (resolveA = res)))
+      .mockImplementationOnce(
+        (el: HTMLElement) =>
+          new Promise<void>((res) => {
+            resolveB = () => {
+              el.textContent = 'B 正文'
+              res()
+            }
+          }),
+      )
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    tip.show('A 正文', 100, 100)
+    expect(el.style.visibility).toBe('hidden')
+    tip.show('B 正文', 100, 100) // A 渲染挂起中切 B
+    resolveA() // A 迟到完成:seq 已变,不得显形/覆盖内容
+    await new Promise((r) => setTimeout(r, 0))
+    expect(el.style.visibility).toBe('hidden')
+    resolveB() // B 完成:place 后显形
+    await vi.waitFor(() => expect(el.textContent).toContain('B 正文'))
+    expect(el.style.visibility).toBe('visible')
+    tip.destroy()
+  })
+})
