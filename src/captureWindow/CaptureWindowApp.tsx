@@ -28,6 +28,9 @@ const tauriPorts: CaptureWindowPorts = {
     if (!('__TAURI_INTERNALS__' in window)) return
     void import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().hide())
+      // 光标粘滞自愈（2026-09-22 托盘区鼠标消失排障）：hide 后让宿主重载系统光标，
+      // 清掉 WebView2 边界竞态可能残留的 NULL 光标（全屏无鼠标、托盘菜单上最易显形）
+      .then(() => import('@tauri-apps/api/core').then(({ invoke }) => invoke('reset_cursor_display')))
       .catch((e) => console.error('捕获小窗隐藏失败', e))
   },
   emitBasketUpdated: async (mapPath) => {
