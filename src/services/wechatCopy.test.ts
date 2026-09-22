@@ -1,6 +1,6 @@
 // src/services/wechatCopy.test.ts —— 案头"复制为公众号格式"单测:预处理、内联样式
 // 映射、编排链(渲染走 mock 注入代表性 DOM,jsdom 不跑 vditor)
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, stripExternalLinks, stripMermaid } from './wechatCopy'
 
@@ -255,6 +255,21 @@ import { renderVditorPreview } from './vditorPreview'
 import { replaceMermaidCode } from './mermaidImage'
 
 describe('copyAsWechatHtml:读盘 → 预处理 → 渲染 → 插图 → 内联样式 → 剪贴板', () => {
+  // mock 调用计数跨测试累积(replaceMermaidCode times 断言),逐测试清调用记录(实现保留)
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('正文包装层剥净进渲染:贴来的标题按标题渲染,不带 > 前缀(2026-09-22 防炸配套)', async () => {
+    const fs = new MemoryFsAdapter()
+    const md = ['# 标题', '', '## A', '> 段落。', '>', '> ## 贴来的标题', ''].join('\n')
+    await fs.writeTextFileAtomic('/ws/文.md', md)
+    await copyAsWechatHtml(fs, '/ws', '/ws/文.md', async () => {})
+    const renderedMd = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
+    expect(renderedMd).toContain('## 贴来的标题')
+    expect(renderedMd).not.toContain('> ##')
+  })
+
   test('全链:标记/mermaid 预处理进渲染,出参带内联样式与 dataURL 插图,舞台即用即清', async () => {
     const fs = new MemoryFsAdapter()
     const md = [

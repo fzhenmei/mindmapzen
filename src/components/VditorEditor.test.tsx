@@ -1,5 +1,6 @@
-import { render } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { subscribeToast } from '../services/toast'
 
 // jsdom 无布局度量,CodeMirror 完整 init 不可行:mock Vditor 构造,锁 options 契约
 // (mode/lang/cdn/value/toolbar)与 input→onChange 接线、受控回流抑制、销毁。
@@ -152,5 +153,42 @@ describe('VditorEditor:正文插图接管(2026-09,替换 vditor base64 兜底)',
     // 外链不收也不改
     expect(el.querySelectorAll('img')[2]!.getAttribute('src')).toBe('https://x.com/b.png')
     expect(resolveImages).toHaveBeenCalledWith(new Set(['assets/a.png', 'assets/配图.png']))
+  })
+})
+
+describe('VditorEditor:正文禁标题(2026-09-22,粘贴标题转加粗 + 工具栏摘除 headings)', () => {
+  test('工具栏不含 headings 按钮(正文不支持标题,不引导使用)', () => {
+    render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />)
+    const toolbar = (Ctor.mock.calls[0]![1] as { toolbar: unknown[] }).toolbar
+    expect(toolbar).not.toContain('headings')
+    expect(toolbar).toContain('bold')
+  })
+
+  test('粘贴:插入区间标题行转加粗,setValue 回写 + toast 提醒', () => {
+    const toasts: string[] = []
+    const unsub = subscribeToast((t) => {
+      if (t !== null) toasts.push(t.text)
+    })
+    const onChange = vi.fn()
+    const { container } = render(
+      <VditorEditor value="已有\n" onChange={onChange} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />,
+    )
+    // capture 打标在 vditor 自身处理前(host 即监听目标,at-target 阶段触发)
+    fireEvent.paste(container.querySelector('[data-testid="vditor-host"]')!)
+    const opts = Ctor.mock.calls[0]![1] as { input: (md: string) => void }
+    opts.input('已有\n新段\n\n## 贴来的标题\n')
+    expect(inst.setValue).toHaveBeenCalledWith('已有\n新段\n\n**贴来的标题**\n')
+    expect(onChange).toHaveBeenCalledWith('已有\n新段\n\n**贴来的标题**\n')
+    expect(toasts.some((t) => t.includes('标题'))).toBe(true)
+    unsub()
+  })
+
+  test('手输 input(无粘贴打标)原样上抛,不转换', () => {
+    const onChange = vi.fn()
+    render(<VditorEditor value="" onChange={onChange} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />)
+    const opts = Ctor.mock.calls[0]![1] as { input: (md: string) => void }
+    opts.input('手输 ## 不转换')
+    expect(onChange).toHaveBeenCalledWith('手输 ## 不转换')
+    expect(inst.setValue).not.toHaveBeenCalled()
   })
 })

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
 import { buildImageMetaFromSrcs, collectMdImageSrcs } from '../services/imageAssets'
+import { mdBodyUnwrapForDisplay } from '../services/mdTree'
 import { toNativePath } from '../services/nativePath'
 import type { MapInfo } from '../types/files'
 import MarkdownPreview from './MarkdownPreview'
@@ -39,7 +40,8 @@ export default function FilePreviewPopover({ info, onClose }: Readonly<FilePrevi
     void (async () => {
       try {
         const { adapter, workspaceDir } = useAppStore.getState()
-        const text = await adapter.readTextFile(info.mdPath)
+        // 显示形态剥正文包装层(2026-09-22 防炸配套):贴来的标题按标题预览,不是引用
+        const text = mdBodyUnwrapForDisplay(await adapter.readTextFile(info.mdPath))
         if (cancelled) return
         setState({ kind: 'text', text })
         if (workspaceDir === null) return

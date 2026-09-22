@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { serialize } from './mdTree'
+import { mdBodyUnwrapForDisplay, serialize } from './mdTree'
 import type { ZenNode } from '../types/tree'
 
 const n = (text: string, children: ZenNode[] = []): ZenNode => ({ text, children })
@@ -77,6 +77,67 @@ describe('serialize linksByUid（M5d Task 2：序列化注入）', () => {
     expect(serialize(tree)).toBe('# 根\n\n## A\n')
     expect(serialize(tree, new Map())).toBe('# 根\n\n## A\n')
     expect(serialize(tree, new Map([['other', ['B']]]))).toBe('# 根\n\n## A\n')
+  })
+})
+
+describe('serialize 正文条件引用包裹（2026-09-22 结构行防炸：非必要不加 >）', () => {
+  const b = (body: string): ZenNode => ({ text: '根', children: [{ text: 'A', body, children: [] }] })
+
+  test('正文含 ATX 标题行：整段正文加一级 > 前缀（空行变裸 >）', () => {
+    expect(serialize(b('第一段。\n\n## 小标题\n\n第二段。'))).toBe(
+      '# 根\n\n## A\n> 第一段。\n>\n> ## 小标题\n>\n> 第二段。\n',
+    )
+  })
+
+  test('正文含裸列表行（无序/有序/裸标记）同样触发包裹', () => {
+    expect(serialize(b('引言\n\n- 要点\n\n1. 第一'))).toBe(
+      '# 根\n\n## A\n> 引言\n>\n> - 要点\n>\n> 1. 第一\n',
+    )
+    expect(serialize(b('二\n\n*'))).toContain('\n> *\n')
+  })
+
+  test('setext 下划线紧贴上一行触发包裹；隔空行的 --- 分隔线不触发（字节同今天）', () => {
+    expect(serialize(b('标题行\n==='))).toBe('# 根\n\n## A\n> 标题行\n> ===\n')
+    expect(serialize(b('上文\n\n---\n\n下文'))).toBe('# 根\n\n## A\n上文\n\n---\n\n下文\n')
+  })
+
+  test('代码围栏内的 #/- 行不触发包裹（字节同今天）', () => {
+    const body = '```js\n# 注释\n- 也不是列表\n```\n\n收尾段。'
+    expect(serialize(b(body))).toBe('# 根\n\n## A\n' + body + '\n')
+  })
+
+  test('正文自带的引用行在包裹后保留一级前缀（用户引用不丢）', () => {
+    expect(serialize(b('- 要点\n\n> 用户引用'))).toBe('# 根\n\n## A\n> - 要点\n>\n> > 用户引用\n')
+  })
+
+  test('display 形态：含结构行的正文也原样输出（渲染/外发用）', () => {
+    expect(serialize(b('第一段。\n\n## 小标题\n\n第二段。'), undefined, { display: true })).toBe(
+      '# 根\n\n## A\n第一段。\n\n## 小标题\n\n第二段。\n',
+    )
+  })
+})
+
+describe('mdBodyUnwrapForDisplay（读文件渲染的显示转换：剥包装层，用户引用不动）', () => {
+  test('包装层剥回裸正文（贴来的标题按标题渲染，不是引用）', () => {
+    const md = '# 根\n\n## A\n> 第一段。\n>\n> ## 小标题\n>\n> 第二段。\n'
+    expect(mdBodyUnwrapForDisplay(md)).toBe('# 根\n\n## A\n第一段。\n\n## 小标题\n\n第二段。\n')
+  })
+
+  test('干净文件逐字节相同（用户引用、代码块、列表结构全部原样）', () => {
+    const md = [
+      '# 根', '', '## A', '段落。', '', '> 用户引用', '', '> 引用里的 - 短横不是结构', '',
+      '```js', '> 也不是引用', '```', '', '- 子节点', '',
+    ].join('\n')
+    expect(mdBodyUnwrapForDisplay(md)).toBe(md)
+  })
+
+  test('列表项内缩进引用不动（那是项内容，不是包装层）', () => {
+    const md = '# r\n\n## a\n- 项\n  > 项内引用\n'
+    expect(mdBodyUnwrapForDisplay(md)).toBe(md)
+  })
+
+  test('列 0 引用包结构与 parse 同口径：剥（旧文件一次性例外的一致性）', () => {
+    expect(mdBodyUnwrapForDisplay('# 根\n\n## A\n> - 项\n')).toBe('# 根\n\n## A\n- 项\n')
   })
 })
 

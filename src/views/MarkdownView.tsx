@@ -56,7 +56,7 @@ export default function MarkdownView({ mmRef, registry, onOutlineVisibleChange, 
     const mm = mmRef.current
     if (mm === null) return
     try {
-      setMd(serialize(engineTreeToZen(mm.getData()).tree, registry.byUid))
+      setMd(serialize(engineTreeToZen(mm.getData()).tree, registry.byUid, { display: true }))
       setFailed(false)
     } catch (e) {
       console.error('Markdown 视图序列化失败', e)

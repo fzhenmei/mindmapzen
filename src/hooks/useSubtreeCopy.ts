@@ -47,7 +47,7 @@ export function useSubtreeCopy({
           .map((zen) => {
             const bodyApplied = settings.copyIncludeBody ? zen : stripTreeBody(zen)
             const markerApplied = settings.copyIncludeIconStatus ? bodyApplied : stripTreeIconStatus(bodyApplied)
-            return serialize(markerApplied, registry.byUid)
+            return serialize(markerApplied, registry.byUid, { display: true })
           })
           .join('\n')
         md = applyCopySettings(md, settings)

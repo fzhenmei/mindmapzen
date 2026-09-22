@@ -45,6 +45,20 @@ describe('MarkdownView', () => {
     expect(mm.on).toHaveBeenCalledWith('data_change', expect.any(Function))
   })
 
+  test('显示形态序列化：含结构行的正文不加引用包装（查看态按真实内容渲染）', () => {
+    const tree = {
+      data: { text: '根节点', uid: 'root' },
+      children: [{ data: { text: '子节点', uid: 'n1', body: '段落。\n\n## 贴来的标题' }, children: [] }],
+    }
+    const mm = makeMm(tree)
+    const mmRef = createRef<never>()
+    ;(mmRef as { current: unknown }).current = mm
+    render(<MarkdownView mmRef={mmRef as never} registry={emptyRegistry} onOutlineVisibleChange={() => {}} onClose={() => {}} />)
+    const text = screen.getByTestId('md-preview').dataset.text!
+    expect(text).toContain('## 贴来的标题')
+    expect(text).not.toContain('> ##')
+  })
+
   test('data_change 重算：树变更后重新序列化', () => {
     let tree = TREE
     const mm = makeMm({ get data() { return tree.data }, get children() { return tree.children } })
