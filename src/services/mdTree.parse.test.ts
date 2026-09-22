@@ -144,6 +144,32 @@ describe('parse', () => {
     expect(r.tree.body).toBe('| a | b |\n| --- | --- |\n| 1 | 2 |')
   })
 
+  // ---- 结构行防炸(2026-09-22):正文包装层剥一级,结构行不再变节点 ----
+  test('包装层:顶层引用块剥一级后含结构行 → body 为剥后内容(标题留在正文,不成节点)', () => {
+    const r = parse('# 根\n\n## A\n> 第一段。\n>\n> ## 小标题\n>\n> 第二段。\n')
+    expect(r).toMatchObject({ ok: true })
+    if (!r.ok) return
+    expect(r.tree.children[0]!.body).toBe('第一段。\n\n## 小标题\n\n第二段。')
+    expect(r.tree.children[0]!.children).toEqual([])
+  })
+
+  test('包装层:剥后无结构行的引用块维持原样口径(旧用户引用不剥)', () => {
+    const r = parse('# 根\n\n## A\n> 用户引用\n>\n> 普通内容\n')
+    expect(r.ok && r.tree.children[0]!.body).toBe('> 用户引用\n>\n> 普通内容')
+  })
+
+  test('包装层:引用内代码围栏的 # 行不算结构,整块按用户引用原样保留', () => {
+    const md = ['# 根', '', '## A', '> ```js', '> # 注释', '> ```', ''].join('\n')
+    const r = parse(md)
+    expect(r.ok && r.tree.children[0]!.body).toBe('> ```js\n> # 注释\n> ```')
+  })
+
+  test('旧文件引用包结构(> - 项):按包装层剥(引用皮丢、内容留,一次性例外)', () => {
+    const r = parse('# 根\n\n## A\n> - 项\n')
+    expect(r.ok && r.tree.children[0]!.body).toBe('- 项')
+    expect(r.ok && r.tree.children[0]!.children).toEqual([])
+  })
+
   // ---- 看板模式:句尾 @status 标记提取(与 ::icon/#tag 同构) ----
   test('状态标记:句尾 @status 提取进 status 字段,文本剥除(标题与列表项同口径)', () => {
     const r = parse('# 根 @todo\n\n## 任务A @doing\n\n- 项 @blocked\n')

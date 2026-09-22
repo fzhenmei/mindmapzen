@@ -101,6 +101,8 @@ export default {
     hintNoSelection: '在画布选中节点后在此撰写正文',
     hintListNode: '深层列表节点暂不支持正文',
     wordCount: '{{count}} 字',
+    // 正文禁标题(2026-09-22):粘贴进正文的标题行转加粗后的提醒
+    headingConverted: '正文不支持标题，已将 {{count}} 个标题转为加粗',
     // 正文插图（2026-09 与节点插图同口径）：落盘失败提示（vditor tip 显示）
     imageSaveFailed: '图片保存失败',
   },

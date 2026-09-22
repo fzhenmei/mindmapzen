@@ -33,13 +33,100 @@ function assertNoBodyInList(node: ZenNode, depth: number): void {
   for (const child of node.children) assertNoBodyInList(child, depth + 1)
 }
 
+/** 结构行（2026-09-22 防炸）：裸 ATX 标题 / 无序、有序列表标记行（≤3 空格缩进；
+ *  裸标记后随空格或行尾均算——空列表项/空标题同样是结构）。转义形态（\- 等）不算 */
+const STRUCTURAL_LINE_RE = /^ {0,3}(#{1,6}(\s|$)|[-+*](\s|$)|\d+[.)](\s|$))/
+/** setext 标题下划线行（纯 = 或 - 字符；仅在紧贴非空行时构成标题，隔空行是分隔线/普通文本） */
+const SETEXT_LINE_RE = /^ {0,3}(=+|-+)\s*$/
+/** 代码围栏开栏行（``` 或 ~~~，≤3 空格缩进） */
+const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/
+
+/** 关栏判定：同字符、不短于开栏、整行仅标记（CommonMark 口径） */
+const closesFence = (line: string, fence: string): boolean =>
+  new RegExp(`^ {0,3}\\${fence[0]}{${fence.length},}\\s*$`).test(line)
+
+/** 正文是否含结构行（2026-09-22 防炸）：结构行裸写进 md 会被 parse 归树（标题→节点、
+ *  列表→深层子节点），正文因此中毒。围栏代码块内的 #/- 行不算（代码块归正文，原样恒等）。
+ *  serialize 侧据此决定是否给正文加引用包装层；parse 侧据此识别包装层（规则互逆） */
+export function bodyHasStructuralLines(body: string): boolean {
+  const lines = body.split('\n')
+  let fence: string | null = null // 开栏标记（```/~~~）
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (fence !== null) {
+      if (closesFence(line, fence)) fence = null
+      continue
+    }
+    const open = FENCE_OPEN_RE.exec(line)
+    if (open !== null) {
+      fence = open[1]!
+      continue
+    }
+    if (STRUCTURAL_LINE_RE.test(line)) return true
+    if (SETEXT_LINE_RE.test(line) && i > 0 && lines[i - 1]!.trim() !== '') return true
+  }
+  return false
+}
+
+/** 文件 md → 显示形态（2026-09-22 防炸配套）：剥正文包装层——列 0 引用块剥一级后含
+ *  结构行即包装层（与 parse 识别规则同源），读文件渲染的入口（公众号复制/案头文件预览）
+ *  渲染前过此转换，正文按真实内容渲染而非引用样式。包装层恒列 0（emitBody 前缀 '> '/'>'
+ *  两种形态），列表项内缩进引用与围栏内 > 行不属包装层不动；干净文件逐字节恒等 */
+export function mdBodyUnwrapForDisplay(md: string): string {
+  const lines = md.split('\n')
+  const out: string[] = []
+  let fence: string | null = null
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
+    if (fence !== null) {
+      out.push(line)
+      if (closesFence(line, fence)) fence = null
+      i++
+    } else if (FENCE_OPEN_RE.test(line)) {
+      out.push(line)
+      fence = FENCE_OPEN_RE.exec(line)![1]!
+      i++
+    } else if (!line.startsWith('>')) {
+      out.push(line)
+      i++
+    } else {
+      i = pushUnwrappedQuoteRun(lines, i, out)
+    }
+  }
+  return out.join('\n')
+}
+
+/** 列 0 引用段按包装层规则处置：剥一级后含结构行 = 包装层 → 剥；否则原样保留。
+ *  返回下一行下标（调用方游标跳过整段） */
+function pushUnwrappedQuoteRun(lines: readonly string[], start: number, out: string[]): number {
+  let j = start
+  while (j < lines.length && lines[j]!.startsWith('>')) j++
+  const block = lines.slice(start, j)
+  const stripped = block.map((l) => l.replace(/^>\s?/, ''))
+  out.push(...(bodyHasStructuralLines(stripped.join('\n')) ? stripped : block))
+  return j
+}
+
+/** 序列化选项：display = 显示形态（查看态/子树复制等渲染外发用）——正文恒原样输出，
+ *  不做防炸引用包裹（只渲染不回读，安全）；缺省 = 文件形态（防炸包裹，md 落盘唯一口径） */
+export interface SerializeOpts {
+  display?: boolean
+}
+
 /** 树 → 规范 markdown。深度 1-6 → H1-H6；≥7 → 嵌套无序列表；
  *  节点正文（2026-09 写作;2026-09-06 备注合并后唯一附属文本）→ 节点行后的原样块
  *  （引用块/代码块等一律原样含前缀；列表层不支持正文，入口抛错拦截）。
+ *  正文含结构行时（2026-09-22 防炸）整段加一级 > 包装层落盘，parse 侧剥回——
+ *  非必要不包裹，干净正文与历史形态逐字节相同。
  *  linksByUid（M5d Task 2 序列化注入）：连线净化会话注册表（源 uid → 目标名列表）——
  *  节点按 uid 命中后句尾追加 ` [[名]]`（多目标依次）；文本已含的目标不重复注入
  *  （会话内手写标记原样保留，规范化发生在下一次打开剥离后） */
-export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readonly string[]>): string {
+export function serialize(
+  tree: ZenNode,
+  linksByUid?: ReadonlyMap<string, readonly string[]>,
+  opts: SerializeOpts = {},
+): string {
   assertNoNewline(tree)
   assertNoBodyInList(tree, 1)
   const lines: string[] = []
@@ -64,10 +151,17 @@ export function serialize(tree: ZenNode, linksByUid?: ReadonlyMap<string, readon
   }
 
   /** 正文输出为原样块，紧跟节点行、先于子结构（与 parse「归属最近标题」互逆）；
-   *  块间空行即 assignBody 的 '\n\n' 合并约定，原样写回逐字恒等；末尾空行与后续结构分隔 */
+   *  块间空行即 assignBody 的 '\n\n' 合并约定，原样写回逐字恒等；末尾空行与后续结构分隔。
+   *  含结构行时（2026-09-22 防炸）文件形态整段加一级 > 包装层（空行变裸 >），
+   *  parse 侧按「剥一级后含结构行」识别剥回；display 形态恒原样（只渲染不回读） */
   function emitBody(node: ZenNode): void {
     if (!node.body) return // 空串视为无正文
-    lines.push(...node.body.split('\n'), '')
+    const body = node.body
+    const wrapped = !opts.display && bodyHasStructuralLines(body)
+    lines.push(
+      ...(wrapped ? body.split('\n').map((l) => (l === '' ? '>' : '> ' + l)) : body.split('\n')),
+      '',
+    )
   }
 
   function emitHeading(node: ZenNode, depth: number): void {
@@ -261,7 +355,15 @@ function visitBlock(md: string, block: MNode, state: OutlineState): string | nul
     // （spec 兼容性：段落从静默忽略变为正文可见）
     const target = state.lastHeading
     if (target === null) state.ignored.push({ type: block.type, excerpt: nodeText(block).slice(0, 50) })
-    else assignBody(target, rawBlockText(md, block))
+    // 引用块二分（2026-09-22 防炸包装层）：剥一级 > 后含结构行 = serialize 的包装层，
+    // 取剥后内容（贴来的标题/列表留在正文，不再炸成节点）；剥后无结构行 = 用户自己写的
+    // 引用，维持原样口径（> 前缀保留在 body）。用户引用嵌在包装层内时多带一级 >，剥的
+    // 恒是包装那一级，互不误伤。规则与 serialize 的 bodyHasStructuralLines 同源互逆
+    else if (block.type === 'blockquote') {
+      const raw = rawBlockText(md, block)
+      const stripped = raw.split('\n').map((l) => l.replace(/^\s*>\s?/, '')).join('\n')
+      assignBody(target, bodyHasStructuralLines(stripped) ? stripped : raw)
+    } else assignBody(target, rawBlockText(md, block))
     return null
   }
   const top = state.stack.at(-1)

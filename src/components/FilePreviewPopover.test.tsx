@@ -48,6 +48,21 @@ describe('FilePreviewPopover', () => {
     await waitFor(() => expect(screen.getByText('标题甲')).toBeInTheDocument())
   })
 
+  test('正文包装层剥净进预览渲染（贴来的标题不带 > 前缀，2026-09-22 防炸配套）', async () => {
+    await useAppStore.getState().adapter.writeTextFileAtomic(
+      '/ws/甲.md',
+      '# 甲\n\n## A\n> 段落。\n>\n> ## 小标题\n',
+    )
+    // 文件级 mock 无逐测试清理:先清陈旧调用,再等待本次读盘渲染的新调用(全量套件
+    // 慢环境下 waitFor 会命中前序用例的旧调用,at(-1) 取到的是别人的入参)
+    vi.mocked(renderVditorPreview).mockClear()
+    render(<FilePreviewPopover info={makeInfo({})} onClose={() => {}} />)
+    await waitFor(() => expect(vi.mocked(renderVditorPreview)).toHaveBeenCalledTimes(1))
+    const md = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
+    expect(md).toContain('## 小标题')
+    expect(md).not.toContain('> ##')
+  })
+
   test('读取失败：错误占位含路径（显式出口，不吞异常）', async () => {
     // 不预置 /ws/缺.md（读取抛错）
     render(<FilePreviewPopover info={makeInfo({ mdPath: '/ws/缺.md', name: '缺' })} onClose={() => {}} />)

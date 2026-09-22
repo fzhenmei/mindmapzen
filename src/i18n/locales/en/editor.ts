@@ -103,6 +103,7 @@ const editor: Dict['editor'] = {
     hintNoSelection: 'Select a node on the canvas, then write its body text here',
     hintListNode: 'Body text is not available for deep list nodes',
     wordCount: '{{count}} characters',
+    headingConverted: 'Headings are not supported in body text; {{count}} heading(s) converted to bold',
     imageSaveFailed: 'Failed to save image',
   },
   outline: {

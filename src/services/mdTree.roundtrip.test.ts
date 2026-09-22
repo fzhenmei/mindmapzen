@@ -578,3 +578,33 @@ describe('status 标记（看板模式）', () => {
     })
   })
 })
+
+// —— 正文结构行防炸（2026-09-22）：含标题/列表行的正文条件引用包裹，开-存-开不漂移 ——
+describe('正文条件引用包裹（结构行防炸）', () => {
+  test('贴来的标题/列表留在正文：roundtrip 全恒等且 serialize 字节定点', () => {
+    const tree: ZenNode = {
+      text: 'r',
+      body: '段落。\n\n## 贴来的标题\n\n- 贴来的列表\n\n> 自己的引用',
+      children: [],
+    }
+    const md = serialize(tree)
+    expect(md).toContain('\n> ## 贴来的标题\n') // 包裹形态落盘
+    const once = parse(md)
+    if (!once.ok) throw new Error(once.error)
+    expect(once.tree.body).toBe(tree.body) // body 逐字还原
+    expect(once.tree.children).toEqual([]) // 不再炸出子节点
+    expect(serialize(once.tree)).toBe(md) // 定点：开-存-开不漂移
+  })
+
+  test('包装层内嵌套的用户引用 roundtrip 恒等（只剥包装一级）', () => {
+    const tree: ZenNode = {
+      text: 'r',
+      body: '- 要点\n\n> 用户引用\n\n> > 双层引用',
+      children: [],
+    }
+    const once = parse(serialize(tree))
+    expect(once).toMatchObject({ ok: true })
+    if (!once.ok) return
+    expect(once.tree.body).toBe(tree.body)
+  })
+})

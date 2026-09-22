@@ -7,6 +7,7 @@ import { applyImgSrcMap, buildImageMetaFromSrcs, collectMdImageSrcs } from './im
 import { highlightCodeBlocks } from './codeHighlight'
 import { replaceMermaidCode } from './mermaidImage'
 import { renderVditorPreview } from './vditorPreview'
+import { mdBodyUnwrapForDisplay } from './mdTree'
 
 /** 插图换 dataURL:md 全文收集图片 src(2026-09 升级 collectMdImageSrcs——行尾标记
  *  口径的超集,正文引用块行中图同收)→ buildImageMetaFromSrcs → 逐 img 命中替换
@@ -28,7 +29,8 @@ export async function copyAsWechatHtml(
   mdPath: string,
   writeHtml: (html: string) => Promise<void>,
 ): Promise<void> {
-  const display = stripMermaid(toDisplayText(await fs.readTextFile(mdPath)))
+  // 显示形态剥正文包装层(2026-09-22 防炸配套):贴来的标题按标题渲染,不是引用
+  const display = stripMermaid(toDisplayText(mdBodyUnwrapForDisplay(await fs.readTextFile(mdPath))))
   const stage = document.createElement('div')
   stage.className = 'wechat-copy-stage'
   stage.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;'

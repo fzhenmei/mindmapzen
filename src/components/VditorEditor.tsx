@@ -12,6 +12,9 @@ import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import { VDITOR_CDN } from '../services/vditorPreview'
 import { applyImgSrcMap, collectRelativeImgSrcs } from '../services/imageAssets'
+import { convertPastedHeadings } from '../services/bodyPaste'
+import { showToast } from '../services/toast'
+import { i18n } from '../i18n'
 
 /** mermaid 围栏插入钮(vditor 无内置 mermaid 工具栏项):光标处插入模板图源 */
 const MERMAID_ICON =
@@ -44,6 +47,19 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
   uploadRef.current = uploadImages
   const resolveRef = useRef(resolveImages)
   resolveRef.current = resolveImages
+  // 粘贴打标(2026-09-22 正文禁标题):capture 阶段先于 vditor 自身处理打标,不拦截——
+  // HTML→md 转换仍由 vditor 完成,input 回调按标对插入区间做标题→加粗转换
+  const pastedRef = useRef(false)
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (host === null) return
+    const mark = (): void => {
+      pastedRef.current = true
+    }
+    host.addEventListener('paste', mark, true)
+    return () => host.removeEventListener('paste', mark, true)
+  }, [])
 
   useEffect(() => {
     const host = hostRef.current
@@ -93,7 +109,9 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
         },
       },
       toolbar: [
-        'undo', 'redo', '|', 'headings', 'bold', 'italic', 'strike', '|',
+        // headings 已摘除(2026-09-22 正文禁标题):正文不支持标题,不引导使用;
+        // 粘贴进来的标题由 input 回调转加粗提醒
+        'undo', 'redo', '|', 'bold', 'italic', 'strike', '|',
         'quote', 'line', 'code', 'inline-code', '|', 'link', 'list', 'check', '|', 'table',
         {
           // vditor 4.0.0 类型 IMenuItem.name 必填:运行时走 Custom 类,作 data-type
@@ -109,6 +127,22 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
         },
       ],
       input: (md: string) => {
+        // 粘贴标题→加粗(2026-09-22 正文禁标题):按粘贴打标识别,只动插入区间
+        // (公共前后缀定位),转换后 setValue 回写 + 光标还原 + toast 提醒;
+        // 手输不转换(格式层条件包裹兜底,不与用户输入对抗)
+        if (pastedRef.current) {
+          pastedRef.current = false
+          const { next, converted, caret } = convertPastedHeadings(lastEmittedRef.current ?? '', md)
+          if (converted > 0) {
+            lastEmittedRef.current = next
+            vdRef.current?.setValue(next)
+            const ta = hostRef.current?.querySelector('textarea')
+            if (ta !== null && ta !== undefined) ta.setSelectionRange(caret, caret)
+            onChangeRef.current(next)
+            showToast(i18n.t('editor.bodyPanel.headingConverted', { count: converted }))
+            return
+          }
+        }
         lastEmittedRef.current = md
         onChangeRef.current(md)
       },
