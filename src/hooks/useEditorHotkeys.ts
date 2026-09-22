@@ -32,6 +32,8 @@ interface Params {
   anyDialogRef: RefObject<boolean>
   /** 呼出快速切换浮层（Ctrl+P；v2.5） */
   openQuickSwitch(): void
+  /** 呼出节点搜索浮层（Ctrl+F；2026-09 节点搜索——App 层已屏蔽浏览器查找栏，键位归应用） */
+  openNodeSearch(): void
   /** Ctrl+Tab 步进（v2.5：呼出轮换浮层/循环移动高亮，Shift 反向；落定在 keyup Ctrl，见 useQuickSwitch） */
   cycleStep(reverse: boolean): void
   /** 视图模式直达（2026-09 画布三态）：Ctrl+1/2/3 → 导图/Markdown/看板（EditorView 组合，
@@ -41,7 +43,7 @@ interface Params {
   goBack(): void
 }
 
-export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, cycleStep, switchViewMode, goBack }: Params): void {
+export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDialogRef, openQuickSwitch, openNodeSearch, cycleStep, switchViewMode, goBack }: Params): void {
   useEffect(() => {
     /** Ctrl/Cmd 命令族（v2.5 拆出：onKey 认知复杂度护栏）：按序匹配，命中返回 true 由 onKey 统一 preventDefault */
     const ctrlCommand = (e: KeyboardEvent): boolean => {
@@ -72,6 +74,12 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
       }
       if (k === 'p' && !anyDialogRef.current) {
         openQuickSwitch()
+        return true
+      }
+      // 节点搜索（2026-09）：守卫同切换族——对话框互斥期 no-op，输入域不拦
+      //（对齐 Ctrl+P：呼出浮层不毁草稿，正文弹窗等模态已在 anyDialog 拦）
+      if (k === 'f' && !anyDialogRef.current) {
+        openNodeSearch()
         return true
       }
       return false

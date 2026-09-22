@@ -48,6 +48,7 @@ import {
   IconRedo,
   IconRoute,
   IconSave,
+  IconSearch,
   IconSettings,
   IconSort,
   IconSwitch,
@@ -62,6 +63,9 @@ interface Props {
   onSettingsClick(): void
   /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
   onSwitchClick(): void
+  /** 搜索节点（2026-09 节点搜索）：呼出节点搜索浮层（Ctrl+F 的按钮路径，任何视图态可开，
+   *  跳转时自动切回导图态定位） */
+  onSearchClick(): void
   /** 新建导图（2026-09 画布内入口）：呼出新建对话框（名称+模板，复用案头组件）；
    *  确认后走 leaveTo 安全链保存当前图再跳转（逻辑在 EditorView） */
   onNewClick(): void
@@ -154,6 +158,7 @@ export default function ZenBar({
   onBack,
   onSettingsClick,
   onSwitchClick,
+  onSearchClick,
   onNewClick,
   isBasket,
   onSortBasket,
@@ -235,6 +240,20 @@ export default function ZenBar({
           onClick={onSwitchClick}
         >
           <IconSwitch />
+        </Button>
+      </Tip>
+      {/* 搜索节点（2026-09）：与切换钮同族（都是「找」——Ctrl+P 找文件 / Ctrl+F 找节点）；
+          任何视图态可开，跳转时切回导图态定位 */}
+      <Tip label={t('editor.zenbar.searchNodes')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-search"
+          aria-label={t('editor.zenbar.searchNodes')}
+          onClick={onSearchClick}
+        >
+          <IconSearch />
         </Button>
       </Tip>
       <Tip label={t('editor.zenbar.newMap')}>

@@ -79,10 +79,13 @@
 // 2026-09-22（一键收起到 N 级批）：840→850（useExpandLevel 受控值接线 + applyExpandLevel
 //   命令组合 + 砚栏两 props，实测 842 + 8 行余量；下拉本体在 ExpandLevelMenu.tsx、
 //   受控值源在 useExpandLevel.ts（均无护栏）——功能性增长，无腐化）。
+// 2026-09-22（节点搜索批）：850→870（useNodeSearch 接线 + 搜索浮层槽 + 砚栏搜索钮与
+//   Ctrl+F 快捷键接线，实测 860 + 10 行余量；浮层本体在 NodeSearchDialog.tsx、状态源在
+//   useNodeSearch.ts、数据面在 services/nodeSearch.ts（均无护栏）——功能性增长，无腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 850 },
+  { path: '../src/views/EditorView.tsx', limit: 870 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
   { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]

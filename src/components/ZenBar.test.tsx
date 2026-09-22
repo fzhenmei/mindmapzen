@@ -37,12 +37,14 @@ function renderBar(overrides: {
   onSortBasket?: () => void
   expandLevel?: number | 'all' | undefined
   onExpandLevel?: (v: number | 'all') => void
+  onSearchClick?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
       <ZenBar
         onBack={noop}
         onSwitchClick={noop}
+        onSearchClick={overrides.onSearchClick ?? noop}
         onNewClick={noop}
         undoRedo={undoRedoStub}
         onCopyClick={noop}
@@ -240,6 +242,17 @@ describe('砚栏导航钮(两空间收敛)', () => {
     expect(screen.queryByTestId('btn-goto-workbench')).toBeNull()
     fireEvent.click(screen.getByTestId('btn-editor-settings'))
     expect(onSettingsClick).toHaveBeenCalledTimes(1)
+  })
+
+  test('搜索节点钮:三态常驻;点击回调 onSearchClick', () => {
+    const onSearchClick = vi.fn()
+    for (const v of ['mindmap', 'markdown', 'kanban'] as const) {
+      cleanup()
+      renderBar({ viewMode: v, onSearchClick })
+      expect(screen.getByTestId('btn-search')).toHaveAttribute('aria-label', '搜索节点（Ctrl+F）')
+    }
+    fireEvent.click(screen.getByTestId('btn-search'))
+    expect(onSearchClick).toHaveBeenCalledTimes(1)
   })
 })
 

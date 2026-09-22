@@ -63,6 +63,15 @@ export const IconCopy = ({ size }: IconProps) =>
   )
 /** 下拉箭头（2026-09 复制选项下拉）：复制钮旁的展开指示，收窄网格 chevron */
 export const IconChevronDown = ({ size }: IconProps) => base(<path d="M4 6l4 4 4-4" />, size)
+/** 搜索节点（2026-09 节点搜索）：放大镜，lens 圆心 (6.5,6.5) r4.5 + 右下柄，16 网格 */
+export const IconSearch = ({ size }: IconProps) =>
+  base(
+    <>
+      <circle cx="6.5" cy="6.5" r="4.5" />
+      <path d="M10 10l4 4" />
+    </>,
+    size,
+  )
 /** 展开层级（一键收起到 N 级）：三层叠片（顶菱 + 双下缘折线），层叠即「层级」语义，
  *  自 lucide layers 简化，几何落在 16 网格（菱心 (8,4.5) 宽 12 高 6） */
 export const IconLayers = ({ size }: IconProps) =>

@@ -28,6 +28,7 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useExpandLevel } from '../hooks/useExpandLevel'
+import { useNodeSearch } from '../hooks/useNodeSearch'
 import { useQuickSwitch } from '../hooks/useQuickSwitch'
 import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
@@ -246,6 +247,11 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     }
   }
 
+  // 节点搜索（2026-09）：浮层开合/全树候选快照/跳转组合在 useNodeSearch；定位复用
+  // locateNode（看板回导图同源：切态+展开收起祖先+居中），激活高亮在 hook 内经
+  // SET_NODE_ACTIVE 落（AI 回合白名单，只读观光语义）
+  const nodeSearch = useNodeSearch({ mmRef, locate: locateNode })
+
   // 状态选择器（2026-09 看板 Task 8；2026-09 画布三态 M1 拆 useStatusPick——行为零变化，
   // 语义注释见该 hook：execOnRenderNode 渲染节点寻址 / getData 快照读现值 / 命令落地后
   // onTreeDataChange / 同态短路不占 undo）
@@ -397,7 +403,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 2026-09：新建导图对话框同列互斥；2026-09-08 弹窗化：正文弹窗同列互斥（模态锁节点）
   // 2026-09 导航系统终审修复：App 级设置/历史框（appDialog）同列互斥——模态在开时 Alt+← 等让位（三态直达键 Ctrl+1/2/3 刻意不进，见 useEditorHotkeys）
   // 2026-09 点子篮子 M1：整理浮层（sortOpen）同列互斥——模态在开时 Shift+F2 不开第二个模态、浮动条让位
-  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null || sortOpen
+  // 2026-09 节点搜索：搜索浮层（nodeSearch.open）同列互斥
+  const anyDialog = guard.guarding || flow.confirming || exportFlow.open || quick.switchOpen || quick.cycle !== null || newMapOpen || conflict.open || bodyDialog.open || appDialog !== null || sortOpen || nodeSearch.open
   const anyDialogRef = useRef(false)
   anyDialogRef.current = anyDialog
   // 快捷键（Ctrl+S / Ctrl+C 复制 md / 正文面板开关 Shift+F2 / 切换 Ctrl+P、Ctrl+Tab）拆至 useEditorHotkeys（验收轮，行数护栏）
@@ -410,6 +417,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
     // AI 回合拦呼出（Task 12 fix，spec §6）：Ctrl+P 搜索浮层 / Ctrl+Tab 轮换浮层回合中
     // 均不开——open 即被拦，commit 路径自然封死（无需改 useQuickSwitch 内部）
     openQuickSwitch: () => guardAiTurn(quick.open),
+    // 节点搜索同守卫（2026-09）：回合中 Ctrl+F 不开（定位跳转本身是白名单观光语义，
+    // 但浮层输入框与回合状态签并存易误解，入口即拦最干净）
+    openNodeSearch: () => guardAiTurn(nodeSearch.openSearch),
     cycleStep: (reverse: boolean) => guardAiTurn(() => quick.cycleStep(reverse)),
     // 视图模式直达（2026-09 画布三态）：getState 读现值同值 no-op——监听只绑一次（首渲染
     // 闭包），订阅值会陈旧，getState 恒新；视图态不涉 AI 回合锁（不切图不写盘，纯视图态）
@@ -677,6 +687,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onBack={goBackToOrigin}
         onSettingsClick={() => useAppStore.getState().openAppDialog('settings')}
         onSwitchClick={() => guardAiTurn(quick.open)}
+        // 搜索节点（2026-09）：AI 回合拦呼出（同 Ctrl+F 路径）
+        onSearchClick={() => guardAiTurn(nodeSearch.openSearch)}
         onNewClick={() => setNewMapOpen(true)}
         // 整理篮子（spec §4.3）：仅篮子图显示（isBasket），点开出批量整理浮层
         isBasket={isBasket}
@@ -792,6 +804,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         }
         // 快速切换浮层（v2.5）：槽组装拆至 buildQuickSwitchSlot（复杂度护栏，槽内两形态互斥）
         quickSwitch={buildQuickSwitchSlot(guard, flow, quick, guardAiTurn)}
+        // 节点搜索浮层（2026-09）：同互斥优先级（guarding > confirming > 搜索）
+        nodeSearch={
+          nodeSearch.open && !guard.guarding && !flow.confirming
+            ? { hits: nodeSearch.hits, onPick: nodeSearch.pick, onClose: nodeSearch.close }
+            : null
+        }
         // 新建导图对话框（2026-09 画布内入口）：互斥优先级同上（guarding > confirming > 新建）。
         // 确认即关框走 leaveTo 安全链——保存当前图成功才 createAndOpen 跳转；保存失败/未映射块
         // 确认挂起留在原图（与「返回案头」同款约定，确认后不自动续行）。创建失败（如重名）走横幅

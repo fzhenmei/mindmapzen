@@ -16,6 +16,7 @@ import IconPickerDialog from './IconPickerDialog'
 import ImageDialog from './ImageDialog'
 import NewMapDialog from './NewMapDialog'
 import QuickSwitchDialog from './QuickSwitchDialog'
+import NodeSearchDialog from './NodeSearchDialog'
 import StatusPickerDialog from './StatusPickerDialog'
 import TagPickerDialog from './TagPickerDialog'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
@@ -43,6 +44,8 @@ interface EditorDialogsProps {
   imageEdit: ComponentProps<typeof ImageDialog> | null
   /** 快速切换浮层（v2.5，2026-09 迁入）：搜索/轮换两形态共用；同上 */
   quickSwitch: ComponentProps<typeof QuickSwitchDialog> | null
+  /** 节点搜索浮层（2026-09 节点搜索）：Ctrl+F 搜节点，跳转定位；同上 */
+  nodeSearch: ComponentProps<typeof NodeSearchDialog> | null
   /** 新建导图对话框（2026-09 画布内入口）：复用案头 NewMapDialog；同上 */
   newMap: ComponentProps<typeof NewMapDialog> | null
   /** 冲突裁决框（外部变更防护）：非 null 时打开（保存链挂起等待三态决策） */
@@ -63,6 +66,7 @@ export default function EditorDialogs({
   statusPicker,
   imageEdit,
   quickSwitch,
+  nodeSearch,
   newMap,
   conflict,
 }: Readonly<EditorDialogsProps>) {
@@ -92,6 +96,7 @@ export default function EditorDialogs({
       {statusPicker !== null && <StatusPickerDialog {...statusPicker} />}
       {imageEdit !== null && <ImageDialog {...imageEdit} />}
       {quickSwitch !== null && <QuickSwitchDialog {...quickSwitch} />}
+      {nodeSearch !== null && <NodeSearchDialog {...nodeSearch} />}
       {newMap !== null && <NewMapDialog {...newMap} />}
       {conflict !== null && <ConflictDialog mapName={conflict.mapName} onChoice={conflict.onChoice} />}
     </>

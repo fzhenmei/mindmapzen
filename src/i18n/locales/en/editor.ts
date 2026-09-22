@@ -57,6 +57,13 @@ const editor: Dict['editor'] = {
     expandLevel: 'Expand levels',
     expandAll: 'Expand all',
     expandToLevel: 'Expand to level {{n}}',
+    searchNodes: 'Search nodes (Ctrl+F)',
+  },
+  nodeSearch: {
+    title: 'Search nodes',
+    placeholder: 'Type keywords to find nodes…',
+    empty: 'No matching nodes',
+    count: '{{count}} matches',
   },
   canvas: {
     loading: 'Opening…',

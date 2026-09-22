@@ -56,6 +56,14 @@ export default {
     expandLevel: '展开层级',
     expandAll: '全部展开',
     expandToLevel: '展开到 {{n}} 级',
+    searchNodes: '搜索节点（Ctrl+F）',
+  },
+  // 节点搜索浮层（2026-09）：Ctrl+P 搜文件 / Ctrl+F 搜节点两族；命中列表跳转定位
+  nodeSearch: {
+    title: '搜索节点',
+    placeholder: '输入节点关键词…',
+    empty: '未找到匹配节点',
+    count: '{{count}} 个匹配节点',
   },
   canvas: {
     loading: '正在打开…',
