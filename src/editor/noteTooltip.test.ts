@@ -7,7 +7,7 @@ vi.mock('../services/vditorPreview', () => ({
   }),
 }))
 
-import { createNoteTooltip } from './noteTooltip'
+import { createNoteTooltip, HIDE_GRACE_MS } from './noteTooltip'
 import { renderVditorPreview } from '../services/vditorPreview'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { useAppStore } from '../store/appStore'
@@ -55,13 +55,17 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
     tip.destroy()
   })
 
-  test('hide:隐藏并清内容;setTheme 显示中按新主题重渲染', async () => {
+  test('hide:防抖到点隐藏并清内容;setTheme 显示中按新主题重渲染', async () => {
     const tip = createNoteTooltip('light')
     tip.show('内容', 0, 0)
     await vi.waitFor(() => expect(mocked).toHaveBeenCalled())
     tip.setTheme('dark') // 显示中(display 非 none)→ 按新主题重渲染
     expect(mocked).toHaveBeenLastCalledWith(expect.any(HTMLElement), '内容', 'dark')
+    // hide 已是防抖语义(指针守卫):真 timers 下 waitFor 完再切 fake 推进 grace 窗
+    vi.useFakeTimers()
     tip.hide()
+    vi.advanceTimersByTime(HIDE_GRACE_MS)
+    vi.useRealTimers()
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     expect(el.style.display).toBe('none')
     expect(el.textContent).toBe('')
@@ -211,6 +215,100 @@ describe('noteTooltip:渲染完成前不可见(2026-09-22 首帧跳变修复)', 
     resolveB() // B 完成:place 后显形
     await vi.waitFor(() => expect(el.textContent).toContain('B 正文'))
     expect(el.style.visibility).toBe('visible')
+    tip.destroy()
+  })
+})
+
+describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () => {
+  // 引擎在角标 mouseout 即调 hide,浮层挂 body 不在角标子树内——鼠标移向浮层途中
+  // 必触发 mouseout,浮层立即关闭没法滚也没法把鼠标放上去。hide 改 200ms 防抖:
+  // 到点指针在浮层 rect 内则不藏(转入浮层 mouseleave 管理),grace 期间 show 打断。
+  const GRACE = HIDE_GRACE_MS
+  // jsdom 量测桩(getBoundingClientRect 恒 0):stub 出浮层 rect (100,50)-(500,250)
+  const stubRect = (el: HTMLElement): void => {
+    Object.defineProperty(el, 'getBoundingClientRect', {
+      value: () => ({
+        left: 100, top: 50, right: 500, bottom: 250, width: 400, height: 200, x: 100, y: 50,
+        toJSON: () => ({}),
+      }),
+      configurable: true,
+    })
+  }
+  const movePointer = (x: number, y: number): void => {
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y }))
+  }
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    document.querySelectorAll('.zen-note-tip').forEach((el) => el.remove())
+  })
+
+  test('hide 防抖到点指针在浮层内:不藏,可把鼠标放上去滚动', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    stubRect(el)
+    tip.show('长文', 300, 200)
+    movePointer(300, 150) // 指针进浮层 rect
+    tip.hide() // 引擎角标 mouseout 到来
+    vi.advanceTimersByTime(GRACE)
+    expect(el.style.display).toBe('block') // 不藏
+    tip.destroy()
+  })
+
+  test('指针不在浮层内:hide 防抖到点真藏(移开即关,略带 200ms 迟滞)', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    stubRect(el)
+    tip.show('长文', 300, 200)
+    movePointer(700, 400) // 界外
+    tip.hide()
+    expect(el.style.display).toBe('block') // 防抖期内未藏
+    vi.advanceTimersByTime(GRACE)
+    expect(el.style.display).toBe('none')
+    tip.destroy()
+  })
+
+  test('浮层 mouseleave 后防抖到点藏;grace 期间 show 打断不藏', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    stubRect(el)
+    // 在浮层内 hide → 不藏;随后指针离场触发浮层 mouseleave → 防抖到点藏
+    tip.show('甲', 300, 200)
+    movePointer(300, 150)
+    tip.hide()
+    vi.advanceTimersByTime(GRACE)
+    movePointer(700, 400)
+    el.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(GRACE - 1)
+    expect(el.style.display).toBe('block')
+    vi.advanceTimersByTime(1)
+    expect(el.style.display).toBe('none')
+    // grace 期间 show 打断:hover 切换节点不闪藏
+    tip.show('乙', 300, 200)
+    movePointer(700, 400)
+    tip.hide()
+    vi.advanceTimersByTime(GRACE - 50)
+    tip.show('丙', 300, 200) // 打断 pending 隐藏
+    vi.advanceTimersByTime(GRACE)
+    expect(el.style.display).toBe('block')
+    tip.destroy()
+  })
+
+  test('Esc 立即藏(无防抖);目标为输入元素时不拦截(留给节点编辑框)', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    stubRect(el)
+    tip.show('长文', 300, 200)
+    movePointer(300, 150) // 指针在浮层内(防抖不会关)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(el.style.display).toBe('none') // Esc 无条件立即藏
+    // 输入元素上的 Esc 不拦截
+    tip.show('长文', 300, 200)
+    const ta = document.createElement('textarea')
+    document.body.append(ta)
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(el.style.display).toBe('block')
+    ta.remove()
     tip.destroy()
   })
 })
