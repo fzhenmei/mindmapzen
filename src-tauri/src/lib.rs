@@ -8,6 +8,36 @@ fn trash_delete(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
 }
 
+/// 光标粘滞自愈（2026-09-22 托盘区鼠标消失排障）：捕获小窗（WebView2/Chromium）在
+/// hide 的边界竞态下可能把线程光标留在 NULL——Win32 光标"粘滞"语义下，explorer 的
+/// 托盘按钮/托盘菜单不显式重设光标，成为全屏无光标最易显形的位置（用户报障点）。
+/// SPI_SETCURSORS 从注册表重载系统光标并广播全系统刷新，幂等无副作用，是此类
+/// 残留（游戏/远程桌面/Chromium 系均有同族问题）的标准修法；SetCursor(箭头) 复位
+/// 本线程责任光标作双保险。前端在捕获小窗 hide 链路收尾调用，非必现问题的自愈兜底
+#[cfg(windows)]
+#[tauri::command]
+fn reset_cursor_display() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        LoadCursorW, SetCursor, SystemParametersInfoW, IDC_ARROW, SPIF_SENDCHANGE, SPI_SETCURSORS,
+    };
+    unsafe {
+        // 失败仅剩参数错误一种可能（固定常量入参），且无补救动作可走——本调用本身
+        // 就是自愈兜底，失败即维持原状（下次 hide 再试），显式丢弃返回值留痕于此
+        let _ = SystemParametersInfoW(SPI_SETCURSORS, 0, std::ptr::null_mut(), SPIF_SENDCHANGE);
+        let arrow = LoadCursorW(std::ptr::null_mut(), IDC_ARROW);
+        if !arrow.is_null() {
+            let _ = SetCursor(arrow); // 同上：失败无补救，返回值为旧光标句柄无用途
+        }
+    }
+}
+
+/// 非 Windows 平台无 Win32 光标粘滞语义，空实现（前端调用点直接返回成功）
+#[cfg(not(windows))]
+#[tauri::command]
+fn reset_cursor_display() {}
+
+
+
 /// 标题栏主题染色（v2.5 视觉一体化）：DWM 属性把系统标题栏/边框染成前端主题色，
 /// 去掉 Windows 强调色（深蓝）与应用主题的割裂。前端在主题落位时调用，传参：
 ///  caption/border 为 #RRGGBB（来自 theme.css 的 --background/--border），
@@ -205,6 +235,7 @@ pub fn run() {
             git_exec,
             git_clone,
             set_titlebar_colors,
+            reset_cursor_display,
             ai_chat_start,
             ai_chat_abort
         ])

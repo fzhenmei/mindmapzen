@@ -41,6 +41,7 @@ futures-util = "0.3"
 # 契约测试起本地 mock server（TcpListener 手写 HTTP 响应）所需特性；与主依赖 tokio 特性并集生效
 tokio = { version = "1.53.1", features = ["macros", "rt", "net", "io-util"] }
 
-# 标题栏主题染色（DWM 染色命令 set_titlebar_colors 的 win32 绑定，仅 Windows 需要）
+# 标题栏主题染色（DWM 染色命令 set_titlebar_colors 的 win32 绑定，仅 Windows 需要）；
+# Win32_UI_WindowsAndMessaging：光标粘滞自愈命令 reset_cursor_display 的 SetCursor/LoadCursorW
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging"] }
