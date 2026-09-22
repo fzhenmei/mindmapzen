@@ -27,19 +27,22 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
     const tip = createNoteTooltip('light')
     tip.show('说明文字', 10, 20)
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
-    expect(el.style.display).toBe('block')
-    await vi.waitFor(() => expect(el.textContent).toContain('说明文字'))
-    expect(mocked).toHaveBeenLastCalledWith(el, '说明文字', 'light')
+    const body = el.querySelector<HTMLElement>('.zen-note-tip-body')!
+    expect(el.style.display).toBe('flex') // 外壳 flex 列:内容区+more 行
+    await vi.waitFor(() => expect(body.textContent).toContain('说明文字'))
+    expect(mocked).toHaveBeenLastCalledWith(body, '说明文字', 'light')
     expect(el.querySelector('.zen-note-tip-more')!.textContent).toContain('Shift+F2')
     tip.destroy()
   })
 
-  test('限高滚动:容器带 max-height 与 overflow(300 字截断退役,md 按字符截断会截破语法)', () => {
+  test('限高滚动:外壳限高+内容区独立滚动(300 字截断退役,md 按字符截断会截破语法)', () => {
     const tip = createNoteTooltip('light')
     tip.show('x'.repeat(500), 0, 0)
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
-    expect(el.style.maxHeight).not.toBe('')
-    expect(el.style.overflowY).toBe('auto')
+    const body = el.querySelector<HTMLElement>('.zen-note-tip-body')!
+    expect(el.style.maxHeight).not.toBe('') // 外壳 40vh 封顶
+    expect(body.style.overflowY).toBe('auto') // 滚动落内容区
+    expect(body.style.minHeight).toBe('0px') // flex 子项可滚前提
     tip.destroy()
   })
 
@@ -68,7 +71,8 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
     vi.useRealTimers()
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     expect(el.style.display).toBe('none')
-    expect(el.textContent).toBe('')
+    // 只清内容区;more 行与内容区是常驻结构,hide 不拆
+    expect(el.querySelector<HTMLElement>('.zen-note-tip-body')!.textContent).toBe('')
     tip.destroy()
   })
 
@@ -169,7 +173,7 @@ describe('noteTooltip:渲染完成前不可见(2026-09-22 首帧跳变修复)', 
     const tip = createNoteTooltip('light')
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     tip.show('长文', 100, 100)
-    expect(el.style.display).toBe('block')
+    expect(el.style.display).toBe('flex')
     expect(el.style.visibility).toBe('hidden')
     await vi.waitFor(() => expect(el.textContent).toContain('长文'))
     expect(el.style.visibility).toBe('visible')
@@ -251,7 +255,7 @@ describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () 
     movePointer(300, 150) // 指针进浮层 rect
     tip.hide() // 引擎角标 mouseout 到来
     vi.advanceTimersByTime(GRACE)
-    expect(el.style.display).toBe('block') // 不藏
+    expect(el.style.display).toBe('flex') // 不藏
     tip.destroy()
   })
 
@@ -262,7 +266,7 @@ describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () 
     tip.show('长文', 300, 200)
     movePointer(700, 400) // 界外
     tip.hide()
-    expect(el.style.display).toBe('block') // 防抖期内未藏
+    expect(el.style.display).toBe('flex') // 防抖期内未藏
     vi.advanceTimersByTime(GRACE)
     expect(el.style.display).toBe('none')
     tip.destroy()
@@ -280,7 +284,7 @@ describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () 
     movePointer(700, 400)
     el.dispatchEvent(new MouseEvent('mouseleave'))
     vi.advanceTimersByTime(GRACE - 1)
-    expect(el.style.display).toBe('block')
+    expect(el.style.display).toBe('flex')
     vi.advanceTimersByTime(1)
     expect(el.style.display).toBe('none')
     // grace 期间 show 打断:hover 切换节点不闪藏
@@ -290,7 +294,7 @@ describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () 
     vi.advanceTimersByTime(GRACE - 50)
     tip.show('丙', 300, 200) // 打断 pending 隐藏
     vi.advanceTimersByTime(GRACE)
-    expect(el.style.display).toBe('block')
+    expect(el.style.display).toBe('flex')
     tip.destroy()
   })
 
@@ -307,8 +311,54 @@ describe('noteTooltip:指针在浮层上不关闭+滚动查看(2026-09-22)', () 
     const ta = document.createElement('textarea')
     document.body.append(ta)
     ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    expect(el.style.display).toBe('block')
+    expect(el.style.display).toBe('flex')
     ta.remove()
+    tip.destroy()
+  })
+})
+
+describe('noteTooltip:同 note 重复 show 幂等 + more 行常显(2026-09-22 闪烁修复)', () => {
+  // 真机闪烁根因:引擎角标是 SVG group(透明 Rect+icon 两子元素),mouseover/mouseout
+  // 走 DOM 冒泡——指针在角标内子元素间微移会成对触发 mouseout→hide+mouseover→show。
+  // show 对同 note 也全量重渲染(textContent='' + visibility 两段式),浮层整个消失
+  // 再出现 = 闪烁(首帧两段式显形引入的回归)。修:渲染已完成且 note 未变时 show
+  // 幂等跳过(只重放位置);more 行移出滚动容器,长内容常显快捷键提示。
+  test('同 note 重复 show:不重渲染(无 hidden 间歇)、内容不清空——幂等', async () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    tip.show('同文', 100, 100)
+    await vi.waitFor(() => expect(el.textContent).toContain('同文'))
+    expect(el.style.visibility).toBe('visible')
+    const calls = mocked.mock.calls.length
+    tip.show('同文', 120, 120) // 角标内子元素切换触发的重复 show
+    expect(mocked.mock.calls.length).toBe(calls) // 不再调 renderVditorPreview
+    expect(el.style.visibility).toBe('visible') // 无 hidden 间歇(不闪)
+    expect(el.textContent).toContain('同文') // 内容未被清空
+    tip.destroy()
+  })
+
+  test('不同 note 的 show 照常全量重渲染(切节点换内容不受幂等影响)', async () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    tip.show('甲文', 100, 100)
+    await vi.waitFor(() => expect(el.textContent).toContain('甲文'))
+    tip.show('乙文', 100, 100)
+    await vi.waitFor(() => expect(el.textContent).toContain('乙文'))
+    expect(mocked).toHaveBeenLastCalledWith(expect.any(HTMLElement), '乙文', 'light')
+    tip.destroy()
+  })
+
+  test('more 行常显:在滚动容器外(外壳 flex 列,内容区独立滚动)', async () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    tip.show('长文', 100, 100)
+    await vi.waitFor(() => expect(el.querySelector('.zen-note-tip-more')).toBeTruthy())
+    const body = el.querySelector<HTMLElement>('.zen-note-tip-body')!
+    // 滚动属性落内容区(长内容滚内容区,more 行钉底不参与滚动);外壳 40vh 封顶
+    expect(body.style.overflowY).toBe('auto')
+    expect(body.style.minHeight).toBe('0px')
+    // more 是外壳直接子元素,与内容区平级
+    expect(el.querySelector('.zen-note-tip-body + .zen-note-tip-more')).toBeTruthy()
     tip.destroy()
   })
 })
