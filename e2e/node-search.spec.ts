@@ -39,7 +39,7 @@ test('节点搜索:收起子树可搜,跳转展开定位,浮层保持', async ({
   await page.getByTestId('node-search-input').fill('目标')
   await expect(page.getByTestId('node-search-item')).toHaveCount(1)
   await expect(page.getByTestId('node-search-item')).toContainText('目标乙')
-  await expect(page.getByTestId('node-search-count')).toHaveText('1 个匹配节点')
+  await expect(page.getByTestId('node-search-count')).toHaveText('1 个匹配节点 · Esc 关闭')
 
   // Enter 跳转:展开收起祖先、节点回画布,浮层保持(输入框仍在)
   await page.keyboard.press('Enter')

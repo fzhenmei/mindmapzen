@@ -1,8 +1,10 @@
 // src/components/NodeSearchDialog.tsx —— 节点搜索浮层（2026-09）：Ctrl+F / 砚栏搜索钮
 // 呼出，QuickSwitchDialog（Ctrl+P 搜文件）同款骨架——屏幕上部窄高浮层、输入即过滤、
-// ↑↓/Tab 循环高亮、Enter 跳转、Esc 由 radix 统一收口。差异两点：
+// ↑↓/Tab 循环高亮、Enter 跳转、Esc 由 radix 统一收口。差异三点：
 // ① 跳转后浮层**保持**（连续 Enter 跳下一处，Esc 才关）——搜索是反复找的流；
-// ② 候选是节点（含收起隐藏子树，全树快照在打开时拍于 useNodeSearch），命中跳转走
+// ② footer 恒显「计数 · Esc 关闭」——浮层常驻时出口提示必须常在眼前（basket.ts
+//   hint 的「·」中缀风格）；
+// ③ 候选是节点（含收起隐藏子树，全树快照在打开时拍于 useNodeSearch），命中跳转走
 //   locate（展开收起祖先 + 居中 + 激活高亮，与看板回导图定位同源）。
 // 纯展示组件——数据面在 services/nodeSearch，定位链在 useNodeSearch。
 import { useState } from 'react'
@@ -94,12 +96,13 @@ export default function NodeSearchDialog({ hits, onPick, onClose }: Readonly<Pro
             ))}
           </div>
         )}
-        {/* 匹配计数：仅有关键词时显示（空 query 的截断数会误导） */}
-        {q !== '' && (
-          <div data-testid="node-search-count" className="border-t px-3 py-1.5 text-xs text-muted-foreground">
-            {t('editor.nodeSearch.count', { count: visible.length })}
-          </div>
-        )}
+        {/* footer 恒显（跳转后浮层保持，Esc 出口须常在眼前）：计数 + Esc 提示同行
+         *  （basket.ts hint 的「·」中缀风格）。空 query 显总数——截断数会误导，总数不会 */}
+        <div data-testid="node-search-count" className="border-t px-3 py-1.5 text-xs text-muted-foreground">
+          {q === ''
+            ? `${t('editor.nodeSearch.countAll', { count: hits.length })} · ${t('editor.nodeSearch.escHint')}`
+            : `${t('editor.nodeSearch.count', { count: visible.length })} · ${t('editor.nodeSearch.escHint')}`}
+        </div>
       </DialogContent>
     </Dialog>
   )

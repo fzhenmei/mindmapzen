@@ -17,20 +17,21 @@ const hits: NodeHit[] = [
 afterEach(cleanup)
 
 describe('NodeSearchDialog(节点搜索浮层)', () => {
-  test('输入框渲染 autoFocus;空 query 列前 50 条不显示计数条', () => {
+  test('输入框渲染 autoFocus;空 query 列前 50 条,footer 显总数与 Esc 提示', () => {
     render(<NodeSearchDialog hits={hits} onPick={() => {}} onClose={() => {}} />)
     const input = screen.getByTestId('node-search-input')
     expect(input).toHaveAttribute('placeholder', '输入节点关键词…')
     expect(document.activeElement).toBe(input)
     expect(screen.getAllByTestId('node-search-item')).toHaveLength(5)
-    expect(screen.queryByTestId('node-search-count')).not.toBeInTheDocument()
+    // footer 恒显:跳转后浮层保持,出口(Esc)必须常在眼前;空 query 显总数(非截断数)
+    expect(screen.getByTestId('node-search-count')).toHaveTextContent('共 5 个节点 · Esc 关闭')
   })
 
-  test('输入即过滤(大小写不敏感)+ 计数条显示匹配数', () => {
+  test('输入即过滤(大小写不敏感)+ footer 切换匹配数', () => {
     render(<NodeSearchDialog hits={hits} onPick={() => {}} onClose={() => {}} />)
     fireEvent.change(screen.getByTestId('node-search-input'), { target: { value: '任务' } })
     expect(screen.getAllByTestId('node-search-item')).toHaveLength(2)
-    expect(screen.getByTestId('node-search-count')).toHaveTextContent('2 个匹配节点')
+    expect(screen.getByTestId('node-search-count')).toHaveTextContent('2 个匹配节点 · Esc 关闭')
     fireEvent.change(screen.getByTestId('node-search-input'), { target: { value: 'spring' } })
     expect(screen.getAllByTestId('node-search-item')).toHaveLength(1)
   })

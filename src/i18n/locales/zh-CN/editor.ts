@@ -64,6 +64,9 @@ export default {
     placeholder: '输入节点关键词…',
     empty: '未找到匹配节点',
     count: '{{count}} 个匹配节点',
+    // footer 恒显（跳转后浮层保持，出口须常在）：空 query 显总数（非截断数，不误导）
+    countAll: '共 {{count}} 个节点',
+    escHint: 'Esc 关闭',
   },
   canvas: {
     loading: '正在打开…',

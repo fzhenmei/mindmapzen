@@ -64,6 +64,8 @@ const editor: Dict['editor'] = {
     placeholder: 'Type keywords to find nodes…',
     empty: 'No matching nodes',
     count: '{{count}} matches',
+    countAll: '{{count}} nodes',
+    escHint: 'Esc to close',
   },
   canvas: {
     loading: 'Opening…',
