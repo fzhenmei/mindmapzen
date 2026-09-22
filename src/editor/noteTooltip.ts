@@ -3,8 +3,9 @@
 // 管线,mermaid 围栏自动成图(vditor dist 资源)。原纯文本转义 + 手动拆段/300 字截断
 // 退役:md 源码按字符截断会截破语法(表格半张/代码块未闭合),改限高滚动。
 // 2026-09-22 边缘浮层修复:引擎 getNoteContentPosition 给的是备注图标原始视口坐标,
-// 节点在右/下缘时 60vw 宽盒大半溢出被裁(变形)或整盒出视口(不可见)——show 时按实测
-// 尺寸钳进视口,异步渲染(mermaid/插图换 dataURL)完成尺寸变化后再钳一次。
+// 节点在右/下缘时放不下——fixed+left 的收缩适应盒可用宽=视口-left,右缘锚点会把盒
+// 压窄(变形);右/下放不下时改贴锚点往左/上长(翻转),翻转后仍出界再钳视口兜底。
+// show 按实测尺寸放置,异步渲染(mermaid/插图换 dataURL)完成尺寸变化后再放一次。
 import { i18n } from '../i18n'
 import { clampOverlayPos } from '../lib/utils'
 import { renderVditorPreview } from '../services/vditorPreview'
@@ -23,7 +24,7 @@ export interface NoteTooltip {
 export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
   let theme = initialTheme
   let showSeq = 0
-  // 原始锚点留存：重钳(异步渲染完成)须从锚点算,不能在已钳坐标上再钳(右缘会越钳越偏)
+  // 原始锚点留存：重放(异步渲染完成)须从锚点算,不能在已放坐标上再放(右缘会越放越偏)
   let anchorLeft = 0
   let anchorTop = 0
   const el = document.createElement('div')
@@ -47,16 +48,18 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
   `
   document.body.appendChild(el)
 
-  /** 按当前实测尺寸把锚点钳进视口(fixed 定位 → 视口即边界);show 空盒/渲染后大盒各调一次 */
-  const clampIntoViewport = (): void => {
-    const c = clampOverlayPos(
-      anchorLeft,
-      anchorTop,
-      el.offsetWidth,
-      el.offsetHeight,
-      window.innerWidth,
-      window.innerHeight,
-    )
+  /** 锚点定侧放置:右/下缘放不下时贴锚点往左/上长(翻转),翻转后仍出界钳视口兜底;
+   *  show 空盒/渲染后大盒各调一次 */
+  const placeFromAnchor = (): void => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const MARGIN = 8
+    // 放不下 → 盒右/下缘贴回锚点往左/上长;界内 → 保持默认右/下展开
+    const left = anchorLeft + w > vw - MARGIN ? anchorLeft - w : anchorLeft
+    const top = anchorTop + h > vh - MARGIN ? anchorTop - h : anchorTop
+    const c = clampOverlayPos(left, top, w, h, vw, vh, MARGIN)
     el.style.left = `${c.left}px`
     el.style.top = `${c.top}px`
   }
@@ -82,7 +85,7 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       more.style.cssText = 'margin-top:6px;color:var(--muted-foreground);font-size:11px;'
       more.textContent = i18n.t('editor.noteTooltip.more')
       el.appendChild(more)
-      clampIntoViewport()
+      placeFromAnchor()
     } catch (e) {
       // 渲染失败降级:源码保底展示 + 显式出口(禁止吞异常)
       if (seq !== showSeq) return
@@ -92,7 +95,7 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
         'margin:0;padding:6px;font-family:var(--font-file);font-size:11px;white-space:pre-wrap;color:var(--destructive);'
       pre.textContent = note
       el.appendChild(pre)
-      clampIntoViewport()
+      placeFromAnchor()
     }
   }
 
@@ -102,9 +105,9 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
       el.dataset.note = note
       anchorLeft = left
       anchorTop = top
-      // 先显形再钳:display:none 时实测尺寸恒 0,右/下缘锚点会漏钳
+      // 先显形再放:display:none 时实测尺寸恒 0,右/下缘锚点会漏翻转
       el.style.display = 'block'
-      clampIntoViewport()
+      placeFromAnchor()
       void renderInto(note, showSeq)
     },
     hide() {

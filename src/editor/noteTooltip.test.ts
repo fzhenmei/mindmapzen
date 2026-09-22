@@ -88,7 +88,7 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
   })
 })
 
-describe('noteTooltip:边缘锚点视口钳制(2026-09-22 边缘浮层修复)', () => {
+describe('noteTooltip:边缘锚点翻转+钳制(2026-09-22 边缘浮层修复)', () => {
   // jsdom 无布局(offsetWidth/Height 恒 0):own-property 桩注入实测尺寸;视口钉 1024×768
   beforeEach(() => {
     vi.stubGlobal('innerWidth', 1024)
@@ -96,29 +96,42 @@ describe('noteTooltip:边缘锚点视口钳制(2026-09-22 边缘浮层修复)', 
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  test('右缘/下缘锚点收进视口(引擎图标坐标原样落 fixed 时大半溢出被裁)', () => {
+  test('右/下缘放不下时贴锚点往左/上长(fixed+left 的收缩适应盒会被压窄,不能只移位)', () => {
     const tip = createNoteTooltip('light')
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
     Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
     tip.show('边缘正文', 900, 650)
-    // left ≤ 1024-300-8=716;top ≤ 768-150-8=610
-    expect(el.style.left).toBe('716px')
-    expect(el.style.top).toBe('610px')
+    // 左:900+300 > 1024-8 → 右缘贴锚点 900 往左长 → 600;上:650+150 > 768-8 → 650-150=500
+    expect(el.style.left).toBe('600px')
+    expect(el.style.top).toBe('500px')
     tip.destroy()
   })
 
-  test('异步渲染内容撑高后重钳(mermaid/插图换 dataURL 尺寸会变,show 时量的是空盒)', async () => {
+  test('异步渲染内容撑高后按新尺寸重判翻转(mermaid/插图换 dataURL 尺寸会变,show 时量的是空盒)', async () => {
     const tip = createNoteTooltip('light')
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
     Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
     Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
     tip.show('长文', 900, 650)
-    expect(el.style.top).toBe('610px')
-    // 渲染完成内容高 400:重钳到 768-400-8=360
+    expect(el.style.top).toBe('500px')
+    // 渲染完成内容高 400:上翻转到 650-400=250
     Object.defineProperty(el, 'offsetHeight', { value: 400, configurable: true })
-    await vi.waitFor(() => expect(el.style.top).toBe('360px'))
-    expect(el.style.left).toBe('716px')
+    await vi.waitFor(() => expect(el.style.top).toBe('250px'))
+    expect(el.style.left).toBe('600px')
+    tip.destroy()
+  })
+
+  test('窄视口翻转后仍左溢:钳底抬到边距(翻转的兜底)', () => {
+    vi.stubGlobal('innerWidth', 500)
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
+    tip.show('窄窗正文', 300, 650)
+    // 300+300 > 500-8 翻转 → 300-300=0,仍 < 边距 8 → 钳到 8
+    expect(el.style.left).toBe('8px')
+    expect(el.style.top).toBe('500px')
     tip.destroy()
   })
 
