@@ -34,6 +34,10 @@ export function createNoteTooltip(initialTheme: 'light' | 'dark'): NoteTooltip {
     position: fixed;
     display: none;
     z-index: 1000;
+    /* 宽度与位置解耦(测量反馈环治本):width:auto 的收缩适应盒可用宽=视口-left,
+       翻转放置后 offsetWidth 读回的是被压小的宽,越移越窄;max-content 让宽恒为
+       内容期望宽(60vw 封顶内换行),翻转/钳制的量测才可信 */
+    width: max-content;
     max-width: 60vw;
     max-height: 40vh;
     overflow-x: auto; /* = overflow:auto 的规范等价展开:jsdom 不展开 shorthand,overflowY 断言需 longhand */

@@ -135,6 +135,15 @@ describe('noteTooltip:边缘锚点翻转+钳制(2026-09-22 边缘浮层修复)',
     tip.destroy()
   })
 
+  test('宽度 max-content 与位置解耦(测量反馈环防回归:翻转后量到的宽已被当前 left 压小,越移越窄)', () => {
+    // 真机复现过:width:auto 的 fixed 盒可用宽=视口-left,翻转到右缘附近后 offsetWidth
+    // 读回的是被压后的宽,jsdom 恒定桩测不出——只能靠样式断言防回归
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    expect(el.style.width).toBe('max-content')
+    tip.destroy()
+  })
+
   test('左/上缘负锚点抬到边距(不越过视口左上)', () => {
     const tip = createNoteTooltip('light')
     const el = document.querySelector<HTMLElement>('.zen-note-tip')!
