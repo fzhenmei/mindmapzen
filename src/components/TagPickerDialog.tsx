@@ -32,12 +32,27 @@ export default function TagPickerDialog({ nodeText, current, used, onCancel, onC
     setPicked((p) => (p.includes(name) ? p.filter((n) => n !== name) : [...p, name]))
   }
 
-  // 回车提交：trim 后空/含空白/#/超白名单/重复均不收（输入保留供修改）
-  const submitDraft = () => {
+  // 草稿并入列表（回车与保存共用同一校验）：trim 后空/含空白/#/超白名单/重复均不收
+  const withDraft = (list: string[]): string[] => {
     const name = draft.trim()
-    if (name === '' || !TAG_NAME_RE.test(name) || picked.includes(name)) return
-    setPicked((p) => [...p, name])
+    if (name === '' || !TAG_NAME_RE.test(name) || list.includes(name)) return list
+    return [...list, name]
+  }
+
+  // 回车提交：非法输入保留输入框供修改
+  const submitDraft = () => {
+    const next = withDraft(picked)
+    if (next === picked) return
+    setPicked(next)
     setDraft('')
+  }
+
+  // 保存即隐式回车：未提交的草稿按同一校验并入，避免"输了没回车→标签凭空消失"
+  const save = () => {
+    const next = withDraft(picked)
+    setPicked(next)
+    setDraft('')
+    onConfirm(next)
   }
 
   return (
@@ -100,7 +115,7 @@ export default function TagPickerDialog({ nodeText, current, used, onCancel, onC
           <Button variant="secondary" size="sm" data-testid="tag-cancel" onClick={onCancel}>
             {t('common.cancel')}
           </Button>
-          <Button size="sm" data-testid="tag-save" onClick={() => onConfirm(picked)}>
+          <Button size="sm" data-testid="tag-save" onClick={save}>
             {t('common.save')}
           </Button>
         </DialogFooter>
