@@ -12,6 +12,7 @@ import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { ViewMode } from '../store/appStore'
 import type { CopySettingKey, CopySettings } from '../types/files'
 import { Button } from './ui/button'
+import ExpandLevelMenu from './ExpandLevelMenu'
 import { Separator } from './ui/separator'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -96,6 +97,12 @@ interface Props {
   onZoomIn(): void
   onCenterRoot(): void
   onFit(): void
+  /** 当前展开层级（一键收起到 N 级，2026-09）：statusOps.expandLevelOf 派生；
+   *  undefined = 手动混合折叠态，菜单不高亮任何项 */
+  expandLevel: number | 'all' | undefined
+  /** 展开层级点选：'all' → EXPAND_ALL；n → UNEXPAND_TO_LEVEL（命令落地在 EditorView，
+   *  走命令通道自动获得置脏/保存链/undo/AI 回合锁） */
+  onExpandLevel(v: number | 'all'): void
   /** 当前激活布局（点亮对应布局按钮） */
   layout: LayoutKind
   /** 布局切换（引擎即时重排 + 偏好落盘，逻辑在 EditorView） */
@@ -164,6 +171,8 @@ export default function ZenBar({
   onZoomIn,
   onCenterRoot,
   onFit,
+  expandLevel,
+  onExpandLevel,
   layout,
   onSwitchLayout,
   viewMode,
@@ -458,6 +467,9 @@ export default function ZenBar({
               <IconFrame />
             </Button>
           </Tip>
+          {/* 展开层级下拉（一键收起到 N 级，2026-09）：缩放段的视图控制同族（导图态专属）；
+              组件独立成文件（行数护栏），触发钮 IconLayers + 单选六项 */}
+          <ExpandLevelMenu level={expandLevel} onSelect={onExpandLevel} />
         </>
       )}
       <Separator orientation="vertical" className="mx-1" />

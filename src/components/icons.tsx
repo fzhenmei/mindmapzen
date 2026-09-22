@@ -63,6 +63,17 @@ export const IconCopy = ({ size }: IconProps) =>
   )
 /** 下拉箭头（2026-09 复制选项下拉）：复制钮旁的展开指示，收窄网格 chevron */
 export const IconChevronDown = ({ size }: IconProps) => base(<path d="M4 6l4 4 4-4" />, size)
+/** 展开层级（一键收起到 N 级）：三层叠片（顶菱 + 双下缘折线），层叠即「层级」语义，
+ *  自 lucide layers 简化，几何落在 16 网格（菱心 (8,4.5) 宽 12 高 6） */
+export const IconLayers = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M8 1.5 14 4.5 8 7.5 2 4.5Z" />
+      <path d="M2 8l6 3 6-3" />
+      <path d="M2 11.5l6 3 6-3" />
+    </>,
+    size,
+  )
 /** 五角星（2026-09 收藏置顶）：正五角星外接 R6.4/内接 r2.9，圆心 (8,8) 网格点位几何核算 */
 export const IconStar = ({ size }: IconProps) => base(
   <path d="M8 1.6L9.7 5.65L14.09 6.02L10.76 8.9L11.76 13.18L8 10.9L4.24 13.18L5.24 8.9L1.91 6.02L6.3 5.65Z" />,

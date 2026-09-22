@@ -52,6 +52,10 @@ export default {
     outlineShow: '显示大纲',
     outlineHide: '隐藏大纲',
     archiveToggle: '归档列',
+    // 展开层级（一键收起到 N 级）：缩放段单选下拉；N 级 = 可见到第 N 层分支（根不计级）
+    expandLevel: '展开层级',
+    expandAll: '全部展开',
+    expandToLevel: '展开到 {{n}} 级',
   },
   canvas: {
     loading: '正在打开…',

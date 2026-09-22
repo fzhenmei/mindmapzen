@@ -54,6 +54,9 @@ const editor: Dict['editor'] = {
     outlineShow: 'Show outline',
     outlineHide: 'Hide outline',
     archiveToggle: 'Archive column',
+    expandLevel: 'Expand levels',
+    expandAll: 'Expand all',
+    expandToLevel: 'Expand to level {{n}}',
   },
   canvas: {
     loading: 'Opening…',

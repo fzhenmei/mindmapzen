@@ -27,6 +27,7 @@ import { useBodyDialog } from '../hooks/useBodyDialog'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
+import { useExpandLevel } from '../hooks/useExpandLevel'
 import { useQuickSwitch } from '../hooks/useQuickSwitch'
 import { useOpenDocument } from '../hooks/useOpenDocument'
 import { useMapStats } from '../hooks/useMapStats'
@@ -475,6 +476,15 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
   // 对话框组（含快速切换浮层）始终挂载——打开失败时 Ctrl+P / Ctrl+Tab / 返回案头照常可达
   const docReady = state === 'ready'
 
+  // 展开层级（一键收起到 N 级，2026-09）：受控值源在 useExpandLevel（双通道跟随展开态）；
+  // 执行直接走引擎原生命令——命令通道自带置脏/保存链/undo/AI 回合锁（MindMapCanvas
+  // execCommand 包装拦截），无需宿主再包守卫
+  const expandLevel = useExpandLevel(mmRef, engineReady)
+  const applyExpandLevel = (v: number | 'all'): void => {
+    if (v === 'all') mmRef.current?.execCommand('EXPAND_ALL')
+    else mmRef.current?.execCommand('UNEXPAND_TO_LEVEL', v)
+  }
+
   // AI 面板派生（spec §1/§7）：未配置隐藏入口；面板宽 = 拖拽暂存 ?? 落盘值 ?? 默认；
   // 上下文节点按现选中组装（恰单选），供 chip 展示与"这个节点"指代上行
   const aiConfigured = aiConfig.baseUrl !== '' && aiConfig.apiKey !== '' && aiConfig.model !== ''
@@ -685,6 +695,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
         onZoomIn={() => mmRef.current?.view.enlarge()}
         onCenterRoot={() => mmRef.current && centerRoot(mmRef.current)}
         onFit={() => mmRef.current && fitView(mmRef.current)}
+        expandLevel={expandLevel}
+        onExpandLevel={applyExpandLevel}
         layout={layout}
         onSwitchLayout={switchLayout}
         viewMode={viewMode}
