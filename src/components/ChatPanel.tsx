@@ -48,12 +48,41 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, on
   const [inputDragPx, setInputDragPx] = useState<number | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLElement>(null)
+  // 自动跟随滚动（2026-09 多轮对话）：消息超出视口后最新回复落在底部看不见——
+  // 贴底时自动滚。跟随意图记 stickRef（用户上翻即停跟，不抢滚动）
+  const listRef = useRef<HTMLDivElement>(null)
+  const listInnerRef = useRef<HTMLDivElement>(null)
+  const stickRef = useRef(true)
   const inputH = inputDragPx ?? savedInputH ?? null
 
   // v1.1（2026-09-13）：卸载即中止回合——关面板 = 不再需要，防后台孤儿回合继续编辑导图
   // （用户失去观察入口却不知情）。走全局句柄（终审 I2/I3 架构不废，正是它让卸载 cleanup
   // 不依赖组件 ref）：idle 时句柄为 null 安全 no-op；切图路径无交集（回合中切图本就被拦）
   useEffect(() => () => { useChatStore.getState().stopRequest?.() }, [])
+
+  // 跟随滚动的触发源：流式 delta / 新消息走 messages 引用变化，但定稿切 md 后
+  // vditor 是异步队列渲染（MarkdownPreview 注释），撑高发生在引用变化之后——
+  // 两类时点统一用 ResizeObserver 观察消息内容 wrapper 的尺寸变化覆盖；
+  // observe 首挂必回调一次，重开面板带历史时直接落到最新。jsdom 无 RO（亦无
+  // 布局，滚动不可见），守卫跳过保单测
+  useEffect(() => {
+    const inner = listInnerRef.current
+    if (inner === null || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      const el = listRef.current
+      if (el !== null && stickRef.current) el.scrollTop = el.scrollHeight
+    })
+    ro.observe(inner)
+    return () => ro.disconnect()
+  }, [])
+
+  /** scroll 只在 scrollTop 变化时触发（内容撑高只变 scrollHeight，不会误清意图）：
+   *  用户上翻→离开底部停跟；程序滚底或翻回底部→恢复跟随 */
+  function handleListScroll(): void {
+    const el = listRef.current
+    if (el === null) return
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
 
   /** Enter 发送 / Shift+Enter 换行（2026-09 输入优化）：无 Shift 的 Enter 拦下走发送，
    *  Shift+Enter 放行走原生换行；合成中放行——中文输入法选词的确认回车 isComposing=true，
@@ -95,6 +124,8 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, on
       .messages.filter((m) => m.role === 'user' || (m.role === 'assistant' && m.rendered && m.text))
       .map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.text }))
     chat.pushUser(text)
+    // 上翻看历史中发送 = 注意力已回对话，强制回底跟随（否则自己的消息+后续回复都看不见）
+    stickRef.current = true
     const sel = selectionLine(contextNode ?? selection)
     // 尾部斜杠循环剥除（Sonar S8786 只认单量词正则，/\/+$/ 亦被报——循行尾重复标记先例改循环）
     let base = ai.baseUrl
@@ -167,15 +198,18 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, on
           <X className="size-4" />
         </button>
       </header>
-      <div data-testid="ai-messages" className="flex-1 overflow-y-auto p-3 text-sm">
-        {messages.length === 0 ? (
-          <div className="mt-8 space-y-1 text-center text-muted-foreground">
-            <p className="font-medium text-foreground">{t('ai.panel.emptyTitle')}</p>
-            <p className="text-xs">{t('ai.panel.emptyBody')}</p>
-          </div>
-        ) : (
-          messages.map((m, i) => <MessageRow key={m.id} msg={m} idx={i} />)
-        )}
+      <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} className="flex-1 overflow-y-auto p-3 text-sm">
+        {/* 内容 wrapper：ResizeObserver 的观察目标（容器自身 flex 定高，内容撑高要看它） */}
+        <div ref={listInnerRef}>
+          {messages.length === 0 ? (
+            <div className="mt-8 space-y-1 text-center text-muted-foreground">
+              <p className="font-medium text-foreground">{t('ai.panel.emptyTitle')}</p>
+              <p className="text-xs">{t('ai.panel.emptyBody')}</p>
+            </div>
+          ) : (
+            messages.map((m, i) => <MessageRow key={m.id} msg={m} idx={i} />)
+          )}
+        </div>
       </div>
       {(contextNode ?? selection) && (
         <p className="shrink-0 truncate border-t border-border px-3 py-1.5 text-xs text-muted-foreground" data-testid="ai-context-chip">
