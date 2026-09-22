@@ -87,3 +87,49 @@ describe('noteTooltip:lute 渲染 + 限高滚动(2026-09 渲染统一)', () => {
     tip.destroy()
   })
 })
+
+describe('noteTooltip:边缘锚点视口钳制(2026-09-22 边缘浮层修复)', () => {
+  // jsdom 无布局(offsetWidth/Height 恒 0):own-property 桩注入实测尺寸;视口钉 1024×768
+  beforeEach(() => {
+    vi.stubGlobal('innerWidth', 1024)
+    vi.stubGlobal('innerHeight', 768)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  test('右缘/下缘锚点收进视口(引擎图标坐标原样落 fixed 时大半溢出被裁)', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
+    tip.show('边缘正文', 900, 650)
+    // left ≤ 1024-300-8=716;top ≤ 768-150-8=610
+    expect(el.style.left).toBe('716px')
+    expect(el.style.top).toBe('610px')
+    tip.destroy()
+  })
+
+  test('异步渲染内容撑高后重钳(mermaid/插图换 dataURL 尺寸会变,show 时量的是空盒)', async () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
+    tip.show('长文', 900, 650)
+    expect(el.style.top).toBe('610px')
+    // 渲染完成内容高 400:重钳到 768-400-8=360
+    Object.defineProperty(el, 'offsetHeight', { value: 400, configurable: true })
+    await vi.waitFor(() => expect(el.style.top).toBe('360px'))
+    expect(el.style.left).toBe('716px')
+    tip.destroy()
+  })
+
+  test('左/上缘负锚点抬到边距(不越过视口左上)', () => {
+    const tip = createNoteTooltip('light')
+    const el = document.querySelector<HTMLElement>('.zen-note-tip')!
+    Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { value: 150, configurable: true })
+    tip.show('左上正文', -20, -5)
+    expect(el.style.left).toBe('8px')
+    expect(el.style.top).toBe('8px')
+    tip.destroy()
+  })
+})
