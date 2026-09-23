@@ -1,9 +1,9 @@
-// src/hooks/useExportFlow.ts —— 导出与复制为图片（M5b Task 5）：对话框开闭状态与三入口执行链，
+// src/hooks/useExportFlow.ts —— 导出与复制为图片（M5b Task 5）：对话框开闭状态与导出五入口执行链，
 // 自 EditorView 拆出（EditorView 行数护栏 ≤300）。导出先经 pickSavePath 选目标路径
 //（取消即静默放弃），复制图直接走 writeImage；成功复用印记（导出=「已存」/复制图=「已复制」），
 // 失败经 setError 出中文横幅。
 // 2026-09-23 导出 Word/PDF：Word/PDF 失败走 toast+console（编辑器侧惯例），
-// 现有三入口保持注入 onError（setError 横幅）不变
+// 原有三入口保持注入 onError（setError 横幅）不变
 import { useState, type RefObject } from 'react'
 import { i18n } from '../i18n'
 import { copyPngToClipboard, exportPngToFile, exportSvgToFile } from '../services/exportImage'
@@ -11,13 +11,14 @@ import { useAppStore } from '../store/appStore'
 import { engineTreeToZen, serialize } from '../services/mdTree'
 import { renderPublishBody } from '../services/publishBody'
 import { buildDocxFromBody } from '../services/docxExport'
+import { buildPrintHtml } from '../services/pdfExport'
 import { showToast } from '../services/toast'
 import type { MindMapHandle } from '../types/engine'
 import type { ExportPorts } from '../types/ports'
 import type { FsAdapter } from '../types/files'
 import type { LinkRegistry } from '../editor/linkRegistry'
 
-/** ExportDialog 入口动作（经 EditorDialogs 的 export prop 传入）；onPdf 占位（Task 6 填打印链） */
+/** ExportDialog 入口动作（经 EditorDialogs 的 export prop 传入） */
 export interface ExportActions {
   onPng(): void
   onSvg(): void
@@ -95,13 +96,11 @@ export function useExportFlow(
       const { workspaceDir } = useAppStore.getState()
       const body = await renderPublishBody(adapter, workspaceDir, md)
       if (kind === 'word') await adapter.writeBytes(savePath, await buildDocxFromBody(body, mapName))
-      else {
-        /* Task 6：接通打印链 ports.runEdgePrint(buildPrintHtml(body, mapName), savePath) */
-      }
+      else await ports.runEdgePrint(buildPrintHtml(body, mapName), savePath)
       onSuccess('saved')
     } catch (e) {
       console.error(`导出 ${kind === 'word' ? 'Word' : 'PDF'} 失败`, e)
-      showToast(i18n.t('errors.exportFailed', { reason: String(e) }))
+      showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }))
     }
   }
 

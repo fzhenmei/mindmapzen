@@ -216,6 +216,12 @@ const exportPorts: ExportPorts = E2E
           (window as unknown as Record<string, unknown>).__zenE2e as { exportedBytes: number | null }
         ).exportedBytes = bytes.length
       },
+      async runEdgePrint(html, pdfPath) {
+        const z = (window as unknown as Record<string, unknown>).__zenE2e as {
+          edgePrints: Array<{ pdfPath: string; htmlLen: number }>
+        }
+        z.edgePrints.push({ pdfPath, htmlLen: html.length })
+      },
     }
   : {
       async pickSavePath(defaultName) {
@@ -224,6 +230,10 @@ const exportPorts: ExportPorts = E2E
       async writeImage(bytes) {
         const { writeImage } = await import('@tauri-apps/plugin-clipboard-manager')
         await writeImage(bytes)
+      },
+      async runEdgePrint(html, pdfPath) {
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('export_pdf_via_edge', { html, pdfPath })
       },
     }
 

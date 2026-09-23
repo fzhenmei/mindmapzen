@@ -13,6 +13,9 @@ export interface ExportPorts {
   pickSavePath(defaultName: string): Promise<string | null>
   /** 图片写入系统剪贴板（plugin-clipboard-manager writeImage 收 Uint8Array） */
   writeImage(bytes: Uint8Array): Promise<void>
+  /** Edge 无头打印出 PDF（2026-09-23 导出 PDF）：生产为 Tauri export_pdf_via_edge；
+   *  测试注入桩，E2E web 模式记录到 harness（__zenE2e.edgePrints） */
+  runEdgePrint(html: string, pdfPath: string): Promise<void>
 }
 
 /** git 命令端口（M20 版本管理）：生产为 Tauri git_exec（cwd 限定工作区），

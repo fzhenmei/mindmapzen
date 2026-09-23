@@ -37,11 +37,8 @@ function makeMmRef(tree: unknown) {
   return mmRef as unknown as { current: MindMapHandle | null }
 }
 
-/** 导出端口桩：runEdgePrint 暂不在 ExportPorts 面（Task 6 才进接口），以交集类型带上——
- *  Task 6 接口化后此返回类型可直接收紧 */
-function makePorts(savePath: string | null): ExportPorts & {
-  runEdgePrint(html: string, savePath: string): Promise<void>
-} {
+/** 导出端口桩（runEdgePrint 已入 ExportPorts 面，2026-09-23 导出 PDF 接口化） */
+function makePorts(savePath: string | null): ExportPorts {
   return {
     pickSavePath: vi.fn(async () => savePath),
     writeImage: vi.fn(async () => {}),
@@ -133,6 +130,53 @@ describe('useExportFlow：导出 Word', () => {
     )
     act(() => {
       result.current.actions.onWord()
+    })
+    await waitFor(() => expect(toastTexts.at(-1)).toMatch(/导出失败/))
+    expect(spy).toHaveBeenCalled()
+    expect(stamp).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+})
+
+describe('useExportFlow：导出 PDF', () => {
+  beforeEach(() => {
+    showToast('') // 清残留（覆盖式单条）
+    toastTexts.length = 0
+    vi.clearAllMocks()
+  })
+
+  test('onPdf：pickSavePath(.pdf) → runEdgePrint 收打印 HTML（含 @page）与目标路径 → 盖「已存」', async () => {
+    const adapter = new MemoryFsAdapter()
+    const writeSpy = vi.spyOn(adapter, 'writeBytes')
+    const ports = makePorts('/ws/导出/图.pdf')
+    const stamp = vi.fn()
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, stamp, vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onPdf()
+    })
+    await waitFor(() => expect(ports.runEdgePrint).toHaveBeenCalled())
+    const [html, pdfPath] = vi.mocked(ports.runEdgePrint).mock.calls[0]!
+    expect(pdfPath).toBe('/ws/导出/图.pdf')
+    expect(html).toContain('@page{size:A4;margin:2cm}')
+    expect(html).toContain('正文') // 渲染体在打印文档内（mock 渲染注入标记 <p>正文</p>）
+    expect(stamp).toHaveBeenCalledWith('saved')
+    expect(writeSpy).not.toHaveBeenCalled() // PDF 不走前端写盘
+  })
+
+  test('runEdgePrint 拒绝：toast + console 线索，不盖章', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const ports = makePorts('/ws/导出/图.pdf')
+    vi.mocked(ports.runEdgePrint).mockImplementation(async () => {
+      throw new Error('未找到 Microsoft Edge')
+    })
+    const stamp = vi.fn()
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), new MemoryFsAdapter(), '图', ports, emptyRegistry, stamp, vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onPdf()
     })
     await waitFor(() => expect(toastTexts.at(-1)).toMatch(/导出失败/))
     expect(spy).toHaveBeenCalled()
