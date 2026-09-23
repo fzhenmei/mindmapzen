@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
-import { consumePendingLocate, execOnRenderNode, expandToUid, findUidByPathText, mergeStatusBadge, nodeStatusOf } from './statusOps'
-import type { MindMapHandle } from '../types/engine'
+import { consumePendingLocate, execOnRenderNode, expandLevelOf, expandToUid, findUidByPathText, mergeStatusBadge, nodeStatusOf } from './statusOps'
+import type { EngineNode, MindMapHandle } from '../types/engine'
 
 describe('statusOps（徽章互保协议）', () => {
   test('mergeStatusBadge：换状态保留用户图标、徽章恒居首；清除只滤徽章', () => {
@@ -111,6 +111,35 @@ describe('statusOps（徽章互保协议）', () => {
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('数据树中无此节点'), 'ghost')
     expect(apply).not.toHaveBeenCalled()
     errSpy.mockRestore()
+  })
+})
+
+describe('expandLevelOf（一键收起到 N 级：当前展开层级的读取口径）', () => {
+  /** 三层树快捷构造：根 > 甲(第1层) > 乙(第2层) > 丙(第3层)；expand 覆写按 uid */
+  const tree3 = (expand: Record<string, boolean>): EngineNode => {
+    const node = (uid: string, children: EngineNode[] = []): EngineNode => ({
+      data: { text: uid, uid, ...(expand[uid] !== undefined ? { expand: expand[uid] } : {}) },
+      children,
+    })
+    return node('r', [node('a', [node('b', [node('c')])])])
+  }
+  test('全部展开（无任何非根非叶收起）→ all', () => {
+    expect(expandLevelOf(tree3({}))).toBe('all')
+  })
+  test('引擎 UNEXPAND_TO_LEVEL(2) 后形态（第1层开、更深全收）→ 2', () => {
+    expect(expandLevelOf(tree3({ a: true, b: false, c: false }))).toBe(2)
+  })
+  test('全收起形态（非根非叶全 false；引擎 expandToLevel 对深层统一置值）→ 1', () => {
+    expect(expandLevelOf(tree3({ a: false, b: false, c: false }))).toBe(1)
+  })
+  test('手动混合折叠（甲收但其隐藏子孙仍展开、无法用单一层级表达）→ undefined', () => {
+    // 甲收起、乙（隐藏子树内）expand=true；丙无子不参与
+    expect(expandLevelOf(tree3({ a: false, b: true }))).toBeUndefined()
+  })
+  test('只有根（无非根非叶）→ all；树缺失 → undefined', () => {
+    expect(expandLevelOf({ data: { text: 'r', uid: 'r' }, children: [] })).toBe('all')
+    expect(expandLevelOf(null)).toBeUndefined()
+    expect(expandLevelOf(undefined)).toBeUndefined()
   })
 })
 

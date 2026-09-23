@@ -54,6 +54,18 @@ const editor: Dict['editor'] = {
     outlineShow: 'Show outline',
     outlineHide: 'Hide outline',
     archiveToggle: 'Archive column',
+    expandLevel: 'Expand levels',
+    expandAll: 'Expand all',
+    expandToLevel: 'Expand to level {{n}}',
+    searchNodes: 'Search nodes (Ctrl+F)',
+  },
+  nodeSearch: {
+    title: 'Search nodes',
+    placeholder: 'Type keywords to find nodes…',
+    empty: 'No matching nodes',
+    count: '{{count}} matches',
+    countAll: '{{count}} nodes',
+    escHint: 'Esc to close',
   },
   canvas: {
     loading: 'Opening…',

@@ -12,6 +12,7 @@ import type { UndoRedo } from '../hooks/useUndoRedo'
 import type { ViewMode } from '../store/appStore'
 import type { CopySettingKey, CopySettings } from '../types/files'
 import { Button } from './ui/button'
+import ExpandLevelMenu from './ExpandLevelMenu'
 import { Separator } from './ui/separator'
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -47,6 +48,7 @@ import {
   IconRedo,
   IconRoute,
   IconSave,
+  IconSearch,
   IconSettings,
   IconSort,
   IconSwitch,
@@ -61,6 +63,9 @@ interface Props {
   onSettingsClick(): void
   /** 切换导图（v2.5）：呼出快速切换浮层（Ctrl+P 的按钮路径，同一安全切换链） */
   onSwitchClick(): void
+  /** 搜索节点（2026-09 节点搜索）：呼出节点搜索浮层（Ctrl+F 的按钮路径，任何视图态可开，
+   *  跳转时自动切回导图态定位） */
+  onSearchClick(): void
   /** 新建导图（2026-09 画布内入口）：呼出新建对话框（名称+模板，复用案头组件）；
    *  确认后走 leaveTo 安全链保存当前图再跳转（逻辑在 EditorView） */
   onNewClick(): void
@@ -96,6 +101,12 @@ interface Props {
   onZoomIn(): void
   onCenterRoot(): void
   onFit(): void
+  /** 当前展开层级（一键收起到 N 级，2026-09）：statusOps.expandLevelOf 派生；
+   *  undefined = 手动混合折叠态，菜单不高亮任何项 */
+  expandLevel: number | 'all' | undefined
+  /** 展开层级点选：'all' → EXPAND_ALL；n → UNEXPAND_TO_LEVEL（命令落地在 EditorView，
+   *  走命令通道自动获得置脏/保存链/undo/AI 回合锁） */
+  onExpandLevel(v: number | 'all'): void
   /** 当前激活布局（点亮对应布局按钮） */
   layout: LayoutKind
   /** 布局切换（引擎即时重排 + 偏好落盘，逻辑在 EditorView） */
@@ -147,6 +158,7 @@ export default function ZenBar({
   onBack,
   onSettingsClick,
   onSwitchClick,
+  onSearchClick,
   onNewClick,
   isBasket,
   onSortBasket,
@@ -164,6 +176,8 @@ export default function ZenBar({
   onZoomIn,
   onCenterRoot,
   onFit,
+  expandLevel,
+  onExpandLevel,
   layout,
   onSwitchLayout,
   viewMode,
@@ -226,6 +240,20 @@ export default function ZenBar({
           onClick={onSwitchClick}
         >
           <IconSwitch />
+        </Button>
+      </Tip>
+      {/* 搜索节点（2026-09）：与切换钮同族（都是「找」——Ctrl+P 找文件 / Ctrl+F 找节点）；
+          任何视图态可开，跳转时切回导图态定位 */}
+      <Tip label={t('editor.zenbar.searchNodes')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-search"
+          aria-label={t('editor.zenbar.searchNodes')}
+          onClick={onSearchClick}
+        >
+          <IconSearch />
         </Button>
       </Tip>
       <Tip label={t('editor.zenbar.newMap')}>
@@ -458,6 +486,9 @@ export default function ZenBar({
               <IconFrame />
             </Button>
           </Tip>
+          {/* 展开层级下拉（一键收起到 N 级，2026-09）：缩放段的视图控制同族（导图态专属）；
+              组件独立成文件（行数护栏），触发钮 IconLayers + 单选六项 */}
+          <ExpandLevelMenu level={expandLevel} onSelect={onExpandLevel} />
         </>
       )}
       <Separator orientation="vertical" className="mx-1" />

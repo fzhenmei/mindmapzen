@@ -35,12 +35,16 @@ function renderBar(overrides: {
   onSettingsClick?: () => void
   isBasket?: boolean
   onSortBasket?: () => void
+  expandLevel?: number | 'all' | undefined
+  onExpandLevel?: (v: number | 'all') => void
+  onSearchClick?: () => void
 } = {}): void {
   render(
     <TooltipProvider>
       <ZenBar
         onBack={noop}
         onSwitchClick={noop}
+        onSearchClick={overrides.onSearchClick ?? noop}
         onNewClick={noop}
         undoRedo={undoRedoStub}
         onCopyClick={noop}
@@ -58,6 +62,8 @@ function renderBar(overrides: {
         onFit={noop}
         layout={overrides.layout ?? ('mindmap' satisfies LayoutKind)}
         onSwitchLayout={overrides.onSwitchLayout ?? noop}
+        expandLevel={overrides.expandLevel ?? 'all'}
+        onExpandLevel={overrides.onExpandLevel ?? noop}
         viewMode={overrides.viewMode ?? 'mindmap'}
         onSwitchView={overrides.onSwitchView ?? noop}
         outlineVisible={overrides.outlineVisible ?? false}
@@ -237,6 +243,17 @@ describe('砚栏导航钮(两空间收敛)', () => {
     fireEvent.click(screen.getByTestId('btn-editor-settings'))
     expect(onSettingsClick).toHaveBeenCalledTimes(1)
   })
+
+  test('搜索节点钮:三态常驻;点击回调 onSearchClick', () => {
+    const onSearchClick = vi.fn()
+    for (const v of ['mindmap', 'markdown', 'kanban'] as const) {
+      cleanup()
+      renderBar({ viewMode: v, onSearchClick })
+      expect(screen.getByTestId('btn-search')).toHaveAttribute('aria-label', '搜索节点（Ctrl+F）')
+    }
+    fireEvent.click(screen.getByTestId('btn-search'))
+    expect(onSearchClick).toHaveBeenCalledTimes(1)
+  })
 })
 
 // ---- 三态矩阵（2026-09 画布三态）：视图组三钮 + 按 viewMode 显隐各段 + 大纲/归档两枚专有钮 ----
@@ -248,18 +265,18 @@ const T = (id: string) => screen.queryByTestId(id)
 describe('ZenBar 三态矩阵', () => {
   afterEach(cleanup)
 
-  test('导图态：全量按钮在（布局/缩放/正文/导出/撤销重做），大纲与归档钮不在', () => {
+  test('导图态：全量按钮在（布局/缩放/层级/正文/导出/撤销重做），大纲与归档钮不在', () => {
     renderBar({ viewMode: 'mindmap' })
-    for (const id of ['layout-mindmap', 'btn-zoom-in', 'btn-body', 'btn-export', 'btn-undo', 'btn-copy', 'btn-save', 'btn-back']) {
+    for (const id of ['layout-mindmap', 'btn-zoom-in', 'btn-expand-level', 'btn-body', 'btn-export', 'btn-undo', 'btn-copy', 'btn-save', 'btn-back']) {
       expect(T(id)).not.toBeNull()
     }
     expect(T('btn-outline-toggle')).toBeNull()
     expect(T('btn-kanban-archive')).toBeNull()
   })
 
-  test('Markdown 态：撤销/重做/正文/导出/缩放/布局隐藏，大纲钮在，复制/保存/返回在', () => {
+  test('Markdown 态：撤销/重做/正文/导出/缩放/布局/层级隐藏，大纲钮在，复制/保存/返回在', () => {
     renderBar({ viewMode: 'markdown' })
-    for (const id of ['btn-undo', 'btn-redo', 'btn-body', 'btn-export', 'btn-zoom-in', 'layout-mindmap', 'btn-layout-more']) {
+    for (const id of ['btn-undo', 'btn-redo', 'btn-body', 'btn-export', 'btn-zoom-in', 'layout-mindmap', 'btn-layout-more', 'btn-expand-level']) {
       expect(T(id)).toBeNull()
     }
     for (const id of ['btn-outline-toggle', 'btn-copy', 'btn-save', 'btn-back', 'btn-switch', 'btn-new']) {
@@ -267,11 +284,12 @@ describe('ZenBar 三态矩阵', () => {
     }
   })
 
-  test('看板态：撤销/重做在，布局/缩放隐藏，归档钮在', () => {
+  test('看板态：撤销/重做在，布局/缩放/层级隐藏，归档钮在', () => {
     renderBar({ viewMode: 'kanban' })
     expect(T('btn-undo')).not.toBeNull()
     expect(T('btn-kanban-archive')).not.toBeNull()
     expect(T('layout-mindmap')).toBeNull()
+    expect(T('btn-expand-level')).toBeNull()
     expect(T('btn-outline-toggle')).toBeNull()
   })
 

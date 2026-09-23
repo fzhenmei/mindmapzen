@@ -72,6 +72,32 @@ export function expandToUid(mm: MindMapHandle, uid: string): boolean {
   return expanded
 }
 
+/** 读取当前展开层级（一键收起到 N 级的菜单受控值）：与引擎 UNEXPAND_TO_LEVEL(n)
+ *  后的树形态比对——'all'（无非根非叶收起，含全展开/只有根）/ n（第 1..n-1 层非根
+ *  非叶全展开、更深全收，等价 expandToLevel(n) 直后形态）/ undefined（手动混合折叠，
+ *  无法用单一层级表达，菜单不高亮任何项）。
+ *  口径只看**非根非叶**节点：根恒显示无折叠语义（引擎折叠钮对根直接 return）；叶子
+ *  expand 无渲染意义；expand 缺省视为展开（引擎仅在收起时写 false）。隐藏子树内的
+ *  非叶节点参与判定——手动收起某分支时其隐藏子孙仍保持展开态，正是混合态的信号源 */
+export function expandLevelOf(root: EngineNode | null | undefined): number | 'all' | undefined {
+  if (root === null || root === undefined) return undefined
+  // 非根非叶采样：(层号, 是否展开)；DFS 一遍，根（depth 0）不入样
+  const sample: Array<{ layer: number; expand: boolean }> = []
+  const walk = (node: EngineNode, depth: number): void => {
+    for (const c of node.children ?? []) {
+      if ((c.children?.length ?? 0) > 0) {
+        sample.push({ layer: depth + 1, expand: c.data.expand !== false })
+      }
+      walk(c, depth + 1)
+    }
+  }
+  walk(root, 0)
+  if (sample.every((s) => s.expand)) return 'all'
+  // 候选 n = 已展开非根非叶的最大层 + 1（无展开项时 n=1：只剩根可见的全收起形态）
+  const n = sample.reduce((m, s) => (s.expand && s.layer > m ? s.layer : m), 0) + 1
+  return sample.every((s) => s.expand === s.layer < n) ? n : undefined
+}
+
 /** 收起分支展开后渲染树重试上限：safeReRender 渲染中场景首轮事件新树未建，需等
  *  其排的重渲完成（1 次重挂即够，上限是防异常树死循环）。导出供 EditorView.locateNode
  *  同口径复用（首挂定位 miss 重试） */
