@@ -70,3 +70,40 @@ test('提交失败：错误显示且不隐藏、内容保留（spec §7.2）', a
   expect(ports.calls.hide).toBe(0)
   expect(ports.calls.emit).toEqual([])
 })
+
+test('窗口获得系统焦点后聚焦输入框（2026-09-23 回归：隐身创建期 mount 时 focus 不生效，呼出后须手动点击）', async () => {
+  useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+  let fireFocus: ((focused: boolean) => void) | undefined
+  const ports = makePorts()
+  ports.onFocusChanged = async (cb) => { fireFocus = cb; return () => {} }
+  render(<CaptureWindowApp ports={ports} />)
+  await screen.findByTestId('capture-input')
+  // mount 期（窗口隐身/无焦点）不聚焦——聚焦必须等 WebView2 拿到系统焦点之后
+  expect(document.activeElement).not.toBe(screen.getByTestId('capture-input'))
+  // 首次自显链：showSelf → setFocus → 系统焦点事件驱动输入框聚焦
+  fireFocus?.(true)
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('capture-input')))
+  // 失焦隐藏（草稿保留，组件不卸载）后再唤起：焦点事件再次驱动聚焦
+  fireFocus?.(false)
+  ;(document.activeElement as HTMLElement).blur()
+  fireFocus?.(true)
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('capture-input')))
+})
+
+test('刚可见化的焦点抖动不隐藏（2026-09-23 回归：前台为 Edge 时首呼一闪而逝，再呼正常）', async () => {
+  useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+  let fireFocus: ((focused: boolean) => void) | undefined
+  const ports = makePorts()
+  ports.onFocusChanged = async (cb) => { fireFocus = cb; return () => {} }
+  render(<CaptureWindowApp ports={ports} />)
+  await screen.findByTestId('capture-input')
+  // showSelf 完成打点可见化时刻，宽限期内（首显+前台化焦点抖动）的 blur 不隐藏
+  await waitFor(() => expect(ports.calls.showSelf).toBeGreaterThanOrEqual(1))
+  fireFocus?.(false)
+  await new Promise((resolve) => { setTimeout(resolve, 50) })
+  expect(ports.calls.hide).toBe(0)
+  // 宽限期（400ms）外的真失焦：照常隐藏（spec §5.4）
+  await new Promise((resolve) => { setTimeout(resolve, 500) })
+  fireFocus?.(false)
+  await waitFor(() => expect(ports.calls.hide).toBe(1))
+})

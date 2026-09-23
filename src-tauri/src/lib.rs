@@ -10,22 +10,34 @@ fn trash_delete(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
 }
 
-/// 光标粘滞自愈（2026-09-22 托盘区鼠标消失排障）：捕获小窗（WebView2/Chromium）在
-/// hide 的边界竞态下可能把线程光标留在 NULL——Win32 光标"粘滞"语义下，explorer 的
-/// 托盘按钮/托盘菜单不显式重设光标，成为全屏无光标最易显形的位置（用户报障点）。
-/// SPI_SETCURSORS 从注册表重载系统光标并广播全系统刷新，幂等无副作用，是此类
-/// 残留（游戏/远程桌面/Chromium 系均有同族问题）的标准修法；SetCursor(箭头) 复位
-/// 本线程责任光标作双保险。前端在捕获小窗 hide 链路收尾调用，非必现问题的自愈兜底
+/// 光标不可见自愈（2026-09-22/23 托盘区鼠标消失排障，画像已经复现机器取证修正）：
+/// 捕获小窗（WebView2/Chromium）hide 边界后，实测 GetCursorInfo 完全正常（SHOWING +
+/// 系统光标句柄 ARROW/SIZENS），但光标不可见、手动移动不恢复——问题不在 NULL 粘滞，
+/// 在图像/渲染层。三层防御：① SPI_SETCURSORS 从注册表重载系统光标图像并全系统广播
+/// （治图像被换空）；② 1px 往返移动生成 WM_MOUSEMOVE，强制鼠标下窗口重派
+/// WM_SETCURSOR 与光标平面重绘（治形状残留/推动驱动重渲染）；③ SetCursor(箭头)
+/// 复位本线程责任光标。前端在捕获小窗 hide 链路延迟约 250ms 后调用——立即调用已被
+/// 复现机器（v2.21.0）证明会被 WebView2 异步清理边界"其后确立"的残留覆盖。幂等无
+/// 副作用，非必现问题的自愈兜底
 #[cfg(windows)]
 #[tauri::command]
 fn reset_cursor_display() {
+    use windows_sys::Win32::Foundation::POINT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        LoadCursorW, SetCursor, SystemParametersInfoW, IDC_ARROW, SPIF_SENDCHANGE, SPI_SETCURSORS,
+        GetCursorPos, LoadCursorW, SetCursor, SetCursorPos, SystemParametersInfoW, IDC_ARROW,
+        SPIF_SENDCHANGE, SPI_SETCURSORS,
     };
     unsafe {
         // 失败仅剩参数错误一种可能（固定常量入参），且无补救动作可走——本调用本身
         // 就是自愈兜底，失败即维持原状（下次 hide 再试），显式丢弃返回值留痕于此
         let _ = SystemParametersInfoW(SPI_SETCURSORS, 0, std::ptr::null_mut(), SPIF_SENDCHANGE);
+        // 1px 往返：视觉无感，但生成两次 WM_MOUSEMOVE，把光标状态推过一次完整的
+        // 派发/重绘循环（失败同上：UIPI 拦截或无补救，留痕丢弃）
+        let mut pt = POINT { x: 0, y: 0 };
+        if GetCursorPos(&mut pt) != 0 {
+            let _ = SetCursorPos(pt.x + 1, pt.y);
+            let _ = SetCursorPos(pt.x, pt.y);
+        }
         let arrow = LoadCursorW(std::ptr::null_mut(), IDC_ARROW);
         if !arrow.is_null() {
             let _ = SetCursor(arrow); // 同上：失败无补救，返回值为旧光标句柄无用途
@@ -37,6 +49,62 @@ fn reset_cursor_display() {
 #[cfg(not(windows))]
 #[tauri::command]
 fn reset_cursor_display() {}
+
+/// 抢前台显示窗口（2026-09-23 无焦点时快捷键呼出小窗不获输入焦点修复）：全局快捷键的
+/// JS 处理链经"热键→IPC→主窗 JS→IPC→Rust"两次往返，热键赋予的前台化权利已蒸发——
+/// 非前台进程的 SetForegroundWindow 被 Windows 前台锁拒绝，窗口可见但拿不到系统焦点，
+/// 键盘输入进不去（主窗在前台时进程本身即前台进程，故平时正常）。AttachThreadInput 把
+/// 本线程短暂挂进当前前台窗口线程的输入队列，借其身份完成 SetForegroundWindow 再脱离，
+/// 是该场景的业界标准解法；attach 窗口仅两次调用，无长驻同步
+#[cfg(windows)]
+#[tauri::command]
+fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    use tauri::Manager;
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
+    };
+    let w = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("window not found: {label}"))?;
+    // 可见性必须走 tauri 通道：裸 Win32 ShowWindow(SW_SHOW) 会与 tao 的 visible 状态
+    // 脱钩——脱钩后 hide() 被 tao 防重入短路成 no-op（返回 Ok 但窗口关不掉，2026-09-23
+    // 引入当日的回归实锤）。Win32 只负责下面的焦点抢夺，不碰可见性
+    w.show().map_err(|e| e.to_string())?;
+    // tauri 返回 windows crate 的 HWND（isize 包装），windows-sys 的 HWND 是裸指针——
+    // 经 usize 一次过桥（同句柄值，仅类型体系不同）
+    let hwnd = w.hwnd().map_err(|e| e.to_string())?.0 as usize as HWND;
+    unsafe {
+        let fg = GetForegroundWindow();
+        let fg_thread = if fg.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(fg, std::ptr::null_mut())
+        };
+        let cur_thread = GetCurrentThreadId();
+        let attached =
+            fg_thread != 0 && fg_thread != cur_thread && AttachThreadInput(cur_thread, fg_thread, 1) != 0;
+        // 只用 SetForegroundWindow：激活自带焦点转移。attach 期间再叠 SetFocus 会在 detach
+        // 后引发焦点回滚抖动——WebView2 报 blur，小窗的失焦隐藏链立刻把刚呼出的窗口藏回去
+        // （2026-09-23 闪现即隐）。失败=前台锁未破，窗口仍显示，无补救分支可走，留痕于此
+        let _ = SetForegroundWindow(hwnd);
+        if attached {
+            let _ = AttachThreadInput(cur_thread, fg_thread, 0);
+        }
+    }
+    Ok(())
+}
+
+/// 非 Windows 无前台锁语义，常规显示+聚焦即可
+#[cfg(not(windows))]
+#[tauri::command]
+fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    let w = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("window not found: {label}"))?;
+    w.show().and_then(|_| w.set_focus()).map_err(|e| e.to_string())
+}
 
 
 
@@ -238,6 +306,7 @@ pub fn run() {
             git_clone,
             set_titlebar_colors,
             reset_cursor_display,
+            force_foreground_window,
             ai_chat_start,
             ai_chat_abort,
             export_pdf_via_edge
