@@ -136,14 +136,21 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
 
   // 就绪自显（2026-09-23 首唤白闪报障）：窗口以 visible:false 隐身创建，WebView2 默认
   // 白底先于主题上屏。待配置读取落定（内容确定、boot 已应用主题）且首帧绘制完成后
-  // （双 rAF）再自显——首现即完整成型的窗口。StrictMode 双跑幂等无害
+  // （双 rAF）再自显——首现即完整成型的窗口。StrictMode 双跑幂等无害。
+  // showSelf 完成后主动补一发聚焦：首次显示路径 WebView2 不派发 window focus 事件
+  // （焦点从未经历 false→true 变化），visibilitychange 又早于 DOM 焦点同步——首次
+  // 呼出恰两条事件驱动都落空（实测首次无焦点、再唤起有）。此刻前台化已在 Rust 侧
+  // 完成，窗口持有真实系统焦点，focus() 必然生效
   useEffect(() => {
     if (hasWorkspace === null) return
     let inner = 0
+    const reveal = (): void => {
+      ports.showSelf()
+        .then(() => setFocusTick((tick) => tick + 1))
+        .catch((e) => console.error('捕获小窗自显失败', e))
+    }
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => {
-        ports.showSelf().catch((e) => console.error('捕获小窗自显失败', e))
-      })
+      inner = requestAnimationFrame(reveal)
     })
     return () => {
       cancelAnimationFrame(outer)
