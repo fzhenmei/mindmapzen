@@ -154,9 +154,12 @@ const editor: Dict['editor'] = {
   },
   export: {
     title: 'Export',
+    // 2026-09-23 dialog reworked into two-group grid: section labels
+    groupImage: 'Images',
     png: 'Export PNG',
     svg: 'Export SVG',
     copy: 'Copy as image',
+    groupDoc: 'Documents',
     // 2026-09-23 Word/PDF export batch: document entries (PDF chain lands in Task 6)
     word: 'Export Word',
     pdf: 'Export PDF',

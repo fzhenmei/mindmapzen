@@ -392,6 +392,48 @@ export const IconArchive = ({ size }: IconProps) =>
 /** 右向箭头（2026-09 看板治理 · 归档列收起钮）：IconChevronDown 的右向镜像
  *  （收起 = 向板缘收纳） */
 export const IconChevronRight = ({ size }: IconProps) => base(<path d="M6 4l4 4-4 4" />, size)
+/** 导出（2026-09 导出入口换语义图标）：上出托盘——IconImport 镜像成对（箭头出托盘） */
+export const IconExport = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M8 2v7.5" />
+      <path d="M5 5 8 2l3 3" />
+      <path d="M2.5 11.5v1A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5v-1" />
+    </>,
+    size,
+  )
+/** 矢量图（2026-09 导出对话框 · SVG 入口）：S 曲线 + 双端节点圆（矢量路径语义，
+ *  同族语言：曲线止于圆缘不穿越） */
+export const IconVector = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M4.8 12.5C8.8 12.5 7.7 3.5 11.2 3.5" />
+      <circle cx="3.5" cy="12.5" r="1.3" />
+      <circle cx="12.5" cy="3.5" r="1.3" />
+    </>,
+    size,
+  )
+/** Word 文档（2026-09 导出对话框 · Word 入口）：文档轮廓复用 IconFileText 的两段
+ *  路径 + 内部 W 字 */
+export const IconFileWord = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M10 1.5H4A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V4.5z" />
+      <path d="M9.5 1.5v2.5a1 1 0 0 0 1 1H13" />
+      <path d="M5.2 6.2l.9 4L8 6.9l1.9 3.3.9-4" />
+    </>,
+    size,
+  )
+/** PDF 文档（2026-09 导出对话框 · PDF 入口）：同 IconFileWord 的文档轮廓 + 内部 P 字 */
+export const IconFilePdf = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M10 1.5H4A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V4.5z" />
+      <path d="M9.5 1.5v2.5a1 1 0 0 0 1 1H13" />
+      <path d="M5.5 11V5.5h2.1a1.7 1.7 0 0 1 0 3.4H5.5" />
+    </>,
+    size,
+  )
 
 /* ═══ 窗口三键（v2.5 自定义标题栏）：Win11 caption 按钮规格的极简线稿，几何居中于 16 网格 ═══ */
 /** 最小化：底对齐短横（Win11 惯例，非垂直居中） */

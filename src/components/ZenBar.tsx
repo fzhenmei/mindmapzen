@@ -30,10 +30,10 @@ import {
   IconChevronDown,
   IconCopy,
   IconCrosshair,
+  IconExport,
   IconFilePlus,
   IconFileText,
   IconFrame,
-  IconImage,
   IconKanbanSquare,
   IconLayoutBoth,
   IconLayoutDown,
@@ -453,7 +453,7 @@ export default function ZenBar({
               aria-label={t('editor.zenbar.exportImage')}
               onClick={onExportClick}
             >
-              <IconImage />
+              <IconExport />
             </Button>
           </Tip>
         </>

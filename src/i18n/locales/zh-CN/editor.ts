@@ -157,9 +157,12 @@ export default {
   },
   export: {
     title: '导出',
+    // 2026-09-23 对话框改两组两列网格：分组标题（图片组/文档组）
+    groupImage: '图片',
     png: '导出 PNG',
     svg: '导出 SVG',
     copy: '复制为图片',
+    groupDoc: '文档',
     // 2026-09-23 导出 Word/PDF 批：文档两入口（pdf 链路 Task 6 接通）
     word: '导出 Word',
     pdf: '导出 PDF',
