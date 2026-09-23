@@ -282,7 +282,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   }
 
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
-  const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
+  const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, registry, flashStamp, setError)
 
   // 复制为公众号格式（2026-09 Markdown 态砚栏钮）：点击时内存树现场序列化喂公众号全链
   // （拆 hook 动因 = 行数护栏，语义见 useWechatCopy 头注释）

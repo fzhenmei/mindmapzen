@@ -28,7 +28,7 @@ export default {
     aiImageHeader: '> 图片为本地绝对路径，请用工具读取',
     save: '保存（Ctrl+S）',
     bodyPanel: '撰写选中节点的正文',
-    exportImage: '导出或复制为图片',
+    exportImage: '导出',
     zoomOut: '缩小（Ctrl+滚轮）',
     zoomIn: '放大（Ctrl+滚轮）',
     centerRoot: '根居中：保持缩放回根',
@@ -156,10 +156,13 @@ export default {
     fileFilter: '图片',
   },
   export: {
-    title: '导出或复制图片',
+    title: '导出',
     png: '导出 PNG',
     svg: '导出 SVG',
     copy: '复制为图片',
+    // 2026-09-23 导出 Word/PDF 批：文档两入口（pdf 链路 Task 6 接通）
+    word: '导出 Word',
+    pdf: '导出 PDF',
   },
   errorPanel: {
     readTitle: '无法打开此文件',
