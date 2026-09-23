@@ -4,22 +4,9 @@
 // 公众号编辑器白名单清洗:<style>/class 全丢,只认元素内联 style(2026-09-09 设计),
 // 故格式化层为自研逐元素内联样式映射,lute 仅负责 md→DOM 前半程
 import type { FsAdapter } from '../types/files'
-import { toDisplayText } from './displayText'
-import { applyImgSrcMap, buildImageMetaFromSrcs, collectMdImageSrcs } from './imageAssets'
-import { highlightCodeBlocks } from './codeHighlight'
-import { replaceMermaidCode } from './mermaidImage'
-import { renderVditorPreview } from './vditorPreview'
-import { mdBodyUnwrapForDisplay } from './mdTree'
+import { extractPublishBody, renderPublishBody } from './publishBody'
 
-/** 插图换 dataURL:md 全文收集图片 src(2026-09 升级 collectMdImageSrcs——行尾标记
- *  口径的超集,正文引用块行中图同收)→ buildImageMetaFromSrcs → 逐 img 命中替换
- *  (原文/百分号解码形态双比对在 applyImgSrcMap) */
-async function resolveImages(fs: FsAdapter, wsDir: string, display: string, root: ParentNode): Promise<void> {
-  const srcs = collectMdImageSrcs(display)
-  if (srcs.size === 0) return
-  const meta = await buildImageMetaFromSrcs(fs, wsDir, srcs) // 单图失败内部宽容跳过
-  applyImgSrcMap(root, new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
-}
+export { stripMermaid } from './publishBody'
 
 /** 编排:读盘 → 委托 copyWechatHtmlFromMd(案头文件右键入口)。
  *  失败原样上抛,由调用方 setError 兜底 */
@@ -32,86 +19,18 @@ export async function copyAsWechatHtml(
   await copyWechatHtmlFromMd(fs, wsDir, await fs.readTextFile(mdPath), writeHtml)
 }
 
-/** 编排:md 文本 → 预处理(显示层标记剥净 + mermaid 改标)→ 离屏渲染 → 插图换
- *  dataURL → mermaid 成图 → 代码高亮 → 剥 vditor 残留 + 内联样式 → 剪贴板。
- *  直喂文本入口(2026-09 画布 Markdown 视图「复制为公众号格式」:数据源 = 内存树
- *  序列化,含未保存修改——所见即所复制;display 形态 md 无包装层,unwrap 幂等)。
- *  失败原样上抛,由调用方兜底;离屏舞台 attached 但移出视口(vditor 内部
- *  IntersectionObserver 依赖挂载),finally 即清 */
+/** 编排:md 文本 → 共享渲染中段(renderPublishBody)→ 公众号 finisher(剥外链 +
+ *  刷内联样式)→ 剪贴板。直喂文本入口(2026-09 画布 Markdown 视图「复制为公众号
+ *  格式」:数据源 = 内存树序列化,含未保存修改——所见即所复制)。失败原样上抛,
+ *  由调用方兜底 */
 export async function copyWechatHtmlFromMd(
   fs: FsAdapter,
   wsDir: string | null,
   mdText: string,
   writeHtml: (html: string) => Promise<void>,
 ): Promise<void> {
-  // 显示形态剥正文包装层(2026-09-22 防炸配套):贴来的标题按标题渲染,不是引用
-  const display = stripMermaid(toDisplayText(mdBodyUnwrapForDisplay(mdText)))
-  const stage = document.createElement('div')
-  stage.className = 'wechat-copy-stage'
-  stage.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;'
-  document.body.append(stage)
-  try {
-    await renderVditorPreview(stage, display, 'light')
-    if (wsDir !== null) await resolveImages(fs, wsDir, display, stage)
-    await replaceMermaidCode(stage)
-    // 先克隆脱离再高亮:舞台上的 vditor 异步 hljs 会重刷已知语言代码块并
-    // 抹掉内联色,克隆体它碰不到
-    const body = extractPublishBody(stage)
-    await highlightCodeBlocks(body)
-    await writeHtml(wrapPublishHtml(body))
-  } finally {
-    stage.remove()
-  }
-}
-
-/** mermaid 代码块改标(```mermaid → ```zen-mermaid):vditor 无此语言适配器,预渲染
- *  改标防其异步成图竞态;渲染后由 mermaidImage.replaceMermaidCode 以自有配置
- *  (htmlLabels:false 无 foreignObject)成图换 PNG dataURL img——公众号剥 SVG,
- *  唯图片可存活,单块失败保留代码块降级。
- *  逐行围栏状态机:跟踪开围栏字符与长度,闭合围栏(同字符、够长、无 info)才出块,
- *  代码块内部的 "```mermaid" 内容行不误伤 */
-/** 单行围栏探测:行首允许空格与引用块 > 标记交错(正文块即引用块、列表嵌套围栏
- *  深缩进——前缀原样保留,只改写围栏 info),其后 3+ 连续 ` 或 ~ 记为围栏;
- *  返回前缀、围栏字符、长度与其后 info 串(手工计数不走正则,避开 S8786 回溯告警) */
-function fenceRun(line: string): { prefix: string; ch: string; len: number; rest: string } | null {
-  let i = 0
-  let advanced = true
-  while (advanced) {
-    advanced = false
-    while (i < line.length && line[i] === ' ') {
-      i++
-      advanced = true
-    }
-    if (i < line.length && line[i] === '>') {
-      i++
-      advanced = true
-    }
-  }
-  const ch = line[i]
-  if (ch !== '`' && ch !== '~') return null
-  let len = 0
-  while (i + len < line.length && line[i + len] === ch) len++
-  if (len < 3) return null
-  return { prefix: line.slice(0, i), ch, len, rest: line.slice(i + len) }
-}
-
-export function stripMermaid(md: string): string {
-  const lines = md.split('\n')
-  let open: { ch: string; len: number } | null = null
-  for (let i = 0; i < lines.length; i++) {
-    const f = fenceRun(lines[i]!)
-    if (open === null) {
-      if (f === null) continue
-      const info = f.rest.trim()
-      if (info === 'mermaid' || info.startsWith('mermaid ')) {
-        lines[i] = `${f.prefix}${f.ch.repeat(f.len)}zen-mermaid`
-      }
-      open = { ch: f.ch, len: f.len }
-    } else if (f !== null && f.ch === open.ch && f.len >= open.len && f.rest.trim() === '') {
-      open = null
-    }
-  }
-  return lines.join('\n')
+  const body = await renderPublishBody(fs, wsDir, mdText)
+  await writeHtml(wrapPublishHtml(body))
 }
 
 /** 单一内置主题(简洁整齐,2026-09-09 设计裁决):正文 15px/1.75 深灰,标题纯
@@ -189,20 +108,6 @@ export function applyWechatStyles(root: ParentNode): void {
     const css = TAG_STYLE[el.tagName]
     if (css !== undefined) el.style.cssText = css
   }
-}
-
-/** 渲染容器 → 脱离的发布正文体:取 .vditor-reset 内容(无则容器自身兜底)克隆,
- *  剥全部 id(锚点/编辑器内部标识,发布无用)与 vditor 预览残留——复制按钮壳
- *  (textarea/svg,公众号剥控件后留大空腔)、末尾零宽测量 span;pre>code 上
- *  vditor 的内联残留(max-height 等)一并清空,代码块样式全部由 pre 承担。
- *  返回克隆体(已脱离文档)——后续高亮等处理作用于其上,舞台上的 vditor 异步
- *  任务(hljs 重刷)无法染指 */
-export function extractPublishBody(rendered: HTMLElement): HTMLElement {
-  const body = (rendered.querySelector('.vditor-reset') ?? rendered).cloneNode(true) as HTMLElement
-  for (const el of body.querySelectorAll('[id]')) el.removeAttribute('id')
-  for (const el of body.querySelectorAll('.vditor-copy, span[style*="position: absolute"]')) el.remove()
-  for (const el of body.querySelectorAll<HTMLElement>('pre > code')) el.style.cssText = ''
-  return body
 }
 
 /** 发布正文体 → 可粘贴 HTML 串:外链剥文字 + 刷内联样式,包一层 section 承担
