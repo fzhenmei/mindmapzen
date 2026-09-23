@@ -36,4 +36,10 @@ describe('buildPrintHtml:渲染 DOM → 打印 HTML 文档', () => {
     expect(html).toContain('background-color:#f7f7f7')
     expect(html).toMatch(/pre\{[^}]*white-space:pre-wrap/) // 覆写(公众号版 white-space:pre 是给代码组件滚动的)
   })
+
+  test('pre 内层 code 覆写:透明底/零内边距(对齐公众号链跳过 PRE 内 CODE 的观感)', () => {
+    const html = buildPrintHtml(bodyOf('<p>x</p>'), 't')
+    // 行内 code 规则(padd 2px 5px/f5f5f5 底/14px)会命中 pre>code,须显式归零归继承
+    expect(html).toContain('pre code{background-color:transparent;padding:0;border-radius:0;font-size:inherit;font-family:inherit}')
+  })
 })

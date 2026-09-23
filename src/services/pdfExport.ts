@@ -26,6 +26,9 @@ export function buildPrintHtml(body: HTMLElement, title: string): string {
     `body{${ROOT_STYLE}}`,
     tagCss,
     'pre{white-space:pre-wrap}',
+    // 行内 code 样式会命中 pre 内层 <code>(多 5px 内边距/双层灰底/14px 覆盖 13px)——
+    // 公众号链 applyWechatStyles 显式跳过 PRE 内 CODE,此处等价覆写(样式归 pre 承担)
+    'pre code{background-color:transparent;padding:0;border-radius:0;font-size:inherit;font-family:inherit}',
     'blockquote,pre,table,img{break-inside:avoid}',
     'h1,h2,h3,h4,h5,h6{break-after:avoid}',
     '</style>',

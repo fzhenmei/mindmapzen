@@ -73,6 +73,17 @@ describe('buildDocxFromBody:DOM → docx 映射(样式值与公众号主题同�
     expect(xml).toContain('<w:ilvl w:val="1"/>')
   })
 
+  test('有序列表编号重启:兄弟 <ol> 各用独立 numId(第二个不从 3 接编)', async () => {
+    const { xml } = await docXml('<ol><li>a1</li><li>a2</li></ol><ol><li>b1</li><li>b2</li></ol>')
+    // 实测序列化:第一个 ol 段落 <w:numId w:val="2"/>×2、第二个 w:val="3"×2(instance 分区)
+    const numIds = [...xml.matchAll(/<w:numId w:val="(\d+)"\/>/g)].map((m) => m[1])
+    expect(numIds).toHaveLength(4)
+    expect(new Set(numIds).size).toBe(2) // 两个列表 → 两个 numId(instance 分区)
+    expect(numIds[0]).toBe(numIds[1]) // 同一列表内共享
+    expect(numIds[2]).toBe(numIds[3])
+    expect(numIds[0]).not.toBe(numIds[2]) // 兄弟列表互不相同 → 编号各自从 1 起
+  })
+
   test('表格:单元格边框 E0E0E0 + 表头底纹', async () => {
     const { xml } = await docXml('<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>D</td></tr></tbody></table>')
     expect(xml).toContain('w:color="E0E0E0"')

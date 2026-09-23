@@ -28,6 +28,13 @@ import { dataUrlToBytes } from './exportImage'
 /** docx 段落/表格子元素(块级产物累积容器) */
 type DocxChildren = (Paragraph | Table)[]
 
+/** OL 编号实例序列:OOXML 中共用 numId 的段落编号跨段连续,不分实例时第二个
+ *  <ol> 会从 4,5,6… 接编。buildDocxFromBody 持本计数器,每个顶层 OL 树领一个
+ *  新 instance(docx 库按 reference-instance 建 concrete numbering → 独立 numId) */
+interface OlSeq {
+  next: number
+}
+
 const FONT_MONO = 'Consolas'
 // 字号(half-point):标题 15/13.5→27 取整 27/12/11pt,正文 11pt,代码 10pt。
 // 22.5 无法入整数 half-point,就近取整——观感差异不可辨,spec 已裁定按视觉可微调
@@ -162,7 +169,7 @@ function quoteParagraph(runs: ParagraphChild[], level: number): Paragraph {
 
 /** 引用块:块级子元素分派——p/裸文本 → 引用段;嵌套 blockquote → 递归;列表/代码/
  *  表格等保持自身样式(引用内出现频次低,不为它们叠加引用铬框,v1 取舍) */
-function mapQuote(bq: Element, level: number, out: DocxChildren): void {
+function mapQuote(bq: Element, level: number, out: DocxChildren, olSeq: OlSeq): void {
   const blocks = blockChildren(bq)
   if (blocks.length === 0) {
     const runs: ParagraphChild[] = []
@@ -172,11 +179,11 @@ function mapQuote(bq: Element, level: number, out: DocxChildren): void {
   }
   for (const child of blocks) {
     if (child.tagName === 'BLOCKQUOTE') {
-      mapQuote(child, level + 1, out)
+      mapQuote(child, level + 1, out, olSeq)
       continue
     }
     if (child.tagName === 'UL' || child.tagName === 'OL' || child.tagName === 'PRE' || child.tagName === 'TABLE') {
-      mapBlock(child, level, out) // 块级元素自身样式,不带引用铬
+      mapBlock(child, level, out, olSeq) // 块级元素自身样式,不带引用铬
       continue
     }
     const runs: ParagraphChild[] = []
@@ -199,10 +206,14 @@ function mapPre(pre: Element, out: DocxChildren): void {
   )
 }
 
-/** 列表:UL/OL → zen-ul/zen-ol 编号引用;li 内嵌套列表先记后发(层级 +1) */
-function mapList(list: Element, depth: number, out: DocxChildren): void {
+/** 列表:UL/OL → zen-ul/zen-ol 编号引用;li 内嵌套列表先记后发(层级 +1)。
+ *  instance = 所属顶层列表树领的编号实例:兄弟 <ol> 各领一个(编号各自从 1 起,
+ *  不分实例则第二个 <ol> 从 4,5,6… 接编);嵌套子列表沿用(同 numId 内层级切换
+ *  本身触发 OOXML 逐级重启,无需再分)。UL 圆点无编号连续问题,不应用实例 */
+function mapList(list: Element, depth: number, instance: number, out: DocxChildren): void {
   const reference = list.tagName === 'OL' ? 'zen-ol' : 'zen-ul'
   const level = Math.min(depth, 3) // numbering 配置 4 级,更深贴第 4 级
+  const numbering = list.tagName === 'OL' ? { reference, level, instance } : { reference, level }
   for (const li of [...list.children].filter((e) => e.tagName === 'LI')) {
     const runs: ParagraphChild[] = []
     const nested: Element[] = []
@@ -222,12 +233,12 @@ function mapList(list: Element, depth: number, out: DocxChildren): void {
     }
     out.push(
       new Paragraph({
-        numbering: { reference, level },
+        numbering,
         spacing: { before: 60, after: 60, ...LINE_BODY },
         children: runs.length > 0 ? runs : [runOf('', {})],
       }),
     )
-    for (const n of nested) mapList(n, depth + 1, out)
+    for (const n of nested) mapList(n, depth + 1, instance, out)
   }
 }
 
@@ -259,7 +270,7 @@ function mapTable(table: Element, out: DocxChildren): void {
 }
 
 /** 块级分派:标题/段落/引用/代码/列表/表格/图片/hr/降级 */
-function mapBlock(el: Element, depth: number, out: DocxChildren): void {
+function mapBlock(el: Element, depth: number, out: DocxChildren, olSeq: OlSeq): void {
   switch (el.tagName) {
     case 'H1':
     case 'H2':
@@ -287,15 +298,19 @@ function mapBlock(el: Element, depth: number, out: DocxChildren): void {
       return
     }
     case 'BLOCKQUOTE':
-      mapQuote(el, 0, out)
+      mapQuote(el, 0, out, olSeq)
       return
     case 'PRE':
       mapPre(el, out)
       return
     case 'UL':
-    case 'OL':
-      mapList(el, depth, out)
+    case 'OL': {
+      // 顶层列表入口领新编号实例(mapList 内只对 OL 应用——UL 无编号连续问题,
+      // 其让出的号位仅是跳号,无害;不用三元分支是守 mapBlock 认知复杂度阈值)
+      const instance = olSeq.next++
+      mapList(el, depth, instance, out)
       return
+    }
     case 'TABLE':
       mapTable(el, out)
       return
@@ -352,7 +367,8 @@ function numberingConfig() {
  *  toBuffer 兜底——勿在生产分支引入 Buffer 依赖) */
 export async function buildDocxFromBody(body: HTMLElement, mapName: string): Promise<Uint8Array> {
   const children: DocxChildren = []
-  for (const el of blockChildren(body)) mapBlock(el, 0, children)
+  const olSeq: OlSeq = { next: 0 }
+  for (const el of blockChildren(body)) mapBlock(el, 0, children, olSeq)
   if (children.length === 0) children.push(new Paragraph({ spacing: LINE_BODY, children: [runOf('', {})] }))
   const doc = new Document({
     title: mapName,

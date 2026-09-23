@@ -77,7 +77,14 @@ pub async fn export_pdf_via_edge(html: String, pdf_path: String) -> Result<(), S
         .arg(to_file_uri(&html_path))
         .status()
     };
-    let status = run().await.map_err(|e| format!("启动 Edge 失败：{e}"))?;
+    // Edge 偶发挂起防 invoke 永久 pending（对话框已收、无 toast 无印记——实质是无出口
+    // 失败路径）：60s 超时上限（打印正常秒级完成）。最小形态：仅给 .status() 包 timeout，
+    // 不改成 spawn + kill——超时残留的 Edge 子进程随临时 profile 目录交 OS 周期清理，
+    // 取舍可接受（同下方 cleanup 忽略删除错误的理由）
+    let status = match tokio::time::timeout(std::time::Duration::from_secs(60), run()).await {
+        Ok(res) => res.map_err(|e| format!("启动 Edge 失败：{e}"))?,
+        Err(_elapsed) => return Err("Edge 打印超时（60 秒）".into()),
+    };
 
     // 临时产物清理：失败仅日志（系统临时目录无害，OS 周期清理），不阻塞导出结果——
     // 此处可安全忽略删除错误的原因：残留只是临时文件，无功能/隐私影响
