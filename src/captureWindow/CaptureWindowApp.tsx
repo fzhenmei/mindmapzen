@@ -13,6 +13,8 @@ import QuickCaptureForm from '../components/QuickCaptureForm'
 import ToastHost from '../components/ToastHost'
 
 export interface CaptureWindowPorts {
+  /** 就绪自显（防首唤白闪）：配置落定 + 首帧绘制后由本窗调用——隐身创建的窗口上屏 */
+  showSelf(): Promise<void>
   /** 隐藏本窗（提交成功 / Esc / 失焦；草稿保留——组件不卸载） */
   hide(): void
   /** 跨窗通知（spec §5.5）：写盘成功后 emit，主窗决策静默重载或提示 */
@@ -24,6 +26,12 @@ export interface CaptureWindowPorts {
 }
 
 const tauriPorts: CaptureWindowPorts = {
+  showSelf: async () => {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    const w = getCurrentWindow()
+    await w.show()
+    await w.setFocus()
+  },
   hide: () => {
     if (!('__TAURI_INTERNALS__' in window)) return
     void import('@tauri-apps/api/window')
@@ -97,6 +105,23 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [ports])
+
+  // 就绪自显（2026-09-23 首唤白闪报障）：窗口以 visible:false 隐身创建，WebView2 默认
+  // 白底先于主题上屏。待配置读取落定（内容确定、boot 已应用主题）且首帧绘制完成后
+  // （双 rAF）再自显——首现即完整成型的窗口。StrictMode 双跑幂等无害
+  useEffect(() => {
+    if (hasWorkspace === null) return
+    let inner = 0
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        ports.showSelf().catch((e) => console.error('捕获小窗自显失败', e))
+      })
+    })
+    return () => {
+      cancelAnimationFrame(outer)
+      if (inner !== 0) cancelAnimationFrame(inner)
+    }
+  }, [hasWorkspace, ports])
 
   const handleSubmitted = async (): Promise<void> => {
     const { workspaceDir, basketRelPath, resolvedLanguage } = useAppStore.getState()

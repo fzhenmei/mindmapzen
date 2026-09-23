@@ -27,7 +27,9 @@ export async function showCaptureWindow(): Promise<void> {
       skipTaskbar: true,
       resizable: false,
       center: true,
-      visible: true,
+      // 防首唤白闪（2026-09-23 报障，主窗防闪变同款思路）：隐身创建，待小窗内配置
+      // 落定 + 首帧绘制完成后由 CaptureWindowApp 的 showSelf 自显——WebView2 白底不上屏
+      visible: false,
     })
     w.once('tauri://error', (e) => {
       console.error('捕获小窗创建失败', e)
