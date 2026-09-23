@@ -5,8 +5,8 @@
 // resize 污染 + 保 undo 栈），原生 <dialog open> 非模态，z-[9] 低于砚栏 z-10（承重阶梯，
 // 详见 KanbanView 头注释，同款适用）。Esc 回导图（!defaultPrevented 守卫同看板：吞掉
 // Radix 已消费的 Esc）。大纲沿用案头 previewOutline/outlineWidth 偏好（M2 FileDetail
-// 退役后此态是唯一消费方）。「复制为公众号格式」出口在砚栏 Markdown 态专有钮
-// （useWechatCopy——点击时按同口径现场序列化，所见即所复制）。
+// 退役后此态是唯一消费方）。「复制为公众号格式」出口在砚栏复制组旁（三态恒显，
+// useWechatCopy——点击时按同口径现场序列化，所见即所复制）。
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'

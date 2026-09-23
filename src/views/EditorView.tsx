@@ -726,7 +726,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
           // FileDetail 同款交互：可见→off，不可见→on（auto 首点即转显式）
           void useAppStore.getState().setPreviewOutline(mdOutlineVisible ? 'off' : 'on')
         }}
-        // Markdown 态公众号复制钮（2026-09）：逻辑在 useWechatCopy（现场序列化喂全链）
+        // 公众号复制钮（2026-09 复制组旁三态恒显）：逻辑在 useWechatCopy（现场序列化喂全链）
         onCopyWechat={wechatCopy.run}
         wechatCopyBusy={wechatCopy.busy}
         // 看板归档列显隐（2026-09 画布三态 M1）：砚栏看板态专有钮 toggle 宿主态

@@ -1,4 +1,4 @@
-// src/hooks/useWechatCopy.test.tsx —— 复制为公众号格式（2026-09 Markdown 态砚栏钮）：
+// src/hooks/useWechatCopy.test.tsx —— 复制为公众号格式（2026-09 砚栏复制组旁，三态恒显）：
 // 点击时从内存树现场序列化 display 形态 md（与 MarkdownView 显示同口径——所见即所复制，
 // 含未保存修改）喂公众号全链。真 copyWechatHtmlFromMd 链，渲染/mermaid mock 注入代表性 DOM。
 import { act, renderHook, waitFor } from '@testing-library/react'

@@ -305,29 +305,26 @@ describe('ZenBar 三态矩阵', () => {
   })
 })
 
-// ---- 公众号复制钮（2026-09 Markdown 态专有段）：动作钮（非开关）+ busy 禁用 ----
+// ---- 公众号复制钮（2026-09 复制家族成员：复制组/路径之后，三态恒显）+ busy 禁用 ----
 
 describe('ZenBar 公众号复制钮', () => {
   afterEach(cleanup)
 
-  test('Markdown 态：钮在、语义名「复制为公众号格式」，点击回调；导图/看板态不在', () => {
+  test('三态恒显（数据源 = 内存树现场序列化，与视图态无关）：语义名「复制为公众号格式」，点击回调', () => {
     const onCopyWechat = vi.fn()
-    renderBar({ viewMode: 'markdown', onCopyWechat })
-    const btn = screen.getByTestId('btn-copy-wechat')
-    expect(btn).toHaveAttribute('aria-label', '复制为公众号格式')
-    expect(btn).toBeEnabled()
-    fireEvent.click(btn)
+    for (const v of ['mindmap', 'markdown', 'kanban'] as const) {
+      cleanup()
+      renderBar({ viewMode: v, onCopyWechat })
+      const btn = screen.getByTestId('btn-copy-wechat')
+      expect(btn).toHaveAttribute('aria-label', '复制为公众号格式')
+      expect(btn).toBeEnabled()
+    }
+    fireEvent.click(screen.getByTestId('btn-copy-wechat'))
     expect(onCopyWechat).toHaveBeenCalledTimes(1)
-    cleanup()
-    renderBar({ viewMode: 'mindmap' })
-    expect(T('btn-copy-wechat')).toBeNull()
-    cleanup()
-    renderBar({ viewMode: 'kanban' })
-    expect(T('btn-copy-wechat')).toBeNull()
   })
 
   test('busy=true：钮禁用（在途防连点信号，由 useWechatCopy 驱动）', () => {
-    renderBar({ viewMode: 'markdown', wechatCopyBusy: true })
+    renderBar({ wechatCopyBusy: true })
     expect(screen.getByTestId('btn-copy-wechat')).toBeDisabled()
   })
 })

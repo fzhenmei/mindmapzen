@@ -120,8 +120,8 @@ interface Props {
   /** 大纲显隐（2026-09 画布三态）：Markdown 态专有钮；visible 由 MarkdownView 上报（auto 跟宽） */
   outlineVisible: boolean
   onToggleOutline(): void
-  /** 复制为公众号格式（2026-09 Markdown 态专有钮）：逻辑在 EditorView 的 useWechatCopy
-   *  （点击时内存树现场序列化喂公众号全链——所见即所复制） */
+  /** 复制为公众号格式（2026-09 复制家族第三出口，三态恒显）：逻辑在 EditorView 的
+   *  useWechatCopy（点击时内存树现场序列化喂公众号全链——所见即所复制） */
   onCopyWechat(): void
   /** 公众号复制在途（防连点禁用信号，useWechatCopy 驱动） */
   wechatCopyBusy: boolean
@@ -396,6 +396,22 @@ export default function ZenBar({
           <IconRoute />
         </Button>
       </Tip>
+      {/* 复制为公众号格式（2026-09 复制家族第三出口）：复制组（md+选项）/路径之后的
+       *  发布口径——内联样式富文本全文。三态恒显：数据源 = 内存树现场序列化
+       *  （useWechatCopy），与视图态无关，导图/看板态直接点即复制，不必先切 Markdown */}
+      <Tip label={t('editor.zenbar.copyWechat')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-copy-wechat"
+          aria-label={t('editor.zenbar.copyWechat')}
+          disabled={wechatCopyBusy}
+          onClick={onCopyWechat}
+        >
+          <IconWechat />
+        </Button>
+      </Tip>
       <Tip label={t('editor.zenbar.save')}>
         <Button
           type="button"
@@ -536,25 +552,11 @@ export default function ZenBar({
           <IconKanbanSquare />
         </ToggleGroupItem>
       </ToggleGroup>
-      {/* Markdown 态专有段（2026-09 画布三态）：公众号复制（主动作在前）+ 大纲开关
-       *  （visible 由 MarkdownView 上报，auto 跟宽；点亮语言同 btn-body 的 data-active
-       *  通道 + aria-pressed，不依赖 data-state） */}
+      {/* Markdown 态专有段（2026-09 画布三态）：大纲开关——visible 由 MarkdownView 上报（auto 跟宽），
+       *  点亮语言同 btn-body（data-active 通道 + aria-pressed，不依赖 data-state） */}
       {viewMode === 'markdown' && (
         <>
           <Separator orientation="vertical" className="mx-1" />
-          <Tip label={t('editor.zenbar.copyWechat')}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              data-testid="btn-copy-wechat"
-              aria-label={t('editor.zenbar.copyWechat')}
-              disabled={wechatCopyBusy}
-              onClick={onCopyWechat}
-            >
-              <IconWechat />
-            </Button>
-          </Tip>
           <Tip label={outlineVisible ? t('editor.zenbar.outlineHide') : t('editor.zenbar.outlineShow')}>
             <Button
               type="button"
