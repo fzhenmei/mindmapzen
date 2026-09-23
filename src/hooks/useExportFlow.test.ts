@@ -29,20 +29,28 @@ vi.mock('../services/mermaidImage', () => ({ replaceMermaidCode: vi.fn(async () 
 const emptyRegistry = { byUid: new Map() } as unknown as LinkRegistry
 const TREE = { data: { text: '根节点', uid: 'root' }, children: [] }
 
-/** 引擎桩：getData 返回最小树（engineTreeToZen 还原 ZenNode，序列化出 `# 根节点`） */
+/** 引擎桩：getData 返回最小树（engineTreeToZen 还原 ZenNode，序列化出 `# 根节点`）；
+ *  doExport 供 PNG/SVG 链（requireExport 核验 + dataURL 解码，字节内容本组用例不断言） */
 function makeMmRef(tree: unknown) {
-  const mm = { getData: () => tree, on: vi.fn(), off: vi.fn() }
+  const mm = {
+    getData: () => tree,
+    on: vi.fn(),
+    off: vi.fn(),
+    doExport: { png: async () => 'data:image/png;base64,QUJD', svg: async () => 'data:image/svg+xml;base64,QUJD' },
+  }
   const mmRef = createRef<never>()
   ;(mmRef as { current: unknown }).current = mm
   return mmRef as unknown as { current: MindMapHandle | null }
 }
 
-/** 导出端口桩（runEdgePrint 已入 ExportPorts 面，2026-09-23 导出 PDF 接口化） */
+/** 导出端口桩（runEdgePrint/ask/openExported 已入 ExportPorts 面，2026-09-23 导出 PDF + 导出后打开） */
 function makePorts(savePath: string | null): ExportPorts {
   return {
     pickSavePath: vi.fn(async () => savePath),
     writeImage: vi.fn(async () => {}),
     runEdgePrint: vi.fn(async () => {}),
+    ask: vi.fn(async () => false),
+    openExported: vi.fn(async () => {}),
   }
 }
 
@@ -182,5 +190,78 @@ describe('useExportFlow：导出 PDF', () => {
     expect(spy).toHaveBeenCalled()
     expect(stamp).not.toHaveBeenCalled()
     spy.mockRestore()
+  })
+})
+
+describe('useExportFlow：导出成功后询问直接打开', () => {
+  beforeEach(() => {
+    showToast('') // 清残留（覆盖式单条）
+    toastTexts.length = 0
+    vi.clearAllMocks()
+  })
+
+  test('Word 成功 + ask 答是：openExported 收 savePath，ask 消息含文件名（含扩展）', async () => {
+    const adapter = new MemoryFsAdapter()
+    const ports = makePorts('/ws/导出/图.docx')
+    vi.mocked(ports.ask).mockImplementation(async () => true)
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, vi.fn(), vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onWord()
+    })
+    await waitFor(() => expect(ports.openExported).toHaveBeenCalledWith('/ws/导出/图.docx'))
+    const [message] = vi.mocked(ports.ask).mock.calls[0]!
+    expect(message).toContain('图.docx')
+  })
+
+  test('ask 答否：openExported 零调用，静默无错误（正常路径）', async () => {
+    const adapter = new MemoryFsAdapter()
+    const ports = makePorts('/ws/导出/图.docx') // makePorts 默认 ask → false
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, vi.fn(), vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onWord()
+    })
+    await waitFor(() => expect(ports.ask).toHaveBeenCalled())
+    expect(ports.openExported).not.toHaveBeenCalled()
+    expect(toastTexts).toHaveLength(0)
+  })
+
+  test('openExported 拒绝：toast 打开导出文件失败 + console 线索，stamp 仍已盖（saved 在问询前）', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const adapter = new MemoryFsAdapter()
+    const ports = makePorts('/ws/导出/图.docx')
+    vi.mocked(ports.ask).mockImplementation(async () => true)
+    vi.mocked(ports.openExported).mockImplementation(async () => {
+      throw new Error('无关联程序')
+    })
+    const stamp = vi.fn()
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, stamp, vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onWord()
+    })
+    await waitFor(() => expect(toastTexts.at(-1)).toMatch(/打开导出文件失败/))
+    expect(spy).toHaveBeenCalled()
+    expect(stamp).toHaveBeenCalledWith('saved')
+    spy.mockRestore()
+  })
+
+  test('PNG 成功 + ask 答是：同样走问询（runExport 链）', async () => {
+    const adapter = new MemoryFsAdapter()
+    const ports = makePorts('/ws/导出/图.png')
+    vi.mocked(ports.ask).mockImplementation(async () => true)
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, vi.fn(), vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onPng()
+    })
+    await waitFor(() => expect(ports.openExported).toHaveBeenCalledWith('/ws/导出/图.png'))
+    const [message] = vi.mocked(ports.ask).mock.calls[0]!
+    expect(message).toContain('图.png')
   })
 })

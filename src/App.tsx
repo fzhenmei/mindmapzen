@@ -9,7 +9,7 @@ import { describeBackendError } from './services/backendError'
 import { closeOrHideMainWindow } from './services/appClose'
 import LibraryView, { type PickedImport } from './views/LibraryView'
 import EditorView from './views/EditorView'
-import { open, save } from '@tauri-apps/plugin-dialog'
+import { ask, open, save } from '@tauri-apps/plugin-dialog'
 import { readFile } from '@tauri-apps/plugin-fs'
 import type { ExportPorts, GitClone, GitRun, RegisterCloseGuard } from './types/ports'
 import { openPath } from '@tauri-apps/plugin-opener'
@@ -180,7 +180,9 @@ const gitRun: GitRun = E2E
     }
 
 /** 导出与复制图片端口（M5b Task 5）：生产走 Tauri save 对话框 + clipboard-manager writeImage；
- *  E2E web 模式记录到 harness 桩（__zenE2e.savePaths/exportedBytes，固定路径走内存 FS 落盘） */
+ *  E2E web 模式记录到 harness 桩（__zenE2e.savePaths/exportedBytes，固定路径走内存 FS 落盘）。
+ *  2026-09-23 导出后打开：ask（原生是/否问询）+ openExported（opener openPath）；
+ *  E2E 记录 __zenE2e.exportAsks/openedPaths，ask 默认答否（exportAskStub 覆写测「选是」） */
 /** git 克隆端口（「从 Git 库打开」）：生产走 Tauri git_clone（600s 超时在 Rust 侧）；
  *  E2E web 模式记录到 harness 桩（__zenE2e.gitCalls，与 gitRun 同账本，恒答成功——
  *  克隆产物由内存 FS 用例自行预置） */
@@ -222,6 +224,17 @@ const exportPorts: ExportPorts = E2E
         }
         z.edgePrints.push({ pdfPath, htmlLen: html.length })
       },
+      async ask(message) {
+        const z = (window as unknown as Record<string, unknown>).__zenE2e as {
+          exportAsks: string[]
+          exportAskStub?: boolean
+        }
+        z.exportAsks.push(message)
+        return z.exportAskStub ?? false
+      },
+      async openExported(path) {
+        ;((window as unknown as Record<string, unknown>).__zenE2e as { openedPaths: string[] }).openedPaths.push(path)
+      },
     }
   : {
       async pickSavePath(defaultName) {
@@ -235,6 +248,10 @@ const exportPorts: ExportPorts = E2E
         const { invoke } = await import('@tauri-apps/api/core')
         await invoke('export_pdf_via_edge', { html, pdfPath })
       },
+      async ask(message, title) {
+        return ask(message, { title })
+      },
+      openExported: (path) => openPath(path),
     }
 
 export default function App() {

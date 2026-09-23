@@ -22,6 +22,8 @@ export default {
   saveFailed: '保存失败：{{reason}}',
   saveLayoutFailed: '保存布局失败：{{reason}}',
   exportFailed: '导出失败：{{reason}}',
+  // 2026-09-23 导出后打开：文件已落盘，打开失败不否定导出结果（toast + console）
+  exportOpenFailed: '打开导出文件失败：{{reason}}',
   copyImageFailed: '复制图片失败：{{reason}}',
   moveFailed: '移动失败：{{reason}}',
   importFailed: '导入失败：{{reason}}',

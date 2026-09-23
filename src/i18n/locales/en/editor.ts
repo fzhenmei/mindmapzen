@@ -163,6 +163,9 @@ const editor: Dict['editor'] = {
     // 2026-09-23 Word/PDF export batch: document entries (PDF chain lands in Task 6)
     word: 'Export Word',
     pdf: 'Export PDF',
+    // 2026-09-23 open-after-export: native ask dialog (title + message with file name)
+    askOpenTitle: 'Open exported file',
+    askOpen: 'Exported {{name}}. Open it now?',
   },
   errorPanel: {
     readTitle: 'Cannot open this file',

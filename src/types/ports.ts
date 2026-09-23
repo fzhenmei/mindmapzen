@@ -16,6 +16,12 @@ export interface ExportPorts {
   /** Edge 无头打印出 PDF（2026-09-23 导出 PDF）：生产为 Tauri export_pdf_via_edge；
    *  测试注入桩，E2E web 模式记录到 harness（__zenE2e.edgePrints） */
   runEdgePrint(html: string, pdfPath: string): Promise<void>
+  /** 原生是/否问询（2026-09-23 导出后打开）：生产为 Tauri dialog ask;测试注入桩，
+   *  E2E web 模式记录到 harness（__zenE2e.exportAsks）并默认答否（不阻塞既有用例） */
+  ask(message: string, title: string): Promise<boolean>
+  /** 系统默认程序打开文件（2026-09-23 导出后打开）：生产为 Tauri opener openPath；
+   *  测试注入桩，E2E web 模式记录到 harness（__zenE2e.openedPaths） */
+  openExported(path: string): Promise<void>
 }
 
 /** git 命令端口（M20 版本管理）：生产为 Tauri git_exec（cwd 限定工作区），

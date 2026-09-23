@@ -166,6 +166,9 @@ export default {
     // 2026-09-23 导出 Word/PDF 批：文档两入口（pdf 链路 Task 6 接通）
     word: '导出 Word',
     pdf: '导出 PDF',
+    // 2026-09-23 导出后询问直接打开：原生 ask 问询（标题 + 含文件名的消息）
+    askOpenTitle: '打开导出文件',
+    askOpen: '已导出 {{name}}，现在打开吗？',
   },
   errorPanel: {
     readTitle: '无法打开此文件',

@@ -218,8 +218,9 @@ const pngDataUrl = `data:image/png;base64,${btoa(String.fromCharCode(0x89, 0x50,
 const svgDataUrl = `data:image/svg+xml;base64,${btoa('<svg/>')}`
 
 // 既有用例的守卫桩：注册即弃（jsdom 无窗口关闭事件源），仅满足新 prop 契约
-// 既有用例的导出端口桩：多数用例不触发导出，注册即弃（仅满足新 prop 契约；runEdgePrint 2026-09-23 入端口面）
-const stubExportPorts = { pickSavePath: vi.fn(async () => null), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) }
+// 既有用例的导出端口桩：多数用例不触发导出，注册即弃（仅满足新 prop 契约；runEdgePrint 2026-09-23 入端口面；
+// ask/openExported 同日导出后打开入面——ask 默认答否，既有导出用例零改动）
+const stubExportPorts = { pickSavePath: vi.fn(async () => null), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} }
 const noopRegister: RegisterCloseGuard = () => () => {}
 const noopExitApp = () => {}
 const stubPickImage = vi.fn(async () => ({ name: 'stub.png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }))
@@ -1932,7 +1933,7 @@ const renderReady = async (exportPorts: ExportPorts): Promise<MindMapHandle> => 
 
 test('btn-export：打开三入口对话框，复制为图片走 writeImage 桩并盖「已复制」印', async () => {
   const writeImage = vi.fn()
-  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage, runEdgePrint: vi.fn(async () => {}) })
+  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage, runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   expect(screen.getByTestId('export-dialog')).toBeInTheDocument()
   fireEvent.click(screen.getByTestId('export-copy'))
@@ -1946,7 +1947,7 @@ test('btn-export：打开三入口对话框，复制为图片走 writeImage 桩�
 
 test('导出 PNG：pickSavePath 收到默认文件名，字节经 writeBytes 落盘并盖「已存」印', async () => {
   const pickSavePath = vi.fn(async (n: string) => `/ws/出/${n}`)
-  const handle = await renderReady({ pickSavePath, writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) })
+  const handle = await renderReady({ pickSavePath, writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   fireEvent.click(screen.getByTestId('export-png'))
   await waitFor(() => expect(pickSavePath).toHaveBeenCalledWith('a.png'))
@@ -1960,7 +1961,7 @@ test('导出 PNG：pickSavePath 收到默认文件名，字节经 writeBytes 落
 })
 
 test('导出 SVG：savePath 基名传给引擎 svg()（写入 svg <title>），落盘字节为 svg 串', async () => {
-  const handle = await renderReady({ pickSavePath: vi.fn(async () => '/ws/子/我的图.svg'), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) })
+  const handle = await renderReady({ pickSavePath: vi.fn(async () => '/ws/子/我的图.svg'), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   fireEvent.click(screen.getByTestId('export-svg'))
   await waitFor(() => expect(handle.doExport?.svg).toHaveBeenCalledWith('我的图'))
@@ -1970,7 +1971,7 @@ test('导出 SVG：savePath 基名传给引擎 svg()（写入 svg <title>），�
 })
 
 test('保存对话框取消（pickSavePath 返回 null）：不写盘不盖印不报错', async () => {
-  await renderReady({ pickSavePath: vi.fn(async () => null), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) })
+  await renderReady({ pickSavePath: vi.fn(async () => null), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   fireEvent.click(screen.getByTestId('export-png'))
   await act(async () => {}) // 排空取消链微任务
@@ -1983,7 +1984,7 @@ test('导出失败（写盘抛错）：中文横幅提示且不盖印', async ()
   fs.writeBytes = vi.fn(async () => {
     throw new Error('目标目录不存在')
   })
-  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) })
+  await renderReady({ pickSavePath: vi.fn(async () => '/ws/a.png'), writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   fireEvent.click(screen.getByTestId('export-png'))
   await waitFor(() => expect(useAppStore.getState().error).toContain('导出失败'))
@@ -1994,7 +1995,7 @@ test('导出失败（写盘抛错）：中文横幅提示且不盖印', async ()
 test('Esc 关闭导出对话框：无任何导出动作', async () => {
   const pickSavePath = vi.fn()
   const writeImage = vi.fn()
-  const handle = await renderReady({ pickSavePath, writeImage, runEdgePrint: vi.fn(async () => {}) })
+  const handle = await renderReady({ pickSavePath, writeImage, runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   // ZenDialog 已迁移 Radix Dialog：Esc 经其 document 捕获监听 → onClose
   fireEvent.keyDown(screen.getByTestId('export-dialog'), { key: 'Escape' })
@@ -2008,7 +2009,7 @@ test('保存对话框异常（pickSavePath 抛错）：中文横幅提示且不�
   const pickSavePath = vi.fn(async () => {
     throw new Error('对话框插件崩溃')
   })
-  await renderReady({ pickSavePath, writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}) })
+  await renderReady({ pickSavePath, writeImage: vi.fn(), runEdgePrint: vi.fn(async () => {}), ask: async () => false, openExported: async () => {} })
   fireEvent.click(screen.getByTestId('btn-export'))
   fireEvent.click(screen.getByTestId('export-png'))
   await waitFor(() => expect(useAppStore.getState().error).toContain('导出失败'))

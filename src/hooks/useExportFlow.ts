@@ -4,6 +4,8 @@
 // 失败经 setError 出中文横幅。
 // 2026-09-23 导出 Word/PDF：Word/PDF 失败走 toast+console（编辑器侧惯例），
 // 原有三入口保持注入 onError（setError 横幅）不变
+// 2026-09-23 导出后打开：四个产文件入口（PNG/SVG/Word/PDF）onSuccess 后 offerOpen
+//（原生 ask 问询 + opener openPath 系统默认程序打开；「复制为图片」无文件不问）
 import { useState, type RefObject } from 'react'
 import { i18n } from '../i18n'
 import { copyPngToClipboard, exportPngToFile, exportSvgToFile } from '../services/exportImage'
@@ -48,6 +50,18 @@ export function useExportFlow(
 ): ExportFlow {
   const [open, setOpen] = useState(false)
 
+  // 导出成功后询问直接打开（2026-09-23）：文件已落盘，问询/打开失败不否定导出结果
+  // ——catch 显式双出口（console + toast）；用户答"否"是正常路径，静默返回
+  const offerOpen = async (savePath: string, name: string): Promise<void> => {
+    try {
+      if (!(await ports.ask(i18n.t('editor.export.askOpen', { name }), i18n.t('editor.export.askOpenTitle')))) return
+      await ports.openExported(savePath)
+    } catch (e) {
+      console.error('打开导出文件失败', e)
+      showToast(i18n.t('errors.exportOpenFailed', { reason: String(e) }))
+    }
+  }
+
   // pickSavePath 返回 null = 用户取消保存对话框：静默放弃（不写盘/不盖印/不报错）；
   // 对话框插件异常与其他导出错误同路进 catch——不挪进 try 会成为未处理拒绝、无横幅
   const runExport = async (kind: 'png' | 'svg'): Promise<void> => {
@@ -59,6 +73,7 @@ export function useExportFlow(
       if (kind === 'png') await exportPngToFile(mm, savePath, adapter.writeBytes.bind(adapter))
       else await exportSvgToFile(mm, savePath, adapter.writeBytes.bind(adapter))
       onSuccess('saved')
+      await offerOpen(savePath, `${mapName}.${kind}`)
     } catch (e) {
       onError(i18n.t('errors.exportFailed', { reason: String(e) }))
     }
@@ -98,6 +113,8 @@ export function useExportFlow(
       if (kind === 'word') await adapter.writeBytes(savePath, await buildDocxFromBody(body, mapName))
       else await ports.runEdgePrint(buildPrintHtml(body, mapName), savePath)
       onSuccess('saved')
+      // 文件名取保存路径基名（含用户可能改写的真实扩展）
+      await offerOpen(savePath, savePath.split(/[\\/]/).pop() ?? mapName)
     } catch (e) {
       console.error(`导出 ${kind === 'word' ? 'Word' : 'PDF'} 失败`, e)
       showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }))

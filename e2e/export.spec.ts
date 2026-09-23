@@ -109,3 +109,34 @@ test('导出 PDF：runEdgePrint 桩记录目标路径与打印 HTML', async ({ p
     .toBeGreaterThan(0)
   await expect(page.getByTestId('save-stamp')).toHaveText('已存')
 })
+
+// 导出后询问直接打开（2026-09-23）：E2E 桩 ask 默认答否（上方既有用例零改动覆盖该分支）；
+// 本用例覆写 exportAskStub=true 测「选是」——openExported 记录目标路径、exportAsks 有问询消息
+test('导出后询问打开：exportAskStub 答是 → openExported 收目标路径，exportAsks 有消息', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('打开问询')
+  await page.getByTestId('btn-confirm').click()
+  await expect(page.getByText('打开问询').first()).toBeVisible()
+  await page.evaluate(() => {
+    ;(window as unknown as { __zenE2e: { exportAskStub?: boolean } }).__zenE2e.exportAskStub = true
+  })
+  await page.getByTestId('btn-export').click()
+  await page.getByTestId('export-pdf').click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const z = (window as unknown as { __zenE2e: { openedPaths: string[] } }).__zenE2e
+        return z.openedPaths[0] ?? ''
+      }),
+    )
+    .toBe('/ws/导出/打开问询.pdf')
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __zenE2e: { exportAsks: string[] } }).__zenE2e.exportAsks.length,
+      ),
+    )
+    .toBeGreaterThanOrEqual(1)
+})
