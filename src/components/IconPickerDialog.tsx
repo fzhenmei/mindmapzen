@@ -24,6 +24,11 @@ type GridIcon = { name: string; svg: string | null; loading: boolean }
  *  图标丢失运行时注册，保存后当场就渲染空占位（重开恢复由 MindMapCanvas 打开期补注册兜底） */
 const uncuratedSvgCache = new Map<string, string>()
 
+/** 非精选加载失败名单（模块级，与 svg 缓存同生命周期）：名字不在 lucide 全集等失败
+ *  的宽容记录。保存钮的「svg 在途禁用」据此放行失败名（否则永久锁死）；失败名不注册
+ *  （extras 空），md 标记照常携带——重开补注册再宽容丢弃，与手写非法名同语义 */
+const uncuratedFailed = new Set<string>()
+
 /** 图标管理器（M18 想法9：节点签名图标的唯一增删 UI 通道）：
  *  精选 64 网格 + 全集搜索（lucide tags.json 懒加载，名字/标签匹配），
  *  点选 toggle 高亮，保存即 SET_NODE_ICON。md 句尾 ::name 标记是事实源，
@@ -67,6 +72,7 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         const svg = await loadIconSvg(name)
         if (cancelled) return
         if (svg !== null) uncuratedSvgCache.set(name, svg)
+        else uncuratedFailed.add(name)
         setResults((rs) => rs.map((r) => (r.name === name ? { ...r, svg, loading: false } : r)))
       }
     })()
@@ -101,6 +107,9 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
         if (svg !== null) {
           uncuratedSvgCache.set(n, svg)
           bumpChipTick((t) => t + 1)
+        } else {
+          uncuratedFailed.add(n)
+          bumpChipTick((t) => t + 1)
         }
       }
     })()
@@ -117,6 +126,13 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
       return svg === undefined ? undefined : { name: n, icon: svg }
     })
     .filter((r): r is { name: string; icon: string } => r !== undefined)
+
+  // 保存门控（2026-09 竞态根因修复）：所选非精选图标 svg 仍在途（未入缓存也未失败）时
+  // 禁用保存——否则 extras 同步派生自异步缓存，静默滤掉在途图标（名字落 md、注册丢失、
+  // 画布空占位）。失败名不在拦截列（宽容解锁，避免永久锁死保存）
+  const svgInFlight = picked.some(
+    (n) => CURATED_ICONS[n] === undefined && !uncuratedSvgCache.has(n) && !uncuratedFailed.has(n),
+  )
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onCancel() }}>
@@ -191,7 +207,13 @@ export default function IconPickerDialog({ nodeText, current, onCancel, onConfir
           <Button variant="secondary" size="sm" data-testid="icon-cancel" onClick={onCancel}>
             {t('common.cancel')}
           </Button>
-          <Button size="sm" data-testid="icon-save" onClick={() => onConfirm(picked, extras)}>
+          <Button
+            size="sm"
+            data-testid="icon-save"
+            disabled={svgInFlight}
+            title={svgInFlight ? t('editor.iconPicker.svgLoading') : undefined}
+            onClick={() => onConfirm(picked, extras)}
+          >
             {t('common.save')}
           </Button>
         </DialogFooter>

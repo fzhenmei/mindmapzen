@@ -35,13 +35,18 @@ async function buildTree(page: Page, children: string[]): Promise<string> {
   return name
 }
 
-/** 全画布圈选（覆盖所有节点含根）：ctrl=true 走 Ctrl+左键，否则裸右键 */
+/** 全画布圈选（覆盖所有节点含根）：ctrl=true 走 Ctrl+左键，否则裸右键。
+ *  mouse.up 前持留 >300ms（引擎 Select.checkInNodes 节流窗）：拖拽期间节流窗内的
+ *  调用被丢弃、命中检测延迟到窗尾才以最新坐标执行——快速甩拖 + 高负载下曾出现
+ *  「mouseup 先于最终矩形评估」的时序竞态（浮条未渲染，2026-09 抖动）。持留跨过
+ *  节流窗让最终矩形在松键前完成选择 + mouseup 的变更兜底即时发射，输入侧确定性化 */
 async function marqueeAll(page: Page, ctrl: boolean): Promise<void> {
   if (ctrl) await page.keyboard.down('Control')
   const box = (await page.getByRole('application').boundingBox())!
   await page.mouse.move(box.x + 60, box.y + 60)
   await page.mouse.down({ button: ctrl ? 'left' : 'right' })
   await page.mouse.move(box.x + box.width - 60, box.y + box.height - 60, { steps: 12 })
+  await page.waitForTimeout(350)
   await page.mouse.up({ button: ctrl ? 'left' : 'right' })
   if (ctrl) await page.keyboard.up('Control')
 }
@@ -66,6 +71,10 @@ test('右键圈选全部节点：浮条计数，浮条删除只剩根，Ctrl+Z �
 
 test('Ctrl+左键圈选：浮条计数，Del 键批删，左键点空白清选后浮条消失', async ({ page }) => {
   test.setTimeout(30_000)
+  // 常驻取证（2026-09 抖动排查）：本用例曾全量长跑下偶发「圈选生效但浮条未渲染」
+  // （activeCount 未达 2+），取证条件下 7 轮未复现；pageerror/console 落 runner 输出，
+  // 再现时现场自留（根因未定，见 memory/e2e-flaky-known）
+  page.on('pageerror', (e) => console.log('[pageerror]', String(e)))
   const name = await buildTree(page, ['甲', '乙'])
   await marqueeAll(page, true)
   await expect(page.getByTestId('multi-select-bar')).toContainText('已选 3 个节点')

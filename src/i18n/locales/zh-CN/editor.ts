@@ -129,6 +129,8 @@ export default {
     title: '节点图标',
     removeIcon: '移除 {{name}}',
     searchPlaceholder: '搜索 lucide 全集（名字或语义标签，如 flag / 时间）',
+    // 保存门控:所选非精选图标 svg 在途时的保存钮悬停提示
+    svgLoading: '图标加载中…',
   },
   tagPicker: {
     title: '节点标签',
