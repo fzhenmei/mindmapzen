@@ -67,6 +67,13 @@ export async function installE2eHarness(): Promise<void> {
     // writeImage 记录图片字节长度（exportedBytes > 0 断言）
     savePaths: [] as string[],
     exportedBytes: null as number | null,
+    // Edge 无头打印桩（2026-09-23 导出 PDF）：App E2E 装配的 runEdgePrint 记录目标路径与 HTML 长度
+    edgePrints: [] as Array<{ pdfPath: string; htmlLen: number }>,
+    // 导出后打开问询桩（2026-09-23）：App E2E 装配的 ask 记录消息并默认答否;
+    // exportAskStub 覆写为 true 可测「选是」分支;openExported 记录目标路径
+    exportAsks: [] as string[],
+    exportAskStub: undefined as boolean | undefined,
+    openedPaths: [] as string[],
     // 导入文件桩：默认返回 md 内置样例（含 1 个忽略块「忽略段。」——2026-09-06 备注合并后
     // 标题下段落归正文不再忽略，样例把忽略段放在根 H1 之前（根前无归属仍进 ignored），
     // 维持导入预览确认链路可触发）；M21 起支持 xmind 用例覆写 __zenE2e.pickImportStub

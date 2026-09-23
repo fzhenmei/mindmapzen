@@ -28,7 +28,7 @@ export default {
     aiImageHeader: '> 图片为本地绝对路径，请用工具读取',
     save: '保存（Ctrl+S）',
     bodyPanel: '撰写选中节点的正文',
-    exportImage: '导出或复制为图片',
+    exportImage: '导出',
     zoomOut: '缩小（Ctrl+滚轮）',
     zoomIn: '放大（Ctrl+滚轮）',
     centerRoot: '根居中：保持缩放回根',
@@ -156,10 +156,21 @@ export default {
     fileFilter: '图片',
   },
   export: {
-    title: '导出或复制图片',
+    title: '导出',
+    // 2026-09-23 对话框改两组两列网格：分组标题（图片组/文档组）
+    groupImage: '图片',
     png: '导出 PNG',
     svg: '导出 SVG',
     copy: '复制为图片',
+    groupDoc: '文档',
+    // 2026-09-23 导出 Word/PDF 批：文档两入口（pdf 链路 Task 6 接通）
+    word: '导出 Word',
+    pdf: '导出 PDF',
+    // 2026-09-23 导出后询问直接打开：原生 ask 问询（标题 + 含文件名的消息）
+    askOpenTitle: '打开导出文件',
+    askOpen: '已导出 {{name}}，现在打开吗？',
+    // 2026-09-23 导出中等待提示：确认保存后渲染/打印空窗的粘住式占位（Word/PDF 链）
+    exporting: '正在导出 {{kind}}…',
   },
   errorPanel: {
     readTitle: '无法打开此文件',

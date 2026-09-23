@@ -1,4 +1,5 @@
 // src/components/ToastHost.tsx —— 轻提示宿主（App shell 常驻）：底部居中浮条，2s 自动消失
+//（ToastItem.durationMs 可逐条覆盖——错误类长文案 6s,2026-09-23 可读性)
 import { useEffect, useRef, useState } from 'react'
 import { subscribeToast, type ToastItem } from '../services/toast'
 
@@ -12,7 +13,12 @@ export default function ToastHost() {
       subscribeToast((t) => {
         if (timer.current !== null) window.clearTimeout(timer.current)
         setItem(t)
-        if (t !== null) timer.current = window.setTimeout(() => setItem(null), AUTO_HIDE_MS)
+        // 非有限时长不排自动消失(2026-09-23 导出等待提示):setTimeout(fn, Infinity)
+        // 会被宿主钳到 0 立即消失,必须 isFinite 守卫;未传 durationMs 时 ?? 默认值恒有限,
+        // 普通 toast 2s 行为不变
+        if (t !== null && Number.isFinite(t.durationMs ?? AUTO_HIDE_MS)) {
+          timer.current = window.setTimeout(() => setItem(null), t.durationMs ?? AUTO_HIDE_MS)
+        }
       }),
     [],
   )

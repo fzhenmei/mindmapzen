@@ -1,7 +1,9 @@
 mod ai_stream;
 mod sse;
+mod export_pdf;
 
 use ai_stream::{ai_chat_abort, ai_chat_start};
+use export_pdf::export_pdf_via_edge;
 
 #[tauri::command]
 fn trash_delete(path: String) -> Result<(), String> {
@@ -237,7 +239,8 @@ pub fn run() {
             set_titlebar_colors,
             reset_cursor_display,
             ai_chat_start,
-            ai_chat_abort
+            ai_chat_abort,
+            export_pdf_via_edge
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

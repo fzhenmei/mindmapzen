@@ -30,7 +30,7 @@ const editor: Dict['editor'] = {
     aiImageHeader: '> Images are local absolute paths; read them with your tools',
     save: 'Save (Ctrl+S)',
     bodyPanel: 'Write body text for the selected node',
-    exportImage: 'Export or copy as image',
+    exportImage: 'Export',
     zoomOut: 'Zoom out (Ctrl+scroll)',
     zoomIn: 'Zoom in (Ctrl+scroll)',
     centerRoot: 'Center root: return to root keeping zoom',
@@ -153,10 +153,21 @@ const editor: Dict['editor'] = {
     fileFilter: 'Images',
   },
   export: {
-    title: 'Export or copy image',
+    title: 'Export',
+    // 2026-09-23 dialog reworked into two-group grid: section labels
+    groupImage: 'Images',
     png: 'Export PNG',
     svg: 'Export SVG',
     copy: 'Copy as image',
+    groupDoc: 'Documents',
+    // 2026-09-23 Word/PDF export batch: document entries (PDF chain lands in Task 6)
+    word: 'Export Word',
+    pdf: 'Export PDF',
+    // 2026-09-23 open-after-export: native ask dialog (title + message with file name)
+    askOpenTitle: 'Open exported file',
+    askOpen: 'Exported {{name}}. Open it now?',
+    // 2026-09-23 in-export waiting hint: sticky placeholder for the render/print gap (Word/PDF chain)
+    exporting: 'Exporting {{kind}}…',
   },
   errorPanel: {
     readTitle: 'Cannot open this file',

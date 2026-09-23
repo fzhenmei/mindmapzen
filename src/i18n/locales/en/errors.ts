@@ -21,6 +21,8 @@ const errors: Dict['errors'] = {
   saveFailed: 'Failed to save: {{reason}}',
   saveLayoutFailed: 'Failed to save layout: {{reason}}',
   exportFailed: 'Failed to export: {{reason}}',
+  // 2026-09-23 open-after-export: file already on disk; failure does not negate the export
+  exportOpenFailed: 'Failed to open exported file: {{reason}}',
   copyImageFailed: 'Failed to copy image: {{reason}}',
   moveFailed: 'Failed to move: {{reason}}',
   importFailed: 'Failed to import: {{reason}}',
