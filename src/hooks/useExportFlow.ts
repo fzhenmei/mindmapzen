@@ -50,6 +50,9 @@ export function useExportFlow(
 ): ExportFlow {
   const [open, setOpen] = useState(false)
 
+  // 错误类轻提示时长(2026-09-23 报障可读性):文案含原因/路径,2s 默认读不完——6s
+  const ERROR_TOAST_MS = 6000
+
   // 导出成功后询问直接打开（2026-09-23）：文件已落盘，问询/打开失败不否定导出结果
   // ——catch 显式双出口（console + toast）；用户答"否"是正常路径，静默返回
   const offerOpen = async (savePath: string, name: string): Promise<void> => {
@@ -58,7 +61,7 @@ export function useExportFlow(
       await ports.openExported(savePath)
     } catch (e) {
       console.error('打开导出文件失败', e)
-      showToast(i18n.t('errors.exportOpenFailed', { reason: String(e) }))
+      showToast(i18n.t('errors.exportOpenFailed', { reason: String(e) }), undefined, ERROR_TOAST_MS)
     }
   }
 
@@ -102,7 +105,7 @@ export function useExportFlow(
       md = serialize(engineTreeToZen(mm.getData()).tree, registry.byUid, { display: true })
     } catch (e) {
       console.error(`导出 ${kind === 'word' ? 'Word' : 'PDF'} 失败：序列化`, e)
-      showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }))
+      showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }), undefined, ERROR_TOAST_MS)
       return
     }
     try {
@@ -117,7 +120,7 @@ export function useExportFlow(
       await offerOpen(savePath, savePath.split(/[\\/]/).pop() ?? mapName)
     } catch (e) {
       console.error(`导出 ${kind === 'word' ? 'Word' : 'PDF'} 失败`, e)
-      showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }))
+      showToast(i18n.t('errors.exportFailed', { reason: e instanceof Error ? e.message : String(e) }), undefined, ERROR_TOAST_MS)
     }
   }
 

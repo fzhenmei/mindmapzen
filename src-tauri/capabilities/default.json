@@ -11,7 +11,11 @@
     "core:window:allow-close",
     "dialog:default",
     "opener:default",
-    "opener:allow-open-path",
+    {
+      "comment": "open_path 须带 scope 条目——裸授权时插件 allow 列表为空、一切路径被 ForbiddenPath 拒绝(2026-09-23 导出后打开报障根因,同修 openInEditor)",
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    },
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-html",
     "clipboard-manager:allow-write-image",

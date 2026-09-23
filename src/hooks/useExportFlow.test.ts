@@ -54,16 +54,20 @@ function makePorts(savePath: string | null): ExportPorts {
   }
 }
 
-/** 轻提示观察（真 toast 服务订阅，非 mock）：订阅载荷是 ToastItem，落 .text 串 */
+/** 轻提示观察（真 toast 服务订阅，非 mock）：订阅载荷是 ToastItem，落 .text 串
+ *  与 durationMs（2026-09-23 报障可读性：错误类 6s、成功类缺省） */
 const toastTexts: (string | null)[] = []
+const toastDurations: (number | undefined)[] = []
 subscribeToast((item) => {
   toastTexts.push(item === null ? null : item.text)
+  toastDurations.push(item === null ? undefined : item.durationMs)
 })
 
 describe('useExportFlow：导出 Word', () => {
   beforeEach(() => {
     showToast('') // 清残留（覆盖式单条）
     toastTexts.length = 0
+    toastDurations.length = 0
     vi.clearAllMocks()
   })
 
@@ -245,6 +249,8 @@ describe('useExportFlow：导出成功后询问直接打开', () => {
       result.current.actions.onWord()
     })
     await waitFor(() => expect(toastTexts.at(-1)).toMatch(/打开导出文件失败/))
+    // 错误类轻提示延长 6s(2026-09-23 报障可读性:2s 读不完带原因/路径的文案)
+    expect(toastDurations.at(-1)).toBe(6000)
     expect(spy).toHaveBeenCalled()
     expect(stamp).toHaveBeenCalledWith('saved')
     spy.mockRestore()
