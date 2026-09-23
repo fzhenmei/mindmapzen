@@ -9,7 +9,7 @@ import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
 import type { AiToolEnv } from '../services/ai/tools'
-import type { WriteClipboard } from '../services/clipboard'
+import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import { createBasketEnginePort } from '../editor/basketEngine'
@@ -63,6 +63,8 @@ interface Props {
   openInEditor: (path: string) => void
   /** 剪贴板写入端口：生产为 Tauri 插件实现，测试注入内存实现 */
   writeClipboard: WriteClipboard
+  /** 富文本剪贴板写入端口（Markdown 视图公众号复制，2026-09）：App 注入，E2E 记录到 harness 桩 */
+  writeHtmlClipboard: WriteHtmlClipboard
   /** 导出与复制图片端口（M5b）：生产为 Tauri save 对话框 + writeImage，测试注入记录桩 */
   exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
@@ -75,7 +77,7 @@ interface Props {
   readClipboardImage: () => Promise<{ name: string; bytes: Uint8Array } | null>
 }
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, writeHtmlClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
   const { t } = useTranslation()
   const { adapter, markDirty, clearDirty, exitEditor, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
@@ -601,6 +603,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           <MarkdownView
             mmRef={mmRef}
             registry={registry}
+            writeHtmlClipboard={writeHtmlClipboard}
             onOutlineVisibleChange={setMdOutlineVisible}
             onClose={() => switchView('mindmap')}
           />

@@ -215,5 +215,9 @@ export default {
     // 序列化失败占位（毒节点家族：换行/列表层正文断言）
     renderFailTitle: 'Markdown 渲染失败',
     renderFailBody: '当前导图数据无法序列化为文档，请回导图检查节点内容（如文本中含换行）',
+    // 复制为公众号格式（2026-09 视图内按钮）：失败 {{reason}} = 全链异常串
+    copyWechat: '复制为公众号格式',
+    copiedToast: '已复制为公众号格式，可到公众号编辑器粘贴',
+    copyWechatFailed: '复制为公众号格式失败：{{reason}}',
   },
 }

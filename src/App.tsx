@@ -377,6 +377,7 @@ export default function App() {
         mdPath={currentMdPath}
         openInEditor={(p) => void openPath(p)}
         writeClipboard={writeClipboard}
+        writeHtmlClipboard={writeHtmlClipboard}
         exportPorts={exportPorts}
         registerCloseGuard={registerCloseGuard}
         exitApp={exitApp}

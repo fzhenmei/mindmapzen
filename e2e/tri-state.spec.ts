@@ -47,6 +47,39 @@ test('三态切换与 Markdown 渲染：视图组/Ctrl+2/Esc 全链', async ({ p
   expect(pageErrors).toEqual([])
 })
 
+// 2026-09 发布复制进画布：Markdown 视图右上角「复制为公众号格式」钮走真渲染全链
+// （与案头树右键同链，数据源 = 内存序列化——所见即所复制，含未保存修改），
+// 富文本剪贴板经 App E2E 装配记录到 __zenE2e.lastCopiedHtml；真实粘贴往返归真机项
+test('Markdown 态「复制为公众号格式」：视图内按钮出内联样式 HTML + 成功轻提示', async ({ page }) => {
+  test.setTimeout(30_000)
+  const pageErrors: string[] = []
+  page.on('pageerror', (e) => pageErrors.push(String(e)))
+  await page.goto('/?e2e=1')
+  await seed(page)
+
+  await page.getByTestId('btn-view-markdown').click()
+  await expect(page.getByTestId('markdown-view')).toBeVisible()
+  await page.getByTestId('btn-copy-wechat').click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+      ),
+    )
+    .toContain('<section')
+  const html = await page.evaluate(
+    () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
+  )
+  // 全量文档进产物：section 根承担正文排版，标题在真渲染产物上获得内联样式
+  expect(html).toContain('三态回归')
+  expect(html).toContain('章节甲')
+  expect(html).toContain('font-size: 15px')
+  expect(html).toContain('font-size: 20px')
+  // 成功轻提示：ToastHost（z-50）浮于 z-[9] 视图之上，可读可断言
+  await expect(page.getByTestId('toast')).toContainText('已复制为公众号格式')
+  expect(pageErrors).toEqual([])
+})
+
 test('工具栏矩阵：Markdown 态隐藏撤销/缩放，大纲钮双向切换', async ({ page }) => {
   test.setTimeout(30_000)
   const pageErrors: string[] = []

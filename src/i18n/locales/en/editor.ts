@@ -213,6 +213,10 @@ const editor: Dict['editor'] = {
     // Serialize-failure placeholder (poison-node family: newline / body-in-list assertion)
     renderFailTitle: 'Markdown render failed',
     renderFailBody: 'Current map data cannot be serialized; check node text (e.g. embedded line breaks) in mind map view',
+    // Copy for WeChat (2026-09 in-view button): {{reason}} = full-chain error string
+    copyWechat: 'Copy for WeChat',
+    copiedToast: 'Copied for WeChat — paste into the WeChat article editor',
+    copyWechatFailed: 'Copy for WeChat failed: {{reason}}',
   },
 }
 export default editor

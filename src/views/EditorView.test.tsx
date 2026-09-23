@@ -225,6 +225,8 @@ const noopExitApp = () => {}
 const stubPickImage = vi.fn(async () => ({ name: 'stub.png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }))
 // 剪贴板读图桩（粘贴截图）：缺省返回固定字节（与选图桩同款魔数）；用例可覆写返回 null 测空剪贴板
 const stubReadClipboardImage = vi.fn(async () => ({ name: '粘贴.png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }))
+// 富文本剪贴板桩（Markdown 视图公众号复制）：本文件不断言其调用，防缺 prop
+const stubWriteHtml = vi.fn(async () => {})
 
 beforeEach(async () => {
   fs = new MemoryFsAdapter()
@@ -263,6 +265,7 @@ test('打开文档渲染画布并显示名称', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -280,6 +283,7 @@ test('解析失败显示错误面板与原文', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -299,6 +303,7 @@ test('读取失败显示错误面板（分型文案，无修复按钮——文�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -317,6 +322,7 @@ test('Ctrl+S 保存 md 与 sidecar 并清除脏标记', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -351,6 +357,7 @@ test('保存采集连线弯曲：引擎 offsets → sidecar linkAdjust 路径对
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -391,6 +398,7 @@ test('删线不复活：引擎 targets 删一后保存，md 缺该标记（注�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -429,6 +437,7 @@ test('打开时 sidecar linkAdjust 注入画布弯曲恢复', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -450,6 +459,7 @@ test('返回文件库前冲刷未保存修改', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -471,6 +481,7 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -509,6 +520,7 @@ test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -536,6 +548,7 @@ test('复制整图：无选中时写入完整 md', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -559,6 +572,7 @@ test('复制文件路径（砚栏路径钮，2026-09）：点击以 mdPath 绝�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -587,6 +601,7 @@ test('复制文件路径（Windows，2026-09 修复）：混用分隔符的 mdPa
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -613,6 +628,7 @@ test('复制子树：选中 uid 时只写该分支（从 H1 重计）', async ()
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -651,6 +667,7 @@ test('复制多选：圈选/Ctrl 多选时只写所选子树（逐棵从 H1 起�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -688,6 +705,7 @@ test('复制多选含嵌套：祖先与后代同选时后代不重复展开（�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -715,6 +733,7 @@ test('复制多选全陈旧（uid 均未命中数据树）→ 回退整图（与
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -741,6 +760,7 @@ test('快捷键 Ctrl+C 触发复制；输入域内放行原生复制', async () 
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -780,6 +800,7 @@ test('复制带图节点：图片相对路径转绝对 + 头部说明行（头�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -814,6 +835,7 @@ const copyWith = async (settings: CopySettings, tree: EngineNode = noteLinkTree(
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -910,6 +932,7 @@ test('连线净化：打开后画布文本剥离标记，保存句尾注入（�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -939,6 +962,7 @@ test('连线净化：源节点改名后保存不断链（注册表以 uid 为键
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -964,6 +988,7 @@ test('显式保存成功盖「已存」印记，1.2s 后自动消失', async () 
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -999,6 +1024,7 @@ test('干净状态下保存为 no-op：不盖印记（无用户可感知的写�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1020,6 +1046,7 @@ test('复制成功盖「已复制为 Markdown」墨青印记（替代按钮内 �
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1049,6 +1076,7 @@ test('复制序列化抛错（节点文本含换行）→ 错误横幅可见而�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1070,6 +1098,7 @@ test('引擎节点复制上报盖「已复制为节点」墨青印记（Ctrl+Shi
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -1092,6 +1121,7 @@ test('同会话到期卸载后再次保存可再次盖印（回归：stamp state
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1131,6 +1161,7 @@ test('1.2s 内连续两次复制：印记持续显示且计时重置（不提前
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1174,6 +1205,7 @@ test('多行粘贴拆子节点：首行替换被编辑节点文本，其余行�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1217,6 +1249,7 @@ test('多行粘贴拆分后无有效行（纯空白）不执行命令', async ()
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1241,6 +1274,7 @@ test('多行粘贴 uid 未命中渲染树时静默放弃（无命令执行）', 
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1290,6 +1324,7 @@ const renderDirtyAndClose = async (guard: ReturnType<typeof makeGuardStub>) => {
       registerCloseGuard={guard.register}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={exitApp}
     />,
   )
@@ -1372,6 +1407,7 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
       registerCloseGuard={guard.register}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={exitApp}
     />,
   )
@@ -1429,6 +1465,7 @@ test('写盘窗口内的新编辑不丢：清脏被修订号拦下并补存一�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1459,6 +1496,7 @@ test('在途保存时点返回：等待补存轮落盘完成才回文件库（I1
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1537,6 +1575,7 @@ const renderIgnoredMap = async (guard?: ReturnType<typeof makeGuardStub>) => {
       exitApp={exitApp}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
     />,
   )
   await screen.findByTestId('ignored-banner')
@@ -1656,7 +1695,8 @@ test('忽略块横幅展开显示中文类型名（段落而非 paragraph）', a
 
 test('视图工具组：−/＋ 缩放与根居中/适配可触发（数学由 viewOps 单测覆盖）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage} />)
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   // 锁定 emit 时实例断言（onCanvasReady 置 engineReady 会重渲、工厂每渲重建 fakeHandle）
@@ -1680,6 +1720,7 @@ test('布局切换：点击写 sidecar 值（保存时落盘）且不置脏', as
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1708,6 +1749,7 @@ test('更多布局下拉切换时间轴：走同一切换链路（引擎 setLayo
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1737,6 +1779,7 @@ test('打开文档：sidecar.layout 作为画布初值并点亮对应按钮', as
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1765,6 +1808,7 @@ test('布局切换：干净状态下 sidecar 即时落盘，仅写 sidecar 不�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1796,6 +1840,7 @@ test('布局切换：sidecar 即时落盘失败提示横幅（偏好丢失不静
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -1811,7 +1856,8 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
     await fs.writeTextFileAtomic('/ws/bare.md', '# 裸图\n') // 无 .zen.json
     useAppStore.setState({ preferredLayout: 'logic' })
     render(<EditorView mdPath="/ws/bare.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage} />)
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml} />)
     await screen.findByTestId('fake-canvas')
     expect(screen.getByTestId('layout-logic')).toHaveAttribute('data-state', 'on')
   })
@@ -1819,7 +1865,8 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
   test('切换布局会记住偏好', async () => {
     useAppStore.setState({ preferredLayout: 'mindmap' })
     render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage} />)
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml} />)
     await screen.findByTestId('fake-canvas')
     ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     fireEvent.click(screen.getByTestId('layout-org'))
@@ -1831,7 +1878,8 @@ describe('偏好布局（验收轮三：记住默认视图）', () => {
 
 test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage} />)
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   expect(screen.getByTestId('btn-copy')).toHaveAttribute('data-scope', 'full')
@@ -1845,7 +1893,8 @@ test('复制按钮 data-scope 随选中态切换（E2E 信号）', async () => {
 
 test('复制按钮 data-scope 多选态为 multi（2026-09-18 多选复制，E2E 信号）', async () => {
   render(<EditorView mdPath="/ws/a.md" openInEditor={vi.fn()} writeClipboard={vi.fn(async () => {})} exportPorts={stubExportPorts} registerCloseGuard={(h) => { void h; return () => {} }} exitApp={vi.fn()} pickImageFile={stubPickImage}
-      readClipboardImage={stubReadClipboardImage} />)
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml} />)
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
   act(() => {
@@ -1874,6 +1923,7 @@ const renderReady = async (exportPorts: {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
             exportPorts={exportPorts}
     />,
@@ -1982,6 +2032,7 @@ test('回退/重做按钮：初始双禁用；历史态事件驱动启用；点�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -2014,6 +2065,7 @@ test('栈态边界：回退到基线（index=0）撤销钮禁用重做可用；�
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -2045,6 +2097,7 @@ const renderForSwitch = async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -2282,6 +2335,7 @@ describe('打开失败优雅恢复（2026-09）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -2355,6 +2409,7 @@ describe('外部变更冲突防护', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -2482,6 +2537,7 @@ const renderReadySelected = async (): Promise<MindMapHandle> => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
           />,
   )
@@ -2716,6 +2772,7 @@ test('关闭守卫先冲防抖窗内草稿再走三态（终审 I2：干净图�
       registerCloseGuard={guard.register}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={exitApp}
     />,
   )
@@ -2982,6 +3039,7 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3153,6 +3211,7 @@ describe('看板模式（2026-09 Task 7）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3191,6 +3250,7 @@ describe('看板模式（2026-09 Task 7）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3278,6 +3338,7 @@ describe('看板模式（2026-09 Task 7）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3320,6 +3381,7 @@ describe('画布三态装配（2026-09 M1）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3398,6 +3460,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
           registerCloseGuard={noopRegister}
           pickImageFile={stubPickImage}
           readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
           exitApp={noopExitApp}
         />,
       )
@@ -3441,6 +3504,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3493,6 +3557,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
           registerCloseGuard={noopRegister}
           pickImageFile={stubPickImage}
           readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
           exitApp={noopExitApp}
         />,
       )
@@ -3524,6 +3589,7 @@ describe('工作台跨图定位（2026-09 spec §5）', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
@@ -3553,6 +3619,7 @@ test('返回钮:btn-back 恒落案头(两空间收敛,不再有工作台来路)'
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -3574,6 +3641,7 @@ test('Alt+← 与返回钮同效(案头来路落案头)', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -3593,6 +3661,7 @@ test('砚栏设置钮打开 App 级设置对话框', async () => {
       registerCloseGuard={noopRegister}
       pickImageFile={stubPickImage}
       readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
       exitApp={noopExitApp}
     />,
   )
@@ -3623,6 +3692,7 @@ describe('点子篮子：整理入口与引擎端口注册', () => {
         registerCloseGuard={noopRegister}
         pickImageFile={stubPickImage}
         readClipboardImage={stubReadClipboardImage}
+        writeHtmlClipboard={stubWriteHtml}
         exitApp={noopExitApp}
       />,
     )
