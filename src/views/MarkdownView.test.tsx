@@ -1,4 +1,5 @@
 // src/views/MarkdownView.test.tsx —— MarkdownView：内存树序列化渲染 + data_change 重算 + Esc 回导图 + 大纲偏好。
+// （「复制为公众号格式」出口已移砚栏 Markdown 态专有钮，逻辑测试见 useWechatCopy.test）
 // MarkdownPreview mock 为透传 div（ChatPanel.test 同款），断言序列化文本经 props 到位。
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { createRef } from 'react'

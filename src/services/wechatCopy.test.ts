@@ -2,7 +2,7 @@
 // 映射、编排链(渲染走 mock 注入代表性 DOM,jsdom 不跑 vditor)
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, stripExternalLinks, stripMermaid } from './wechatCopy'
+import { applyWechatStyles, buildWechatHtml, copyAsWechatHtml, copyWechatHtmlFromMd, stripExternalLinks, stripMermaid } from './wechatCopy'
 
 describe('stripMermaid:mermaid 围栏改 zen-mermaid 标记(vditor 无此适配器不触其成图,成图由 mermaidImage 管线接管)', () => {
   test('```mermaid 围栏改标 ```zen-mermaid,其余围栏不动', () => {
@@ -334,5 +334,36 @@ describe('copyAsWechatHtml:读盘 → 预处理 → 渲染 → 插图 → 内联
       written.push(html)
     })
     expect(written[0]!).toContain('data:image/png;base64,Bw==')
+  })
+})
+
+describe('copyWechatHtmlFromMd:直喂 md 文本(2026-09 画布 Markdown 视图「复制为公众号格式」入口,不读盘)', () => {
+  // mock 调用记录跨测试累积(读 mock.calls.at(-1)),逐测试清调用记录(实现保留)
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('预处理同读盘链:显示层标记剥净进渲染,出参 section 根 HTML 写富文本端口', async () => {
+    const fs = new MemoryFsAdapter()
+    const written: string[] = []
+    await copyWechatHtmlFromMd(fs, null, '# 标题 [[链]] #tag ::flag\n\n正文段', async (html) => {
+      written.push(html)
+    })
+    const renderedMd = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
+    expect(renderedMd).toBe('# 标题\n\n正文段')
+    expect(written).toHaveLength(1)
+    expect(written[0]!).toContain('<section')
+    expect(written[0]!).toContain('font-size: 15px')
+  })
+
+  test('copyAsWechatHtml 读盘后委托本入口:同内容两路渲染入参一致(案头/画布产物同链)', async () => {
+    const fs = new MemoryFsAdapter()
+    const md = '# 甲 [[b]]\n\n> 引文'
+    await fs.writeTextFileAtomic('/ws/文.md', md)
+    await copyAsWechatHtml(fs, null, '/ws/文.md', async () => {})
+    const viaFile = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
+    await copyWechatHtmlFromMd(fs, null, md, async () => {})
+    const viaText = vi.mocked(renderVditorPreview).mock.calls.at(-1)![1]!
+    expect(viaText).toBe(viaFile)
   })
 })

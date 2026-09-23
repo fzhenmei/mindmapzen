@@ -1,4 +1,6 @@
-// src/services/wechatCopy.ts —— 案头"复制为公众号格式":md → 内联样式 HTML → 剪贴板。
+// src/services/wechatCopy.ts —— "复制为公众号格式":md → 内联样式 HTML → 剪贴板。
+// 两入口同一链:案头文件右键(copyAsWechatHtml 读盘)/画布 Markdown 视图钮
+// (copyWechatHtmlFromMd 直喂内存序列化文本)。
 // 公众号编辑器白名单清洗:<style>/class 全丢,只认元素内联 style(2026-09-09 设计),
 // 故格式化层为自研逐元素内联样式映射,lute 仅负责 md→DOM 前半程
 import type { FsAdapter } from '../types/files'
@@ -19,18 +21,31 @@ async function resolveImages(fs: FsAdapter, wsDir: string, display: string, root
   applyImgSrcMap(root, new Map([...meta].map(([k, v]) => [k, v.dataUrl])))
 }
 
-/** 编排:读盘 → 预处理(显示层标记剥净 + mermaid 改标)→ 离屏渲染 → 插图换
- *  dataURL → mermaid 成图 → 代码高亮 → 剥 vditor 残留 + 内联样式 → 剪贴板。
- *  失败原样上抛,由调用方 setError 兜底;离屏舞台 attached 但移出视口(vditor
- *  内部 IntersectionObserver 依赖挂载),finally 即清 */
+/** 编排:读盘 → 委托 copyWechatHtmlFromMd(案头文件右键入口)。
+ *  失败原样上抛,由调用方 setError 兜底 */
 export async function copyAsWechatHtml(
   fs: FsAdapter,
   wsDir: string | null,
   mdPath: string,
   writeHtml: (html: string) => Promise<void>,
 ): Promise<void> {
+  await copyWechatHtmlFromMd(fs, wsDir, await fs.readTextFile(mdPath), writeHtml)
+}
+
+/** 编排:md 文本 → 预处理(显示层标记剥净 + mermaid 改标)→ 离屏渲染 → 插图换
+ *  dataURL → mermaid 成图 → 代码高亮 → 剥 vditor 残留 + 内联样式 → 剪贴板。
+ *  直喂文本入口(2026-09 画布 Markdown 视图「复制为公众号格式」:数据源 = 内存树
+ *  序列化,含未保存修改——所见即所复制;display 形态 md 无包装层,unwrap 幂等)。
+ *  失败原样上抛,由调用方兜底;离屏舞台 attached 但移出视口(vditor 内部
+ *  IntersectionObserver 依赖挂载),finally 即清 */
+export async function copyWechatHtmlFromMd(
+  fs: FsAdapter,
+  wsDir: string | null,
+  mdText: string,
+  writeHtml: (html: string) => Promise<void>,
+): Promise<void> {
   // 显示形态剥正文包装层(2026-09-22 防炸配套):贴来的标题按标题渲染,不是引用
-  const display = stripMermaid(toDisplayText(mdBodyUnwrapForDisplay(await fs.readTextFile(mdPath))))
+  const display = stripMermaid(toDisplayText(mdBodyUnwrapForDisplay(mdText)))
   const stage = document.createElement('div')
   stage.className = 'wechat-copy-stage'
   stage.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;'

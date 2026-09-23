@@ -364,6 +364,20 @@ export const IconKanbanSquare = ({ size }: IconProps) =>
     </>,
     size,
   )
+/** 公众号（2026-09 Markdown 态「复制为公众号格式」砚栏钮）：微信标识性双对话
+ *  气泡——大小相叠（小者右下在前）、各含双眼点、左下小尾巴。按本库线性风格自绘
+ *  的简化轮廓（非官方品牌资产）：交叠区大气泡弧段留隙断开（遮挡读法），尾巴并入
+ *  弧线避免根部尖角；眼睛点用零长线段 + 圆帽（IconOutline 同款） */
+export const IconWechat = ({ size }: IconProps) =>
+  base(
+    <>
+      <path d="M6.77 10.37A4.5 4.3 0 0 1 3.41 9.39L2.6 11.2 5.14 10.26A4.5 4.3 0 1 1 10.79 6.25" />
+      <path d="M4.7 5.7h.01M7.9 5.7h.01" />
+      <path d="M7.88 11.8A3.6 3.2 0 1 1 9.48 13.1L8.3 14.1Z" />
+      <path d="M9.85 9.8h.01M12.15 9.8h.01" />
+    </>,
+    size,
+  )
 /** 归档（2026-09 看板治理 · 归档列收起条/批量归档钮）：纸盒——顶盖横条 + 箱体 +
  *  正面锁扣线（lucide archive 语义缩至 16 网格） */
 export const IconArchive = ({ size }: IconProps) =>

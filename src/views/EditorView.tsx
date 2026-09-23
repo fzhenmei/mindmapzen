@@ -9,7 +9,7 @@ import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
 import type { AiToolEnv } from '../services/ai/tools'
-import type { WriteClipboard } from '../services/clipboard'
+import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
 import { createBasketEnginePort } from '../editor/basketEngine'
@@ -26,6 +26,7 @@ import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useBodyDialog } from '../hooks/useBodyDialog'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
+import { useWechatCopy } from '../hooks/useWechatCopy'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useExpandLevel } from '../hooks/useExpandLevel'
 import { useNodeSearch } from '../hooks/useNodeSearch'
@@ -63,6 +64,8 @@ interface Props {
   openInEditor: (path: string) => void
   /** 剪贴板写入端口：生产为 Tauri 插件实现，测试注入内存实现 */
   writeClipboard: WriteClipboard
+  /** 富文本剪贴板写入端口（Markdown 视图公众号复制，2026-09）：App 注入，E2E 记录到 harness 桩 */
+  writeHtmlClipboard: WriteHtmlClipboard
   /** 导出与复制图片端口（M5b）：生产为 Tauri save 对话框 + writeImage，测试注入记录桩 */
   exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
@@ -75,7 +78,7 @@ interface Props {
   readClipboardImage: () => Promise<{ name: string; bytes: Uint8Array } | null>
 }
 
-export default function EditorView({ mdPath, openInEditor, writeClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
+export default function EditorView({ mdPath, openInEditor, writeClipboard, writeHtmlClipboard, exportPorts, registerCloseGuard, exitApp, pickImageFile, readClipboardImage }: Readonly<Props>) {
   const { t } = useTranslation()
   const { adapter, markDirty, clearDirty, exitEditor, setError } = useAppStore()
   const workspaceDir = useAppStore((s) => s.workspaceDir)
@@ -280,6 +283,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
 
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
+
+  // 复制为公众号格式（2026-09 Markdown 态砚栏钮）：点击时内存树现场序列化喂公众号全链
+  // （拆 hook 动因 = 行数护栏，语义见 useWechatCopy 头注释）
+  const wechatCopy = useWechatCopy(mmRef, registry, writeHtmlClipboard)
 
   /** 复制文件路径（2026-09）：mdPath 入剪贴板（发给 AI 读），出口分隔符按平台归一（toNativePath，同批修复） */
   const copyPath = (): void => {
@@ -719,6 +726,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, expor
           // FileDetail 同款交互：可见→off，不可见→on（auto 首点即转显式）
           void useAppStore.getState().setPreviewOutline(mdOutlineVisible ? 'off' : 'on')
         }}
+        // 公众号复制钮（2026-09 复制组旁三态恒显）：逻辑在 useWechatCopy（现场序列化喂全链）
+        onCopyWechat={wechatCopy.run}
+        wechatCopyBusy={wechatCopy.busy}
         // 看板归档列显隐（2026-09 画布三态 M1）：砚栏看板态专有钮 toggle 宿主态
         kanbanArchiveOpen={kanbanArchiveOpen}
         onToggleKanbanArchive={() => setKanbanArchiveOpen((v) => !v)}

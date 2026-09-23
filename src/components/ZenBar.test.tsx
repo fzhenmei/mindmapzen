@@ -38,6 +38,8 @@ function renderBar(overrides: {
   expandLevel?: number | 'all' | undefined
   onExpandLevel?: (v: number | 'all') => void
   onSearchClick?: () => void
+  onCopyWechat?: () => void
+  wechatCopyBusy?: boolean
 } = {}): void {
   render(
     <TooltipProvider>
@@ -68,6 +70,8 @@ function renderBar(overrides: {
         onSwitchView={overrides.onSwitchView ?? noop}
         outlineVisible={overrides.outlineVisible ?? false}
         onToggleOutline={overrides.onToggleOutline ?? noop}
+        onCopyWechat={overrides.onCopyWechat ?? noop}
+        wechatCopyBusy={overrides.wechatCopyBusy ?? false}
         kanbanArchiveOpen={overrides.kanbanArchiveOpen ?? false}
         onToggleKanbanArchive={overrides.onToggleKanbanArchive ?? noop}
         onSettingsClick={overrides.onSettingsClick ?? noop}
@@ -298,6 +302,30 @@ describe('ZenBar 三态矩阵', () => {
     expect(T('btn-view-mindmap')).not.toBeNull()
     expect(T('btn-view-markdown')).not.toBeNull()
     expect(T('btn-view-kanban')).not.toBeNull()
+  })
+})
+
+// ---- 公众号复制钮（2026-09 复制家族成员：复制组/路径之后，三态恒显）+ busy 禁用 ----
+
+describe('ZenBar 公众号复制钮', () => {
+  afterEach(cleanup)
+
+  test('三态恒显（数据源 = 内存树现场序列化，与视图态无关）：语义名「复制为公众号格式」，点击回调', () => {
+    const onCopyWechat = vi.fn()
+    for (const v of ['mindmap', 'markdown', 'kanban'] as const) {
+      cleanup()
+      renderBar({ viewMode: v, onCopyWechat })
+      const btn = screen.getByTestId('btn-copy-wechat')
+      expect(btn).toHaveAttribute('aria-label', '复制为公众号格式')
+      expect(btn).toBeEnabled()
+    }
+    fireEvent.click(screen.getByTestId('btn-copy-wechat'))
+    expect(onCopyWechat).toHaveBeenCalledTimes(1)
+  })
+
+  test('busy=true：钮禁用（在途防连点信号，由 useWechatCopy 驱动）', () => {
+    renderBar({ wechatCopyBusy: true })
+    expect(screen.getByTestId('btn-copy-wechat')).toBeDisabled()
   })
 })
 

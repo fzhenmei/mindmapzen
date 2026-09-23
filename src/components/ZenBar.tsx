@@ -53,6 +53,7 @@ import {
   IconSort,
   IconSwitch,
   IconUndo,
+  IconWechat,
 } from './icons'
 
 interface Props {
@@ -119,6 +120,11 @@ interface Props {
   /** 大纲显隐（2026-09 画布三态）：Markdown 态专有钮；visible 由 MarkdownView 上报（auto 跟宽） */
   outlineVisible: boolean
   onToggleOutline(): void
+  /** 复制为公众号格式（2026-09 复制家族第三出口，三态恒显）：逻辑在 EditorView 的
+   *  useWechatCopy（点击时内存树现场序列化喂公众号全链——所见即所复制） */
+  onCopyWechat(): void
+  /** 公众号复制在途（防连点禁用信号，useWechatCopy 驱动） */
+  wechatCopyBusy: boolean
   /** 归档列显隐（2026-09 画布三态）：看板态专有钮（toggle 宿主持有的 archiveOpen） */
   kanbanArchiveOpen: boolean
   onToggleKanbanArchive(): void
@@ -184,6 +190,8 @@ export default function ZenBar({
   onSwitchView,
   outlineVisible,
   onToggleOutline,
+  onCopyWechat,
+  wechatCopyBusy,
   kanbanArchiveOpen,
   onToggleKanbanArchive,
 }: Readonly<Props>) {
@@ -386,6 +394,22 @@ export default function ZenBar({
           onClick={onCopyPathClick}
         >
           <IconRoute />
+        </Button>
+      </Tip>
+      {/* 复制为公众号格式（2026-09 复制家族第三出口）：复制组（md+选项）/路径之后的
+       *  发布口径——内联样式富文本全文。三态恒显：数据源 = 内存树现场序列化
+       *  （useWechatCopy），与视图态无关，导图/看板态直接点即复制，不必先切 Markdown */}
+      <Tip label={t('editor.zenbar.copyWechat')}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="btn-copy-wechat"
+          aria-label={t('editor.zenbar.copyWechat')}
+          disabled={wechatCopyBusy}
+          onClick={onCopyWechat}
+        >
+          <IconWechat />
         </Button>
       </Tip>
       <Tip label={t('editor.zenbar.save')}>
