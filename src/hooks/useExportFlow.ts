@@ -111,10 +111,14 @@ export function useExportFlow(
     try {
       const savePath = await ports.pickSavePath(`${mapName}.${kind === 'word' ? 'docx' : 'pdf'}`)
       if (savePath === null) return
+      // 等待提示(2026-09-23):渲染+Edge 打印有数秒空窗,粘住式占位;成功先清再盖章,
+      // 失败被 6s 错误 toast 单条覆盖,无需此处清理(也不用 finally——会把错误 toast 抹掉)
+      showToast(i18n.t('editor.export.exporting', { kind: kind === 'word' ? 'Word' : 'PDF' }), undefined, Number.POSITIVE_INFINITY)
       const { workspaceDir } = useAppStore.getState()
       const body = await renderPublishBody(adapter, workspaceDir, md)
       if (kind === 'word') await adapter.writeBytes(savePath, await buildDocxFromBody(body, mapName))
       else await ports.runEdgePrint(buildPrintHtml(body, mapName), savePath)
+      showToast('') // 先清等待提示再盖章:避免「正在导出」压着成功反馈与问询
       onSuccess('saved')
       // 文件名取保存路径基名（含用户可能改写的真实扩展）
       await offerOpen(savePath, savePath.split(/[\\/]/).pop() ?? mapName)

@@ -169,6 +169,8 @@ export default {
     // 2026-09-23 导出后询问直接打开：原生 ask 问询（标题 + 含文件名的消息）
     askOpenTitle: '打开导出文件',
     askOpen: '已导出 {{name}}，现在打开吗？',
+    // 2026-09-23 导出中等待提示：确认保存后渲染/打印空窗的粘住式占位（Word/PDF 链）
+    exporting: '正在导出 {{kind}}…',
   },
   errorPanel: {
     readTitle: '无法打开此文件',

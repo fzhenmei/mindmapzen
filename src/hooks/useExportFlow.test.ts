@@ -130,6 +130,39 @@ describe('useExportFlow：导出 Word', () => {
     spy.mockRestore()
   })
 
+  test('Word 导出中：粘住等待提示出现，成功后清除再盖章问询', async () => {
+    // 门闩卡 writeBytes：观察"进行中"快照——等待提示须粘住（durationMs=Infinity，
+    // ToastHost 不排自动消失），不能靠 2s 默认时长侥幸存活
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    const adapter = new MemoryFsAdapter()
+    const writeBytes = vi.spyOn(adapter, 'writeBytes').mockImplementation(async () => {
+      await gate
+    })
+    const ports = makePorts('/ws/导出/图.docx') // ask 默认答否
+    const stamp = vi.fn()
+    const { result } = renderHook(() =>
+      useExportFlow(makeMmRef(TREE), adapter, '图', ports, emptyRegistry, stamp, vi.fn()),
+    )
+    act(() => {
+      result.current.actions.onWord()
+    })
+    await waitFor(() => expect(writeBytes).toHaveBeenCalled())
+    // 卡在写盘期间：等待提示已出现且为粘住时长；链路未完成不盖章
+    const stuckAt = toastTexts.findIndex((t) => t !== null && /正在导出/.test(t))
+    expect(stuckAt).toBeGreaterThanOrEqual(0)
+    expect(toastDurations[stuckAt]).toBe(Number.POSITIVE_INFINITY)
+    expect(stamp).not.toHaveBeenCalled()
+    release()
+    // 成功：先清提示（末尾 null）再盖章、问询（默认答否不打开）
+    await waitFor(() => expect(stamp).toHaveBeenCalledWith('saved'))
+    await waitFor(() => expect(ports.ask).toHaveBeenCalled())
+    expect(toastTexts.at(-1)).toBeNull()
+    expect(ports.openExported).not.toHaveBeenCalled()
+  })
+
   test('链路失败（writeBytes 拒绝）：toast + console 线索，不盖章', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const adapter = new MemoryFsAdapter()
@@ -230,7 +263,10 @@ describe('useExportFlow：导出成功后询问直接打开', () => {
     })
     await waitFor(() => expect(ports.ask).toHaveBeenCalled())
     expect(ports.openExported).not.toHaveBeenCalled()
-    expect(toastTexts).toHaveLength(0)
+    // 2026-09-23 粘住等待提示：Word 链现会先「正在导出」再清除——末尾 null 且全程
+    // 无错误文案，即"静默无错误"（原 toHaveLength(0) 断言随等待提示落地失效）
+    expect(toastTexts.at(-1)).toBeNull()
+    expect(toastTexts.filter((t) => t !== null).every((t) => /正在导出/.test(t))).toBe(true)
   })
 
   test('openExported 拒绝：toast 打开导出文件失败 + console 线索，stamp 仍已盖（saved 在问询前）', async () => {

@@ -166,6 +166,8 @@ const editor: Dict['editor'] = {
     // 2026-09-23 open-after-export: native ask dialog (title + message with file name)
     askOpenTitle: 'Open exported file',
     askOpen: 'Exported {{name}}. Open it now?',
+    // 2026-09-23 in-export waiting hint: sticky placeholder for the render/print gap (Word/PDF chain)
+    exporting: 'Exporting {{kind}}…',
   },
   errorPanel: {
     readTitle: 'Cannot open this file',

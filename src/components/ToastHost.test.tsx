@@ -33,3 +33,21 @@ test('约 2s 后自动消失', async () => {
   expect(screen.queryByTestId('toast')).toBeNull()
 })
 
+test('durationMs = Infinity 粘住不自动消失，空串显式清除', () => {
+  // 2026-09-23 导出中等待提示：非有限时长不排自动消失（setTimeout(fn, Infinity)
+  // 会被钳到 0 立即消失），由后续 showToast('') 或覆盖式替换收尾
+  vi.useFakeTimers()
+  render(<ToastHost />)
+  act(() => {
+    showToast('正在导出 Word…', undefined, Number.POSITIVE_INFINITY)
+  })
+  act(() => {
+    vi.advanceTimersByTime(60_000)
+  })
+  expect(screen.getByTestId('toast')).toHaveTextContent('正在导出 Word…')
+  act(() => {
+    showToast('')
+  })
+  expect(screen.queryByTestId('toast')).toBeNull()
+})
+
