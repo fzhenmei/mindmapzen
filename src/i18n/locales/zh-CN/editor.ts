@@ -51,6 +51,8 @@ export default {
     },
     outlineShow: '显示大纲',
     outlineHide: '隐藏大纲',
+    // 公众号复制（2026-09 Markdown 态专有钮）：语义名与浮签同源
+    copyWechat: '复制为公众号格式',
     archiveToggle: '归档列',
     // 展开层级（一键收起到 N 级）：缩放段单选下拉；N 级 = 可见到第 N 层分支（根不计级）
     expandLevel: '展开层级',
@@ -215,8 +217,8 @@ export default {
     // 序列化失败占位（毒节点家族：换行/列表层正文断言）
     renderFailTitle: 'Markdown 渲染失败',
     renderFailBody: '当前导图数据无法序列化为文档，请回导图检查节点内容（如文本中含换行）',
-    // 复制为公众号格式（2026-09 视图内按钮）：失败 {{reason}} = 全链异常串
-    copyWechat: '复制为公众号格式',
+    // 复制为公众号格式（2026-09 Markdown 态砚栏钮，按钮文案在 zenbar.copyWechat）：
+    // 失败 {{reason}} = 全链异常串
     copiedToast: '已复制为公众号格式，可到公众号编辑器粘贴',
     copyWechatFailed: '复制为公众号格式失败：{{reason}}',
   },

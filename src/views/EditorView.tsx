@@ -26,6 +26,7 @@ import { useActiveSelection } from '../hooks/useActiveSelection'
 import { useBodyDialog } from '../hooks/useBodyDialog'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import { useExportFlow } from '../hooks/useExportFlow'
+import { useWechatCopy } from '../hooks/useWechatCopy'
 import { useEditorHotkeys } from '../hooks/useEditorHotkeys'
 import { useExpandLevel } from '../hooks/useExpandLevel'
 import { useNodeSearch } from '../hooks/useNodeSearch'
@@ -282,6 +283,10 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
 
   // 导出与复制为图片（M5b 拆出）：对话框状态与三入口执行链（行数护栏）；端口经 props 注入
   const exportFlow = useExportFlow(mmRef, adapter, name, exportPorts, flashStamp, setError)
+
+  // 复制为公众号格式（2026-09 Markdown 态砚栏钮）：点击时内存树现场序列化喂公众号全链
+  // （拆 hook 动因 = 行数护栏，语义见 useWechatCopy 头注释）
+  const wechatCopy = useWechatCopy(mmRef, registry, writeHtmlClipboard)
 
   /** 复制文件路径（2026-09）：mdPath 入剪贴板（发给 AI 读），出口分隔符按平台归一（toNativePath，同批修复） */
   const copyPath = (): void => {
@@ -603,7 +608,6 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
           <MarkdownView
             mmRef={mmRef}
             registry={registry}
-            writeHtmlClipboard={writeHtmlClipboard}
             onOutlineVisibleChange={setMdOutlineVisible}
             onClose={() => switchView('mindmap')}
           />
@@ -722,6 +726,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
           // FileDetail 同款交互：可见→off，不可见→on（auto 首点即转显式）
           void useAppStore.getState().setPreviewOutline(mdOutlineVisible ? 'off' : 'on')
         }}
+        // Markdown 态公众号复制钮（2026-09）：逻辑在 useWechatCopy（现场序列化喂全链）
+        onCopyWechat={wechatCopy.run}
+        wechatCopyBusy={wechatCopy.busy}
         // 看板归档列显隐（2026-09 画布三态 M1）：砚栏看板态专有钮 toggle 宿主态
         kanbanArchiveOpen={kanbanArchiveOpen}
         onToggleKanbanArchive={() => setKanbanArchiveOpen((v) => !v)}
