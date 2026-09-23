@@ -56,7 +56,7 @@ export default function QuickCaptureForm({ onSubmitted, focusOnMount = false }: 
         rows={3}
         value={value}
         placeholder={t('basket.capture.placeholder')}
-        className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+        className="w-full flex-1 resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           // 合成期（输入法确认候选）的 Enter 不入篮：Chromium/WebView2 下该 keydown 带

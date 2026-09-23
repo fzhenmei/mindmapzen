@@ -19,7 +19,9 @@ export async function showCaptureWindow(): Promise<void> {
       url: 'index.html',
       title: i18n.t('basket.capture.title'),
       width: 480,
-      height: 280,
+      // 内容自然高 ~170（p-5×2 + 标题 + rows=3 输入框 + hint，均为显式像素值）+
+      // error 态 24（一段 text-xs + gap）：280 会恒留 ~110px 底部空白（2026-09-23 报障）
+      height: 194,
       decorations: false,
       alwaysOnTop: true,
       skipTaskbar: true,
