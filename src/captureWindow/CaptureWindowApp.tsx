@@ -115,16 +115,23 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
     return () => window.removeEventListener('keydown', onKey)
   }, [ports])
 
-  // 输入框聚焦由 visibilitychange 驱动：隐身创建的首次自显与失焦隐藏后的再唤起同链
-  // （隐藏→可见都触发）。tauri://focus 事件在"隐藏→显示+前台化"路径上实测不可靠
-  // （2026-09-23 呼出后输入框未聚焦），而 WebView2 的 visibilityState 对 Win32
-  // show/hide 响应稳定；onFocusChanged 路径的 tick 保留，事件到达时幂等补一发
+  // 输入框聚焦由 visibilitychange + window focus 双事件驱动：隐身创建的首次自显与失焦
+  // 隐藏后的再唤起同链。tauri://focus 事件在"隐藏→显示+前台化"路径上实测不可靠；而
+  // 仅靠 visibilitychange 有竞态——show() 与前台化之间 JS 可能先处理 visibilitychange，
+  // 此刻 DOM 焦点未同步，focus() 只记账不生效，随后的 window focus 事件必须有监听者
+  // 补聚焦（2026-09-23 首次唤起无法输入、ESC 却可关的实测画像：窗口有系统焦点、
+  // textarea 无焦点）。window focus 到达时 document 必已激活，focus() 真实生效
   useEffect(() => {
+    const bump = (): void => setFocusTick((tick) => tick + 1)
     const onVisibility = (): void => {
-      if (document.visibilityState === 'visible') setFocusTick((tick) => tick + 1)
+      if (document.visibilityState === 'visible') bump()
     }
     document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', bump)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', bump)
+    }
   }, [])
 
   // 就绪自显（2026-09-23 首唤白闪报障）：窗口以 visible:false 隐身创建，WebView2 默认
