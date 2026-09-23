@@ -62,18 +62,20 @@ fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), S
     use tauri::Manager;
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow, ShowWindow, SW_SHOW,
+        GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
     };
     let w = app
         .get_webview_window(&label)
         .ok_or_else(|| format!("window not found: {label}"))?;
+    // 可见性必须走 tauri 通道：裸 Win32 ShowWindow(SW_SHOW) 会与 tao 的 visible 状态
+    // 脱钩——脱钩后 hide() 被 tao 防重入短路成 no-op（返回 Ok 但窗口关不掉，2026-09-23
+    // 引入当日的回归实锤）。Win32 只负责下面的焦点抢夺，不碰可见性
+    w.show().map_err(|e| e.to_string())?;
     // tauri 返回 windows crate 的 HWND（isize 包装），windows-sys 的 HWND 是裸指针——
     // 经 usize 一次过桥（同句柄值，仅类型体系不同）
     let hwnd = w.hwnd().map_err(|e| e.to_string())?.0 as usize as HWND;
     unsafe {
-        ShowWindow(hwnd, SW_SHOW);
         let fg = GetForegroundWindow();
         let fg_thread = if fg.is_null() {
             0
@@ -83,10 +85,10 @@ fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), S
         let cur_thread = GetCurrentThreadId();
         let attached =
             fg_thread != 0 && fg_thread != cur_thread && AttachThreadInput(cur_thread, fg_thread, 1) != 0;
-        // SetForegroundWindow/SetFocus 失败=前台锁未破，窗口仍显示但焦点维持原状——无补救
-        // 分支可走，调用方有常规 show/setFocus 兜底，失败留痕于此
+        // 只用 SetForegroundWindow：激活自带焦点转移。attach 期间再叠 SetFocus 会在 detach
+        // 后引发焦点回滚抖动——WebView2 报 blur，小窗的失焦隐藏链立刻把刚呼出的窗口藏回去
+        // （2026-09-23 闪现即隐）。失败=前台锁未破，窗口仍显示，无补救分支可走，留痕于此
         let _ = SetForegroundWindow(hwnd);
-        let _ = SetFocus(hwnd);
         if attached {
             let _ = AttachThreadInput(cur_thread, fg_thread, 0);
         }

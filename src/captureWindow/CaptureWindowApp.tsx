@@ -115,6 +115,18 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
     return () => window.removeEventListener('keydown', onKey)
   }, [ports])
 
+  // 输入框聚焦由 visibilitychange 驱动：隐身创建的首次自显与失焦隐藏后的再唤起同链
+  // （隐藏→可见都触发）。tauri://focus 事件在"隐藏→显示+前台化"路径上实测不可靠
+  // （2026-09-23 呼出后输入框未聚焦），而 WebView2 的 visibilityState 对 Win32
+  // show/hide 响应稳定；onFocusChanged 路径的 tick 保留，事件到达时幂等补一发
+  useEffect(() => {
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') setFocusTick((tick) => tick + 1)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   // 就绪自显（2026-09-23 首唤白闪报障）：窗口以 visible:false 隐身创建，WebView2 默认
   // 白底先于主题上屏。待配置读取落定（内容确定、boot 已应用主题）且首帧绘制完成后
   // （双 rAF）再自显——首现即完整成型的窗口。StrictMode 双跑幂等无害
