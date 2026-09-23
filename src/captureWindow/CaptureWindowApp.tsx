@@ -36,8 +36,10 @@ const tauriPorts: CaptureWindowPorts = {
     if (!('__TAURI_INTERNALS__' in window)) return
     void import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().hide())
-      // 光标粘滞自愈（2026-09-22 托盘区鼠标消失排障）：hide 后让宿主重载系统光标，
-      // 清掉 WebView2 边界竞态可能残留的 NULL 光标（全屏无鼠标、托盘菜单上最易显形）
+      // 光标不可见自愈（2026-09-23 复现机器取证修正）：v2.21.0 的"hide 后立即重载"
+      // 实测无效——WebView2 异步清理边界在重载之后才确立残留（图像/渲染层，非 NULL
+      // 粘滞）。延迟 250ms 等残留落定，再让宿主重载光标图像 + 1px 往返强制重绘
+      .then(() => new Promise<void>((resolve) => { setTimeout(resolve, 250) }))
       .then(() => import('@tauri-apps/api/core').then(({ invoke }) => invoke('reset_cursor_display')))
       .catch((e) => console.error('捕获小窗隐藏失败', e))
   },
