@@ -89,3 +89,21 @@ test('窗口获得系统焦点后聚焦输入框（2026-09-23 回归：隐身创
   fireFocus?.(true)
   await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('capture-input')))
 })
+
+test('刚可见化的焦点抖动不隐藏（2026-09-23 回归：前台为 Edge 时首呼一闪而逝，再呼正常）', async () => {
+  useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+  let fireFocus: ((focused: boolean) => void) | undefined
+  const ports = makePorts()
+  ports.onFocusChanged = async (cb) => { fireFocus = cb; return () => {} }
+  render(<CaptureWindowApp ports={ports} />)
+  await screen.findByTestId('capture-input')
+  // showSelf 完成打点可见化时刻，宽限期内（首显+前台化焦点抖动）的 blur 不隐藏
+  await waitFor(() => expect(ports.calls.showSelf).toBeGreaterThanOrEqual(1))
+  fireFocus?.(false)
+  await new Promise((resolve) => { setTimeout(resolve, 50) })
+  expect(ports.calls.hide).toBe(0)
+  // 宽限期（400ms）外的真失焦：照常隐藏（spec §5.4）
+  await new Promise((resolve) => { setTimeout(resolve, 500) })
+  fireFocus?.(false)
+  await waitFor(() => expect(ports.calls.hide).toBe(1))
+})
