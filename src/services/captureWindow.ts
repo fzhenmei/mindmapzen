@@ -11,8 +11,17 @@ export async function showCaptureWindow(): Promise<void> {
     const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow')
     const existing = await WebviewWindow.getByLabel(CAPTURE_WINDOW_LABEL)
     if (existing !== null) {
-      await existing.show()
-      await existing.setFocus()
+      // 唤起场景常为本应用无焦点（快捷键呼出），常规 setFocus 跨 IPC 后被 Windows 前台锁
+      // 拒——窗口可见但键盘进不去（2026-09-23 报障），走宿主的 AttachThreadInput 前台化
+      // 通道；失败回退常规 show+setFocus（保持窗口至少可见）
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        await invoke('force_foreground_window', { label: CAPTURE_WINDOW_LABEL })
+      } catch (e) {
+        console.error('捕获小窗前台化失败，回退常规显示', e)
+        await existing.show()
+        await existing.setFocus()
+      }
       return
     }
     const w = new WebviewWindow(CAPTURE_WINDOW_LABEL, {

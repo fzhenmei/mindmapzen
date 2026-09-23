@@ -50,6 +50,60 @@ fn reset_cursor_display() {
 #[tauri::command]
 fn reset_cursor_display() {}
 
+/// 抢前台显示窗口（2026-09-23 无焦点时快捷键呼出小窗不获输入焦点修复）：全局快捷键的
+/// JS 处理链经"热键→IPC→主窗 JS→IPC→Rust"两次往返，热键赋予的前台化权利已蒸发——
+/// 非前台进程的 SetForegroundWindow 被 Windows 前台锁拒绝，窗口可见但拿不到系统焦点，
+/// 键盘输入进不去（主窗在前台时进程本身即前台进程，故平时正常）。AttachThreadInput 把
+/// 本线程短暂挂进当前前台窗口线程的输入队列，借其身份完成 SetForegroundWindow 再脱离，
+/// 是该场景的业界标准解法；attach 窗口仅两次调用，无长驻同步
+#[cfg(windows)]
+#[tauri::command]
+fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    use tauri::Manager;
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow, ShowWindow, SW_SHOW,
+    };
+    let w = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("window not found: {label}"))?;
+    // tauri 返回 windows crate 的 HWND（isize 包装），windows-sys 的 HWND 是裸指针——
+    // 经 usize 一次过桥（同句柄值，仅类型体系不同）
+    let hwnd = w.hwnd().map_err(|e| e.to_string())?.0 as usize as HWND;
+    unsafe {
+        ShowWindow(hwnd, SW_SHOW);
+        let fg = GetForegroundWindow();
+        let fg_thread = if fg.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(fg, std::ptr::null_mut())
+        };
+        let cur_thread = GetCurrentThreadId();
+        let attached =
+            fg_thread != 0 && fg_thread != cur_thread && AttachThreadInput(cur_thread, fg_thread, 1) != 0;
+        // SetForegroundWindow/SetFocus 失败=前台锁未破，窗口仍显示但焦点维持原状——无补救
+        // 分支可走，调用方有常规 show/setFocus 兜底，失败留痕于此
+        let _ = SetForegroundWindow(hwnd);
+        let _ = SetFocus(hwnd);
+        if attached {
+            let _ = AttachThreadInput(cur_thread, fg_thread, 0);
+        }
+    }
+    Ok(())
+}
+
+/// 非 Windows 无前台锁语义，常规显示+聚焦即可
+#[cfg(not(windows))]
+#[tauri::command]
+fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    let w = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("window not found: {label}"))?;
+    w.show().and_then(|_| w.set_focus()).map_err(|e| e.to_string())
+}
+
 
 
 /// 标题栏主题染色（v2.5 视觉一体化）：DWM 属性把系统标题栏/边框染成前端主题色，
@@ -250,6 +304,7 @@ pub fn run() {
             git_clone,
             set_titlebar_colors,
             reset_cursor_display,
+            force_foreground_window,
             ai_chat_start,
             ai_chat_abort,
             export_pdf_via_edge

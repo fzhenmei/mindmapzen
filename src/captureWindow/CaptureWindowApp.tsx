@@ -9,6 +9,7 @@ import { useAppStore } from '../store/appStore'
 import { loadConfig } from '../services/config'
 import { basketAbsPath, resolveBasketRelPath } from '../services/basket'
 import { BASKET_UPDATED_EVENT } from '../services/basketSync'
+import { CAPTURE_WINDOW_LABEL } from './detect'
 import QuickCaptureForm from '../components/QuickCaptureForm'
 import ToastHost from '../components/ToastHost'
 
@@ -27,10 +28,11 @@ export interface CaptureWindowPorts {
 
 const tauriPorts: CaptureWindowPorts = {
   showSelf: async () => {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    const w = getCurrentWindow()
-    await w.show()
-    await w.setFocus()
+    // 隐身创建后的首显必须抢到系统焦点（呼出场景常为本应用无焦点）：常规 setFocus 跨
+    // IPC 后被 Windows 前台锁拒（2026-09-23 无焦点快捷键呼出后无法输入报障），走宿主
+    // 的 AttachThreadInput 前台化通道
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('force_foreground_window', { label: CAPTURE_WINDOW_LABEL })
   },
   hide: () => {
     if (!('__TAURI_INTERNALS__' in window)) return
