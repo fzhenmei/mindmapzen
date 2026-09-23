@@ -2,7 +2,8 @@
 // 两入口同一链:案头文件右键(copyAsWechatHtml 读盘)/画布 Markdown 视图钮
 // (copyWechatHtmlFromMd 直喂内存序列化文本)。
 // 公众号编辑器白名单清洗:<style>/class 全丢,只认元素内联 style(2026-09-09 设计),
-// 故格式化层为自研逐元素内联样式映射,lute 仅负责 md→DOM 前半程
+// 故格式化层为自研逐元素内联样式映射,lute 仅负责 md→DOM 前半程;渲染中段见
+// publishBody.ts(2026-09-23 抽出)
 import type { FsAdapter } from '../types/files'
 import { extractPublishBody, renderPublishBody } from './publishBody'
 
@@ -41,12 +42,12 @@ const FONT_MONO = `'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace`
 // 行高一律绝对 px(倍数×各级字号换算,视觉与无单位倍数等价):公众号后台内容
 // 结构检测把 line-height 当 px 字面值与 font-size 比较,无单位 1.75/1.4/1.6 会
 // 被判"行高小于字体大小、文字重叠"误报(2026-09-20 真机),px 值恒 ≥ 字号即不触发
-const ROOT_STYLE = `font-family:${FONT_BODY};font-size:15px;color:#3f3f3f;line-height:26.25px;word-break:break-word` // 15×1.75
+export const ROOT_STYLE = `font-family:${FONT_BODY};font-size:15px;color:#3f3f3f;line-height:26.25px;word-break:break-word` // 15×1.75;pdfExport 直出打印 CSS(2026-09-23)
 
 const HEADING_COLOR = 'color:#1f1f1f'
 /** 微信链接色:保留的互链与剥成文字的外链共用(视觉与原文一致,只是后者不可点) */
 const A_STYLE = 'color:#576b95;text-decoration:none'
-const TAG_STYLE: Record<string, string> = {
+export const TAG_STYLE: Record<string, string> = { // pdfExport 直出打印 CSS(2026-09-23)
   H1: `margin:28px 0 14px;font-size:20px;font-weight:600;line-height:28px;${HEADING_COLOR}`,
   H2: `margin:24px 0 12px;font-size:18px;font-weight:600;line-height:25.2px;${HEADING_COLOR}`,
   H3: `margin:20px 0 10px;font-size:16px;font-weight:600;line-height:22.4px;${HEADING_COLOR}`,
