@@ -19,13 +19,17 @@ export async function showCaptureWindow(): Promise<void> {
       url: 'index.html',
       title: i18n.t('basket.capture.title'),
       width: 480,
-      height: 280,
+      // 内容自然高 ~170（p-5×2 + 标题 + rows=3 输入框 + hint，均为显式像素值）+
+      // error 态 24（一段 text-xs + gap）：280 会恒留 ~110px 底部空白（2026-09-23 报障）
+      height: 194,
       decorations: false,
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
       center: true,
-      visible: true,
+      // 防首唤白闪（2026-09-23 报障，主窗防闪变同款思路）：隐身创建，待小窗内配置
+      // 落定 + 首帧绘制完成后由 CaptureWindowApp 的 showSelf 自显——WebView2 白底不上屏
+      visible: false,
     })
     w.once('tauri://error', (e) => {
       console.error('捕获小窗创建失败', e)

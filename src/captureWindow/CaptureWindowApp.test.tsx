@@ -6,13 +6,14 @@ import { useAppStore } from '../store/appStore'
 import { basketAbsPath } from '../services/basket'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
-const makePorts = (): CaptureWindowPorts & { calls: { hide: number; emit: string[]; showMain: number } } => {
-  const s = { hide: 0, emit: [] as string[], showMain: 0 }
+const makePorts = (): CaptureWindowPorts & { calls: { hide: number; emit: string[]; showMain: number; showSelf: number } } => {
+  const s = { hide: 0, emit: [] as string[], showMain: 0, showSelf: 0 }
   return {
     calls: s,
     hide: () => { s.hide += 1 },
     emitBasketUpdated: async (mapPath) => { s.emit.push(mapPath) },
     showMainWindow: async () => { s.showMain += 1 },
+    showSelf: async () => { s.showSelf += 1 },
     onFocusChanged: async () => () => {},
   }
 }
@@ -28,7 +29,7 @@ beforeEach(() => {
   useAppStore.setState({ adapter: fs, configPath: '/cfg.json', workspaceDir: null, basketRelPath: null, resolvedLanguage: 'zh-CN' })
 })
 
-test('无工作区：提示 + 打开主窗口按钮（spec §5.4）', async () => {
+test('无工作区：提示 + 打开主窗口按钮（spec §5.4），就绪后同样自显', async () => {
   useAppStore.setState({ captureIdea: async () => ({ ok: true }) })
   const ports = makePorts()
   render(<CaptureWindowApp ports={ports} />)
@@ -36,6 +37,15 @@ test('无工作区：提示 + 打开主窗口按钮（spec §5.4）', async () =
   expect(btn).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: '打开主窗口' }))
   await waitFor(() => expect(ports.calls.showMain).toBe(1))
+  await waitFor(() => expect(ports.calls.showSelf).toBeGreaterThanOrEqual(1))
+})
+
+test('就绪自显：配置落定 + 首帧绘制后调 showSelf（防首唤白闪，隐身创建）', async () => {
+  useAppStore.setState({ workspaceDir: '/ws', basketRelPath: '点子篮子.md' })
+  const ports = makePorts()
+  render(<CaptureWindowApp ports={ports} />)
+  await screen.findByTestId('capture-input')
+  await waitFor(() => expect(ports.calls.showSelf).toBeGreaterThanOrEqual(1))
 })
 
 test('提交成功：emit basket-updated（篮子绝对路径）并隐藏（spec §5.5）', async () => {
