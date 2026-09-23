@@ -9,7 +9,10 @@ interface Props {
   /** 提交成功回调：壳决定收尾（Dialog 壳：关浮层+toast；小窗壳：emit 跨窗事件+隐藏） */
   onSubmitted(): void
   /** 挂载即聚焦（Dialog 壳不传：Radix 自动聚焦首个可聚焦元素，S9379 先例）；小窗壳传 true */
-  focusOnMount?: boolean
+  /** 焦点触发器：每次递增聚焦输入框。小窗链WebView2 获得系统焦点后由
+   * CaptureWindowApp 递增——mount 期 focus 对隐身创建的窗口不生效（2026-09-23
+   * 呼出后须手动点击输入框报障），聚焦必须晚于窗口真正可见/获得焦点 */
+  focusOnTick?: number
 }
 
 /** 多行输入拆分：首行 = 点子文本，其余 = 正文（空行丢弃） */
@@ -21,14 +24,14 @@ function splitIdea(raw: string): { text: string; body?: string } | null {
   return { text, ...(body !== '' ? { body } : {}) }
 }
 
-export default function QuickCaptureForm({ onSubmitted, focusOnMount = false }: Readonly<Props>) {
+export default function QuickCaptureForm({ onSubmitted, focusOnTick }: Readonly<Props>) {
   const { t } = useTranslation()
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
-    if (focusOnMount) ref.current?.focus()
-  }, [focusOnMount])
+    if (focusOnTick !== undefined && focusOnTick > 0) ref.current?.focus()
+  }, [focusOnTick])
 
   const submit = async (): Promise<void> => {
     const idea = splitIdea(value)

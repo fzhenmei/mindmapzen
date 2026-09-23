@@ -69,6 +69,7 @@ const tauriPorts: CaptureWindowPorts = {
 export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ ports?: CaptureWindowPorts }>) {
   const { t } = useTranslation()
   const [hasWorkspace, setHasWorkspace] = useState<boolean | null>(null) // null = 配置读取中
+  const [focusTick, setFocusTick] = useState(0) // 输入框聚焦触发器（窗口获得系统焦点时递增）
 
   // 聚焦刷新（R5）：读到什么信什么；读取失败维持现值（boot 已注入过一次），只有明确
   // workspaceDir === null 才进无工作区态——避免 cfg 抖动误清正在输入的会话
@@ -91,8 +92,12 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
     let disposed = false
     void ports
       .onFocusChanged((focused) => {
-        if (focused) void refresh()
-        else ports.hide()
+        if (focused) {
+          void refresh()
+          // WebView2 拿到系统焦点后才聚焦输入框：首次自显（showSelf→setFocus）与失焦
+          // 隐藏后再唤起都走这条链——mount 期 focus 对隐身窗口不生效（2026-09-23 报障）
+          setFocusTick((tick) => tick + 1)
+        } else ports.hide()
       })
       .then((fn) => { if (disposed) fn(); else unref = fn })
       .catch((e) => console.error('捕获小窗焦点订阅失败', e))
@@ -157,7 +162,7 @@ export default function CaptureWindowApp({ ports = tauriPorts }: Readonly<{ port
     content = (
       <div className="flex h-screen flex-col gap-2 bg-background p-5">
         <h1 className="text-sm font-medium">{t('basket.capture.title')}</h1>
-        <QuickCaptureForm focusOnMount onSubmitted={() => void handleSubmitted()} />
+        <QuickCaptureForm focusOnTick={focusTick} onSubmitted={() => void handleSubmitted()} />
       </div>
     )
   }
