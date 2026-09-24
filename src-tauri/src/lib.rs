@@ -68,6 +68,11 @@ fn force_foreground_window(app: tauri::AppHandle, label: String) -> Result<(), S
     let w = app
         .get_webview_window(&label)
         .ok_or_else(|| format!("window not found: {label}"))?;
+    // 每次呼出都重新居中（2026-09-24 报障根治的纵深防御）：小窗隐藏期间显示器拓扑
+    // 可能变化（接/拔扩展屏、改分辨率），隐藏窗口保留旧坐标会在新布局下出屏；
+    // 居中趁窗口尚隐藏时做，用户看不到跳动。与 window-state 插件的 denylist 互补
+    // ——denylist 断掉"会话间陈旧状态复活"，这里断掉"会话内拓扑漂移"
+    w.center().map_err(|e| e.to_string())?;
     // 可见性必须走 tauri 通道：裸 Win32 ShowWindow(SW_SHOW) 会与 tao 的 visible 状态
     // 脱钩——脱钩后 hide() 被 tao 防重入短路成 no-op（返回 Ok 但窗口关不掉，2026-09-23
     // 引入当日的回归实锤）。Win32 只负责下面的焦点抢夺，不碰可见性
@@ -255,8 +260,15 @@ pub fn run() {
         // 窗口状态记忆：自动保存/恢复位置、尺寸、最大化状态（见 Cargo.toml 注释）。
         // state_flags 去掉 VISIBLE：窗口以 visible:false 创建，插件不抢跑 show，
         // 由 setup 在状态恢复 / 首次最大化后统一显示（防 800×600→最大化闪变）
+        // denylist 排除捕获小窗（2026-09-24 报障：小窗出现在屏幕右下角而非居中）：
+        // 插件对运行时动态创建的窗口同样会在 on_window_ready 恢复磁盘状态，覆盖
+        // 创建参数的 center+尺寸。实测状态文件里残留一条 4K/150% 环境保存的
+        // 720×420@(1560,834)（=旧版 480×280 逻辑尺寸×1.5），在 1920×1080@100% 上
+        // 被"显示器相交即恢复"放过，小窗每次创建都挂在右下角大半出屏、罩住托盘区。
+        // 工具弹窗语义是"每次呼出都居中"，位置/尺寸不是可记忆状态——彻底退出跟踪
         .plugin(
             tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["quick-capture"])
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         & !tauri_plugin_window_state::StateFlags::VISIBLE,
