@@ -242,6 +242,19 @@ struct GitResult {
     err: String,
 }
 
+/// 窗口最小尺寸下限（逻辑像素），与 tauri.conf.json 的 minWidth/minHeight 同值——
+/// 配置管交互式缩小（OS 层 WM_GETMINMAXINFO 硬拦），此处管存档恢复链路（见 setup 钳制）
+const MIN_WINDOW_SIZE: (f64, f64) = (800.0, 600.0);
+
+/// 恢复态窗口尺寸钳制（2026-09-24 "窗体缩成一团"防御）：window-state 插件恢复存档时
+/// 不校验数值，异常时点（异常退出/显示器拓扑切换瞬间）写入的极小尺寸会被原样复活。
+/// 入参/出参均为物理像素，scale 为窗口当前缩放比；任一边低于下限即抬到下限（800×600
+/// 逻辑 × scale），达标边保留原值
+fn clamp_window_size(width: f64, height: f64, scale: f64) -> (f64, f64) {
+    let (min_w, min_h) = MIN_WINDOW_SIZE;
+    (width.max(min_w * scale), height.max(min_h * scale))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -306,6 +319,27 @@ pub fn run() {
                 if first_run {
                     let _ = win.maximize();
                 }
+                // 存档污染防御（2026-09-24 "窗体缩成一团"报障）：插件恢复存档时不校验数值，
+                // 异常时点（异常退出/显示器拓扑切换瞬间）写入的极小尺寸会被原样复活——与
+                // quick-capture 小窗当年的存档污染同类。交互式缩小另有 tauri.conf.json 的
+                // minWidth/minHeight 由 OS 硬拦，此处只管恢复链路（set_size 走 SetWindowPos，
+                // 不保证吃 min 约束，显式钳制才确定）。此刻窗口尚不可见，钳制无视觉跳动
+                if let (Ok(size), Ok(scale)) = (win.inner_size(), win.scale_factor()) {
+                    let (w, h) = clamp_window_size(size.width as f64, size.height as f64, scale);
+                    let (tw, th) = (w as u32, h as u32);
+                    if (tw, th) != (size.width, size.height) {
+                        // 失败不阻断启动（eprintln 留痕，窗口维持恢复值——症状可见可查）
+                        if let Err(e) = win.set_size(tauri::PhysicalSize::new(tw, th)) {
+                            eprintln!(
+                                "窗口尺寸钳制失败（维持 {}×{}）：{}",
+                                size.width, size.height, e
+                            );
+                        }
+                    }
+                } else {
+                    // 读取失败（窗口已创建，实际不可达）：留痕跳过，不阻断启动
+                    eprintln!("窗口尺寸/缩放比读取失败，跳过恢复钳制");
+                }
                 // 此刻插件已恢复完状态（on_window_ready 早于 setup），统一显示+聚焦
                 let _ = win.show();
                 let _ = win.set_focus();
@@ -325,4 +359,30 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 极小尺寸_两边都抬到下限() {
+        assert_eq!(clamp_window_size(300.0, 200.0, 1.0), (800.0, 600.0));
+    }
+
+    #[test]
+    fn 单边过小_只抬该边_达标边保留() {
+        assert_eq!(clamp_window_size(1000.0, 400.0, 1.0), (1000.0, 600.0));
+    }
+
+    #[test]
+    fn 缩放折算_高dpi下限按物理像素放大() {
+        // 200% 缩放：800×600 逻辑 = 1600×1200 物理；物理 480×194 远低于下限
+        assert_eq!(clamp_window_size(480.0, 194.0, 2.0), (1600.0, 1200.0));
+    }
+
+    #[test]
+    fn 正常尺寸_原样通过() {
+        assert_eq!(clamp_window_size(1800.0, 1350.0, 1.5), (1800.0, 1350.0));
+    }
 }
