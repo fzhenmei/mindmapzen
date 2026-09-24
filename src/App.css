@@ -39,13 +39,21 @@ html, body { overflow: hidden; }
  * 卡片/预览为 ui/card 解剖，皮肤全在 Tailwind utility（组件与页面内联）。
  * M12b Task 5 起，对话框/浮签/移动树/设置行/备注框皮肤亦由 ui/* 组件与 utility 承担
  * （ui/dialog、ui/tooltip、ui/button、ui/input + 消费方内联），本文件不再有对应规则；
- * 此处仅保留 error-banner（color-mix 便利）。
+ * 此处仅保留 error-toast（color-mix 便利）。
  * .library / .map-card / .preview-row 类名保留为测试钩子（visual-smoke 计算值 / desk.spec 定位 /
  * PreviewPane.test 内联缩进断言），视觉不再由本文件驱动 */
-/* error-banner / zen-banner / raw-preview（M14b 区块化）：语义横幅与代码块去描边线，
+/* error-toast / zen-banner / raw-preview（M14b 区块化）：语义横幅与代码块去描边线，
    改纯色块（破坏性色 color-mix 底 / muted 底），分区靠色不靠线 */
-.error-banner { background: color-mix(in srgb, var(--destructive) 12%, var(--background)); color: var(--destructive);
-  border-radius: var(--radius); padding: var(--space-2) var(--space-3); white-space: pre-wrap; }
+/* 错误浮层（2026-09-24 修正闭环）：案头流内横幅（不可关闭、编辑器内不可见）退役后的全局
+   出口——App shell 常驻 ErrorToast 订阅 appStore.error 渲染。固定右上（编辑器顶部居中是
+   MapTabs(top-2)/zen-banner(top:60px) 通知位，右上也避让底部 ToastHost/ZenBar；右上常驻
+   仅 1.2s 保存印记且与保存失败互斥）；top 40px = 标题栏 h-8(32px) + 8px 呼吸缝，不遮窗口
+   三键；实底 destructive color-mix（浮层必不透明）+ 阴影 + copy-in 淡入（同印记浮层语言）；
+   粘住不自动消失，X 显式关闭 */
+.error-toast { position: fixed; top: 40px; right: 16px; z-index: 50; max-width: 28rem;
+  background: color-mix(in srgb, var(--destructive) 10%, var(--card)); color: var(--destructive);
+  border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: var(--space-2) var(--space-3); animation: copy-in var(--duration-2) ease-out; }
 
 /* 编辑器 */
 .editor { position: relative; height: 100%; background: var(--background); }
@@ -176,6 +184,6 @@ html, body { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .library, .library * { transition: none; animation: none; transform: none; }
   .zen-bar, .zen-bar *, .node-actions, .node-actions *, .editor-caption, .theme-fab, .theme-fab *,
-  .canvas-host { transition: none; animation: none; }
+  .canvas-host, .error-toast, .error-toast * { transition: none; animation: none; }
   .save-stamp, .copy-stamp, .warn-stamp { transition: none; animation: none; }
 }

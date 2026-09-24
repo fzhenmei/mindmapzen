@@ -18,6 +18,7 @@ import AppLogo from './components/AppLogo'
 import TitleBar from './components/TitleBar'
 import DevBadge from './components/DevBadge'
 import ToastHost from './components/ToastHost'
+import ErrorToast from './components/ErrorToast'
 import QuickCapture from './components/QuickCapture'
 import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
@@ -376,6 +377,8 @@ export default function App() {
       <AppDialogs />
       <DevBadge />
       <ToastHost />
+      {/* 全局错误浮层（2026-09-24 修正闭环）：三态统一出口，替代案头流内横幅 */}
+      <ErrorToast />
       <QuickCapture open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <TourOverlay />
     </div>

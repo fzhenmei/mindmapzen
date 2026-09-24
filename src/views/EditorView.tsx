@@ -98,6 +98,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
+  // 保存管线最近一次报错串（2026-09-24 修正闭环）：onSaved 比对清除——只清保存失败
+  // 自己报的错，不误清期间落进来的其他来源错误（导入失败等）
+  const saveFailedMsgRef = useRef<string | null>(null)
   // 布局双状态（spec §3.7）：initialLayout=挂载期布局（只来自 sidecar）；layout=当前激活——切换走 setLayout 即时重排不重挂载
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
@@ -148,11 +151,20 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
     dirtyRef,
     registry,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
-    onError: setError,
-    // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）+ 统计行记保存时刻
+    onError: (msg, locateUid) => {
+      saveFailedMsgRef.current = msg
+      setError(msg, locateUid)
+    },
+    // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）+ 统计行记保存时刻；
+    // 修正闭环（2026-09-24）：保存成功清掉保存管线此前报的错（串匹配，不误清其他来源），浮层退场
     onSaved: () => {
       rebuildFromRegistry()
       stats.markSaved()
+      const store = useAppStore.getState()
+      if (saveFailedMsgRef.current !== null && store.error === saveFailedMsgRef.current) {
+        saveFailedMsgRef.current = null
+        store.setError(null)
+      }
     },
     // 外部变更裁决（多实例/外部编辑器改盘防护）：保存链挂起等本视图的冲突对话框三态
     onExternalConflict: conflict.ask,
@@ -255,6 +267,18 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   // locateNode（看板回导图同源：切态+展开收起祖先+居中），激活高亮在 hook 内经
   // SET_NODE_ACTIVE 落（AI 回合白名单，只读观光语义）
   const nodeSearch = useNodeSearch({ mmRef, locate: locateNode })
+
+  // 保存失败定位消费（2026-09-24 修正闭环）：浮层「定位」钮递增 locatePulse → 此处消费即清
+  // （同 pendingLocate 模式，重开编辑器不重放残留请求）→ 复用 locateNode（切导图态+展开
+  // 收起祖先+居中高亮）。uid 失联（节点已删/跨图残留）时 findNodeByUid miss，定位链安全 no-op
+  const locatePulse = useAppStore((s) => s.locatePulse)
+  useEffect(() => {
+    if (locatePulse === 0) return
+    useAppStore.setState({ locatePulse: 0 })
+    const loc = useAppStore.getState().errorLocate
+    if (loc !== null) locateNode(loc.uid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- locateNode 每渲染重建（非 memo），入依赖则场场空跑；effect 只须由 locatePulse 驱动
+  }, [locatePulse])
 
   // 状态选择器（2026-09 看板 Task 8；2026-09 画布三态 M1 拆 useStatusPick——行为零变化，
   // 语义注释见该 hook：execOnRenderNode 渲染节点寻址 / getData 快照读现值 / 命令落地后

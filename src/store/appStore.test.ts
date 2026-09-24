@@ -20,6 +20,34 @@ describe('appStore', () => {
     expect(useAppStore.getState().maps.map((m) => m.name)).toEqual(['已有'])
   })
 
+  // 2026-09-24 保存失败修正闭环：error 单一事实源不变，errorLocate 携带问题节点 uid
+  //（浮层「定位」钮显示依据）；点击走 locatePulse 脉冲（EditorView 消费即清，挂载不重放）
+  describe('error + errorLocate + locatePulse（错误浮层/定位链）', () => {
+    test('setError 带 uid 落 errorLocate；无 uid / 清空不落', () => {
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u1')
+      expect(useAppStore.getState().error).toBe('保存失败：节点文本包含换行')
+      expect(useAppStore.getState().errorLocate).toEqual({ uid: 'u1' })
+      useAppStore.getState().setError('导入失败：xxx')
+      expect(useAppStore.getState().errorLocate).toBeNull()
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u2')
+      useAppStore.getState().setError(null)
+      expect(useAppStore.getState().error).toBeNull()
+      expect(useAppStore.getState().errorLocate).toBeNull()
+    })
+
+    test('requestErrorLocate 递增 locatePulse（重复点击定位钮重复脉冲）', () => {
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u1')
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(1)
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(2)
+      // 无定位信息时 no-op（定位钮本就不显示，防御）
+      useAppStore.getState().setError(null)
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(2)
+    })
+  })
+
   // v0.7.0 验收：设置页「退出工作区（回到开屏）」的 store 面——清内存态 + load-merge-save 持久化 null
   test('exitWorkspace 清工作区内存态并持久化 workspaceDir:null（其他字段保留）', async () => {
     useAppStore.setState({ configPath: '/cfg.json' })

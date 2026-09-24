@@ -34,6 +34,10 @@ export default {
   mdNoRoot: '未找到根标题（缺少一级标题 H1）',
   mdNodeNewline: '节点文本包含换行，暂不支持多行文本：{{text}}…',
   mdBodyInListLayer: '深层列表节点暂不支持正文：{{text}}…',
+  // 2026-09-24 保存失败修正闭环：错误浮层的修正指引与动作钮
+  fixLocateHint: '定位问题节点修正后，自动保存会重试；保存成功前不能离开画布',
+  locateBtn: '定位',
+  dismiss: '关闭',
   xmindBadZip: '不是有效的 .xmind 文件（无法解压）',
   xmindMissingContent: '不是有效的 .xmind 文件（缺少 content.json/content.xml）',
   xmindNoRootTopic: 'content.json 缺少 rootTopic',

@@ -450,7 +450,9 @@ describe('案头三区与交互（M5d）', () => {
     )
     fireEvent.contextMenu(await screen.findByTestId('file-node-想法A'))
     fireEvent.click(await screen.findByTestId('ctx-btn-copy-wechat'))
-    expect(await screen.findByText(/复制为公众号格式失败/)).toBeInTheDocument()
+    // 错误出口已上收 App 级 ErrorToast 浮层（2026-09-24，LibraryView 不再自渲染横幅）——
+    // 显式出口断言走 store（浮层组件渲染归 ErrorToast.test）
+    await waitFor(() => expect(useAppStore.getState().error).toContain('复制为公众号格式失败'))
     expect(useAppStore.getState().error).toContain('boom')
   })
 

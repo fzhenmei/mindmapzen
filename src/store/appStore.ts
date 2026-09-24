@@ -85,6 +85,12 @@ interface AppState {
   exitEditor(): Promise<void>
   dirty: boolean
   error: string | null
+  /** 错误关联的问题节点定位（2026-09-24 保存失败修正闭环）：setError 携带 uid 时落
+   *  { uid }，浮层「定位」钮的显示依据；error 清除即随清（nonce 触发语义在 locatePulse） */
+  errorLocate: { uid: string } | null
+  /** 定位请求脉冲（浮层「定位」钮递增；EditorView 消费即清回 0——同 pendingLocate 模式，
+   *  挂载不重放残留请求）。与 errorLocate 分离：错误落下不自动跳转，点击才定位 */
+  locatePulse: number
   configPath: string
   adapter: FsAdapter
   /** 用户偏好的默认布局（init 自配置；切换布局时更新并持久化） */
@@ -231,7 +237,11 @@ interface AppState {
   /** 冲突裁决「以磁盘版为准」：递增重挂序号（App 层 key 变化），当前图从磁盘重载 */
   reopenEditor: () => void
   backToLibrary: () => Promise<void>
-  setError: (e: string | null) => void
+  /** 全局错误落口（单一事实源，浮层 ErrorToast 订阅渲染）：locateUid 非空时连带落
+   *  errorLocate（保存失败结构断言携带的问题节点 uid——浮层「定位」钮数据源） */
+  setError: (e: string | null, locateUid?: string) => void
+  /** 问题节点定位请求（locatePulse 递增，EditorView 消费即清）；无定位信息 no-op（防御） */
+  requestErrorLocate: () => void
 }
 
 /** tab 稳定序维护（2026-09 顶部胶囊条）：已在列不动、新开尾部追加，超 5 淘汰最早（上限 5，2026-09 用户裁定） */
@@ -311,6 +321,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPendingLocate: (v) => set({ pendingLocate: v }),
   dirty: false,
   error: null,
+  errorLocate: null,
+  locatePulse: 0,
   configPath: '/cfg.json',
   adapter: null as unknown as FsAdapter, // 生产环境在 main.tsx 注入 tauriFsAdapter
   preferredLayout: 'mindmap',
@@ -747,5 +759,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     await saveConfig(adapter, configPath, { ...cfg, tourDone: true })
   },
 
-  setError: (e) => set({ error: e }),
+  setError: (e, locateUid) =>
+    set({ error: e, errorLocate: e !== null && locateUid !== undefined ? { uid: locateUid } : null }),
+  requestErrorLocate: () => {
+    if (get().errorLocate === null) return
+    set({ locatePulse: get().locatePulse + 1 })
+  },
 }))
