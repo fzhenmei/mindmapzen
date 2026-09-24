@@ -7,6 +7,9 @@ export default {
     placeholder: '问点什么，或让 AI 改这图…',
     send: '发送',
     stop: '停止',
+    // 按轮悬浮复制（2026-09）：定稿回复 hover 复制钮的无障碍名 + 失败 toast
+    copyMessage: '复制此轮回复',
+    copyFailed: '复制失败，请重试',
     contextChip: '上下文：{{text}}',
     // 输入区（2026-09 长内容输入）：快捷键常显提示 + 拖高手柄无障碍名/悬停提示
     inputHint: 'Enter 发送，Shift + Enter 换行',

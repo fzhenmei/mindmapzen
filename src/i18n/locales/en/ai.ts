@@ -7,6 +7,9 @@ export default {
     placeholder: 'Ask anything, or let AI edit this map…',
     send: 'Send',
     stop: 'Stop',
+    // Per-reply hover copy (2026-09): a11y name of the copy button on finalized replies + failure toast
+    copyMessage: 'Copy this reply',
+    copyFailed: 'Copy failed, please retry',
     contextChip: 'Context: {{text}}',
     // Input area (2026-09 long-content input): always-on shortcut hint + resize handle a11y name/tooltip
     inputHint: 'Enter to send, Shift + Enter for newline',

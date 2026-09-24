@@ -82,10 +82,12 @@
 // 2026-09-22（节点搜索批）：850→870（useNodeSearch 接线 + 搜索浮层槽 + 砚栏搜索钮与
 //   Ctrl+F 快捷键接线，实测 860 + 10 行余量；浮层本体在 NodeSearchDialog.tsx、状态源在
 //   useNodeSearch.ts、数据面在 services/nodeSearch.ts（均无护栏）——功能性增长，无腐化）。
+// 2026-09-24（AI 按轮复制批）：870→880（ChatPanel writeClipboard 一行接线，实测 871 +
+//   9 行余量；复制钮本体在 ChatPanel.tsx（无护栏）——功能性增长，非腐化）。
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 870 },
+  { path: '../src/views/EditorView.tsx', limit: 880 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
   { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]
