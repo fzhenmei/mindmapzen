@@ -18,12 +18,15 @@ export default {
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and bodies, set icons/tags, link and fold. The canvas is read-only while AI works; you can stop anytime.',
-    // Chat history banner (2026-09 persistence): shown when the opened map has past turns —
-    // load vs restart, token impact stated in the copy; write failure surfaces as a toast
-    historyBanner: 'This map has {{n}} rounds of past AI conversation. Loading them sends that history as context in new chats (higher token usage); "Restart" omits it.',
+    // Chat history banner (2026-09 persistence): shown when the opened map has past turns and
+    // they are not loaded yet — only "Load" is offered here ("Restart" is a session action that
+    // lives in the header, meaningless without a conversation); token impact stated in the copy
+    historyBanner: 'This map has {{n}} rounds of past AI conversation. Loading them sends that history as context in new chats (higher token usage); otherwise you start a fresh session.',
     historyLoad: 'Load history',
-    historyRestart: 'Restart',
     historySaveFailed: 'Failed to save AI chat history; this turn may not be recorded',
+    // Restart session (2026-09 interaction rework): header icon button — shown only with a conversation while AI is idle
+    restartSession: 'Restart session',
+    restartSessionHint: 'Clear the current conversation and start fresh (history stays archived and loadable)',
     // Operation cards collapse (2026-09): details fold into a summary row at turn end, click to expand; failed count appended in red when present.
     // Rolling window (2026-09 bounded queue): latest 5 stay visible mid-turn, earlier ones fold — cardsOlder labels the earlier set
     cardsSummary: '{{n}} operations',
@@ -46,6 +49,7 @@ export default {
   },
   turn: {
     badge: 'AI working…',
+    tokenHint: 'note token usage',
     roundLimit: 'AI exceeded the 12-round tool-call limit; turn stopped (applied edits kept, undoable)',
     toolFailStreak: 'AI tools failed 3 times in a row; turn stopped',
     transportUnavailable: 'AI network calls are unavailable in this environment (desktop app only)',

@@ -480,8 +480,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
     }
   }, [aiOpen, aiChatWidth])
 
-  // AI 对话历史接线（2026-09 持久化）：读流水挂待载入（banner 提醒）+ 回合收尾落盘端口
-  const persistChatTurn = useChatHistory(adapter, mdPath)
+  // AI 对话历史接线（2026-09 持久化）：读流水挂待载入（banner 提醒）+ 回合落盘/重读端口
+  const { persistChatTurn, reloadChatHistory } = useChatHistory(adapter, mdPath)
 
   /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。
    *  但布局偏好须即时落 sidecar——否则 writeOnce 的 !dirty 早退使偏好永不落盘（元数据即时落盘不违背「不置脏不自动保存」） */
@@ -653,6 +653,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
             }}
             onClose={() => setAiOpen(false)}
             persistTurn={persistChatTurn}
+            reloadHistory={reloadChatHistory}
           />
         </div>
       )}

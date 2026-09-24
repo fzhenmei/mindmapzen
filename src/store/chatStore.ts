@@ -59,8 +59,9 @@ interface ChatState {
   setPendingHistory: (msgs: PendingChatMessage[]) => void
   /** 载入历史：灌入 messages（id 重排、assistant 定稿态、卡片收起），清待载入 */
   loadPendingHistory: () => void
-  /** 重新开始：仅弃待载入（消息区保持现状），新对话不带历史 */
-  dismissPendingHistory: () => void
+  /** 重新开始会话（2026-09 交互重构）：清空当前会话消息。只管 messages——历史提醒的回归
+   *  由宿主 reload（重读文件流水挂 pending）接棒，两步在 ChatPanel 重开钮处串联 */
+  clearSession: () => void
   pushUser: (text: string) => void
   appendStreamDelta: (text: string) => void
   finalizeStream: () => void
@@ -107,7 +108,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }))
       return { messages: [...s.messages, ...loaded], pendingHistory: null }
     }),
-  dismissPendingHistory: () => set({ pendingHistory: null }),
+  clearSession: () => set({ messages: [] }),
   pushUser: (text) =>
     set((s) => ({
       messages: [...s.messages, { id: nextId(), role: 'user', text }, { id: nextId(), role: 'assistant', text: '' }],

@@ -16,7 +16,12 @@ vi.mock('./MarkdownPreview', () => ({
 
 const fakeMm = { execCommand: vi.fn(), renderer: { findNodeByUid: () => null, renderTree: null } }
 
-function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(async () => {}), persistTurn: (m: ChatMessage[]) => Promise<void> = vi.fn(async () => {})) {
+function mount(
+  mm: unknown = fakeMm,
+  writeClipboard: WriteClipboard = vi.fn(async () => {}),
+  persistTurn: (m: ChatMessage[]) => Promise<void> = vi.fn(async () => {}),
+  reloadHistory: () => Promise<void> = vi.fn(async () => {}),
+) {
   return render(
     <ChatPanel
       mmRef={{ current: mm as never }}
@@ -29,6 +34,7 @@ function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(asyn
       onReset={() => {}}
       onClose={() => {}}
       persistTurn={persistTurn}
+      reloadHistory={reloadHistory}
     />,
   )
 }
@@ -492,9 +498,9 @@ test('滚动窗口：回合收尾全折成总计数摘要（不再标"较早的"
   expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
 })
 
-// ═══ 历史对话提醒（2026-09 持久化）：banner 载入/重新开始/隐式清理 + 回合收尾落盘 ═══
+// ═══ 历史对话提醒（2026-09 持久化 + 交互重构）：banner 单钮载入 / header 重新开始 + 回合落盘 ═══
 
-test('有历史时置顶 banner 示轮数；载入历史：消息入面板、卡片收起、banner 退场', async () => {
+test('有历史时置顶 banner 示轮数，只提供载入（无对话时重开钮无意义不显示）；载入后 banner 退场', async () => {
   useChatStore.getState().setPendingHistory([
     { role: 'user', text: '旧问' },
     { role: 'assistant', text: '旧答', cards: [{ kind: 'add', ok: true, text: '节点' }] },
@@ -502,6 +508,8 @@ test('有历史时置顶 banner 示轮数；载入历史：消息入面板、卡
   ])
   mount()
   expect(screen.getByTestId('ai-history-banner')).toHaveTextContent('2 轮')
+  expect(screen.getByTestId('ai-history-load')).toBeInTheDocument()
+  expect(screen.queryByTestId('ai-restart')).not.toBeInTheDocument() // 无对话：重开钮不在场
   await userEvent.click(screen.getByTestId('ai-history-load'))
   expect(screen.queryByTestId('ai-history-banner')).not.toBeInTheDocument()
   // 载入消息走定稿分支（md 渲染），卡片收起成摘要行
@@ -512,15 +520,7 @@ test('有历史时置顶 banner 示轮数；载入历史：消息入面板、卡
   expect(useChatStore.getState().pendingHistory).toBeNull()
 })
 
-test('重新开始：仅弃待载入，消息区保持空态', async () => {
-  useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
-  mount()
-  await userEvent.click(screen.getByTestId('ai-history-restart'))
-  expect(screen.queryByTestId('ai-history-banner')).not.toBeInTheDocument()
-  expect(useChatStore.getState().messages).toEqual([])
-})
-
-test('banner 在场时发送 = 隐式重新开始：banner 退场，新回合照常落盘且不带旧历史', async () => {
+test('banner 在场时发送 = 隐式不载入：banner 退场，新回合照常落盘且不带旧历史', async () => {
   const persistTurn = vi.fn<(msgs: ChatMessage[]) => Promise<void>>(async () => {})
   useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
   mount(fakeMm, undefined, persistTurn)
@@ -533,6 +533,47 @@ test('banner 在场时发送 = 隐式重新开始：banner 退场，新回合照
   const persisted = persistTurn.mock.calls[0][0] as ChatMessage[]
   expect(persisted.map((m) => m.role)).toEqual(['notice', 'user', 'assistant'])
   expect(persisted[1]).toMatchObject({ text: '新话题' })
+})
+
+test('重新开始（header 钮）：清空当前会话并触发重读——banner 回归可再载入（含刚聊轮次）', async () => {
+  const reloadHistory = vi.fn(async () => {
+    // EditorView 闭包行为仿真：重读流水（此刻文件已含载入内容）→ 挂回待载入
+    useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }, { role: 'user', text: '新话题' }])
+  })
+  // 会话态：载入历史 + 聊过一轮（消息非空、idle）→ 重开钮在场
+  useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
+  useChatStore.getState().loadPendingHistory()
+  useChatStore.getState().pushUser('新话题')
+  useChatStore.getState().appendStreamDelta('答')
+  useChatStore.getState().finalizeStream()
+  useChatStore.getState().setPhase('idle')
+  mount(fakeMm, undefined, undefined, reloadHistory)
+  await userEvent.click(screen.getByTestId('ai-restart'))
+  expect(useChatStore.getState().messages).toEqual([]) // 会话清空
+  await waitFor(() => expect(reloadHistory).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(useChatStore.getState().pendingHistory).not.toBeNull()) // banner 回归
+  expect(useChatStore.getState().pendingHistory).toHaveLength(2) // 含刚聊的「新话题」轮
+})
+
+test('AI 处理中不显示重开钮（防打断在途回合）；执行中状态行带 Token 消耗提示', async () => {
+  // 门闸 transport：start 挂起——回合停在 streaming
+  let releaseStart: ((o: { endedWith: string }) => void) | null = null
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: () =>
+      new Promise<{ endedWith: string }>((resolve) => {
+        releaseStart = resolve
+      }),
+    abort: () => {},
+  })
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '长任务')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-msg-streaming')
+  expect(screen.queryByTestId('ai-restart')).not.toBeInTheDocument() // streaming：重开钮隐藏
+  expect(screen.getByTestId('ai-status')).toHaveTextContent('Token') // 状态行 Token 提示
+  releaseStart!({ endedWith: 'done' })
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  expect(screen.getByTestId('ai-restart')).toBeInTheDocument() // 收尾回归 idle：重开钮回来
 })
 
 test('回合收尾把操作卡片随消息一并交持久化端口（在途挂卡，收尾切片带出）', async () => {

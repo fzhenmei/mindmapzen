@@ -134,13 +134,13 @@ test('loadPendingHistory：灌入重排 id、assistant 定稿态、卡片收起�
   expect(useChatStore.getState().pendingHistory).toBeNull()
 })
 
-test('dismissPendingHistory：弃待载入，消息区保持现状', () => {
+test('clearSession：清空当前会话消息，不动待载入（重开钮串联 reload 接棒 banner 回归）', () => {
   const s = useChatStore.getState()
   s.pushUser('x')
   s.setPendingHistory([{ role: 'user', text: '旧' }])
-  s.dismissPendingHistory()
-  expect(useChatStore.getState().pendingHistory).toBeNull()
-  expect(useChatStore.getState().messages).toHaveLength(2) // 不动消息区
+  s.clearSession()
+  expect(useChatStore.getState().messages).toEqual([]) // 只管消息区
+  expect(useChatStore.getState().pendingHistory).toEqual([{ role: 'user', text: '旧' }]) // pending 归 reload 管
 })
 
 test('pushUser 清 pendingHistory（发送即隐式重新开始）；reset 一并清', () => {

@@ -2,7 +2,7 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle } from 'lucide-react'
+import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle, RotateCcw } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
@@ -39,9 +39,12 @@ interface Props {
   /** 回合收尾持久化端口（2026-09 对话历史）：EditorView 接 appendTurn（adapter+mdPath 闭包），
    *  测试注入桩——同 writeClipboard 先例。闭包内自兜错误（console+toast），此处 void 不再捕 */
   persistTurn(msgs: ChatMessage[]): Promise<void>
+  /** 重读流水挂待载入（2026-09 交互重构）：重新开始钮串联 clearSession 后调此——文件是
+   *  全量流水，重开后 banner 回归、载入历史仍可回来（含刚聊的轮次）。同自兜合同 */
+  reloadHistory(): Promise<void>
 }
 
-export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose, persistTurn }: Readonly<Props>) {
+export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose, persistTurn, reloadHistory }: Readonly<Props>) {
   const { t } = useTranslation()
   const messages = useChatStore((s) => s.messages)
   const phase = useChatStore((s) => s.phase)
@@ -207,13 +210,34 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
       <SplitResizer side="left" width={width} min={240} max={520} label={t('ai.panel.title')} onResize={onResize} onCommit={onCommit} onReset={onReset} />
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-sm font-medium">{t('ai.panel.title')}</span>
-        <button type="button" data-testid="ai-close" aria-label={t('ai.panel.close')} onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-accent">
-          <X className="size-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          {/* 重新开始会话（2026-09 交互重构）：会话操作归 header——有对话且 AI 空闲才显示
+              （处理中不能重开，防打断在途回合）。点击 = 清空当前会话 + 重读流水挂回 banner
+              （文件全量流水，历史含刚聊的轮次，可再载入）——无损操作不弹确认 */}
+          {messages.length > 0 && phase === 'idle' && (
+            <button
+              type="button"
+              data-testid="ai-restart"
+              aria-label={t('ai.panel.restartSession')}
+              title={t('ai.panel.restartSessionHint')}
+              onClick={() => {
+                useChatStore.getState().clearSession()
+                void reloadHistory()
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
+            >
+              <RotateCcw className="size-4" />
+            </button>
+          )}
+          <button type="button" data-testid="ai-close" aria-label={t('ai.panel.close')} onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-accent">
+            <X className="size-4" />
+          </button>
+        </div>
       </header>
-      {/* 历史对话提醒（2026-09 持久化）：打开的导图有历史流水时置顶提醒，用户选「载入历史」
-          （接续上下文继续聊）或「重新开始」（不带历史，流水照常追加）；首条消息发送 = 隐式
-          重新开始（pushUser 清 pendingHistory）。不透明 muted 底——半透明底深浅主题混叠看不清 */}
+      {/* 历史对话提醒（2026-09 持久化）：打开的导图有历史流水且尚未载入时置顶提醒——此时
+          只提供「载入历史」（「重新开始」是会话操作归 header，无对话时无意义）；首条消息
+          发送 = 隐式不载入（pushUser 清 pendingHistory，banner 退场）。不透明 muted 底——
+          半透明底深浅主题混叠看不清 */}
       {pendingHistory !== null && (
         <div data-testid="ai-history-banner" className="shrink-0 space-y-1.5 border-b border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
           <p>
@@ -227,14 +251,6 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
               className="rounded border border-border bg-background px-2 py-0.5 hover:bg-accent"
             >
               {t('ai.panel.historyLoad')}
-            </button>
-            <button
-              type="button"
-              data-testid="ai-history-restart"
-              onClick={() => useChatStore.getState().dismissPendingHistory()}
-              className="rounded border border-border px-2 py-0.5 hover:bg-accent"
-            >
-              {t('ai.panel.historyRestart')}
             </button>
           </div>
         </div>
@@ -263,6 +279,8 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
         >
           <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
           {t('ai.turn.badge')}
+          <span className="text-border">·</span>
+          {t('ai.turn.tokenHint')}
         </div>
       )}
       {(contextNode ?? selection) && (
