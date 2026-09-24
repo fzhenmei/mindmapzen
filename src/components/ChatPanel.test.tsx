@@ -322,3 +322,13 @@ test('按轮复制：剪贴板失败——toast 报错不静默（吞异常红�
   await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
   expect(toasts).toContain('复制失败，请重试')
 })
+
+test('按轮复制：user 输入也有独立复制钮，各自复制各自内容', async () => {
+  const write = vi.fn(async () => {})
+  seedFinalAssistant('回答') // 消息流：[user('问'), assistant('回答')]
+  mount(fakeMm, write)
+  await userEvent.click(screen.getByRole('button', { name: '复制此条输入' }))
+  expect(write).toHaveBeenCalledWith('问')
+  await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
+  expect(write).toHaveBeenCalledWith('回答')
+})
