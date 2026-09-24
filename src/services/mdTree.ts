@@ -16,10 +16,23 @@ function escapeItemText(text: string): string {
   return /^([-+*#>]|\d+[.)]\s|\\+(?=[-+*#>]|\d+[.)]))/.test(text) ? '\\' + text : text
 }
 
+/** 结构断言错误（节点文本含换行 / 深层列表正文）：携带问题节点 uid——engineTreeToZen
+ *  方向 uid 在树（保存失败「定位」钮数据源，2026-09-24）；parse 方向树无 uid 不挂 */
+export interface NodeStructureError extends Error {
+  nodeUid?: string
+}
+
+/** 断言抛错统一出口：文案 + 可选 uid（Error 子类不引入，属性挂载最小实现） */
+function throwNodeStructureError(key: 'errors.mdNodeNewline' | 'errors.mdBodyInListLayer', text: string, node: ZenNode): never {
+  const err = new Error(i18n.t(key, { text: text.slice(0, 20) })) as NodeStructureError
+  if (node.uid !== undefined) err.nodeUid = node.uid
+  throw err
+}
+
 /** 节点文本含换行时序列化必然产出结构损坏的 md（静默丢内容），宁可当场报错拦截 */
 function assertNoNewline(node: ZenNode): void {
   if (node.text.includes('\n') || node.text.includes('\r')) {
-    throw new Error(i18n.t('errors.mdNodeNewline', { text: node.text.slice(0, 20) }))
+    throwNodeStructureError('errors.mdNodeNewline', node.text, node)
   }
   for (const child of node.children) assertNoNewline(child)
 }
@@ -28,7 +41,7 @@ function assertNoNewline(node: ZenNode): void {
  *  （正常 UI 路径由 useBodyDialog 的 layer 门禁拦截，此处防其他写入路径） */
 function assertNoBodyInList(node: ZenNode, depth: number): void {
   if (depth >= 7 && node.body !== undefined) {
-    throw new Error(i18n.t('errors.mdBodyInListLayer', { text: node.text.slice(0, 20) }))
+    throwNodeStructureError('errors.mdBodyInListLayer', node.text, node)
   }
   for (const child of node.children) assertNoBodyInList(child, depth + 1)
 }

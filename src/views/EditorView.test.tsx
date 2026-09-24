@@ -533,6 +533,114 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
   expect(screen.getByTestId('dirty-badge')).toBeInTheDocument()
 })
 
+test('保存失败结构断言携带问题节点 uid；修正后保存成功清错误与定位（修正闭环 2026-09-24）', async () => {
+  // 毒节点：child 文本含 \r\n（Word 粘贴漏网形态）——serialize 断言抛错须带 uid 走定位链
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [{ data: { text: '因为没有想到，肯定就做不到。\r\n现在', expand: true, uid: 'poison-uid' }, children: [] }],
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  expect(useAppStore.getState().error).toContain('换行')
+  expect(useAppStore.getState().errorLocate).toEqual({ uid: 'poison-uid' })
+  // 用户修正（毒节点文本去换行）→ 保存成功 → 错误与定位随清（浮层退场，闭环完成）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [{ data: { text: '因为没有想到，肯定就做不到。 现在', expand: true, uid: 'poison-uid' }, children: [] }],
+  }
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toBeNull())
+  expect(useAppStore.getState().errorLocate).toBeNull()
+  expect(useAppStore.getState().dirty).toBe(false)
+})
+
+test('保存成功只清保存管线报的错，不误清其他来源错误', async () => {
+  // 磁盘故障一轮（throw 一次后恢复）
+  const original = fs.writeTextFileAtomic.bind(fs)
+  let thrown = false
+  fs.writeTextFileAtomic = async (p: string, contents: string) => {
+    if (!thrown) {
+      thrown = true
+      throw new Error('磁盘已满（模拟）')
+    }
+    return original(p, contents)
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  // 保存失败期间落了别的错误（如导入失败）——保存恢复成功后不得替它退场
+  useAppStore.getState().setError('导入失败：坏文件')
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(useAppStore.getState().error).toBe('导入失败：坏文件')
+})
+
+test('浮层定位钮脉冲消费：locatePulse → locateNode 居中问题节点；消费即清不重放', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 保存失败带问题节点 uid（child-uid 桩可寻址）；错误落下不自动跳转（nonce 语义已拆走）
+  useAppStore.getState().setError('保存失败：节点文本包含换行', 'child-uid')
+  const handle = fakeHandle
+  expect(handle.renderer?.moveNodeToCenter).not.toHaveBeenCalled()
+  // 点击「定位」→ 脉冲 → locateNode（切导图态+展开祖先+居中）→ moveNodeToCenter 问题节点
+  act(() => {
+    useAppStore.getState().requestErrorLocate()
+  })
+  expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledWith(fakeChildNode)
+  expect(useAppStore.getState().locatePulse).toBe(0) // 消费即清（挂载重开不重放残留请求）
+  // 重复点击同 uid 再脉冲再居中（nonce 递增语义由 locatePulse 承担）
+  act(() => {
+    useAppStore.getState().requestErrorLocate()
+  })
+  expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledTimes(2)
+})
+
 test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
   // 原子写持续失败（模拟磁盘故障）：文件内容已在 beforeEach 写入，读取不受影响
   fs.writeTextFileAtomic = vi.fn(async () => {

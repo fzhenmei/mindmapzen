@@ -3,7 +3,7 @@
 // 守卫「放弃」路径也读写它）；所有管线状态走 refs，闭包取首渲染值即可（同 dirtyRef 模式）。
 import { useRef, type RefObject } from 'react'
 import { i18n } from '../i18n'
-import { engineTreeToZen, serialize } from '../services/mdTree'
+import { engineTreeToZen, serialize, type NodeStructureError } from '../services/mdTree'
 import { writeSidecar } from '../services/sidecar'
 import { collectLinkAdjust, type LinkAdjust } from '../services/linkAdjust'
 import { harvestRegistry } from '../editor/linkRegistry'
@@ -22,7 +22,9 @@ export interface SavePipelineOpts {
   /** 连线净化会话注册表（M5d Task 2）：序列化时按 uid 查表句尾注入 [[..]] 标记（稳定引用对象） */
   registry: LinkRegistry
   onDirtyChange: (dirty: boolean) => void // 脏标记同步（markDirty / clearDirty）
-  onError: (msg: string) => void // 保存失败横幅（setError）
+  /** 保存失败横幅（setError）；locateUid = serialize 结构断言携带的问题节点 uid
+   *  （换行/深层正文——浮层「定位」钮数据源，无则缺省） */
+  onError: (msg: string, locateUid?: string) => void
   onSaved?: () => void // md+sidecar 落盘成功后回调（M5b Task 3：双链重建随保存链）
   /** 外部变更裁决（多实例/外部编辑器改盘）：保存链挂起等待三态决策——
    *  overwrite 以内存为准续写；reload/cancel 中止本轮保脏（重载导航由上层按决策执行） */
@@ -115,10 +117,12 @@ export function useSavePipeline(opts: SavePipelineOpts): SavePipeline {
       onDirtyChange(false)
       return true
     } catch (e) {
-      // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试
+      // 保存失败：保留脏标记（数据未落盘不能丢），提示后等待重试；结构断言错误
+      // （节点文本换行/深层正文）携带问题节点 uid 透传定位链（浮层「定位」钮）
       dirtyRef.current = true
       onDirtyChange(true)
-      onError(i18n.t('errors.saveFailed', { reason: String(e) }))
+      const locateUid = e instanceof Error && 'nodeUid' in e ? (e as NodeStructureError).nodeUid : undefined
+      onError(i18n.t('errors.saveFailed', { reason: String(e) }), locateUid)
       return false
     }
   }

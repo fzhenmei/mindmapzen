@@ -23,21 +23,30 @@ interface NodeDataPayload {
   [key: string]: unknown
 }
 
+/** 节点数据载荷归一化（text 单行、body/note 多行；浅拷贝不改原对象）——SET_NODE_DATA
+ *  与 INSERT_CHILD_NODE 载荷共用同一口径 */
+const sanitizeNodePayload = (data: NodeDataPayload): NodeDataPayload => {
+  const out: NodeDataPayload = { ...data }
+  if (typeof out.text === 'string') out.text = normalizeNodeText(out.text)
+  if (typeof out.body === 'string') out.body = normalizeMultiline(out.body)
+  if (typeof out.note === 'string') out.note = normalizeMultiline(out.note)
+  return out
+}
+
 /** 提交口命令参数归一化（2026-09-07 Word 粘贴毒节点治本）：编辑框提交（SET_NODE_TEXT，
- *  引擎 TextEdit.js:492）与正文弹窗写入（SET_NODE_DATA，useBodyDialog flushNow）是节点
- *  文本/正文的两条入口——在 execCommand 包装层统一剥换行，粘贴口拦截（MindMapCanvas
- *  onPaste）之外的漏网路径在此兜底。非目标命令原样返回 */
+ *  引擎 TextEdit.js:492）、正文弹窗写入（SET_NODE_DATA，useBodyDialog flushNow）与画布态
+ *  粘贴建节点（INSERT_CHILD_NODE，canvasPaste 整段塞单节点 text——2026-09-24 Word 粘贴
+ *  毒节点实案的漏网入口）是节点文本/正文的三条入口——在 execCommand 包装层统一剥换行，
+ *  粘贴口拦截（MindMapCanvas onPaste）之外的漏网路径在此兜底。非目标命令原样返回 */
 export function sanitizeExecArgs(cmd: string, args: unknown[]): unknown[] {
   if (cmd === 'SET_NODE_TEXT' && typeof args[1] === 'string') {
     return [args[0], normalizeNodeText(args[1]), ...args.slice(2)]
   }
   if (cmd === 'SET_NODE_DATA' && args[1] !== null && typeof args[1] === 'object') {
-    const data = args[1] as NodeDataPayload
-    const out: NodeDataPayload = { ...data }
-    if (typeof out.text === 'string') out.text = normalizeNodeText(out.text)
-    if (typeof out.body === 'string') out.body = normalizeMultiline(out.body)
-    if (typeof out.note === 'string') out.note = normalizeMultiline(out.note)
-    return [args[0], out, ...args.slice(2)]
+    return [args[0], sanitizeNodePayload(args[1] as NodeDataPayload), ...args.slice(2)]
+  }
+  if (cmd === 'INSERT_CHILD_NODE' && args[2] !== null && typeof args[2] === 'object') {
+    return [args[0], args[1], sanitizeNodePayload(args[2] as NodeDataPayload), ...args.slice(3)]
   }
   return args
 }

@@ -56,7 +56,7 @@ interface Props {
  *  单击 = 选中目录（主区仍欢迎页） */
 export default function LibraryView({ pickDirectory, pickImportFile, writeClipboard, writeHtmlClipboard }: Readonly<Props>) {
   const { t, i18n } = useTranslation()
-  const { workspaceDir, maps, error, selectedDir, favorites, librarySort } = useAppStore()
+  const { workspaceDir, maps, selectedDir, favorites, librarySort } = useAppStore()
   const recentOpened = useAppStore((s) => s.recentOpened)
   // App 级对话框开合（设置/历史）：作浮窗挂载门——开着时卸载浮窗，防一次 Esc 双关
   const appDialog = useAppStore((s) => s.appDialog)
@@ -254,7 +254,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
   if (!workspaceDir)
     return (
       <div className="library relative flex h-full flex-col bg-background">
-        {error && <div className="error-banner">{error}</div>}
+        {/* 全局错误出口已上收 App 层 ErrorToast 浮层（2026-09-24，可关闭）——本视图不再渲染 */}
         <WelcomeScreen
           onCreateWorkspace={() => void chooseWorkspace()}
           onCloneFromGit={() => setCloneOpen(true)}
@@ -387,7 +387,7 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
               {iconBtn(t('library.library.importMd'), 'btn-import', IconImport, () => void dlg.startImport())}
             </div>
           </header>
-          {error && <div className="error-banner">{error}</div>}
+          {/* 全局错误出口已上收 App 层 ErrorToast 浮层（2026-09-24，可关闭）——原流内横幅退役 */}
           {/* 主区（官方 p-6）：单态（欢迎页/空态）；relative 供悬浮预览浮窗 absolute 锚定 */}
           <main className="relative flex min-h-0 flex-1 p-6">
             {renderRight()}
