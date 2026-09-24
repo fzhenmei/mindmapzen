@@ -18,6 +18,12 @@ export default {
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本与正文、设图标标签、连线和折叠；AI 处理期间画布只读，随时可停。',
+    // 历史对话提醒（2026-09 持久化）：打开有历史流水的导图时置顶 banner——载入 vs 重新开始，
+    // Token 影响写进文案；落盘失败走 toast
+    historyBanner: '此导图有 {{n}} 轮历史对话。载入后新对话将携带这些历史作为上下文，Token 消耗会相应增加；「重新开始」则不携带。',
+    historyLoad: '载入历史',
+    historyRestart: '重新开始',
+    historySaveFailed: 'AI 对话记录保存失败，本轮对话可能未入档',
     // 操作卡片收起（2026-09）：回合收尾明细卡折叠成摘要行，点击展开；有失败时追加红色失败计数。
     // 滚动窗口（2026-09 有界队列）：回合中恒显最新 5 条，较早的折进摘要——cardsOlder 标较早组
     cardsSummary: '{{n}} 项操作',

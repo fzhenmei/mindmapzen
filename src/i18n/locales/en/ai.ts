@@ -18,6 +18,12 @@ export default {
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and bodies, set icons/tags, link and fold. The canvas is read-only while AI works; you can stop anytime.',
+    // Chat history banner (2026-09 persistence): shown when the opened map has past turns —
+    // load vs restart, token impact stated in the copy; write failure surfaces as a toast
+    historyBanner: 'This map has {{n}} rounds of past AI conversation. Loading them sends that history as context in new chats (higher token usage); "Restart" omits it.',
+    historyLoad: 'Load history',
+    historyRestart: 'Restart',
+    historySaveFailed: 'Failed to save AI chat history; this turn may not be recorded',
     // Operation cards collapse (2026-09): details fold into a summary row at turn end, click to expand; failed count appended in red when present.
     // Rolling window (2026-09 bounded queue): latest 5 stay visible mid-turn, earlier ones fold — cardsOlder labels the earlier set
     cardsSummary: '{{n}} operations',

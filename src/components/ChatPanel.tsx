@@ -11,6 +11,7 @@ import { showToast } from '../services/toast'
 import type { WriteClipboard } from '../services/clipboard'
 import { useAppStore } from '../store/appStore'
 import { useChatStore, type ChatMessage, CARDS_WINDOW } from '../store/chatStore'
+import { windowedHistory } from '../services/chatHistory'
 import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
 import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
@@ -35,13 +36,17 @@ interface Props {
   onCommit(w: number): void // 松手落盘
   onReset(): void // 双击回默认宽
   onClose(): void
+  /** 回合收尾持久化端口（2026-09 对话历史）：EditorView 接 appendTurn（adapter+mdPath 闭包），
+   *  测试注入桩——同 writeClipboard 先例。闭包内自兜错误（console+toast），此处 void 不再捕 */
+  persistTurn(msgs: ChatMessage[]): Promise<void>
 }
 
-export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose }: Readonly<Props>) {
+export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose, persistTurn }: Readonly<Props>) {
   const { t } = useTranslation()
   const messages = useChatStore((s) => s.messages)
   const phase = useChatStore((s) => s.phase)
   const contextNode = useChatStore((s) => s.contextNode)
+  const pendingHistory = useChatStore((s) => s.pendingHistory)
   const [input, setInput] = useState('')
   // 输入框拖高（2026-09 长内容）：层级同面板宽（aiDragPx ?? aiChatWidth 先例），
   // 但松手不清暂存——持久层异步落盘窗口期清了会闪回（见 InputResizer onCommit 注释），
@@ -120,13 +125,12 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
       appNow.markAiBackupNoticeShown()
       chat.pushNotice(i18n.t('ai.notice.noBackup'))
     }
-    // 对话历史只回传 user/assistant 文本（工具明细不回传，省 token；卡片留在 UI）；
+    // 对话历史回传（2026-09 持久化改道 windowedHistory）：user/assistant 文本尾部窗口化
+    // （24000 字符预算，工具明细/卡片仍不回传）——加载长历史/长会话不会无限爆上下文；
     // 先取历史再 pushUser——runUserTurn 自会追加本轮 userText，取晚一步会把当前消息重复上送
-    const history = useChatStore
-      .getState()
-      .messages.filter((m) => m.role === 'user' || (m.role === 'assistant' && m.rendered && m.text))
-      .map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.text }))
-    chat.pushUser(text)
+    const history = windowedHistory(useChatStore.getState().messages)
+    const turnStartIdx = chat.messages.length // 本回合落盘切片起点（pushUser 前）
+    chat.pushUser(text) // pushUser 顺带清 pendingHistory：发送即隐式「重新开始」
     // 上翻看历史中发送 = 注意力已回对话，强制回底跟随（否则自己的消息+后续回复都看不见）
     stickRef.current = true
     const sel = selectionLine(contextNode ?? selection)
@@ -187,6 +191,9 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
       useChatStore.getState().setPhase('idle')
       endAiTurn()
       useChatStore.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
+      // 对话历史落盘（2026-09 持久化）：本回合 user/assistant（含卡片；error/notice 与空文本
+      // 占位由 appendTurn 过滤）追加进 sidecar 流水。fire-and-forget：闭包自兜错误，不阻塞收尾
+      void persistTurn(useChatStore.getState().messages.slice(turnStartIdx))
     }
   }
 
@@ -204,6 +211,34 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
           <X className="size-4" />
         </button>
       </header>
+      {/* 历史对话提醒（2026-09 持久化）：打开的导图有历史流水时置顶提醒，用户选「载入历史」
+          （接续上下文继续聊）或「重新开始」（不带历史，流水照常追加）；首条消息发送 = 隐式
+          重新开始（pushUser 清 pendingHistory）。不透明 muted 底——半透明底深浅主题混叠看不清 */}
+      {pendingHistory !== null && (
+        <div data-testid="ai-history-banner" className="shrink-0 space-y-1.5 border-b border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <p>
+            {t('ai.panel.historyBanner', { n: pendingHistory.filter((m) => m.role === 'user').length })}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-testid="ai-history-load"
+              onClick={() => useChatStore.getState().loadPendingHistory()}
+              className="rounded border border-border bg-background px-2 py-0.5 hover:bg-accent"
+            >
+              {t('ai.panel.historyLoad')}
+            </button>
+            <button
+              type="button"
+              data-testid="ai-history-restart"
+              onClick={() => useChatStore.getState().dismissPendingHistory()}
+              className="rounded border border-border px-2 py-0.5 hover:bg-accent"
+            >
+              {t('ai.panel.historyRestart')}
+            </button>
+          </div>
+        </div>
+      )}
       <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} className="flex-1 overflow-y-auto p-3 text-sm">
         {/* 内容 wrapper：ResizeObserver 的观察目标（容器自身 flex 定高，内容撑高要看它） */}
         <div ref={listInnerRef}>

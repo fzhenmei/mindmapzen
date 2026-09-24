@@ -141,6 +141,14 @@ function Tip({ label, children }: Readonly<{ label: string; children: ReactNode 
   )
 }
 
+/** 复制范围三态推导（scope 词汇表归 ZenBar，宿主按选区导出值）：单选=分支；
+ *  圈选多节点=多选；无选择=全图。语句式分派（Sonar S3358 拆嵌套三元） */
+export function copyScopeOf(uid: string | null, activeCount: number): 'full' | 'branch' | 'multi' {
+  if (uid !== null) return 'branch'
+  if (activeCount > 1) return 'multi'
+  return 'full'
+}
+
 /** 常用三布局钮（ToggleGroup 项）：kind + 图标元组——语义名渲染期经 t() 取（layouts 子域） */
 const BAR_LAYOUTS = [
   ['mindmap', <IconLayoutRight key="r" />],

@@ -107,14 +107,21 @@ export async function renameMap(
   if (await fs.exists(oldSidecar)) {
     await fs.rename(oldSidecar, joinPath(dir, trimmed + '.zen.json'))
   }
+  // AI 对话历史 sidecar（2026-09 持久化）：一并搬移，否则改名后历史孤儿化
+  const oldChat = joinPath(dir, oldName + '.zen.chat.json')
+  if (await fs.exists(oldChat)) {
+    await fs.rename(oldChat, joinPath(dir, trimmed + '.zen.chat.json'))
+  }
 }
 
-/** 删除导图（两文件一起 remove）。relDir 为导图所在相对目录（'' = 工作区根），同 renameMap 按目录拼路径 */
+/** 删除导图（三个 sidecar 文件一起 remove）。relDir 为导图所在相对目录（'' = 工作区根），同 renameMap 按目录拼路径 */
 export async function deleteMap(fs: FsAdapter, wsDir: string, relDir: string, name: string): Promise<void> {
   const dir = resolveDir(wsDir, relDir)
   await fs.remove(joinPath(dir, name + '.md'))
   const sidecar = joinPath(dir, name + '.zen.json')
   if (await fs.exists(sidecar)) await fs.remove(sidecar)
+  const chat = joinPath(dir, name + '.zen.chat.json')
+  if (await fs.exists(chat)) await fs.remove(chat)
 }
 
 export function joinPath(dir: string, name: string): string {

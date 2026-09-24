@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import ChatPanel from './ChatPanel'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, type ChatMessage } from '../store/chatStore'
 import { useAppStore } from '../store/appStore'
 import { subscribeToast } from '../services/toast'
 import type { WriteClipboard } from '../services/clipboard'
@@ -16,7 +16,7 @@ vi.mock('./MarkdownPreview', () => ({
 
 const fakeMm = { execCommand: vi.fn(), renderer: { findNodeByUid: () => null, renderTree: null } }
 
-function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(async () => {})) {
+function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(async () => {}), persistTurn: (m: ChatMessage[]) => Promise<void> = vi.fn(async () => {})) {
   return render(
     <ChatPanel
       mmRef={{ current: mm as never }}
@@ -28,6 +28,7 @@ function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(asyn
       onCommit={() => {}}
       onReset={() => {}}
       onClose={() => {}}
+      persistTurn={persistTurn}
     />,
   )
 }
@@ -489,4 +490,69 @@ test('滚动窗口：回合收尾全折成总计数摘要（不再标"较早的"
   expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(false)
   expect(screen.getByTestId('ai-card-1-0')).toBeInTheDocument()
   expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
+})
+
+// ═══ 历史对话提醒（2026-09 持久化）：banner 载入/重新开始/隐式清理 + 回合收尾落盘 ═══
+
+test('有历史时置顶 banner 示轮数；载入历史：消息入面板、卡片收起、banner 退场', async () => {
+  useChatStore.getState().setPendingHistory([
+    { role: 'user', text: '旧问' },
+    { role: 'assistant', text: '旧答', cards: [{ kind: 'add', ok: true, text: '节点' }] },
+    { role: 'user', text: '旧问二' },
+  ])
+  mount()
+  expect(screen.getByTestId('ai-history-banner')).toHaveTextContent('2 轮')
+  await userEvent.click(screen.getByTestId('ai-history-load'))
+  expect(screen.queryByTestId('ai-history-banner')).not.toBeInTheDocument()
+  // 载入消息走定稿分支（md 渲染），卡片收起成摘要行
+  expect(screen.getByTestId('md-preview')).toHaveTextContent('旧答')
+  expect(screen.getByText('旧问')).toBeInTheDocument()
+  expect(screen.getByText('旧问二')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-cards-toggle-1')).toHaveTextContent('1 项操作')
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+})
+
+test('重新开始：仅弃待载入，消息区保持空态', async () => {
+  useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
+  mount()
+  await userEvent.click(screen.getByTestId('ai-history-restart'))
+  expect(screen.queryByTestId('ai-history-banner')).not.toBeInTheDocument()
+  expect(useChatStore.getState().messages).toEqual([])
+})
+
+test('banner 在场时发送 = 隐式重新开始：banner 退场，新回合照常落盘且不带旧历史', async () => {
+  const persistTurn = vi.fn<(msgs: ChatMessage[]) => Promise<void>>(async () => {})
+  useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
+  mount(fakeMm, undefined, persistTurn)
+  await userEvent.type(screen.getByTestId('ai-input'), '新话题')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  expect(await screen.findByText(/收到/)).toBeInTheDocument()
+  expect(screen.queryByTestId('ai-history-banner')).not.toBeInTheDocument()
+  // 端口收到本回合原始切片（含安全网 notice——过滤归 appendTurn，服务层单测已覆盖）
+  await waitFor(() => expect(persistTurn).toHaveBeenCalledTimes(1))
+  const persisted = persistTurn.mock.calls[0][0] as ChatMessage[]
+  expect(persisted.map((m) => m.role)).toEqual(['notice', 'user', 'assistant'])
+  expect(persisted[1]).toMatchObject({ text: '新话题' })
+})
+
+test('回合收尾把操作卡片随消息一并交持久化端口（在途挂卡，收尾切片带出）', async () => {
+  const persistTurn = vi.fn<(msgs: ChatMessage[]) => Promise<void>>(async () => {})
+  // 门闸 transport：start 挂起等放行——卡在回合在途时挂上，避免收尾竞态
+  let releaseStart: ((o: { endedWith: string }) => void) | null = null
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: () =>
+      new Promise<{ endedWith: string }>((resolve) => {
+        releaseStart = resolve
+      }),
+    abort: () => {},
+  })
+  mount(fakeMm, undefined, persistTurn)
+  await userEvent.type(screen.getByTestId('ai-input'), '加节点')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-msg-streaming') // 回合在途（user + assistant 占位已建，start 已挂起）
+  useChatStore.getState().pushCard({ kind: 'add', ok: true, text: '新想法' })
+  releaseStart!({ endedWith: 'done' })
+  await waitFor(() => expect(persistTurn).toHaveBeenCalledTimes(1))
+  const persisted = persistTurn.mock.calls[0][0] as ChatMessage[]
+  expect(persisted[2]!.cards).toEqual([{ kind: 'add', ok: true, text: '新想法' }])
 })
