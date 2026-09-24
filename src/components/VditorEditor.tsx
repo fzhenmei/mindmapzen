@@ -119,6 +119,9 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
           name: 'mermaid',
           hotkey: '',
           tip: 'Mermaid',
+          // tipPosition 必配(2026-09-24):MenuItem 构造拼 className="vditor-tooltipped__"+
+          // tipPosition,缺省拼出 __undefined 无方向规则,tooltip ::after 无定位回退静态位置
+          tipPosition: 'n',
           className: 'zen-vd-mermaid',
           icon: MERMAID_ICON,
           click: () => {
@@ -148,6 +151,15 @@ export default function VditorEditor({ value, onChange, lang, theme, uploadImage
       },
       after: () => {
         inited = true
+        // 工具栏 tooltip 方向适配(2026-09-24 左侧裁剪修复):vditor 给 undo/redo 硬编码
+        // tipPosition "nw"(tooltip 右缘锚按钮中线、向左展开)——本组件唯一宿主是弹窗,
+        // DialogContent overflow-hidden(圆角裁内容)下最左按钮向左展开必越弹窗左界被裁
+        // (e2e 实测 undo 越界 59px 裁 64%,左侧文字不可见);换 "ne"(左缘锚中线-15px
+        // 向右展开)全程界内。运行时改方向类与 vditor 官方同构(Fullscreen 回调即此做法);
+        // 工具栏仅 undo/redo 是 __nw,initUI 后一次性覆写,无回写竞争
+        host.querySelectorAll('.vditor-toolbar .vditor-tooltipped__nw').forEach((b) => {
+          b.classList.replace('vditor-tooltipped__nw', 'vditor-tooltipped__ne')
+        })
         // 打开即聚焦(2026-09-22):sv 的 textarea 异步 init 后才存在,autoFocus 属性挂不上;
         // Radix 开弹窗默认聚焦内容区首个可聚焦元素(× 关闭钮)——init 完成瞬间把焦点
         // 交给编辑器,用户开弹窗即可输入,无需先点一下编辑区

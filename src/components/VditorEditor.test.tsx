@@ -102,6 +102,36 @@ describe('VditorEditor:VDitor 薄包装契约', () => {
     expect(inst.destroy).not.toHaveBeenCalled()
     expect(inst.isDestroyed).toBe(true) // 令挂起的 init() 入口早退
   })
+
+  test('after:initUI 后把工具栏 __nw 方向类换 __ne(弹窗 overflow-hidden 下向左展开越左界被裁)', () => {
+    // 2026-09-24 缺陷回归:vditor 给 undo/redo 硬编码 tipPosition "nw"(tooltip 右缘锚
+    // 按钮中线、向左展开)——本组件唯一宿主是弹窗,DialogContent overflow-hidden(圆角
+    // 裁内容)下最左按钮 tooltip 向左越弹窗左界即被裁(e2e 实测 undo 越 59px 裁 64%,
+    // 左侧文字不可见);换 "ne"(左缘锚中线-15px 向右展开)全程界内。mock 模式下
+    // vditor 不真挂 DOM:host 预置 __nw 假按钮模拟 initUI 产物,after 后断言换类
+    const { container } = render(
+      <VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />,
+    )
+    const host = container.querySelector('[data-testid="vditor-host"]')!
+    host.innerHTML =
+      '<div class="vditor-toolbar"><button class="vditor-tooltipped vditor-tooltipped__nw" data-type="undo"></button><button class="vditor-tooltipped vditor-tooltipped__ne" data-type="bold"></button></div>'
+    ;(lastOpts()!.after as () => void)()
+    const undoBtn = host.querySelector('[data-type="undo"]')!
+    expect(undoBtn.classList.contains('vditor-tooltipped__ne')).toBe(true)
+    expect(undoBtn.classList.contains('vditor-tooltipped__nw')).toBe(false)
+    // 其他方向类不受影响
+    expect(host.querySelector('[data-type="bold"]')!.className).toBe('vditor-tooltipped vditor-tooltipped__ne')
+  })
+
+  test('mermaid 项配 tipPosition: n(自定义项缺省拼出 __undefined 方向类,tooltip 无定位规则)', () => {
+    // 2026-09-24:vditor MenuItem 构造 className = "vditor-tooltipped__".concat(tipPosition),
+    // 自定义项不配则类名成 vditor-tooltipped__undefined——无任何方向规则命中,::after
+    // 无 top/left 定位回退静态位置;配 n(居中上方)与内置中间按钮同口径
+    render(<VditorEditor value="" onChange={() => {}} lang="zh_CN" theme="light" uploadImages={uploadImagesStub} resolveImages={resolveImagesStub} />)
+    const toolbar = (Ctor.mock.calls[0]![1] as Record<string, unknown>).toolbar as Array<Record<string, unknown>>
+    const mermaid = toolbar.find((it) => typeof it === 'object' && it.name === 'mermaid')!
+    expect(mermaid.tipPosition).toBe('n')
+  })
 })
 
 describe('VditorEditor:正文插图接管(2026-09,替换 vditor base64 兜底)', () => {

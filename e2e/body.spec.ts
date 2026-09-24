@@ -325,3 +325,33 @@ test('R1 往返：连续空行/缩进/引用块/表格经 VDitor 编辑后逐字
   await expect(page.getByTestId('body-dialog')).toBeVisible()
   await expect(editor).toHaveValue('段一。\n\n\n缩进行:\n  嵌套列表项\n> 引用保持\n\n| a | b |\n|---|---|\n| 1 | 2 |\n')
 })
+
+// 工具栏 tooltip 左侧裁剪回归(2026-09-24):vditor 给 undo/redo 硬编码 tipPosition
+// "nw"(tooltip 右缘锚按钮中线、向左展开),正文弹窗 DialogContent overflow-hidden 下
+// 最左按钮向左展开必越弹窗左界被裁(e2e 实测 undo 越 59px 裁 64%,左侧文字不可见)。
+// VditorEditor after 回调换 __ne(左缘锚中线-15px 向右展开,全程界内);mermaid 自定义
+// 项缺省拼出 __undefined 无方向规则,配 n 居中。真实 vditor 渲染下锁方向类(单测 mock
+// 模式锁逻辑,e2e 锁真实 DOM 产物,防 vditor 升级改内部行为)。
+test('工具栏 tooltip 方向:undo/redo __ne 向右展开、mermaid __n 居中(弹窗左界不裁)', async ({ page }) => {
+  test.setTimeout(30_000)
+  await page.goto('/?e2e=1')
+  await page.getByTestId('btn-new').click()
+  await page.getByTestId('input-name').fill('tooltip方向')
+  await page.getByTestId('btn-confirm').click()
+  await page.getByText('tooltip方向').first().click()
+  await page.getByTestId('btn-body').click()
+  await expect(page.getByTestId('body-dialog')).toBeVisible()
+  // vditor 两段异步(脚本加载→initUI 挂 DOM):after 换类发生在 initUI 后,等按钮出现
+  await page.waitForSelector('.vditor-toolbar .vditor-tooltipped', { timeout: 15_000 })
+  const cls = await page.evaluate(() => {
+    const q = (t: string): string =>
+      document.querySelector(`.vditor-toolbar [data-type="${t}"]`)?.className ?? ''
+    return { undo: q('undo'), redo: q('redo'), mermaid: q('mermaid') }
+  })
+  expect(cls.undo).toContain('vditor-tooltipped__ne')
+  expect(cls.undo).not.toContain('__nw')
+  expect(cls.redo).toContain('vditor-tooltipped__ne')
+  // __n 是 __ne 的前缀,先排除 __ne 再锁 __ne 外的 __n 存在
+  expect(cls.mermaid).not.toContain('vditor-tooltipped__ne')
+  expect(cls.mermaid).toContain('vditor-tooltipped__n')
+})
