@@ -66,7 +66,7 @@ test('拆分正交（2026-09）：只开快捷键 → 注册快捷键 + 托盘�
   expect(ports.registerShortcut).toHaveBeenCalledTimes(1) // 托盘开关不触发快捷键注册
 })
 
-test('案头路由：tray 开时拦截关窗（preventDefault + closeMainWindow）；编辑器路由摘除', async () => {
+test('案头路由：关窗一律拦截（preventDefault + closeMainWindow，裁决在 appClose）；编辑器路由摘除', async () => {
   const ports = makePorts()
   let captured: ((e: { preventDefault(): void }) => void) | undefined
   ports.registerLibraryCloseGuard.mockImplementation(async (cb) => { captured = cb; return () => {} })
@@ -78,11 +78,19 @@ test('案头路由：tray 开时拦截关窗（preventDefault + closeMainWindow�
   useAppStore.setState({ route: 'library' } as never) // 回案头 → 重新注册（effect 清理/重挂）
   rerender()
   await waitFor(() => expect(ports.registerLibraryCloseGuard).toHaveBeenCalledTimes(1))
-  const prevent = vi.fn()
-  useAppStore.setState({ quickCaptureTray: true } as never) // 关窗隐藏跟托盘走（拆分裁定）
-  act(() => captured!({ preventDefault: prevent }))
-  expect(prevent).toHaveBeenCalledTimes(1)
+  // tray 关也必须拦截：自然关闭只销毁主窗，隐藏复用的捕获窗驻留进程成僵尸
+  // （2026-09-24 报障：托盘关闭后关窗进程不死，单实例锁封死复启）
+  const preventOff = vi.fn()
+  useAppStore.setState({ quickCaptureTray: false } as never)
+  act(() => captured!({ preventDefault: preventOff }))
+  expect(preventOff).toHaveBeenCalledTimes(1)
   expect(ports.closeMainWindow).toHaveBeenCalledTimes(1)
+  // tray 开：同样拦截（appClose 裁决为 hide 驻留）
+  const preventOn = vi.fn()
+  useAppStore.setState({ quickCaptureTray: true } as never)
+  act(() => captured!({ preventDefault: preventOn }))
+  expect(preventOn).toHaveBeenCalledTimes(1)
+  expect(ports.closeMainWindow).toHaveBeenCalledTimes(2)
 })
 
 test('托盘联动：启用/禁用均调 setTray（actions 间接读 store，闭包安全）', async () => {

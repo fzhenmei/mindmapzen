@@ -7,7 +7,7 @@ import type { RegisterCloseGuard } from '../types/ports'
 export interface CloseGuardOpts {
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
   registerCloseGuard: RegisterCloseGuard
-  /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
+  /** 退出应用端口：生产为 closeOrHideMainWindow（appClose 裁决），测试记录调用 */
   exitApp: () => void
   /** 脏标记 ref（EditorView 持有：「放弃」路径也读写它；React 19 类型,current 可变） */
   dirtyRef: RefObject<boolean>
@@ -24,10 +24,6 @@ export interface CloseGuardOpts {
   blockClose?: () => boolean
   /** blockClose 命中时的提示回调（EditorView 注入 chatStore.notifyBlocked） */
   onBlocked?: () => void
-  /** 干净关闭接管（2026-09 点子篮子 M2，spec §5.1）：返回 true 时 preventClose 走 exitApp
-   *  （快速捕获开启 → hide）。不能放行自然关闭：隐藏的捕获窗会驻留进程，自然关闭留下
-   *  僵尸应用（M2 plan R3）；脏态仍优先走三态框 */
-  hijackCleanClose?: () => boolean
 }
 
 export interface CloseGuard {
@@ -42,7 +38,8 @@ export function useCloseGuard(opts: CloseGuardOpts): CloseGuard {
   const [guarding, setGuarding] = useState(false) // 关闭守卫对话框（spec §4 关闭拦截）
   const guardSavingRef = useRef(false) // 守卫保存在途：三态选择一律挡下（见 onGuardChoice）
 
-  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则放行自然关闭。
+  // 关闭守卫（spec §4）：dirty 时拦截窗口关闭弹三态对话框；干净则接管走 exitApp
+  // （appClose 裁决，不放行自然关闭——隐藏的捕获窗会驻留进程）。
   // 终审 I2：先冲防抖草稿——干净图上防抖窗内直接关窗（Alt+F4/点 X）时 dirty 未及置
   // （data_change 节流异步），flushPending 返回 true 即按脏走三态，草稿不随窗口蒸发
   useEffect(() => {
@@ -56,10 +53,11 @@ export function useCloseGuard(opts: CloseGuardOpts): CloseGuard {
       }
       const flushed = flushPending?.() ?? false
       if (!dirtyRef.current && !flushed) {
-        if (opts.hijackCleanClose?.()) {
-          e.preventClose()
-          opts.exitApp()
-        }
+        // 干净关闭一律接管走 exitApp（裁决在 appClose：托盘开 → hide 驻留；关 → 销毁
+        // 捕获窗+主窗真退出）。不能放行自然关闭：自然关闭只销毁主窗，隐藏复用的捕获窗
+        // 驻留进程成僵尸——托盘关闭后关窗进程不死、单实例锁封死复启（2026-09-24 报障）
+        e.preventClose()
+        opts.exitApp()
         return
       }
       e.preventClose()
