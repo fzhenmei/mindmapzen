@@ -71,3 +71,43 @@ test('reset 清空', () => {
   expect(useChatStore.getState().messages).toEqual([])
   expect(useChatStore.getState().phase).toBe('idle')
 })
+
+// ═══ 操作卡滚动窗口（2026-09 有界队列）：回合中恒显最新 5 条，更早的折进摘要——
+// 窗口由渲染层推导（AssistantRow），pushCard 纯追加，store 只持 toggleCards 翻转位 ═══
+
+test('pushCard 纯追加：不写任何折叠/窗口键（滚动窗口由渲染层推导）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  const last = useChatStore.getState().messages.at(-1)!
+  expect(last.cards).toHaveLength(8)
+  expect(last.cardsCollapsed).toBeUndefined() // undefined=从未折叠既有契约保持
+  expect(last.cardsWindowed).toBeUndefined()
+})
+
+test('toggleCards 三态分派：>5 条窗口态 ↔ 全展开互切；≤5 条现行全折', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  const id = useChatStore.getState().messages.at(-1)!.id
+  s.toggleCards(id) // 窗口态 → 全展开
+  expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(false)
+  s.toggleCards(id) // 全展开 → 折回窗口
+  expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(true)
+  // ≤5 条无窗口：现行行为——展开态点摘要全折
+  s.pushUser('少')
+  for (let i = 0; i < 2; i++) useChatStore.getState().pushCard({ kind: 'add', ok: true, text: `x${i}` })
+  useChatStore.getState().toggleCards(useChatStore.getState().messages.at(-1)!.id)
+  expect(useChatStore.getState().messages.at(-1)!.cardsCollapsed).toBe(true)
+})
+
+test('toggleCards 三态分派：全折态点摘要 → 全展开（collapsed=false 且 windowed=false）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  s.collapseLastCards() // 回合收尾全折
+  useChatStore.getState().toggleCards(useChatStore.getState().messages.at(-1)!.id)
+  const m = useChatStore.getState().messages.at(-1)!
+  expect(m.cardsCollapsed).toBe(false)
+  expect(m.cardsWindowed).toBe(false) // 展开意图=全部，不是回窗口
+})

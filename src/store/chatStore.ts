@@ -4,6 +4,12 @@ import { create } from 'zustand'
 
 export type ChatPhase = 'idle' | 'streaming' | 'executing'
 
+/** 卡片滚动窗口大小（2026-09 有界队列）：回合中操作明细恒显最新 CARDS_WINDOW 条，
+ *  更早的折进摘要行——操作多时消息区不再被逐张明细越撑越长，回复尾部（流式光标）
+ *  始终留在视口内。窗口由渲染层推导（ChatPanel AssistantRow），store 只持翻转位；
+ *  回合收尾 collapseLastCards 仍全折（「共 N 项」摘要） */
+export const CARDS_WINDOW = 5
+
 export interface ToolCardData {
   kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink'
   ok: boolean
@@ -19,6 +25,10 @@ export interface ChatMessage {
   /** 操作卡片收起态（2026-09）：undefined/false = 展开明细卡；回合收尾由 collapseLastCards
    *  自动置 true（操作步骤完成即收，想看自己展开），摘要行点击经 toggleCards 切换 */
   cardsCollapsed?: boolean
+  /** 卡片窗口展开位（2026-09 滚动窗口）：undefined/true = 窗口态（恒显最新 CARDS_WINDOW
+   *  条，较早的折进摘要）；false = 用户点开过全部。仅 cards.length > CARDS_WINDOW 且
+   *  未全折时有意义——pushCard 纯追加不写此键（窗口由渲染层推导，新卡不与用户抢状态） */
+  cardsWindowed?: boolean
 }
 
 let seq = 0
@@ -127,11 +137,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return { messages: msgs }
     }),
+  /** 摘要行点击按形态分派（2026-09 滚动窗口）：全折态 → 全展开（collapsed=false 且
+   *  windowed=false，展开意图是全部）；窗口态（>CARDS_WINDOW 条未全折）→ 翻转
+   *  windowed（全展开 ↔ 窗口）；≤窗口条数无旧组 → 现行全折/全展互切 */
   toggleCards: (id) =>
     set((s) => ({
-      messages: s.messages.map((m) =>
-        m.id === id && (m.cards?.length ?? 0) > 0 ? { ...m, cardsCollapsed: !m.cardsCollapsed } : m,
-      ),
+      messages: s.messages.map((m) => {
+        if (m.id !== id || (m.cards?.length ?? 0) === 0) return m
+        if (m.cardsCollapsed) return { ...m, cardsCollapsed: false, cardsWindowed: false }
+        if ((m.cards?.length ?? 0) > CARDS_WINDOW) return { ...m, cardsWindowed: m.cardsWindowed === false }
+        return { ...m, cardsCollapsed: true }
+      }),
     })),
   pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
   pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
