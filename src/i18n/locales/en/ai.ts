@@ -18,8 +18,10 @@ export default {
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and bodies, set icons/tags, link and fold. The canvas is read-only while AI works; you can stop anytime.',
-    // Operation cards collapse (2026-09): details fold into a summary row at turn end, click to expand; failed count appended in red when present
+    // Operation cards collapse (2026-09): details fold into a summary row at turn end, click to expand; failed count appended in red when present.
+    // Rolling window (2026-09 bounded queue): latest 5 stay visible mid-turn, earlier ones fold — cardsOlder labels the earlier set
     cardsSummary: '{{n}} operations',
+    cardsOlder: 'Earlier {{n}} operations',
     cardsFailed: ' · {{n}} failed',
   },
   card: {

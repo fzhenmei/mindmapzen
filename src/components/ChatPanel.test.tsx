@@ -447,3 +447,46 @@ test('状态行：executing 阶段同样显示（工具轮间隙无流式光标�
   mount()
   expect(screen.getByTestId('ai-status')).toBeInTheDocument()
 })
+
+// ═══ 操作卡滚动窗口（2026-09 有界队列）：回合中恒显最新 5 条，更早的折进摘要 ═══
+
+/** 布置一条含 n 张卡的 assistant 消息（走真实 store 流），返回其消息下标 */
+function seedCards(n: number): void {
+  useChatStore.getState().pushUser('问')
+  for (let i = 0; i < n; i++) useChatStore.getState().pushCard({ kind: 'add', ok: true, text: `op${i}` })
+}
+
+test('滚动窗口：8 张卡默认只见最新 5 条，摘要计较早 3 条；点开展开全部，再点回窗口', async () => {
+  seedCards(8)
+  mount()
+  // 窗口态：较早 op0..op2 折起，最新 op3..op7 恒显（testid 用原始下标，跨形态稳定）
+  expect(screen.queryByTestId('ai-card-1-0')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('ai-card-1-2')).not.toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-3')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
+  const toggle = screen.getByTestId('ai-cards-toggle-1')
+  expect(toggle).toHaveTextContent('较早的 3 项操作')
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await userEvent.click(toggle) // 全展开：8 条明细齐现，摘要仍在窗口上方（箭头转向）
+  expect(screen.getByTestId('ai-card-1-0')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await userEvent.click(toggle) // 折回窗口：较早的重新折起
+  expect(screen.queryByTestId('ai-card-1-0')).not.toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('滚动窗口：回合收尾全折成总计数摘要（不再标"较早的"），点开即全部展开', async () => {
+  seedCards(8)
+  useChatStore.getState().collapseLastCards()
+  mount()
+  const toggle = screen.getByTestId('ai-cards-toggle-1')
+  expect(toggle).toHaveTextContent('8 项操作')
+  expect(toggle).not.toHaveTextContent('较早的')
+  expect(screen.queryByTestId('ai-card-1-7')).not.toBeInTheDocument()
+  await userEvent.click(toggle) // 全折态点摘要：全部展开（windowed=false）
+  expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(false)
+  expect(screen.getByTestId('ai-card-1-0')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-7')).toBeInTheDocument()
+})

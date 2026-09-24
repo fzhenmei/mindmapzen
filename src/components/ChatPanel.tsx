@@ -10,7 +10,7 @@ import { i18n } from '../i18n'
 import { showToast } from '../services/toast'
 import type { WriteClipboard } from '../services/clipboard'
 import { useAppStore } from '../store/appStore'
-import { useChatStore, type ChatMessage } from '../store/chatStore'
+import { useChatStore, type ChatMessage, CARDS_WINDOW } from '../store/chatStore'
 import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
 import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
@@ -347,6 +347,16 @@ function CopyButton({ text, label, writeClipboard }: Readonly<{ text: string; la
 /** assistant 回复行（2026-09 拆出）：定稿后 hover 右上角浮现复制钮，复制该轮 Markdown 原文。
  *  流式分支（rendered=false）文本未完整不显示钮 */
 function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {
+  // 滚动窗口（2026-09 有界队列）：未全折且超出窗口条数时，恒显最新 CARDS_WINDOW 条，
+  // 较早的折进摘要（计数=较早条数，label 标「较早的」区分）；全折（回合收尾）摘要
+  // 计总数。明细 testid 用原始下标（offset 起）——窗口滑动/展开形态切换间稳定标识
+  const cards = msg.cards ?? []
+  const total = cards.length
+  const olderCount = total > CARDS_WINDOW ? total - CARDS_WINDOW : 0
+  const windowed = !msg.cardsCollapsed && olderCount > 0 && msg.cardsWindowed !== false
+  const shown = windowed ? cards.slice(total - CARDS_WINDOW) : cards
+  const offset = total - shown.length
+  const expanded = !msg.cardsCollapsed && !windowed
   return (
     <div className="group relative mb-3">
       {msg.rendered ? (
@@ -365,33 +375,36 @@ function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage;
         </p>
       )}
       {/* 卡片 append-only 无删除重排（chatStore.pushCard 只追加），内容复合键即稳定标识。
-          *  收起态（2026-09）：回合收尾自动折叠明细，摘要行常驻（也是展开/收起的开关）——
-          *  失败不静默：有失败卡时摘要行追加红色失败计数 */}
-      {(msg.cards ?? []).length > 0 && (
+          *  摘要行常驻（也是展开/收起的开关）——失败不静默：失败计数遍历全量卡，
+          *  折进窗口/全折的失败也 surfaced 在摘要行（红色计数） */}
+      {total > 0 && (
         <>
           <button
             type="button"
             data-testid={`ai-cards-toggle-${idx}`}
-            aria-expanded={!msg.cardsCollapsed}
+            aria-expanded={expanded}
             onClick={() => useChatStore.getState().toggleCards(msg.id)}
             className="mt-1 inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
           >
             <ChevronRight
-              className={cn('size-3 shrink-0 transition-transform', !msg.cardsCollapsed && 'rotate-90')}
+              className={cn('size-3 shrink-0 transition-transform', expanded && 'rotate-90')}
               aria-hidden
             />
-            {i18n.t('ai.panel.cardsSummary', { n: msg.cards!.length })}
-            {msg.cards!.some((c) => !c.ok) && (
+            {/* 窗口态/全展开（>窗口条数）：摘要治理的是较早组；全折/≤窗口条数：治理全量 */}
+            {olderCount > 0 && !msg.cardsCollapsed
+              ? i18n.t('ai.panel.cardsOlder', { n: olderCount })
+              : i18n.t('ai.panel.cardsSummary', { n: total })}
+            {cards.some((c) => !c.ok) && (
               <span className="text-destructive">
-                {i18n.t('ai.panel.cardsFailed', { n: msg.cards!.filter((c) => !c.ok).length })}
+                {i18n.t('ai.panel.cardsFailed', { n: cards.filter((c) => !c.ok).length })}
               </span>
             )}
           </button>
           {!msg.cardsCollapsed &&
-            msg.cards!.map((c, i) => (
+            shown.map((c, j) => (
               <p
-                key={`${c.kind}-${c.ok}-${i}`}
-                data-testid={`ai-card-${idx}-${i}`}
+                key={`${c.kind}-${c.ok}-${offset + j}`}
+                data-testid={`ai-card-${idx}-${offset + j}`}
                 className={`mt-1 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs ${c.ok ? 'border-border text-muted-foreground' : 'border-destructive/40 text-destructive'}`}
               >
                 {/* spec §7「成功绿/失败红」：成功仅 ✓ 图标着绿（克制处理，正文保持 muted）；失败整卡红 */}
