@@ -423,3 +423,27 @@ test('操作卡片收起：只收本轮最后一条 assistant——往轮卡片�
   expect(first.cardsCollapsed).toBeUndefined() // 往轮不动（保持用户留置的展开态）
   expect(last.cardsCollapsed).toBe(true)
 })
+
+// ═══ 回合级状态行（2026-09 执行中指示常驻）：操作多时消息区被滚离底部，面板内
+// 无任何"还在执行"指示——状态行放滚动区外，回合期间恒可见，收尾即隐 ═══
+
+test('状态行：回合中常驻消息区外（不随滚动），收尾即隐', async () => {
+  stallTransport() // 停摆流：streaming 挂起至点停止
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '执行')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-stop') // phase=streaming：进入回合
+  // 回合中：状态行出现，且在滚动消息区之外——上翻看操作明细也恒可见
+  const row = screen.getByTestId('ai-status')
+  expect(row).toHaveTextContent('AI 处理中')
+  expect(screen.getByTestId('ai-messages')).not.toContainElement(row)
+  await userEvent.click(screen.getByTestId('ai-stop'))
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  expect(screen.queryByTestId('ai-status')).not.toBeInTheDocument()
+})
+
+test('状态行：executing 阶段同样显示（工具轮间隙无流式光标时仍是执行中）', () => {
+  useChatStore.getState().setPhase('executing')
+  mount()
+  expect(screen.getByTestId('ai-status')).toBeInTheDocument()
+})

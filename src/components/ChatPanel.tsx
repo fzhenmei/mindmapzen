@@ -2,7 +2,7 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Send, Square, Copy, Check, ChevronRight } from 'lucide-react'
+import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
@@ -217,6 +217,19 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
           )}
         </div>
       </div>
+      {/* 回合级状态行（2026-09 执行中指示常驻）：操作多时消息区变长，上翻看明细后
+          流式光标/新卡片被滚出视口，面板内再无"还在执行"指示；executing 阶段定稿后
+          更是连光标都没有。状态行放滚动区外（flex 布局恒占位），回合期间始终可见，
+          收尾 finally 置 idle 即隐；文案复用画布状态签 ai.turn.badge */}
+      {phase !== 'idle' && (
+        <div
+          data-testid="ai-status"
+          className="flex shrink-0 items-center gap-1.5 border-t border-border px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+          {t('ai.turn.badge')}
+        </div>
+      )}
       {(contextNode ?? selection) && (
         <p className="shrink-0 truncate border-t border-border px-3 py-1.5 text-xs text-muted-foreground" data-testid="ai-context-chip">
           {t('ai.panel.contextChip', { text: (contextNode ?? selection)!.text })}
