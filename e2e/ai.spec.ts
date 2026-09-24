@@ -121,6 +121,11 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   // （ChatPanel MessageRow），7106d41 起首轮发送前插入 notice 安全网信息卡，messages 变为
   // [notice, user, assistant]，消息下标随前置消息数漂移（曾 ai-card-1-0 → ai-card-2-0）；
   // 卡片 append-only 无重排，文本即稳定标识
+  // 2026-09 操作卡收起：回合收尾明细卡自动折叠成摘要行——先等回合结束（ai-send 重现 =
+  // finally 已跑），再验摘要行、点开验明细卡（收起前直接断言卡片存在回合结束时机竞态）
+  await expect(page.getByTestId('ai-send')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId(/^ai-cards-toggle-/)).toContainText('1 项操作')
+  await page.getByTestId(/^ai-cards-toggle-/).click()
   await expect(page.getByTestId(/^ai-card-/).filter({ hasText: 'AI 要点' })).toBeVisible()
   // 收尾文本走 MarkdownPreview 异步渲染，超时与全链路断言对齐（默认 5s 偶发不够）
   await expect(page.getByText(/已添加/).first()).toBeVisible({ timeout: 15_000 })
@@ -135,8 +140,7 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   expect(summaryFont).toBe('13px')
   // 全程无错误消息：web 模式无 Tauri invoke，工厂注入生效即不该出现 AI_TRANSPORT_UNAVAILABLE
   await expect(page.getByTestId('ai-msg-error')).toHaveCount(0)
-  // 回合结束：回到发送态（停止钮消失）
-  await expect(page.getByTestId('ai-send')).toBeVisible({ timeout: 15_000 })
+  // 回合结束信号（ai-send 重现）已在上方卡片断言前等待，此处不再重复
 })
 
 // 输入区交互（2026-09 长内容输入批）：快捷键（Enter 发送/Shift+Enter 换行 + 常显提示）
