@@ -167,6 +167,16 @@ describe('moveMap', () => {
     expect(await fs.exists('/ws/a/a.md')).toBe(true)
     expect(await fs.exists('/ws/a/a.zen.json')).toBe(true)
   })
+  test('移动携带全部 sidecar（.zen.json 与 .zen.chat.json 同移；2026-09-25 修复：原漏搬对话历史）', async () => {
+    await fs.writeTextFileAtomic('/ws/图.md', '# a\n')
+    await fs.writeTextFileAtomic('/ws/图.zen.json', '{"version":1}')
+    await fs.writeTextFileAtomic('/ws/图.zen.chat.json', '{"version":1,"messages":[]}')
+    await moveMap(fs, '/ws', '图', '', '分类')
+    expect(await fs.exists('/ws/分类/图.md')).toBe(true)
+    expect(await fs.exists('/ws/分类/图.zen.json')).toBe(true)
+    expect(await fs.exists('/ws/分类/图.zen.chat.json')).toBe(true)
+    expect(await fs.exists('/ws/图.zen.chat.json')).toBe(false)
+  })
 })
 
 describe('隐藏 git 内部目录（M20 验收）', () => {
