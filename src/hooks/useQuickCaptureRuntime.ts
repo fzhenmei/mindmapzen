@@ -59,7 +59,7 @@ const tauriPorts: QuickCapturePorts = {
 
 export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): void {
   // 2026-09 拆分：快捷键/托盘两个独立开关（均默认关）——快捷键只管全局注册，
-  // 托盘只管图标 + 关窗隐藏（关窗裁决见 appClose/EditorView/library guard，都读 tray）
+  // 托盘只管图标 + 关窗隐藏（关窗裁决集中在 appClose：路由守卫只负责拦截转交）
   const shortcutOn = useAppStore((s) => s.quickCaptureShortcut)
   const trayOn = useAppStore((s) => s.quickCaptureTray)
   const route = useAppStore((s) => s.route)
@@ -95,15 +95,17 @@ export function useQuickCaptureRuntime(ports: QuickCapturePorts = tauriPorts): v
     return () => { disposed = true }
   }, [shortcutOn, ports])
 
-  // 案头路由关窗拦截（spec §5.1）：编辑器路由由 useCloseGuard（hijackCleanClose）接管，
-  // 案头无守卫——此处补位；路由切换经 effect 清理/重挂保证两监听器不并存
+  // 案头路由关窗拦截（spec §5.1）：编辑器路由由 useCloseGuard 接管，案头无守卫——
+  // 此处补位。关窗一律拦截走 closeMainWindow（appClose 裁决：托盘开 → hide；关 →
+  // 销毁捕获窗+主窗）——自然关闭只销毁主窗，隐藏复用的捕获窗驻留进程成僵尸
+  // （2026-09-24 报障：托盘关闭后关窗进程不死，单实例锁封死复启）；
+  // 路由切换经 effect 清理/重挂保证两监听器不并存
   useEffect(() => {
     if (!('__TAURI_INTERNALS__' in window) || route === 'editor') return
     let unref: (() => void) | undefined
     let disposed = false
     void ports
       .registerLibraryCloseGuard((e) => {
-        if (!useAppStore.getState().quickCaptureTray) return // 关窗隐藏跟托盘走（2026-09 拆分）
         e.preventDefault()
         ports.closeMainWindow()
       })

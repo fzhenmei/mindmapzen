@@ -70,7 +70,7 @@ interface Props {
   exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
   registerCloseGuard: RegisterCloseGuard
-  /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
+  /** 退出应用端口：生产为 closeOrHideMainWindow（appClose 裁决），测试记录调用 */
   exitApp: () => void
   /** 选图端口（M19 插图）：生产为 Tauri 对话框 + readFile 字节；E2E harness 桩 */
   pickImageFile: () => Promise<{ name: string; bytes: Uint8Array } | null>
@@ -361,11 +361,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   }
 
   // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图。
-  // AI 回合关窗锁（Task 12，spec §6）：回合期间 preventClose + 状态签脉冲，不走三态框
+  // AI 回合关窗锁（Task 12，spec §6）：回合期间 preventClose + 状态签脉冲，不走三态框。
+  // 干净关闭恒接管走 exitApp（appClose 裁决：托盘开 → hide；关 → 销毁捕获窗+主窗——
+  // 不放行自然关闭，隐藏捕获窗驻留进程成僵尸，2026-09-24 报障）
   const guard = useCloseGuard({
     registerCloseGuard,
     exitApp,
-    hijackCleanClose: () => useAppStore.getState().quickCaptureTray, // 关窗隐藏跟托盘走（2026-09 拆分）
     dirtyRef,
     explicitSave,
     clearDirty,

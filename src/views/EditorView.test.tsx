@@ -1396,7 +1396,7 @@ test('关闭守卫：保存失败 → 收起对话框留在应用（不静默退
   await waitFor(() => expect(screen.queryByTestId('closeguard-save')).not.toBeInTheDocument())
 })
 
-test('关闭守卫：干净状态（未修改）不拦截、无对话框', async () => {
+test('关闭守卫：干净状态（未修改）拦截但不弹框，走 exitApp（appClose 裁决）', async () => {
   const guard = makeGuardStub()
   const exitApp = vi.fn()
   render(
@@ -1414,9 +1414,10 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
   )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：未修改
-  expect(guard.fireClose()).toBe(false)
+  // 恒拦截走 exitApp（不放行自然关闭——隐藏捕获窗驻留进程成僵尸，2026-09-24 报障）
+  expect(guard.fireClose()).toBe(true)
   expect(screen.queryByTestId('closeguard-dialog')).not.toBeInTheDocument()
-  expect(exitApp).not.toHaveBeenCalled()
+  expect(exitApp).toHaveBeenCalledOnce()
 })
 
 test('关闭守卫：对话框内连点保存不提前退出（落盘完成才退出且只退一次）', async () => {

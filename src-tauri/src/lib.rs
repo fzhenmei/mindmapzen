@@ -357,8 +357,26 @@ pub fn run() {
             ai_chat_abort,
             export_pdf_via_edge
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // 主窗销毁 = 应用退出（2026-09-24 关窗僵尸进程报障，纵深防御）：捕获小窗懒创建+
+        // 隐藏复用，若主窗经任何未经前端 appClose 裁决的路径销毁（含小窗创建在途的竞态
+        // 窗口），残存小窗会让 Tauri「最后一个窗口关闭才退出」永不满足——进程驻留且无
+        // 任何可见入口，单实例锁再封死复启。产品语义主窗即应用本体（托盘驻留是 hide 不
+        // 是销毁，不受影响），主窗 Destroyed 一律退出；window-state 插件在 RunEvent::Exit
+        // 落盘，几何存档不受影响
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Destroyed,
+                ..
+            } = event
+            {
+                if label == "main" {
+                    app.exit(0);
+                }
+            }
+        });
 }
 
 #[cfg(test)]
