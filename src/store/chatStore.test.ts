@@ -71,3 +71,38 @@ test('reset 清空', () => {
   expect(useChatStore.getState().messages).toEqual([])
   expect(useChatStore.getState().phase).toBe('idle')
 })
+
+// ═══ 操作卡动态收起（2026-09）：回合中明细卡达阈值即折成摘要行，不等回合收尾——
+// 操作多时逐张明细把消息区越撑越长，回复尾部（流式光标）被顶出视口 ═══
+
+test('pushCard 动态收起：第 5 张落下即折起，后续新卡只入列不展开', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 5; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  let last = useChatStore.getState().messages.at(-1)!
+  expect(last.cards).toHaveLength(5)
+  expect(last.cardsCollapsed).toBe(true) // 恰达阈值：立即折成摘要行
+  s.pushCard({ kind: 'add', ok: true, text: 'op5' })
+  last = useChatStore.getState().messages.at(-1)!
+  expect(last.cards).toHaveLength(6) // 计数照涨（数字即进度反馈）
+  expect(last.cardsCollapsed).toBe(true) // 保持折起
+})
+
+test('pushCard 动态收起：不足阈值不折（4 张仍展开）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 4; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  expect(useChatStore.getState().messages.at(-1)!.cardsCollapsed).not.toBe(true)
+})
+
+test('pushCard 动态收起：恰达阈值只折一次——用户展开后，后续新卡不重抢', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 5; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  const id = useChatStore.getState().messages.at(-1)!.id
+  s.toggleCards(id) // 用户点开摘要看明细
+  expect(useChatStore.getState().messages.at(-1)!.cardsCollapsed).toBe(false)
+  s.pushCard({ kind: 'add', ok: true, text: 'op5' })
+  // 不重抢：展开态保持到回合收尾（collapseLastCards 兜底），中途不强制折回
+  expect(useChatStore.getState().messages.at(-1)!.cardsCollapsed).toBe(false)
+})

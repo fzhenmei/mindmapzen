@@ -4,6 +4,12 @@ import { create } from 'zustand'
 
 export type ChatPhase = 'idle' | 'streaming' | 'executing'
 
+/** 卡片动态收起阈值（2026-09）：回合中明细卡达到该数即折成摘要行——操作多时逐张
+ *  明细把消息区越撑越长，回复尾部（流式光标/新卡）被顶出视口；提前收起保紧凑，
+ *  不再等回合收尾。恰达阈值折叠一次（=== 非 >=）：用户此后展开摘要，后续新卡
+ *  不重抢，回合收尾 collapseLastCards 照常兜底收起 */
+const CARDS_AUTO_COLLAPSE_AT = 5
+
 export interface ToolCardData {
   kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink'
   ok: boolean
@@ -107,7 +113,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const msgs = [...s.messages]
       for (let i = msgs.length - 1; i >= 0; i--) {
         if (msgs[i]!.role === 'assistant') {
-          msgs[i] = { ...msgs[i]!, cards: [...(msgs[i]!.cards ?? []), c] }
+          const cards = [...(msgs[i]!.cards ?? []), c]
+          msgs[i] = {
+            ...msgs[i]!,
+            cards,
+            // 动态收起（2026-09）：只在恰达阈值那一刻写折叠键——未跨阈值不写
+            // （undefined=从未折叠是既有契约，往轮消息保持原样）；已折则幂等保持
+            ...(cards.length === CARDS_AUTO_COLLAPSE_AT && !msgs[i]!.cardsCollapsed
+              ? { cardsCollapsed: true }
+              : {}),
+          }
           break
         }
       }
