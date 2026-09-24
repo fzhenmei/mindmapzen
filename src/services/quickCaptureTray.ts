@@ -1,6 +1,7 @@
 // src/services/quickCaptureTray.ts —— 托盘图标开关联动（spec §5.2）：JS Tray API（菜单
-// action 回调直达前端逻辑，无需 Rust 事件中转）。关闭 = setIcon(null) 摘图标（实例与菜单
-// 保留）；再开 = 恢复图标。actions 由调用方以「间接读 store/调服务」的闭包传入，重建无过期
+// action 回调直达前端逻辑，无需 Rust 事件中转）。关闭 = close() 销毁实例（Windows 上
+// setIcon(null) 只清图标图像不删条目，残留无图标空白占位且菜单仍可唤出——2026-09-24
+// 报障实证）；再开 = 全新创建。actions 由调用方以「间接读 store/调服务」的闭包传入，重建无过期
 import type { TrayIcon } from '@tauri-apps/api/tray'
 import { i18n } from '../i18n'
 // 应用自有图标（发布合规：OFL/自有资源；拷贝自 src-tauri/icons/32x32.png，Task 4 落位）
@@ -19,7 +20,7 @@ function pngBytes(): Uint8Array {
   if (iconBytes !== null) return iconBytes
   const b64 = trayIconPng.slice(trayIconPng.indexOf(',') + 1)
   const bin = atob(b64)
-  iconBytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  iconBytes = Uint8Array.from(bin, (c) => c.codePointAt(0) ?? 0)
   return iconBytes
 }
 
@@ -48,10 +49,9 @@ export async function setTrayEnabled(enabled: boolean, actions: TrayActions): Pr
           if (ev.type === 'Click' && ev.button === 'Left') actions.onShowMain()
         },
       })
-    } else {
-      await tray.setIcon(pngBytes()) // 再启用：恢复图标（setIcon(null) 只摘图标）
     }
   } else if (tray !== null) {
-    await tray.setIcon(null) // 移除托盘（spec §5.1：关闭 = 全部还原）
+    await tray.close() // 真销毁（NIM_DELETE 删条目），spec §5.1：关闭 = 全部还原
+    tray = null
   }
 }
