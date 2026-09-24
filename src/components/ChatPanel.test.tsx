@@ -332,3 +332,94 @@ test('按轮复制：user 输入也有独立复制钮，各自复制各自内容
   await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
   expect(write).toHaveBeenCalledWith('回答')
 })
+
+// ═══ 操作卡片收起（2026-09）：回合收尾自动收起明细卡，摘要行点击可展开 ═══
+
+/** 两轮 transport 台：round-1 发 add_node 工具调用（fakeMm findNodeByUid 恒 null → 失败卡，
+ *  失败计数分支一并覆盖）后收尾；round-2 吐一个文本 delta 后挂起——releaseRound2 放行收尾 */
+function toolTurnTransport(): { releaseRound2(): void } {
+  let round = 0
+  let releaseRound2: (() => void) | null = null
+  // 两次 onDelta 同 M3 先例：工具调用 delta + finish_reason=tool_calls 收尾
+  const toolDelta = JSON.stringify({
+    choices: [
+      {
+        delta: {
+          tool_calls: [
+            { index: 0, id: 'c1', function: { name: 'add_node', arguments: '{"parentUid":"root","text":"x"}' } },
+          ],
+        },
+      },
+    ],
+  })
+  const finishDelta = JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+  ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
+    start: (_p: unknown, onDelta: (d: string) => void) => {
+      round++
+      if (round === 1) {
+        onDelta(toolDelta)
+        onDelta(finishDelta)
+        return Promise.resolve({ endedWith: 'done' as const })
+      }
+      onDelta('{"choices":[{"delta":{"content":"完成"}}]}')
+      return new Promise<{ endedWith: string }>((resolve) => {
+        releaseRound2 = () => resolve({ endedWith: 'done' })
+      })
+    },
+    abort: () => {},
+  })
+  return { releaseRound2: () => releaseRound2?.() }
+}
+
+test('操作卡片收起：回合结束自动收起——回合中展开可见，收尾只剩摘要行（含失败计数）', async () => {
+  const { releaseRound2 } = toolTurnTransport()
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '加节点')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  // round-1 工具已执行、round-2 已挂起（executing→streaming 过渡点）
+  await waitFor(() => expect(useChatStore.getState().messages.at(-1)?.cards).toHaveLength(1))
+  // 回合中：操作步骤进行时明细卡展开可见（用户能看进度）。消息下标 2 = 首轮 notice
+  // 安全网卡前插（git 备份未启用，beforeEach 默认关）→ [notice, user, assistant]
+  expect(screen.getByTestId('ai-card-2-0')).toBeInTheDocument()
+  releaseRound2()
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  // 回合收尾：自动收起——明细卡退场，只剩摘要行；失败不静默：失败计数入摘要
+  expect(screen.queryByTestId('ai-card-2-0')).not.toBeInTheDocument()
+  const toggle = screen.getByTestId('ai-cards-toggle-2')
+  expect(toggle).toHaveTextContent('1 项操作')
+  expect(toggle).toHaveTextContent('1 项失败')
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('操作卡片收起：点击摘要行展开明细、再点收起；全成功无失败计数', async () => {
+  useChatStore.getState().pushUser('x')
+  useChatStore.getState().pushCard({ kind: 'add', ok: true, text: '新想法' })
+  useChatStore.getState().pushCard({ kind: 'add', ok: true, text: '另一个' })
+  useChatStore.getState().collapseLastCards()
+  mount()
+  const toggle = screen.getByTestId('ai-cards-toggle-1')
+  expect(toggle).toHaveTextContent('2 项操作')
+  expect(toggle).not.toHaveTextContent('失败')
+  expect(screen.queryByTestId('ai-card-1-0')).not.toBeInTheDocument()
+  await userEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.getByTestId('ai-card-1-0')).toBeInTheDocument()
+  expect(screen.getByTestId('ai-card-1-1')).toBeInTheDocument()
+  await userEvent.click(toggle)
+  expect(screen.queryByTestId('ai-card-1-0')).not.toBeInTheDocument()
+})
+
+test('操作卡片收起：只收本轮最后一条 assistant——往轮卡片保持原样', () => {
+  const chat = useChatStore.getState()
+  chat.pushUser('a')
+  chat.pushCard({ kind: 'add', ok: true, text: '旧1' }) // 挂第一轮 assistant
+  chat.pushUser('b')
+  chat.pushCard({ kind: 'add', ok: true, text: '新1' }) // 挂第二轮 assistant
+  chat.collapseLastCards()
+  const msgs = useChatStore.getState().messages
+  const first = msgs.find((m) => m.role === 'assistant')!
+  const last = msgs.at(-1)!
+  expect(last.role).toBe('assistant')
+  expect(first.cardsCollapsed).toBeUndefined() // 往轮不动（保持用户留置的展开态）
+  expect(last.cardsCollapsed).toBe(true)
+})

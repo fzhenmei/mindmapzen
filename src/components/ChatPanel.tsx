@@ -2,7 +2,7 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Send, Square, Copy, Check } from 'lucide-react'
+import { X, Send, Square, Copy, Check, ChevronRight } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
@@ -181,6 +181,9 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
       useChatStore.getState().pushError(err instanceof Error ? err.message : String(err))
     } finally {
       useChatStore.getState().finalizeStream() // 停止/异常路径也定稿半截消息
+      // 操作步骤完成即收起明细卡（2026-09）：回合中逐张展开可看进度，收尾折成摘要行；
+      // 只动最后一条 assistant（本轮卡片全挂它），往轮留置态不扰
+      useChatStore.getState().collapseLastCards()
       useChatStore.getState().setPhase('idle')
       endAiTurn()
       useChatStore.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
@@ -348,17 +351,42 @@ function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage;
           <span className="animate-pulse">▍</span>
         </p>
       )}
-      {/* 卡片 append-only 无删除重排（chatStore.pushCard 只追加），内容复合键即稳定标识 */}
-      {(msg.cards ?? []).map((c, i) => (
-        <p
-          key={`${c.kind}-${c.ok}-${i}`}
-          data-testid={`ai-card-${idx}-${i}`}
-          className={`mt-1 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs ${c.ok ? 'border-border text-muted-foreground' : 'border-destructive/40 text-destructive'}`}
-        >
-          {/* spec §7「成功绿/失败红」：成功仅 ✓ 图标着绿（克制处理，正文保持 muted）；失败整卡红 */}
-          {c.ok ? <span className="text-emerald-600 dark:text-emerald-400">✓</span> : '✕'} {cardText(c)}
-        </p>
-      ))}
+      {/* 卡片 append-only 无删除重排（chatStore.pushCard 只追加），内容复合键即稳定标识。
+          *  收起态（2026-09）：回合收尾自动折叠明细，摘要行常驻（也是展开/收起的开关）——
+          *  失败不静默：有失败卡时摘要行追加红色失败计数 */}
+      {(msg.cards ?? []).length > 0 && (
+        <>
+          <button
+            type="button"
+            data-testid={`ai-cards-toggle-${idx}`}
+            aria-expanded={!msg.cardsCollapsed}
+            onClick={() => useChatStore.getState().toggleCards(msg.id)}
+            className="mt-1 inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+          >
+            <ChevronRight
+              className={cn('size-3 shrink-0 transition-transform', !msg.cardsCollapsed && 'rotate-90')}
+              aria-hidden
+            />
+            {i18n.t('ai.panel.cardsSummary', { n: msg.cards!.length })}
+            {msg.cards!.some((c) => !c.ok) && (
+              <span className="text-destructive">
+                {i18n.t('ai.panel.cardsFailed', { n: msg.cards!.filter((c) => !c.ok).length })}
+              </span>
+            )}
+          </button>
+          {!msg.cardsCollapsed &&
+            msg.cards!.map((c, i) => (
+              <p
+                key={`${c.kind}-${c.ok}-${i}`}
+                data-testid={`ai-card-${idx}-${i}`}
+                className={`mt-1 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs ${c.ok ? 'border-border text-muted-foreground' : 'border-destructive/40 text-destructive'}`}
+              >
+                {/* spec §7「成功绿/失败红」：成功仅 ✓ 图标着绿（克制处理，正文保持 muted）；失败整卡红 */}
+                {c.ok ? <span className="text-emerald-600 dark:text-emerald-400">✓</span> : '✕'} {cardText(c)}
+              </p>
+            ))}
+        </>
+      )}
     </div>
   )
 }

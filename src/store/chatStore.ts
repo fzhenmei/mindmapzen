@@ -16,6 +16,9 @@ export interface ChatMessage {
   text: string
   cards?: ToolCardData[]
   rendered?: boolean
+  /** 操作卡片收起态（2026-09）：undefined/false = 展开明细卡；回合收尾由 collapseLastCards
+   *  自动置 true（操作步骤完成即收，想看自己展开），摘要行点击经 toggleCards 切换 */
+  cardsCollapsed?: boolean
 }
 
 let seq = 0
@@ -39,6 +42,11 @@ interface ChatState {
    *  lute 重渲染（亦是 I1 渲染竞态的生产暴露路径），定稿再挂 md */
   unrenderLastAssistant: () => void
   pushCard: (c: ToolCardData) => void
+  /** 回合收尾把最后一条 assistant 的操作卡片收起（仅标记收起态，明细数据不动）——
+   *  在 handleSend 的 finally 调用，整回合恰好一次（多工具轮之间不闪收） */
+  collapseLastCards: () => void
+  /** 摘要行点击切换某条消息的卡片展开/收起（用户自主查看） */
+  toggleCards: (id: string) => void
   pushError: (text: string) => void
   /** 系统提示信息卡（v1.1 ②：无安全网告知等中性提示）——不进对话历史回传（AI 上下文
    *  只取 user/assistant，历史过滤器天然排除），仅 UI 留存 */
@@ -105,6 +113,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return { messages: msgs }
     }),
+  // 幂等（同 unrenderLastAssistant 先例）：已收起不克隆，不白拷消息数组扰动订阅
+  collapseLastCards: () =>
+    set((s) => {
+      const msgs = [...s.messages]
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i]!.role === 'assistant') {
+          if ((msgs[i]!.cards?.length ?? 0) > 0 && !msgs[i]!.cardsCollapsed) {
+            msgs[i] = { ...msgs[i]!, cardsCollapsed: true }
+          }
+          break
+        }
+      }
+      return { messages: msgs }
+    }),
+  toggleCards: (id) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id && (m.cards?.length ?? 0) > 0 ? { ...m, cardsCollapsed: !m.cardsCollapsed } : m,
+      ),
+    })),
   pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
   pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
   setPhase: (p) => set({ phase: p }),

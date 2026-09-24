@@ -18,6 +18,9 @@ export default {
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本与正文、设图标标签、连线和折叠；AI 处理期间画布只读，随时可停。',
+    // 操作卡片收起（2026-09）：回合收尾明细卡折叠成摘要行，点击展开；有失败时追加红色失败计数
+    cardsSummary: '{{n}} 项操作',
+    cardsFailed: ' · {{n}} 项失败',
   },
   card: {
     add: '新增「{{text}}」',
