@@ -2,11 +2,13 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, Send, Square } from 'lucide-react'
+import { X, Send, Square, Copy, Check } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
 import { i18n } from '../i18n'
+import { showToast } from '../services/toast'
+import type { WriteClipboard } from '../services/clipboard'
 import { useAppStore } from '../store/appStore'
 import { useChatStore, type ChatMessage } from '../store/chatStore'
 import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
@@ -28,13 +30,14 @@ interface Props {
   /** 画布域工具的宿主通道（Task 8，spec §3）：连线注册表/置脏/布局组合；null = 通道未挂（工具显式失败） */
   aiEnv: AiToolEnv | null
   width: number
+  writeClipboard: WriteClipboard // 按轮复制（2026-09）：定稿回复复制钮的写入端口，测试注入内存桩
   onResize(w: number): void // 拖拽中每帧（内存态）
   onCommit(w: number): void // 松手落盘
   onReset(): void // 双击回默认宽
   onClose(): void
 }
 
-export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, onCommit, onReset, onClose }: Readonly<Props>) {
+export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose }: Readonly<Props>) {
   const { t } = useTranslation()
   const messages = useChatStore((s) => s.messages)
   const phase = useChatStore((s) => s.phase)
@@ -207,7 +210,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, onResize, on
               <p className="text-xs">{t('ai.panel.emptyBody')}</p>
             </div>
           ) : (
-            messages.map((m, i) => <MessageRow key={m.id} msg={m} idx={i} />)
+            messages.map((m, i) => <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} />)
           )}
         </div>
       </div>
@@ -273,10 +276,12 @@ function handleStop(): void {
   useChatStore.getState().stopRequest?.()
 }
 
-function MessageRow({ msg, idx }: Readonly<{ msg: ChatMessage; idx: number }>) {
+function MessageRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {
   if (msg.role === 'user') {
+    // 复制钮在气泡左侧（行右对齐，气泡右侧无空位）；items-start 顶部对齐气泡
     return (
-      <div className="mb-2 flex justify-end">
+      <div className="group mb-2 flex items-start justify-end gap-1">
+        <CopyButton text={msg.text} label={i18n.t('ai.panel.copyInput')} writeClipboard={writeClipboard} />
         <p className="max-w-[85%] rounded-lg bg-accent px-2.5 py-1.5" data-testid="ai-msg-user">{msg.text}</p>
       </div>
     )
@@ -288,12 +293,55 @@ function MessageRow({ msg, idx }: Readonly<{ msg: ChatMessage; idx: number }>) {
     // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清
     return <p className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">{msg.text}</p>
   }
+  return <AssistantRow msg={msg} idx={idx} writeClipboard={writeClipboard} />
+}
+
+/** 消息复制钮（2026-09 按轮复制，user/assistant 共用）：Copy→Check 就地反馈 1.5s（成功绿
+ *  同卡片 ✓ 语言）。视觉 hover/focus 显隐、常驻 DOM 保键盘可达；定位归调用方——assistant
+ *  绝对定位右上，user 流内气泡左侧，本体只管状态/点击/图标 */
+function CopyButton({ text, label, writeClipboard }: Readonly<{ text: string; label: string; writeClipboard: WriteClipboard }>) {
+  const [copied, setCopied] = useState(false)
+
+  /** 事件回调里的异步异常框架会静默吞（吞异常红线），自兜出口：console + toast */
+  async function handleCopy(): Promise<void> {
+    try {
+      await writeClipboard(text)
+      setCopied(true)
+      // 复位定时回调无抛错面（chatStore.notifyBlocked 同判）；组件已卸载时 setState 为 no-op
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      console.error('AI 面板消息复制失败', err)
+      showToast(i18n.t('ai.panel.copyFailed'))
+    }
+  }
+
   return (
-    <div className="mb-3">
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={() => void handleCopy()}
+      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100"
+    >
+      {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+    </button>
+  )
+}
+
+/** assistant 回复行（2026-09 拆出）：定稿后 hover 右上角浮现复制钮，复制该轮 Markdown 原文。
+ *  流式分支（rendered=false）文本未完整不显示钮 */
+function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {
+  return (
+    <div className="group relative mb-3">
       {msg.rendered ? (
-        <div className="prose prose-sm max-w-none" data-testid="ai-msg-md">
-          <MarkdownPreview text={msg.text} />
-        </div>
+        <>
+          <div className="absolute -top-1 right-0 z-10">
+            <CopyButton text={msg.text} label={i18n.t('ai.panel.copyMessage')} writeClipboard={writeClipboard} />
+          </div>
+          <div className="prose prose-sm max-w-none" data-testid="ai-msg-md">
+            <MarkdownPreview text={msg.text} />
+          </div>
+        </>
       ) : (
         <p className="whitespace-pre-wrap" data-testid="ai-msg-streaming">
           {msg.text}

@@ -637,6 +637,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
             selection={aiSelectionNode}
             aiEnv={aiEnv}
             width={aiPanelPx}
+            writeClipboard={writeClipboard}
             onResize={setAiDragPx}
             onCommit={(w) => {
               void useAppStore.getState().setAiChatWidth(w)

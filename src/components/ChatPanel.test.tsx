@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event'
 import ChatPanel from './ChatPanel'
 import { useChatStore } from '../store/chatStore'
 import { useAppStore } from '../store/appStore'
+import { subscribeToast } from '../services/toast'
+import type { WriteClipboard } from '../services/clipboard'
 
 // jsdom 不执行 vditor 注入的子资源脚本（渲染 promise 永不 resolve），真实渲染归 e2e；
 // 单测 mock MarkdownPreview 为透传 div——定稿消息走 md 渲染分支由 data-testid 断言
@@ -14,13 +16,14 @@ vi.mock('./MarkdownPreview', () => ({
 
 const fakeMm = { execCommand: vi.fn(), renderer: { findNodeByUid: () => null, renderTree: null } }
 
-function mount(mm: unknown = fakeMm) {
+function mount(mm: unknown = fakeMm, writeClipboard: WriteClipboard = vi.fn(async () => {})) {
   return render(
     <ChatPanel
       mmRef={{ current: mm as never }}
       selection={null}
       aiEnv={null}
       width={320}
+      writeClipboard={writeClipboard}
       onResize={() => {}}
       onCommit={() => {}}
       onReset={() => {}}
@@ -284,4 +287,48 @@ test('拖高手柄：松手提交的落盘窗口期高度不闪回（拖拽暂�
   expect(commit).toHaveBeenCalledWith(100)
   expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).style.height).toBe('100px') // 落地前不闪回
   release!()
+})
+
+// ═══ 按轮悬浮复制（2026-09）：定稿 assistant 回复 hover 复制钮，复制该轮 Markdown 原文 ═══
+
+/** 布置一条定稿 assistant 回复（走真实 store 流：pushUser 占位 → 追加 delta → 定稿） */
+function seedFinalAssistant(text: string): void {
+  useChatStore.getState().pushUser('问')
+  useChatStore.getState().appendStreamDelta(text)
+  useChatStore.getState().finalizeStream()
+}
+
+test('按轮复制：定稿回复有复制钮，点击复制该轮 Markdown 原文', async () => {
+  const write = vi.fn(async () => {})
+  seedFinalAssistant('**回答**')
+  mount(fakeMm, write)
+  await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
+  expect(write).toHaveBeenCalledWith('**回答**')
+})
+
+test('按轮复制：流式生成中不显示复制钮（文本未定稿）', () => {
+  useChatStore.getState().pushUser('问')
+  useChatStore.getState().appendStreamDelta('半截') // 不 finalize：rendered=false
+  mount()
+  expect(screen.queryByRole('button', { name: '复制此轮回复' })).not.toBeInTheDocument()
+})
+
+test('按轮复制：剪贴板失败——toast 报错不静默（吞异常红线）', async () => {
+  const write = vi.fn(() => Promise.reject(new Error('clipboard unavailable')))
+  seedFinalAssistant('回答')
+  mount(fakeMm, write)
+  const toasts: (string | null)[] = []
+  subscribeToast((t) => toasts.push(t?.text ?? null))
+  await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
+  expect(toasts).toContain('复制失败，请重试')
+})
+
+test('按轮复制：user 输入也有独立复制钮，各自复制各自内容', async () => {
+  const write = vi.fn(async () => {})
+  seedFinalAssistant('回答') // 消息流：[user('问'), assistant('回答')]
+  mount(fakeMm, write)
+  await userEvent.click(screen.getByRole('button', { name: '复制此条输入' }))
+  expect(write).toHaveBeenCalledWith('问')
+  await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
+  expect(write).toHaveBeenCalledWith('回答')
 })
