@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 import { useAppStore, type ViewMode } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
+import { useChatHistory } from '../hooks/useChatHistory'
 import { useSubtreeCopy } from '../hooks/useSubtreeCopy'
 import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets'
 import type { BodyImageUploadResult } from '../components/VditorEditor'
@@ -56,7 +57,7 @@ import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
 import WarnStamp from '../components/WarnStamp'
-import ZenBar from '../components/ZenBar'
+import ZenBar, { copyScopeOf } from '../components/ZenBar'
 import ChatPanel, { AI_PANEL_DEFAULT_PX } from '../components/ChatPanel'
 import AiTurnBadge from '../components/AiTurnBadge'
 interface Props {
@@ -479,6 +480,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
     }
   }, [aiOpen, aiChatWidth])
 
+  // AI 对话历史接线（2026-09 持久化）：读流水挂待载入（banner 提醒）+ 回合落盘/重读端口
+  const { persistChatTurn, reloadChatHistory } = useChatHistory(adapter, mdPath)
+
   /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。
    *  但布局偏好须即时落 sidecar——否则 writeOnce 的 !dirty 早退使偏好永不落盘（元数据即时落盘不违背「不置脏不自动保存」） */
   const switchLayout = (kind: LayoutKind) => {
@@ -648,6 +652,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
               void useAppStore.getState().setAiChatWidth(null)
             }}
             onClose={() => setAiOpen(false)}
+            persistTurn={persistChatTurn}
+            reloadHistory={reloadChatHistory}
           />
         </div>
       )}
@@ -707,7 +713,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
         copySettings={copySettings}
         onToggleCopySetting={(key) => void useAppStore.getState().setSetting(key, !copySettings[key])}
         onCopyPathClick={copyPath}
-        scope={selection.activeUid ? 'branch' : selection.activeCount > 1 ? 'multi' : 'full'}
+        scope={copyScopeOf(selection.activeUid, selection.activeCount)}
         onSaveClick={() => void explicitSave()}
         onBodyClick={() => toggleBodyOrWarn(null)}
         bodyActive={bodyDialog.open}

@@ -31,12 +31,24 @@ export interface ChatMessage {
   cardsWindowed?: boolean
 }
 
+/** 待载入历史条目（2026-09 持久化）：chatHistory 服务的存储投影（结构同 PersistedChatMessage，
+ *  结构型兼容免反向 import） */
+export interface PendingChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  cards?: ToolCardData[]
+}
+
 let seq = 0
 const nextId = (): string => `m${++seq}`
 
 interface ChatState {
   messages: ChatMessage[]
   phase: ChatPhase
+  /** 待载入对话历史（2026-09 持久化）：打开导图读到非空流水时挂此（EditorView 异读灌入）；
+   *  null = 无历史或已处置。载入/重新开始/首条消息发送（pushUser）任一即清——发送即
+   *  隐式「重新开始」：新会话不回传旧上下文，文件流水照常追加（历史不丢） */
+  pendingHistory: PendingChatMessage[] | null
   /** 被锁拦截的尝试触发状态签脉冲（AI 处理中 → 红框提示） */
   blockedPulse: boolean
   /** 当前选中节点（上下文 chip + 用户指代；EditorView onActiveChange 时写入） */
@@ -44,6 +56,12 @@ interface ChatState {
   /** 全局停止句柄（终审 I3）：回合中 ai-close 卸载面板再重开，新组件实例的 ref 归零，
    *  停止句柄若只存组件内则 no-op（孤儿回合失控）——挂 store 才能跨实例停掉进行中回合 */
   stopRequest: (() => void) | null
+  setPendingHistory: (msgs: PendingChatMessage[]) => void
+  /** 载入历史：灌入 messages（id 重排、assistant 定稿态、卡片收起），清待载入 */
+  loadPendingHistory: () => void
+  /** 重新开始会话（2026-09 交互重构）：清空当前会话消息。只管 messages——历史提醒的回归
+   *  由宿主 reload（重读文件流水挂 pending）接棒，两步在 ChatPanel 重开钮处串联 */
+  clearSession: () => void
   pushUser: (text: string) => void
   appendStreamDelta: (text: string) => void
   finalizeStream: () => void
@@ -71,12 +89,30 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   phase: 'idle',
+  pendingHistory: null,
   blockedPulse: false,
   contextNode: null,
   stopRequest: null,
+  setPendingHistory: (msgs) => set({ pendingHistory: msgs }),
+  loadPendingHistory: () =>
+    set((s) => {
+      if (s.pendingHistory === null || s.pendingHistory.length === 0) return { pendingHistory: null }
+      const loaded: ChatMessage[] = s.pendingHistory.map((m) => ({
+        id: nextId(),
+        role: m.role,
+        text: m.text,
+        // assistant 补定稿态（载入的历史必是完整回合）；卡片统一收起，想看自己展开
+        rendered: m.role === 'assistant' ? true : undefined,
+        cards: m.cards,
+        cardsCollapsed: m.cards !== undefined && m.cards.length > 0 ? true : undefined,
+      }))
+      return { messages: [...s.messages, ...loaded], pendingHistory: null }
+    }),
+  clearSession: () => set({ messages: [] }),
   pushUser: (text) =>
     set((s) => ({
       messages: [...s.messages, { id: nextId(), role: 'user', text }, { id: nextId(), role: 'assistant', text: '' }],
+      pendingHistory: null, // 发送即隐式「重新开始」：banner 场景下不再提醒
     })),
   appendStreamDelta: (text) =>
     set((s) => {
@@ -166,5 +202,5 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   setContextNode: (n) => set({ contextNode: n }),
   // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂
-  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null }),
+  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null, pendingHistory: null }),
 }))

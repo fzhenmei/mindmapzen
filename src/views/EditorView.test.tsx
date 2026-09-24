@@ -273,6 +273,32 @@ test('打开文档渲染画布并显示名称', async () => {
   expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
 })
 
+// AI 对话历史接线（2026-09 持久化）：打开带流水 sidecar 的导图 → 异读挂 chatStore 待载入
+test('打开带历史流水的导图：chatStore.pendingHistory 挂上待 banner 提醒', async () => {
+  useChatStore.getState().reset()
+  await fs.writeTextFileAtomic(
+    '/ws/a.zen.chat.json',
+    JSON.stringify({ version: 1, messages: [{ role: 'user', text: '旧问' }, { role: 'assistant', text: '旧答' }] }),
+  )
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await waitFor(() => expect(useChatStore.getState().pendingHistory).toEqual([
+    { role: 'user', text: '旧问' },
+    { role: 'assistant', text: '旧答' },
+  ]))
+})
+
 test('解析失败显示错误面板与原文', async () => {
   await fs.writeTextFileAtomic('/ws/bad.md', '## 没有一级标题\n')
   render(

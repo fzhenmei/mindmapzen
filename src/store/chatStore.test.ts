@@ -111,3 +111,49 @@ test('toggleCards 三态分派：全折态点摘要 → 全展开（collapsed=fa
   expect(m.cardsCollapsed).toBe(false)
   expect(m.cardsWindowed).toBe(false) // 展开意图=全部，不是回窗口
 })
+
+// ═══ 待载入对话历史（2026-09 持久化）：打开导图读到非空流水挂此，载入/重新开始/
+// 首条消息发送任一即清——发送即隐式「重新开始」（新会话不回传旧上下文） ═══
+
+test('loadPendingHistory：灌入重排 id、assistant 定稿态、卡片收起；清待载入', () => {
+  const s = useChatStore.getState()
+  s.pushUser('本会话已有') // id m1/m2——载入须从其后排起，不与既有 id 撞车
+  s.setPendingHistory([
+    { role: 'user', text: '旧问' },
+    { role: 'assistant', text: '旧答', cards: [{ kind: 'add', ok: true, text: '新节点' }] },
+  ])
+  s.loadPendingHistory()
+  const msgs = useChatStore.getState().messages
+  expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+  // 重排 id：与既有 id 不撞车且互不相同（seq 模块级跨用例递增，断言相对性）
+  const ids = msgs.map((m) => m.id)
+  expect(new Set(ids).size).toBe(4)
+  expect(ids.slice(2)).not.toContain(ids[0])
+  expect(msgs[3]).toMatchObject({ text: '旧答', rendered: true, cardsCollapsed: true })
+  expect(msgs[2]).toMatchObject({ text: '旧问' }) // user 无 rendered 键
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+})
+
+test('clearSession：清空当前会话消息，不动待载入（重开钮串联 reload 接棒 banner 回归）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('x')
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  s.clearSession()
+  expect(useChatStore.getState().messages).toEqual([]) // 只管消息区
+  expect(useChatStore.getState().pendingHistory).toEqual([{ role: 'user', text: '旧' }]) // pending 归 reload 管
+})
+
+test('pushUser 清 pendingHistory（发送即隐式重新开始）；reset 一并清', () => {
+  const s = useChatStore.getState()
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  s.pushUser('新话题')
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  useChatStore.getState().reset()
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+})
+
+test('loadPendingHistory 空态安全：无待载入时 no-op', () => {
+  useChatStore.getState().loadPendingHistory()
+  expect(useChatStore.getState().messages).toEqual([])
+})

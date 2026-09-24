@@ -18,6 +18,14 @@ export default {
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本与正文、设图标标签、连线和折叠；AI 处理期间画布只读，随时可停。',
+    // 历史对话提醒（2026-09 持久化）：打开有历史流水的导图时置顶 banner——此时只提供载入
+    // （「重新开始」是会话操作归 header，无对话时无意义）；Token 影响写进文案；落盘失败走 toast
+    historyBanner: '此导图有 {{n}} 轮历史对话。载入后新对话将携带这些历史作为上下文，Token 消耗会相应增加；不载入则从新会话开始。',
+    historyLoad: '载入历史',
+    historySaveFailed: 'AI 对话记录保存失败，本轮对话可能未入档',
+    // 重新开始会话（2026-09 交互重构）：header 图标钮——有对话且 AI 空闲才显示
+    restartSession: '重新开始会话',
+    restartSessionHint: '清空当前会话，从新对话开始（历史已存档，仍可载入）',
     // 操作卡片收起（2026-09）：回合收尾明细卡折叠成摘要行，点击展开；有失败时追加红色失败计数。
     // 滚动窗口（2026-09 有界队列）：回合中恒显最新 5 条，较早的折进摘要——cardsOlder 标较早组
     cardsSummary: '{{n}} 项操作',
@@ -40,6 +48,7 @@ export default {
   },
   turn: {
     badge: 'AI 处理中…',
+    tokenHint: '注意 Token 消耗',
     roundLimit: 'AI 工具调用超过 12 轮上限，已终止本回合（已做的修改保留，可撤销）',
     toolFailStreak: 'AI 连续 3 次工具执行失败，已终止本回合',
     transportUnavailable: '当前环境不支持 AI 网络调用（需在桌面应用内使用）',
