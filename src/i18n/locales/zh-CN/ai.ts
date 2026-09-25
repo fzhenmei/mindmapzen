@@ -1,6 +1,14 @@
 // src/i18n/locales/zh-CN/ai.ts —— AI 对话面板词典（2026-09 AI Agent v1，spec §7）
 export default {
   toggle: 'AI 对话',
+  // 案头 AI 文件整理（2026-09 案头 AI）：右缘竖条入口 + 组装面板文案
+  desk: {
+    toggle: 'AI 整理',
+    title: 'AI 整理',
+    placeholder: '描述想要的整理效果，AI 先出方案…',
+    emptyTitle: '让 AI 整理文件',
+    emptyBody: '描述你想要的整理效果，AI 会先给出方案；你确认后才执行改名、移动与建目录。',
+  },
   panel: {
     title: 'AI 对话',
     close: '收起 AI 面板',

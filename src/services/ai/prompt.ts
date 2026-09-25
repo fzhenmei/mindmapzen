@@ -57,6 +57,19 @@ export function selectionLine(node: { uid: string; text: string } | null): strin
   return `[${node.uid}] ${node.text.replace(/\s+/g, ' ').trim()}`
 }
 
+/** 案头文件整理 system prompt（spec §2.4）：两段式协议 + 工具纪律 */
+export function buildDeskSystemPrompt(): string {
+  return [
+    '你是工作区文件整理助手。工作区是用户的思维导图文件库（.md 文件与目录）。',
+    '工作纪律:',
+    '1. 动手前先调 list_workspace_files 了解文件全貌;文件名不足以判断归类时,用 get_file_outline 读该文件前两层大纲;',
+    '2. 严格遵守两段式协议:先列出完整整理方案(逐个文件如何改名/移动、要建哪些目录),明确询问用户是否确认;用户确认前,写工具会被系统拒绝,不要在未确认时反复调用它们;用户确认后再分步执行,每步等工具结果确认成功再继续,全部完成后简要汇报;',
+    '3. 新文件名与目录名不能包含 \\ / : * ? " < > | 等非法字符;移动目标目录不存在时会自动创建;',
+    '4. 你没有删除文件的权限,也不要建议用户删除文件;',
+    '5. 用户修改需求或放弃调整时,按新需求重新出方案再征求确认。',
+  ].join('\n')
+}
+
 /** system prompt：角色 + 工具纪律 + 当前树快照 */
 export function buildSystemPrompt(tree: EngineNode | null): string {
   const outline = tree ? treeToUidOutline(tree).join('\n') : '（空）'

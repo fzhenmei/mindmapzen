@@ -11,6 +11,7 @@ import { copyAsWechatHtml } from '../services/wechatCopy'
 import LibraryDialogs from '../components/LibraryDialogs'
 import WelcomePane from '../components/WelcomePane'
 import DeskOverview from '../components/DeskOverview'
+import DeskAiPanel from '../components/DeskAiPanel'
 import { ThemeFab } from '../components/ThemeToggle'
 import WelcomeScreen from '../components/WelcomeScreen'
 import CloneDialog, { type CloneRequest } from '../components/CloneDialog'
@@ -402,6 +403,9 @@ export default function LibraryView({ pickDirectory, pickImportFile, writeClipbo
           {/* 右下主题钮（2026-09 三态统一）：SidebarInset 自身 relative，锚点即圆角浮层右下角 */}
           <ThemeFab />
         </SidebarInset>
+        {/* 案头 AI 文件整理（2026-09 案头 AI）：fixed 定位浮层（右缘竖条入口 + 组装面板），
+            不参与 flex 布局——建目录/移动后经 reloadTree 刷左树 */}
+        <DeskAiPanel onTreeChanged={reloadTree} writeClipboard={writeClipboard} />
       </SidebarProvider>
 
       {/* 对话框集群（2026-09 行数护栏拆分）：状态机与业务确认在 useLibraryDialogs，
