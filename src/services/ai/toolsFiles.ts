@@ -12,6 +12,9 @@ import { parse } from '../mdTree'
 export const NOT_CONFIRMED_DETAIL =
   '整理方案尚未获得用户确认：请先用文字列出完整方案（每个文件如何改名/移动、要建哪些目录），明确询问用户是否确认；用户确认后再执行。'
 
+/** 路径围栏拒绝文案（终审 I-1）：relDir/toRelDir 越界或含非法段 */
+const INVALID_RELDIR_DETAIL = '目录路径非法（不能包含 .. 或非法字符），请使用工作区内相对目录'
+
 export interface FileToolEnv {
   adapter: FsAdapter
   wsDir: string
@@ -102,6 +105,18 @@ const WRITE_TOOLS = new Set(['rename_file', 'move_file', 'create_directory'])
 type Args = Record<string, unknown>
 const str = (args: Args, k: string): string => (typeof args[k] === 'string' ? (args[k] as string).trim() : '')
 
+/** 路径围栏（终审 I-1）：AI 生成的相对目录段逐段校验——拒 `..`/`.` 段与 INVALID 字符段，
+ *  反斜杠按非法拒（工作区路径约定 '/' 分隔；'\\' 恰在 INVALID 集内）。null = 越界/非法 */
+export function validateRelDir(raw: string): string | null {
+  if (raw === '') return '' // 根：合法（split 会得到单个空段，先短路放行）
+  const segs = raw.split('/')
+  for (const seg of segs) {
+    if (seg === '' || seg === '.' || seg === '..') return null // 空段（'a//b'、'a/'、'/a'）与当前/父目录段全拒
+    if (INVALID.test(seg)) return null
+  }
+  return segs.join('/')
+}
+
 /** 本地日期 YYYY-MM-DD（list 展示用；不用 toISOString——UTC 会差一天） */
 function localDate(ms: number): string {
   const d = new Date(ms)
@@ -110,7 +125,14 @@ function localDate(ms: number): string {
 }
 
 async function handleList(env: FileToolEnv): Promise<ToolCallResult> {
-  const maps = await listMaps(env.adapter, env.wsDir)
+  let maps: Awaited<ReturnType<typeof listMaps>>
+  try {
+    maps = await listMaps(env.adapter, env.wsDir)
+  } catch (e) {
+    // IO 异常转译（M-1）：对齐文件头「失败不抛异常」——console.warn 留线索 + 中文 detail 回传 AI
+    console.warn('list_workspace_files 枚举工作区失败', e)
+    return { ok: false, detail: '读取工作区文件列表失败，请稍后重试' }
+  }
   if (maps.length === 0) return { ok: true, detail: '（工作区为空，没有任何导图文件）' }
   const sorted = [...maps].sort((a, b) =>
     `${a.relDir}/${a.name}`.localeCompare(`${b.relDir}/${b.name}`, 'zh-CN'),
@@ -122,11 +144,20 @@ async function handleList(env: FileToolEnv): Promise<ToolCallResult> {
 }
 
 async function handleOutline(env: FileToolEnv, args: Args): Promise<ToolCallResult> {
-  const relDir = str(args, 'relDir')
+  const relDir = validateRelDir(str(args, 'relDir'))
+  if (relDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   const name = str(args, 'name')
   const mdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
   if (!(await env.adapter.exists(mdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
-  const r = parse(await env.adapter.readTextFile(mdPath))
+  let md: string
+  try {
+    md = await env.adapter.readTextFile(mdPath)
+  } catch (e) {
+    // IO 异常转译（M-1）：exists 通过后读取仍可能失败（被占用/权限等），不抛给回合层
+    console.warn('get_file_outline 读取文件失败', e)
+    return { ok: false, detail: `读取文件失败：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  }
+  const r = parse(md)
   if (!r.ok) return { ok: false, detail: `文件解析失败：[${name}]（可能不是有效导图 md）` }
   const lines: string[] = []
   // walk 按 mdTree.parse 的真实树形窄化：ZenNode（text 直挂节点，children 非可选），
@@ -152,7 +183,8 @@ async function callService(fn: () => Promise<void>, successDetail: string): Prom
 }
 
 async function handleRename(env: FileToolEnv, args: Args): Promise<ToolCallResult> {
-  const relDir = str(args, 'relDir')
+  const relDir = validateRelDir(str(args, 'relDir'))
+  if (relDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   const name = str(args, 'name')
   const newName = str(args, 'newName')
   if (name === '' || newName === '') return { ok: false, detail: 'name/newName 不能为空' }
@@ -166,9 +198,10 @@ async function handleRename(env: FileToolEnv, args: Args): Promise<ToolCallResul
 }
 
 async function handleMove(env: FileToolEnv, args: Args): Promise<ToolCallResult> {
-  const relDir = str(args, 'relDir')
+  const relDir = validateRelDir(str(args, 'relDir'))
+  const toRelDir = validateRelDir(str(args, 'toRelDir'))
+  if (relDir === null || toRelDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   const name = str(args, 'name')
-  const toRelDir = str(args, 'toRelDir')
   if (name === '') return { ok: false, detail: 'name 不能为空' }
   const oldMdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
   if (!(await env.adapter.exists(oldMdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
@@ -187,7 +220,8 @@ async function handleMove(env: FileToolEnv, args: Args): Promise<ToolCallResult>
 }
 
 async function handleCreateDir(env: FileToolEnv, args: Args): Promise<ToolCallResult> {
-  const relDir = str(args, 'relDir')
+  const relDir = validateRelDir(str(args, 'relDir'))
+  if (relDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   if (relDir === '') return { ok: false, detail: 'relDir 不能为空' }
   const r = await callService(() => createDir(env.adapter, env.wsDir, relDir), `已创建目录 ${relDir}/`)
   if (!r.ok) return r

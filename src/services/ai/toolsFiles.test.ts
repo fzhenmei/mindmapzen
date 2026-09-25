@@ -2,7 +2,7 @@
 // 非法字符拒绝/自动建目录/大纲截断/人工确认门
 import { beforeEach, describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from '../fs/MemoryFsAdapter'
-import { executeFileTool, NOT_CONFIRMED_DETAIL, type FileToolEnv } from './toolsFiles'
+import { executeFileTool, NOT_CONFIRMED_DETAIL, validateRelDir, type FileToolEnv } from './toolsFiles'
 
 let fs: MemoryFsAdapter
 const relocations: Array<[string, string]> = []
@@ -128,5 +128,64 @@ describe('list_workspace_files', () => {
     await empty.mkdir('/ws2')
     const r2 = await executeFileTool('list_workspace_files', {}, { ...env(), adapter: empty, wsDir: '/ws2' })
     expect(r2.detail).toContain('空')
+  })
+})
+
+describe('路径围栏（终审 I-1）', () => {
+  test('validateRelDir 纯函数：.././空段/反斜杠/非法字符全拒；根与正常路径放行', () => {
+    for (const bad of ['../x', 'a/../../b', 'a\\b', '.', '..', './a', 'a/.', 'a//b', 'a/', '/a', 'a:b']) {
+      expect(validateRelDir(bad)).toBeNull()
+    }
+    expect(validateRelDir('')).toBe('') // 根：合法
+    expect(validateRelDir('a/b')).toBe('a/b')
+    expect(validateRelDir('工作/周会')).toBe('工作/周会')
+  })
+
+  test('四个 handler 入口全拦：ok:false 且文案指向工作区内相对目录', async () => {
+    confirmed = true
+    const cases = [
+      ['rename_file', { relDir: '../esc', name: '会议纪要', newName: 'x' }],
+      ['move_file', { relDir: '../esc', name: '会议纪要', toRelDir: '工作' }],
+      ['move_file', { relDir: '', name: '会议纪要', toRelDir: '../esc' }],
+      ['create_directory', { relDir: '../esc' }],
+      ['get_file_outline', { relDir: '../esc', name: '会议纪要' }],
+    ] as const
+    for (const [name, args] of cases) {
+      const r = await executeFileTool(name, args, env())
+      expect(r.ok).toBe(false)
+      expect(r.detail).toBe('目录路径非法（不能包含 .. 或非法字符），请使用工作区内相对目录')
+    }
+  })
+
+  test('全链：确认后 move_file toRelDir 越界仍 ok:false 且文件未动', async () => {
+    confirmed = true
+    const r = await executeFileTool('move_file', { relDir: '', name: '会议纪要', toRelDir: '../逃逸' }, env())
+    expect(r.ok).toBe(false)
+    expect(r.detail).toBe('目录路径非法（不能包含 .. 或非法字符），请使用工作区内相对目录')
+    expect(await fs.exists('/ws/会议纪要.md')).toBe(true)
+    expect(relocations).toEqual([]) // onFileRelocated 未被触发
+  })
+})
+
+describe('IO 异常转译（M-1）：list/outline 失败不抛异常', () => {
+  test('list_workspace_files 枚举失败 → ok:false 中文 detail', async () => {
+    const broken = new MemoryFsAdapter()
+    broken.readDirEntries = async () => {
+      throw new Error('枚举 IO 失败')
+    }
+    const r = await executeFileTool('list_workspace_files', {}, { ...env(), adapter: broken })
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('失败')
+  })
+
+  test('get_file_outline 读取失败 → ok:false 中文 detail', async () => {
+    const broken = new MemoryFsAdapter()
+    await broken.writeTextFileAtomic('/ws/会议纪要.md', '# 会议纪要\n') // exists 通过、readTextFile 抛
+    broken.readTextFile = async () => {
+      throw new Error('读取 IO 失败')
+    }
+    const r = await executeFileTool('get_file_outline', { relDir: '', name: '会议纪要' }, { ...env(), adapter: broken })
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('读取文件失败')
   })
 })

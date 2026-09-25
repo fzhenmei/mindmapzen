@@ -103,6 +103,23 @@ test('否定短语不开门：方案后发『不行』，写工具仍被拒文�
   expect(await fs.exists('/ws/周会纪要.md')).toBe(false)
 }, 20_000)
 
+test('ASCII 确认词全等（M-2）：「看下token用量」含 "ok" 子串不开门，文件不动', async () => {
+  render(<DeskAiPanel onTreeChanged={async () => {}} writeClipboard={writeClipboard} />)
+  await userEvent.click(screen.getByTestId('desk-ai-toggle'))
+  const input = screen.getByTestId('ai-input')
+  await userEvent.type(input, '帮我整理')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  expect(await screen.findByText(/方案：把「会议纪要」改名为/)).toBeInTheDocument()
+  // 「token」含子串 "ok"（≤12 字符）——包含匹配会误开门；改为 ASCII 全等后不开门。
+  // 重装正向 tool_calls 工厂（会议纪要→周会纪要）：门若误开会真的改名，断言即刻翻车
+  installAlwaysToolTransport({ relDir: '', name: '会议纪要', newName: '周会纪要' })
+  await userEvent.type(input, '看下token用量')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await waitFor(() => { expect(useDeskChatStore.getState().phase).toBe('idle') })
+  expect(await fs.exists('/ws/会议纪要.md')).toBe(true)
+  expect(await fs.exists('/ws/周会纪要.md')).toBe(false)
+}, 20_000)
+
 test('确认后执行：rename_file 落地三件套 + 路径换址 + .zen.desk-chat.json 落盘', async () => {
   render(<DeskAiPanel onTreeChanged={async () => {}} writeClipboard={writeClipboard} />)
   await userEvent.click(screen.getByTestId('desk-ai-toggle'))
@@ -151,13 +168,16 @@ test('回合结束确认重置：执行成功后再发非确认消息，写工�
   expect(await fs.exists('/ws/会议纪要.md')).toBe(false)
 }, 20_000)
 
-/** 恒发 tool_calls 的 transport（rename 回旧名）：验证门禁重置/否定短语不开门——写工具
- *  被拒后模型每轮再试；单轮单工具 failStreak 到不了 3（护栏是「一轮内连败」口径），
- *  回合实际由 12 轮上限 roundLimit 终止 */
-function installAlwaysToolTransport(): void {
+/** 恒发 tool_calls 的 transport（默认 rename 回旧名）：验证门禁重置/否定短语不开门——
+ *  写工具被拒后模型每轮再试；单轮单工具 failStreak 到不了 3（护栏是「一轮内连败」口径），
+ *  回合实际由 12 轮上限 roundLimit 终止。renameArgs 可覆写（M-2 用例正向改名——若门被
+ *  误开文件会真的被移动，断言即刻翻车，防「源不存在假阴性」） */
+function installAlwaysToolTransport(
+  renameArgs: { relDir: string; name: string; newName: string } = { relDir: '', name: '周会纪要', newName: '会议纪要' },
+): void {
   ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
     start: (_p: unknown, onDelta: (d: string) => void) => {
-      onDelta(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c9","function":{"name":"rename_file","arguments":"${esc(JSON.stringify({ relDir: '', name: '周会纪要', newName: '会议纪要' }))}"}}]}}]}`)
+      onDelta(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c9","function":{"name":"rename_file","arguments":"${esc(JSON.stringify(renameArgs))}"}}]}}]}`)
       onDelta('{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}')
       return Promise.resolve({ endedWith: 'done' as const })
     },

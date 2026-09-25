@@ -13,9 +13,11 @@ import { executeFileTool, AI_FILE_TOOL_SCHEMAS, type FileToolEnv } from '../serv
 import type { ToolCallResult } from '../services/ai/tools'
 import type { WriteClipboard } from '../services/clipboard'
 
-/** 确认词（spec §1.5）：大小写不敏感包含匹配；trim 后 ≤12 字符才检测——长消息视为
- *  新指令/讨论（如「嗯，但是我再想想要不要把 A 也移过去」是犹豫不是确认） */
-const CONFIRM_WORDS = ['确认', 'ok', 'okay', '好的', '好', '可以', '同意', '执行', '行', '嗯', 'yes', '没问题', '开始']
+/** 确认词（spec §1.5）：trim 后 ≤12 字符才检测——长消息视为新指令/讨论（如「嗯，但是
+ *  我再想想要不要把 A 也移过去」是犹豫不是确认）。中文词包含匹配；ASCII 词（ok/okay/yes）
+ *  全等比较（终审 M-2）——「看下token用量」含 "ok" 子串，按包含匹配会误开门 */
+const CONFIRM_WORDS = ['确认', '好的', '好', '可以', '同意', '执行', '行', '嗯', '没问题', '开始']
+const CONFIRM_WORDS_ASCII = ['ok', 'okay', 'yes']
 const CONFIRM_MAX_LEN = 12
 
 /** 否定词（2026-09-25 裁定）：先于确认词判定——「不行」「不可以」含单字确认词会误开门 */
@@ -25,7 +27,7 @@ function isConfirmation(text: string): boolean {
   const t = text.trim().toLowerCase()
   if (t.length > CONFIRM_MAX_LEN || t === '') return false
   if (REJECT_WORDS.some((w) => t.includes(w))) return false
-  return CONFIRM_WORDS.some((w) => t.includes(w))
+  return CONFIRM_WORDS.some((w) => t.includes(w)) || CONFIRM_WORDS_ASCII.some((w) => t === w)
 }
 
 interface Props {

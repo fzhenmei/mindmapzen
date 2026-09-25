@@ -232,12 +232,14 @@ test('toolSchemas 经 deps 注入透传进请求 body.tools（案头文件域只
   expect(tools.map((x) => x.function.name)).toEqual(['rename_file'])
 })
 
-test('rename_file 成功卡片 kind=file 且触发回合前备份（EDIT_KINDS 含 file）', async () => {
+test('rename_file 备份先于工具执行（终审 I-3：文件域落盘发生在 executeTool 内）', async () => {
   const okRenameFile = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c9","function":{"name":"rename_file","arguments":"{\\"name\\":\\"a\\",\\"newName\\":\\"b\\"}"}}]}}]}'
   const t = scriptedTransport([[okRenameFile, finishToolCalls], [textHi, finishStop]])
-  const { deps, on, backup } = makeDeps(t)
+  const { deps, on, backup, executeTool } = makeDeps(t)
   await runUserTurn(deps, createTurnStop(), INIT)
   const cards = on.card.mock.calls.map((c) => c[0] as ToolCardData)
   expect(cards.some((c) => c.kind === 'file' && c.ok)).toBe(true)
   expect(backup).toHaveBeenCalledTimes(1)
+  // 调用序断言：备份必须早于工具执行——否则安全网已含本回合第一个文件操作（改前：备份在成功后）
+  expect(backup.mock.invocationCallOrder[0]).toBeLessThan(executeTool.mock.invocationCallOrder[0]!)
 })

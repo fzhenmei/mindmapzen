@@ -147,12 +147,17 @@ async function executeRoundTools(
   let failStreak = 0
   for (const call of toolCalls) {
     if (stop.stopped) return false // executing 中停止：当前工具未启动即让位（已应用编辑保留）
-    const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
     const kind = CARD_KIND_BY_TOOL[call.function.name]
+    // 文件域（rename/move/createDir）的落盘发生在 executeTool 内部——备份必须先于执行，
+    // 否则安全网提交已含本回合第一个文件操作（终审 I-3）；引擎域时序不动：编辑在工具
+    // 成功后才应用，维持「首个编辑工具成功后落备份」语义（失败工具无落盘）
+    if (kind === 'file') await backupOnceBeforeFirstEdit(deps, kind, backupDone)
+    const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
     if (kind) deps.on.card({ kind, ok: r.ok, text: r.detail })
     history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: r.ok, detail: r.detail, uid: r.uid }) })
     if (r.ok) {
       failStreak = 0
+      // file 域已在执行前备份（backupDone 置位后此处 no-op）；引擎域保持成功后备份
       await backupOnceBeforeFirstEdit(deps, kind, backupDone)
     } else if (++failStreak >= MAX_FAIL_STREAK) {
       deps.on.error(i18n.t('ai.turn.toolFailStreak'))

@@ -15,6 +15,8 @@ export function deskChatHistoryPath(wsDir: string): string {
 
 export function useDeskChatHistory(adapter: FsAdapter, workspaceDir: string | null) {
   useEffect(() => {
+    // 回合在途时先经全局句柄中止（对齐 ChatPanel「卸载即中止」语义；idle 时句柄为 null 安全 no-op）
+    useDeskChatStore.getState().stopRequest?.()
     // 切工作区 = 新会话：reset 后重读新工作区流水（cancelled 守卫同 useChatHistory）
     useDeskChatStore.getState().reset()
     if (workspaceDir === null) return
