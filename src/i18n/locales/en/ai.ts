@@ -1,6 +1,14 @@
 // src/i18n/locales/en/ai.ts —— English mirror of zh-CN/ai.ts (keys must match exactly)
 export default {
   toggle: 'AI chat',
+  // Desk AI file organize (2026-09): right-edge tab entry + assembled panel copy
+  desk: {
+    toggle: 'AI Organize',
+    title: 'AI Organize',
+    placeholder: 'Describe how you want files organized…',
+    emptyTitle: 'Organize with AI',
+    emptyBody: 'Describe the organization you want; AI proposes a plan first and executes renames, moves and folders only after you confirm.',
+  },
   panel: {
     title: 'AI Chat',
     close: 'Hide AI panel',
@@ -45,6 +53,7 @@ export default {
     layout: 'Switched layout {{text}}',
     link: 'Added link',
     unlink: 'Removed link',
+    file: '{{text}}',
     failed: ' (failed)',
   },
   turn: {

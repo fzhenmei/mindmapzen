@@ -1,6 +1,6 @@
 // src/store/chatStore.test.ts —— 对话状态机（Task 9）
 import { beforeEach, expect, test, vi } from 'vitest'
-import { useChatStore } from './chatStore'
+import { createChatStore, useChatStore } from './chatStore'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -156,4 +156,17 @@ test('pushUser 清 pendingHistory（发送即隐式重新开始）；reset 一�
 test('loadPendingHistory 空态安全：无待载入时 no-op', () => {
   useChatStore.getState().loadPendingHistory()
   expect(useChatStore.getState().messages).toEqual([])
+})
+
+test('工厂双实例隔离（案头 AI 面板）：消息/相位互不影响', () => {
+  const desk = createChatStore()
+  useChatStore.getState().pushUser('编辑器消息')
+  desk.getState().pushUser('案头消息')
+  // 各自 pushUser 产生 [user, assistant 占位] 两条，互不渗漏
+  expect(useChatStore.getState().messages.map((m) => m.text)).toEqual(['编辑器消息', ''])
+  expect(desk.getState().messages.map((m) => m.text)).toEqual(['案头消息', ''])
+  desk.getState().setPhase('streaming')
+  expect(useChatStore.getState().phase).toBe('idle')
+  desk.getState().reset()
+  expect(useChatStore.getState().messages.length).toBe(2)
 })

@@ -9,7 +9,11 @@ import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets
 import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
-import type { AiToolEnv } from '../services/ai/tools'
+import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/tools'
+import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
+import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
+import { withAiCall } from '../services/ai/lock'
+import { i18n } from '../i18n'
 import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
@@ -661,10 +665,26 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
           onCommit 不清暂存：异步落盘窗口期清了会闪回（2026-09 闪回修复，同输入框拖高） */}
       {aiOpen && (
         <div className="absolute top-0 right-[5px] bottom-[5px] z-20 flex" style={{ width: aiPanelPx }}>
+          {/* deps 原值组装（2026-09 案头文件域参数化）：编辑器域=单例 chatStore + i18n 文案 +
+              导图快照 prompt + 结构域/画布域工具链与清单——与参数化前硬编码路径逐值等价 */}
           <ChatPanel
-            mmRef={mmRef}
+            deps={{
+              store: useChatStore,
+              texts: {
+                title: t('ai.panel.title'),
+                placeholder: t('ai.panel.placeholder'),
+                emptyTitle: t('ai.panel.emptyTitle'),
+                emptyBody: t('ai.panel.emptyBody'),
+              },
+              buildPrompt: () => buildSystemPrompt(mmRef.current?.renderer?.renderTree ?? null),
+              buildSelectionLine: () =>
+                selectionLine(useChatStore.getState().contextNode ?? aiSelectionNode),
+              preSendGuard: () => (mmRef.current ? null : i18n.t('ai.turn.engineNotReady')),
+              executeTool: (name, args) =>
+                Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined)),
+              toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS],
+            }}
             selection={aiSelectionNode}
-            aiEnv={aiEnv}
             width={aiPanelPx}
             writeClipboard={writeClipboard}
             onResize={setAiDragPx}

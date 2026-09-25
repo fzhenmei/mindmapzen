@@ -1,6 +1,8 @@
 // src/components/ChatPanel.tsx —— AI 对话面板（spec §7）：纯装配 + 回合编排（send/stop）。
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SubmitEvent } from 'react'
+// 参数化（2026-09 案头文件域）：引擎/会话耦合全部下沉 deps 注入（store/prompt/工具执行/
+// 守卫/确认回调/工具清单）——编辑器挂载处传原值，行为零变化；面板本体与宿主域解耦。
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle, RotateCcw } from 'lucide-react'
 import MarkdownPreview from './MarkdownPreview'
@@ -10,14 +12,12 @@ import { i18n } from '../i18n'
 import { showToast } from '../services/toast'
 import type { WriteClipboard } from '../services/clipboard'
 import { useAppStore } from '../store/appStore'
-import { useChatStore, type ChatMessage, CARDS_WINDOW } from '../store/chatStore'
+import { CARDS_WINDOW, type ChatMessage, type ChatStore } from '../store/chatStore'
 import { windowedHistory } from '../services/chatHistory'
-import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
-import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
-import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
+import { beginAiTurn, endAiTurn } from '../services/ai/lock'
+import type { ToolCallResult } from '../services/ai/tools'
 import { getTransport } from '../services/ai/client'
 import { createTurnStop, runUserTurn } from '../services/ai/agentLoop'
-import type { MindMapHandle } from '../types/engine'
 
 export const AI_PANEL_DEFAULT_PX = 320
 
@@ -25,11 +25,35 @@ export const AI_PANEL_DEFAULT_PX = 320
  *  jsdom clientHeight=0、极小窗口面板过矮时，输入框至少还能向上扩 40px */
 const AI_INPUT_MIN_PX = 64
 
+/** 面板显示文案（2026-09 案头文件域参数化）：编辑器走 i18n key 组装，案头传自己的词典 */
+export interface ChatPanelTexts {
+  title: string
+  placeholder: string
+  emptyTitle: string
+  emptyBody: string
+}
+
+/** 宿主注入面（Task 8 最终 Props 契约）：store/prompt/工具执行/守卫/确认回调——
+ *  编辑器与案头各带自己的域，面板只消费不感知引擎 */
+export interface ChatPanelDeps {
+  store: ChatStore
+  texts: ChatPanelTexts
+  /** system prompt 组装（编辑器：导图快照；案头：工作区整理纪律） */
+  buildPrompt(): string
+  /** 用户选中行（AI 侧上下文）；null = 无 */
+  buildSelectionLine(): string | null
+  /** 发送前置守卫：返回错误文案则不发（编辑器：引擎未就绪）；null = 放行 */
+  preSendGuard(): string | null
+  executeTool(name: string, args: unknown): Promise<ToolCallResult>
+  toolSchemas: unknown[]
+  /** 发送前回调（案头：确认词检测置位确认门）；编辑器不传 */
+  onUserMessage?(text: string): void
+}
+
 interface Props {
-  mmRef: RefObject<MindMapHandle | null>
+  deps: ChatPanelDeps
+  /** 选中节点 chip 显示（仅展示；AI 侧合成在 buildSelectionLine）——编辑器传，案头 undefined */
   selection: { uid: string; text: string } | null
-  /** 画布域工具的宿主通道（Task 8，spec §3）：连线注册表/置脏/布局组合；null = 通道未挂（工具显式失败） */
-  aiEnv: AiToolEnv | null
   width: number
   writeClipboard: WriteClipboard // 按轮复制（2026-09）：定稿回复复制钮的写入端口，测试注入内存桩
   onResize(w: number): void // 拖拽中每帧（内存态）
@@ -44,12 +68,12 @@ interface Props {
   reloadHistory(): Promise<void>
 }
 
-export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboard, onResize, onCommit, onReset, onClose, persistTurn, reloadHistory }: Readonly<Props>) {
+export default function ChatPanel({ deps, selection, width, writeClipboard, onResize, onCommit, onReset, onClose, persistTurn, reloadHistory }: Readonly<Props>) {
   const { t } = useTranslation()
-  const messages = useChatStore((s) => s.messages)
-  const phase = useChatStore((s) => s.phase)
-  const contextNode = useChatStore((s) => s.contextNode)
-  const pendingHistory = useChatStore((s) => s.pendingHistory)
+  const messages = deps.store((s) => s.messages)
+  const phase = deps.store((s) => s.phase)
+  const contextNode = deps.store((s) => s.contextNode)
+  const pendingHistory = deps.store((s) => s.pendingHistory)
   const [input, setInput] = useState('')
   // 输入框拖高（2026-09 长内容）：层级同面板宽（aiDragPx ?? aiChatWidth 先例），
   // 但松手不清暂存——持久层异步落盘窗口期清了会闪回（见 InputResizer onCommit 注释），
@@ -68,8 +92,10 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
 
   // v1.1（2026-09-13）：卸载即中止回合——关面板 = 不再需要，防后台孤儿回合继续编辑导图
   // （用户失去观察入口却不知情）。走全局句柄（终审 I2/I3 架构不废，正是它让卸载 cleanup
-  // 不依赖组件 ref）：idle 时句柄为 null 安全 no-op；切图路径无交集（回合中切图本就被拦）
-  useEffect(() => () => { useChatStore.getState().stopRequest?.() }, [])
+  // 不依赖组件 ref）：idle 时句柄为 null 安全 no-op；切图路径无交集（回合中切图本就被拦）。
+  // deps.store 是稳定 zustand hook 引用（单例/工厂实例身份不变），依赖数组仍 []
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps.store 为稳定 hook 引用（宿主注入后身份不变），卸载中止只须挂载期绑一次
+  useEffect(() => () => { deps.store.getState().stopRequest?.() }, [])
 
   // 跟随滚动的触发源：流式 delta / 新消息走 messages 引用变化，但定稿切 md 后
   // vditor 是异步队列渲染（MarkdownPreview 注释），撑高发生在引用变化之后——
@@ -107,20 +133,22 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
   async function handleSend(e?: SubmitEvent): Promise<void> {
     e?.preventDefault()
     const text = input.trim()
-    const chat = useChatStore.getState()
+    const chat = deps.store.getState()
     if (!text || chat.phase !== 'idle') return
     const ai = useAppStore.getState().aiConfig
     if (!ai.baseUrl || !ai.apiKey || !ai.model) {
       chat.pushError(i18n.t('ai.error.notConfigured'))
       return
     }
-    const mm = mmRef.current
-    if (!mm) {
-      // 引擎未就绪不再无声失败（终审三叉#2）：return 前给显式出口——错误卡指引重试
-      chat.pushError(i18n.t('ai.turn.engineNotReady'))
+    // 发送前置守卫参数化：就绪判据归宿主（编辑器=引擎挂载；案头=恒放行）。返回错误文案
+    // 则不发且不再无声失败（终审三叉#2 语义原样）——错误卡给显式出口指引重试
+    const guard = deps.preSendGuard()
+    if (guard !== null) {
+      chat.pushError(guard)
       return
     }
     setInput('')
+    deps.onUserMessage?.(text) // 发送前回调（spec §1.5，pushUser 前）：案头确认词检测置确认门
     // v1.1 ②：git 备份未启用（默认）且本会话未告知——首轮发送前插安全网信息卡（出现在
     // 用户消息上方）。纯指路（案头 → 设置 → 版本管理）不做面板内开关：设置已有入口避免重复
     const appNow = useAppStore.getState()
@@ -131,12 +159,12 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
     // 对话历史回传（2026-09 持久化改道 windowedHistory）：user/assistant 文本尾部窗口化
     // （24000 字符预算，工具明细/卡片仍不回传）——加载长历史/长会话不会无限爆上下文；
     // 先取历史再 pushUser——runUserTurn 自会追加本轮 userText，取晚一步会把当前消息重复上送
-    const history = windowedHistory(useChatStore.getState().messages)
+    const history = windowedHistory(deps.store.getState().messages)
     const turnStartIdx = chat.messages.length // 本回合落盘切片起点（pushUser 前）
     chat.pushUser(text) // pushUser 顺带清 pendingHistory：发送即隐式「重新开始」
     // 上翻看历史中发送 = 注意力已回对话，强制回底跟随（否则自己的消息+后续回复都看不见）
     stickRef.current = true
-    const sel = selectionLine(contextNode ?? selection)
+    const sel = deps.buildSelectionLine()
     // 尾部斜杠循环剥除（Sonar S8786 只认单量词正则，/\/+$/ 亦被报——循行尾重复标记先例改循环）
     let base = ai.baseUrl
     while (base.endsWith('/')) base = base.slice(0, -1)
@@ -149,7 +177,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
     // 停止钮会 no-op（孤儿回合失控）——闭包同时持有 stop 与 transport，重开面板也能
     // 停掉在途回合。除 stop.request 外直接 abort transport（终审 I2）：模型停摆（无
     // 后续 delta）时 abort 传染不触发，不主动掐流就要挂到 Rust 空闲超时 120s 才收尾
-    useChatStore.getState().setStopRequest(() => {
+    deps.store.getState().setStopRequest(() => {
       stop.request()
       transport.abort()
     })
@@ -158,25 +186,28 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
         {
           transport,
           buildMessages: (msgs) => [
-            { role: 'system', content: buildSystemPrompt(mm.renderer?.renderTree ?? null) },
+            { role: 'system', content: deps.buildPrompt() },
             ...msgs,
           ],
-          executeTool: (name, args) => Promise.resolve(executeAiTool(mm, name, args, withAiCall, aiEnv ?? undefined)),
+          executeTool: deps.executeTool,
           backupBeforeFirstEdit: async () => {
             await useAppStore.getState().backupNow()
           },
+          // 工具清单是编排层职责（2026-09 案头文件域）：透传宿主注入域
+          // （编辑器=结构域+画布域；案头=文件域）
+          toolSchemas: deps.toolSchemas,
           on: {
             phase: (p) => {
-              const chat = useChatStore.getState()
+              const chat = deps.store.getState()
               chat.setPhase(p)
               // 工具轮 round-2 回到 streaming 时把已定稿消息退回流式分支（终审 M3）：
               // delta 继续纯文本+光标追加，不再每 delta 一次全量 lute 重渲染，定稿再挂 md
               if (p === 'streaming') chat.unrenderLastAssistant()
             },
-            delta: (d) => useChatStore.getState().appendStreamDelta(d),
-            finalize: () => useChatStore.getState().finalizeStream(),
-            card: (c) => useChatStore.getState().pushCard(c),
-            error: (msg) => useChatStore.getState().pushError(msg),
+            delta: (d) => deps.store.getState().appendStreamDelta(d),
+            finalize: () => deps.store.getState().finalizeStream(),
+            card: (c) => deps.store.getState().pushCard(c),
+            error: (msg) => deps.store.getState().pushError(msg),
           },
         },
         stop,
@@ -185,18 +216,18 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
     } catch (err) {
       // 编排入口兜底出口（吞异常红线）：任何未预期异常落错误卡片
       console.error('AI 回合异常', err)
-      useChatStore.getState().pushError(err instanceof Error ? err.message : String(err))
+      deps.store.getState().pushError(err instanceof Error ? err.message : String(err))
     } finally {
-      useChatStore.getState().finalizeStream() // 停止/异常路径也定稿半截消息
+      deps.store.getState().finalizeStream() // 停止/异常路径也定稿半截消息
       // 操作步骤完成即收起明细卡（2026-09）：回合中逐张展开可看进度，收尾折成摘要行；
       // 只动最后一条 assistant（本轮卡片全挂它），往轮留置态不扰
-      useChatStore.getState().collapseLastCards()
-      useChatStore.getState().setPhase('idle')
+      deps.store.getState().collapseLastCards()
+      deps.store.getState().setPhase('idle')
       endAiTurn()
-      useChatStore.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
+      deps.store.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
       // 对话历史落盘（2026-09 持久化）：本回合 user/assistant（含卡片；error/notice 与空文本
       // 占位由 appendTurn 过滤）追加进 sidecar 流水。fire-and-forget：闭包自兜错误，不阻塞收尾
-      void persistTurn(useChatStore.getState().messages.slice(turnStartIdx))
+      void persistTurn(deps.store.getState().messages.slice(turnStartIdx))
     }
   }
 
@@ -207,9 +238,9 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
       style={{ width }}
       className="relative flex h-full shrink-0 flex-col rounded-md border border-border bg-background"
     >
-      <SplitResizer side="left" width={width} min={240} max={520} label={t('ai.panel.title')} onResize={onResize} onCommit={onCommit} onReset={onReset} />
+      <SplitResizer side="left" width={width} min={240} max={520} label={deps.texts.title} onResize={onResize} onCommit={onCommit} onReset={onReset} />
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
-        <span className="text-sm font-medium">{t('ai.panel.title')}</span>
+        <span className="text-sm font-medium">{deps.texts.title}</span>
         <div className="flex items-center gap-0.5">
           {/* 重新开始会话（2026-09 交互重构）：会话操作归 header——有对话且 AI 空闲才显示
               （处理中不能重开，防打断在途回合）。点击 = 清空当前会话 + 重读流水挂回 banner
@@ -221,7 +252,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
               aria-label={t('ai.panel.restartSession')}
               title={t('ai.panel.restartSessionHint')}
               onClick={() => {
-                useChatStore.getState().clearSession()
+                deps.store.getState().clearSession()
                 void reloadHistory()
               }}
               className="rounded p-1 text-muted-foreground hover:bg-accent"
@@ -247,7 +278,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
             <button
               type="button"
               data-testid="ai-history-load"
-              onClick={() => useChatStore.getState().loadPendingHistory()}
+              onClick={() => deps.store.getState().loadPendingHistory()}
               className="rounded border border-border bg-background px-2 py-0.5 hover:bg-accent"
             >
               {t('ai.panel.historyLoad')}
@@ -260,11 +291,13 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
         <div ref={listInnerRef}>
           {messages.length === 0 ? (
             <div className="mt-8 space-y-1 text-center text-muted-foreground">
-              <p className="font-medium text-foreground">{t('ai.panel.emptyTitle')}</p>
-              <p className="text-xs">{t('ai.panel.emptyBody')}</p>
+              <p className="font-medium text-foreground">{deps.texts.emptyTitle}</p>
+              <p className="text-xs">{deps.texts.emptyBody}</p>
             </div>
           ) : (
-            messages.map((m, i) => <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} />)
+            messages.map((m, i) => (
+              <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} onToggleCards={(id) => deps.store.getState().toggleCards(id)} />
+            ))
           )}
         </div>
       </div>
@@ -315,7 +348,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder={t('ai.panel.placeholder')}
+            placeholder={deps.texts.placeholder}
             rows={2}
             style={inputH === null ? undefined : { height: inputH }}
             className="min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent p-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
@@ -325,7 +358,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
               <Send className="size-4" />
             </button>
           ) : (
-            <button type="button" data-testid="ai-stop" aria-label={t('ai.panel.stop')} onClick={handleStop} className="rounded-md bg-destructive p-2 text-destructive-foreground">
+            <button type="button" data-testid="ai-stop" aria-label={t('ai.panel.stop')} onClick={() => deps.store.getState().stopRequest?.()} className="rounded-md bg-destructive p-2 text-destructive-foreground">
               <Square className="size-4" />
             </button>
           )}
@@ -338,14 +371,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
   )
 }
 
-/** 全局停止句柄（终审 I2/I3）：不依赖组件实例 ref——回合中 ai-close 卸载重开后
- *  新实例仍可停掉进行中回合；句柄内同时 stop.request + transport.abort（模型停摆
- *  时 abort 传染不触发，主动掐流不等 Rust 空闲超时 120s） */
-function handleStop(): void {
-  useChatStore.getState().stopRequest?.()
-}
-
-function MessageRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {
+function MessageRow({ msg, idx, writeClipboard, onToggleCards }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void }>) {
   if (msg.role === 'user') {
     // 复制钮在气泡左侧（行右对齐，气泡右侧无空位）；items-start 顶部对齐气泡
     return (
@@ -362,7 +388,7 @@ function MessageRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; i
     // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清
     return <p className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">{msg.text}</p>
   }
-  return <AssistantRow msg={msg} idx={idx} writeClipboard={writeClipboard} />
+  return <AssistantRow msg={msg} idx={idx} writeClipboard={writeClipboard} onToggleCards={onToggleCards} />
 }
 
 /** 消息复制钮（2026-09 按轮复制，user/assistant 共用）：Copy→Check 就地反馈 1.5s（成功绿
@@ -399,7 +425,7 @@ function CopyButton({ text, label, writeClipboard }: Readonly<{ text: string; la
 
 /** assistant 回复行（2026-09 拆出）：定稿后 hover 右上角浮现复制钮，复制该轮 Markdown 原文。
  *  流式分支（rendered=false）文本未完整不显示钮 */
-function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {
+function AssistantRow({ msg, idx, writeClipboard, onToggleCards }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void }>) {
   // 滚动窗口（2026-09 有界队列）：未全折且超出窗口条数时，恒显最新 CARDS_WINDOW 条，
   // 较早的折进摘要（计数=较早条数，label 标「较早的」区分）；全折（回合收尾）摘要
   // 计总数。明细 testid 用原始下标（offset 起）——窗口滑动/展开形态切换间稳定标识
@@ -436,7 +462,7 @@ function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage;
             type="button"
             data-testid={`ai-cards-toggle-${idx}`}
             aria-expanded={expanded}
-            onClick={() => useChatStore.getState().toggleCards(msg.id)}
+            onClick={() => onToggleCards(msg.id)}
             className="mt-1 inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
           >
             <ChevronRight
@@ -474,7 +500,7 @@ function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage;
 const CARD_LABEL_KEYS = {
   add: 'ai.card.add', update: 'ai.card.update', remove: 'ai.card.remove', move: 'ai.card.move',
   body: 'ai.card.body', icon: 'ai.card.icon', tag: 'ai.card.tag', expand: 'ai.card.expand',
-  layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink',
+  layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink', file: 'ai.card.file',
 } as const
 
 function cardText(c: { kind: string; ok: boolean; text: string }): string {

@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import ChatPanel from './ChatPanel'
+import ChatPanel, { type ChatPanelDeps } from './ChatPanel'
 import { useChatStore, type ChatMessage } from '../store/chatStore'
 import { useAppStore } from '../store/appStore'
 import { subscribeToast } from '../services/toast'
@@ -14,19 +14,32 @@ vi.mock('./MarkdownPreview', () => ({
   default: ({ text }: { text: string }) => <div data-testid="md-preview">{text}</div>,
 }))
 
-const fakeMm = { execCommand: vi.fn(), renderer: { findNodeByUid: () => null, renderTree: null } }
-
+// mount（2026-09 案头文件域参数化）：Props 契约的执行样例——默认 deps 即编辑器中性桩
+// （守卫放行 / 无选中 / executeTool 恒成功），用例经 overrides 换桩（如 preSendGuard 报错）
 function mount(
-  mm: unknown = fakeMm,
+  overrides: Partial<ChatPanelDeps> = {},
   writeClipboard: WriteClipboard = vi.fn(async () => {}),
   persistTurn: (m: ChatMessage[]) => Promise<void> = vi.fn(async () => {}),
   reloadHistory: () => Promise<void> = vi.fn(async () => {}),
 ) {
   return render(
     <ChatPanel
-      mmRef={{ current: mm as never }}
+      deps={{
+        store: useChatStore,
+        texts: {
+          title: 'AI 对话',
+          placeholder: '问点什么，或让 AI 改这图…',
+          emptyTitle: '和 AI 一起写导图',
+          emptyBody: '在下方输入想法…',
+        },
+        buildPrompt: () => 'sys',
+        buildSelectionLine: () => null,
+        preSendGuard: () => null,
+        executeTool: () => Promise.resolve({ ok: true, detail: 'ok' }),
+        toolSchemas: [],
+        ...overrides,
+      }}
       selection={null}
-      aiEnv={null}
       width={320}
       writeClipboard={writeClipboard}
       onResize={() => {}}
@@ -166,7 +179,9 @@ test('v1.1 ②：git 备份已启用——无安全网信息卡', async () => {
 })
 
 test('终审三叉#2：引擎未就绪发送——错误卡片出现（无声失败消除）', async () => {
-  mount(null) // mmRef.current=null：画布引擎尚未挂载（加载态）
+  // 参数化后守卫经 deps 注入：编辑器 preSendGuard 原值即「引擎未挂载返回错误文案」
+  // （i18n zh 原文），此处同值注入桩断言同一错误卡
+  mount({ preSendGuard: () => '画布引擎未就绪：导图仍在加载，请稍候重试' })
   await userEvent.type(screen.getByTestId('ai-input'), 'hi')
   await userEvent.click(screen.getByTestId('ai-send'))
   expect(screen.getByTestId('ai-msg-error')).toHaveTextContent('画布引擎未就绪')
@@ -308,7 +323,7 @@ function seedFinalAssistant(text: string): void {
 test('按轮复制：定稿回复有复制钮，点击复制该轮 Markdown 原文', async () => {
   const write = vi.fn(async () => {})
   seedFinalAssistant('**回答**')
-  mount(fakeMm, write)
+  mount(undefined, write)
   await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
   expect(write).toHaveBeenCalledWith('**回答**')
 })
@@ -323,7 +338,7 @@ test('按轮复制：流式生成中不显示复制钮（文本未定稿）', ()
 test('按轮复制：剪贴板失败——toast 报错不静默（吞异常红线）', async () => {
   const write = vi.fn(() => Promise.reject(new Error('clipboard unavailable')))
   seedFinalAssistant('回答')
-  mount(fakeMm, write)
+  mount(undefined, write)
   const toasts: (string | null)[] = []
   subscribeToast((t) => toasts.push(t?.text ?? null))
   await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
@@ -333,7 +348,7 @@ test('按轮复制：剪贴板失败——toast 报错不静默（吞异常红�
 test('按轮复制：user 输入也有独立复制钮，各自复制各自内容', async () => {
   const write = vi.fn(async () => {})
   seedFinalAssistant('回答') // 消息流：[user('问'), assistant('回答')]
-  mount(fakeMm, write)
+  mount(undefined, write)
   await userEvent.click(screen.getByRole('button', { name: '复制此条输入' }))
   expect(write).toHaveBeenCalledWith('问')
   await userEvent.click(screen.getByRole('button', { name: '复制此轮回复' }))
@@ -342,7 +357,7 @@ test('按轮复制：user 输入也有独立复制钮，各自复制各自内容
 
 // ═══ 操作卡片收起（2026-09）：回合收尾自动收起明细卡，摘要行点击可展开 ═══
 
-/** 两轮 transport 台：round-1 发 add_node 工具调用（fakeMm findNodeByUid 恒 null → 失败卡，
+/** 两轮 transport 台：round-1 发 add_node 工具调用（配 executeTool 失败桩 → 失败卡，
  *  失败计数分支一并覆盖）后收尾；round-2 吐一个文本 delta 后挂起——releaseRound2 放行收尾 */
 function toolTurnTransport(): { releaseRound2(): void } {
   let round = 0
@@ -380,7 +395,8 @@ function toolTurnTransport(): { releaseRound2(): void } {
 
 test('操作卡片收起：回合结束自动收起——回合中展开可见，收尾只剩摘要行（含失败计数）', async () => {
   const { releaseRound2 } = toolTurnTransport()
-  mount()
+  // 失败桩（原 fakeMm findNodeByUid 恒 null 的真链等价物）：add_node 恒败 → 失败卡
+  mount({ executeTool: () => Promise.resolve({ ok: false, detail: '节点不存在：[x]' }) })
   await userEvent.type(screen.getByTestId('ai-input'), '加节点')
   await userEvent.click(screen.getByTestId('ai-send'))
   // round-1 工具已执行、round-2 已挂起（executing→streaming 过渡点）
@@ -523,7 +539,7 @@ test('有历史时置顶 banner 示轮数，只提供载入（无对话时重开
 test('banner 在场时发送 = 隐式不载入：banner 退场，新回合照常落盘且不带旧历史', async () => {
   const persistTurn = vi.fn<(msgs: ChatMessage[]) => Promise<void>>(async () => {})
   useChatStore.getState().setPendingHistory([{ role: 'user', text: '旧问' }])
-  mount(fakeMm, undefined, persistTurn)
+  mount(undefined, undefined, persistTurn)
   await userEvent.type(screen.getByTestId('ai-input'), '新话题')
   await userEvent.click(screen.getByTestId('ai-send'))
   expect(await screen.findByText(/收到/)).toBeInTheDocument()
@@ -547,7 +563,7 @@ test('重新开始（header 钮）：清空当前会话并触发重读——bann
   useChatStore.getState().appendStreamDelta('答')
   useChatStore.getState().finalizeStream()
   useChatStore.getState().setPhase('idle')
-  mount(fakeMm, undefined, undefined, reloadHistory)
+  mount(undefined, undefined, undefined, reloadHistory)
   await userEvent.click(screen.getByTestId('ai-restart'))
   expect(useChatStore.getState().messages).toEqual([]) // 会话清空
   await waitFor(() => expect(reloadHistory).toHaveBeenCalledTimes(1))
@@ -587,7 +603,7 @@ test('回合收尾把操作卡片随消息一并交持久化端口（在途挂�
       }),
     abort: () => {},
   })
-  mount(fakeMm, undefined, persistTurn)
+  mount(undefined, undefined, persistTurn)
   await userEvent.type(screen.getByTestId('ai-input'), '加节点')
   await userEvent.click(screen.getByTestId('ai-send'))
   await screen.findByTestId('ai-msg-streaming') // 回合在途（user + assistant 占位已建，start 已挂起）

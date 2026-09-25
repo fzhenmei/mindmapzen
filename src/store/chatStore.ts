@@ -11,7 +11,7 @@ export type ChatPhase = 'idle' | 'streaming' | 'executing'
 export const CARDS_WINDOW = 5
 
 export interface ToolCardData {
-  kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink'
+  kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink' | 'file'
   ok: boolean
   text: string
 }
@@ -86,121 +86,132 @@ interface ChatState {
   reset: () => void
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
-  messages: [],
-  phase: 'idle',
-  pendingHistory: null,
-  blockedPulse: false,
-  contextNode: null,
-  stopRequest: null,
-  setPendingHistory: (msgs) => set({ pendingHistory: msgs }),
-  loadPendingHistory: () =>
-    set((s) => {
-      if (s.pendingHistory === null || s.pendingHistory.length === 0) return { pendingHistory: null }
-      const loaded: ChatMessage[] = s.pendingHistory.map((m) => ({
-        id: nextId(),
-        role: m.role,
-        text: m.text,
-        // assistant 补定稿态（载入的历史必是完整回合）；卡片统一收起，想看自己展开
-        rendered: m.role === 'assistant' ? true : undefined,
-        cards: m.cards,
-        cardsCollapsed: m.cards !== undefined && m.cards.length > 0 ? true : undefined,
-      }))
-      return { messages: [...s.messages, ...loaded], pendingHistory: null }
-    }),
-  clearSession: () => set({ messages: [] }),
-  pushUser: (text) =>
-    set((s) => ({
-      messages: [...s.messages, { id: nextId(), role: 'user', text }, { id: nextId(), role: 'assistant', text: '' }],
-      pendingHistory: null, // 发送即隐式「重新开始」：banner 场景下不再提醒
-    })),
-  appendStreamDelta: (text) =>
-    set((s) => {
-      const msgs = [...s.messages]
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i]!.role === 'assistant') {
-          msgs[i] = { ...msgs[i]!, text: msgs[i]!.text + text }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-  finalizeStream: () =>
-    set((s) => {
-      const msgs = [...s.messages]
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i]!.role === 'assistant') {
-          msgs[i] = { ...msgs[i]!, rendered: true }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-  // M3：仅 rendered=true 时克隆置回（已流式态幂等，不白拷消息数组扰动订阅）
-  unrenderLastAssistant: () =>
-    set((s) => {
-      const msgs = [...s.messages]
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i]!.role === 'assistant') {
-          if (msgs[i]!.rendered) msgs[i] = { ...msgs[i]!, rendered: false }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-  pushCard: (c) =>
-    set((s) => {
-      const msgs = [...s.messages]
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i]!.role === 'assistant') {
-          msgs[i] = { ...msgs[i]!, cards: [...(msgs[i]!.cards ?? []), c] }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-  // 幂等（同 unrenderLastAssistant 先例）：已收起不克隆，不白拷消息数组扰动订阅
-  collapseLastCards: () =>
-    set((s) => {
-      const msgs = [...s.messages]
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i]!.role === 'assistant') {
-          if ((msgs[i]!.cards?.length ?? 0) > 0 && !msgs[i]!.cardsCollapsed) {
-            msgs[i] = { ...msgs[i]!, cardsCollapsed: true }
-          }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-  /** 摘要行点击按形态分派（2026-09 滚动窗口）：全折态 → 全展开（collapsed=false 且
-   *  windowed=false，展开意图是全部）；窗口态（>CARDS_WINDOW 条未全折）→ 翻转
-   *  windowed（全展开 ↔ 窗口）；≤窗口条数无旧组 → 现行全折/全展互切 */
-  toggleCards: (id) =>
-    set((s) => ({
-      messages: s.messages.map((m) => {
-        if (m.id !== id || (m.cards?.length ?? 0) === 0) return m
-        if (m.cardsCollapsed) return { ...m, cardsCollapsed: false, cardsWindowed: false }
-        if ((m.cards?.length ?? 0) > CARDS_WINDOW) return { ...m, cardsWindowed: m.cardsWindowed === false }
-        return { ...m, cardsCollapsed: true }
+/** 会话仓工厂（2026-09 案头 AI）：编辑器单例之外，案头面板持第二实例——两会话的
+ *  messages/phase/pendingHistory/stopRequest 互不污染、互不误停。id 序列 nextId 仍是
+ *  模块级共享（跨实例全局唯一，React key 语义不受影响） */
+export type ChatStore = typeof useChatStore
+
+// 返回类型不显式标注 ChatStore：ChatStore = typeof useChatStore，若再反向标注会构成
+// 类型循环（TS2456）；留推断流出——createChatStore() 的返回与 useChatStore 是同一类型
+export function createChatStore() {
+  return create<ChatState>((set, get) => ({
+    messages: [],
+    phase: 'idle',
+    pendingHistory: null,
+    blockedPulse: false,
+    contextNode: null,
+    stopRequest: null,
+    setPendingHistory: (msgs) => set({ pendingHistory: msgs }),
+    loadPendingHistory: () =>
+      set((s) => {
+        if (s.pendingHistory === null || s.pendingHistory.length === 0) return { pendingHistory: null }
+        const loaded: ChatMessage[] = s.pendingHistory.map((m) => ({
+          id: nextId(),
+          role: m.role,
+          text: m.text,
+          // assistant 补定稿态（载入的历史必是完整回合）；卡片统一收起，想看自己展开
+          rendered: m.role === 'assistant' ? true : undefined,
+          cards: m.cards,
+          cardsCollapsed: m.cards !== undefined && m.cards.length > 0 ? true : undefined,
+        }))
+        return { messages: [...s.messages, ...loaded], pendingHistory: null }
       }),
-    })),
-  pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
-  pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
-  setPhase: (p) => set({ phase: p }),
-  setStopRequest: (fn) => set({ stopRequest: fn }),
-  notifyBlocked: () => {
-    set({ blockedPulse: true })
-    // 定时回调无抛错面；仍守"异步回调自己兜"惯例，出错也不静默
-    try {
-      window.setTimeout(() => {
-        if (get().blockedPulse) set({ blockedPulse: false })
-      }, 1600)
-    } catch (e) {
-      console.warn('AI 状态签脉冲复位失败', e)
-    }
-  },
-  setContextNode: (n) => set({ contextNode: n }),
-  // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂
-  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null, pendingHistory: null }),
-}))
+    clearSession: () => set({ messages: [] }),
+    pushUser: (text) =>
+      set((s) => ({
+        messages: [...s.messages, { id: nextId(), role: 'user', text }, { id: nextId(), role: 'assistant', text: '' }],
+        pendingHistory: null, // 发送即隐式「重新开始」：banner 场景下不再提醒
+      })),
+    appendStreamDelta: (text) =>
+      set((s) => {
+        const msgs = [...s.messages]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i]!.role === 'assistant') {
+            msgs[i] = { ...msgs[i]!, text: msgs[i]!.text + text }
+            break
+          }
+        }
+        return { messages: msgs }
+      }),
+    finalizeStream: () =>
+      set((s) => {
+        const msgs = [...s.messages]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i]!.role === 'assistant') {
+            msgs[i] = { ...msgs[i]!, rendered: true }
+            break
+          }
+        }
+        return { messages: msgs }
+      }),
+    // M3：仅 rendered=true 时克隆置回（已流式态幂等，不白拷消息数组扰动订阅）
+    unrenderLastAssistant: () =>
+      set((s) => {
+        const msgs = [...s.messages]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i]!.role === 'assistant') {
+            if (msgs[i]!.rendered) msgs[i] = { ...msgs[i]!, rendered: false }
+            break
+          }
+        }
+        return { messages: msgs }
+      }),
+    pushCard: (c) =>
+      set((s) => {
+        const msgs = [...s.messages]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i]!.role === 'assistant') {
+            msgs[i] = { ...msgs[i]!, cards: [...(msgs[i]!.cards ?? []), c] }
+            break
+          }
+        }
+        return { messages: msgs }
+      }),
+    // 幂等（同 unrenderLastAssistant 先例）：已收起不克隆，不白拷消息数组扰动订阅
+    collapseLastCards: () =>
+      set((s) => {
+        const msgs = [...s.messages]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i]!.role === 'assistant') {
+            if ((msgs[i]!.cards?.length ?? 0) > 0 && !msgs[i]!.cardsCollapsed) {
+              msgs[i] = { ...msgs[i]!, cardsCollapsed: true }
+            }
+            break
+          }
+        }
+        return { messages: msgs }
+      }),
+    /** 摘要行点击按形态分派（2026-09 滚动窗口）：全折态 → 全展开（collapsed=false 且
+     *  windowed=false，展开意图是全部）；窗口态（>CARDS_WINDOW 条未全折）→ 翻转
+     *  windowed（全展开 ↔ 窗口）；≤窗口条数无旧组 → 现行全折/全展互切 */
+    toggleCards: (id) =>
+      set((s) => ({
+        messages: s.messages.map((m) => {
+          if (m.id !== id || (m.cards?.length ?? 0) === 0) return m
+          if (m.cardsCollapsed) return { ...m, cardsCollapsed: false, cardsWindowed: false }
+          if ((m.cards?.length ?? 0) > CARDS_WINDOW) return { ...m, cardsWindowed: m.cardsWindowed === false }
+          return { ...m, cardsCollapsed: true }
+        }),
+      })),
+    pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
+    pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
+    setPhase: (p) => set({ phase: p }),
+    setStopRequest: (fn) => set({ stopRequest: fn }),
+    notifyBlocked: () => {
+      set({ blockedPulse: true })
+      // 定时回调无抛错面；仍守"异步回调自己兜"惯例，出错也不静默
+      try {
+        window.setTimeout(() => {
+          if (get().blockedPulse) set({ blockedPulse: false })
+        }, 1600)
+      } catch (e) {
+        console.warn('AI 状态签脉冲复位失败', e)
+      }
+    },
+    setContextNode: (n) => set({ contextNode: n }),
+    // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂
+    reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null, pendingHistory: null }),
+  }))
+}
+
+export const useChatStore = createChatStore()

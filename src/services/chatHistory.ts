@@ -40,24 +40,31 @@ export function parseChatMessages(v: unknown): PersistedChatMessage[] {
   return out
 }
 
-/** 读历史流水：文件不存在 → []（这张图还没聊过）；坏 JSON/IO 失败 → warn + []
- *  （侧功能降级，不阻塞导图打开）。坏文件被读成 [] 后，下次 appendTurn 整写覆盖——
+/** 读历史流水（显式路径版，2026-09 案头）：路径直用不加后缀——工作区级
+ *  .zen.desk-chat.json 不走 chatHistoryPathOf 的 .md 后缀规则。
+ *  文件不存在 → []（这张图还没聊过）；坏 JSON/IO 失败 → warn + []（侧功能降级，
+ *  不阻塞导图打开）。坏文件被读成 [] 后，下次 appendTurn 整写覆盖——
  *  文件本已不可用，且原子写保证正常路径不会写坏，只可能是外部篡改 */
-export async function readChatHistory(fs: FsAdapter, mdPath: string): Promise<PersistedChatMessage[]> {
-  const p = chatHistoryPathOf(mdPath)
+export async function readChatHistoryAt(fs: FsAdapter, path: string): Promise<PersistedChatMessage[]> {
   try {
-    if (!(await fs.exists(p))) return []
-    return parseChatMessages(JSON.parse(await fs.readTextFile(p))?.messages)
+    if (!(await fs.exists(path))) return []
+    return parseChatMessages(JSON.parse(await fs.readTextFile(path))?.messages)
   } catch (e) {
     console.warn('读取 AI 对话历史失败（按无历史处理）', e)
     return []
   }
 }
 
-/** 回合收尾追加：过滤出本回合 user/assistant（空文本且无卡片的半截占位不入档——中止于
- *  首字前的占位；零文本但有操作卡片的保留：卡片是已发生引擎编辑的 honest 记录），
+/** 按 mdPath 寻址的既有语义（编辑器每图历史）：包装 At 版 + 后缀规则 */
+export async function readChatHistory(fs: FsAdapter, mdPath: string): Promise<PersistedChatMessage[]> {
+  return readChatHistoryAt(fs, chatHistoryPathOf(mdPath))
+}
+
+/** 回合收尾追加（显式路径版，2026-09 案头）：路径直用不加后缀。过滤出本回合
+ *  user/assistant（空文本且无卡片的半截占位不入档——中止于首字前的占位；
+ *  零文本但有操作卡片的保留：卡片是已发生引擎编辑的 honest 记录），
  *  read → 合并 → 原子整写。过滤后为空（纯错误回合）不写盘 */
-export async function appendTurn(fs: FsAdapter, mdPath: string, turnMsgs: ChatMessage[]): Promise<void> {
+export async function appendTurnAt(fs: FsAdapter, path: string, turnMsgs: ChatMessage[]): Promise<void> {
   const persisted = turnMsgs
     .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } =>
       (m.role === 'user' || m.role === 'assistant') && (m.text !== '' || (m.cards?.length ?? 0) > 0))
@@ -67,8 +74,13 @@ export async function appendTurn(fs: FsAdapter, mdPath: string, turnMsgs: ChatMe
       return base
     })
   if (persisted.length === 0) return
-  const messages = [...(await readChatHistory(fs, mdPath)), ...persisted]
-  await fs.writeTextFileAtomic(chatHistoryPathOf(mdPath), JSON.stringify({ version: 1, messages }, null, 2))
+  const messages = [...(await readChatHistoryAt(fs, path)), ...persisted]
+  await fs.writeTextFileAtomic(path, JSON.stringify({ version: 1, messages }, null, 2))
+}
+
+/** 按 mdPath 寻址的既有语义（编辑器每图历史）：包装 At 版 + 后缀规则 */
+export async function appendTurn(fs: FsAdapter, mdPath: string, turnMsgs: ChatMessage[]): Promise<void> {
+  await appendTurnAt(fs, chatHistoryPathOf(mdPath), turnMsgs)
 }
 
 /** 回传窗口字符预算（≈1.5 万 token）：加载长历史/长会话不会无限爆上下文。

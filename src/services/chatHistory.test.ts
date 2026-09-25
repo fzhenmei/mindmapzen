@@ -4,9 +4,11 @@ import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
 import {
   HISTORY_CHAR_BUDGET,
   appendTurn,
+  appendTurnAt,
   chatHistoryPathOf,
   parseChatMessages,
   readChatHistory,
+  readChatHistoryAt,
   windowedHistory,
 } from './chatHistory'
 import { useChatStore, type ChatMessage } from '../store/chatStore'
@@ -104,6 +106,20 @@ describe('appendTurn', () => {
       { role: 'assistant', text: '新答', cards: [{ kind: 'add', ok: true, text: '节点' }] },
       { role: 'assistant', text: '', cards: [{ kind: 'remove', ok: true, text: '误建节点' }] },
     ])
+  })
+})
+
+describe('工作区级 At 版（2026-09 案头 AI）', () => {
+  test('appendTurnAt/readChatHistoryAt 路径直用：不加 .zen.chat.json 后缀', async () => {
+    const fs = new MemoryFsAdapter()
+    await appendTurnAt(fs, '/ws/.zen.desk-chat.json', [
+      { id: 'a', role: 'user', text: '整理一下' },
+      { id: 'b', role: 'assistant', text: '好的，方案如下…' },
+    ])
+    expect(await fs.exists('/ws/.zen.desk-chat.json')).toBe(true)
+    expect(await fs.exists('/ws/.zen.desk-chat.json.zen.chat.json')).toBe(false)
+    const msgs = await readChatHistoryAt(fs, '/ws/.zen.desk-chat.json')
+    expect(msgs.map((m) => m.text)).toEqual(['整理一下', '好的，方案如下…'])
   })
 })
 
