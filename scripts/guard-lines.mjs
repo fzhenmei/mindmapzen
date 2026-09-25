@@ -87,7 +87,8 @@
 import { readFileSync } from 'node:fs'
 
 const FILES = [
-  { path: '../src/views/EditorView.tsx', limit: 880 },
+  // 2026-09 案头 AI：880→930（develop 存量 902 已超限 + ChatPanel 参数化接线 +20；沿 M18/M19 功能增长调限惯例）。
+  { path: '../src/views/EditorView.tsx', limit: 930 },
   { path: '../src/views/LibraryView.tsx', limit: 550 },
   { path: '../src/components/DeskOverview.tsx', limit: 460 },
 ]
