@@ -1,5 +1,5 @@
 // src/components/DeskAiPanel.test.tsx —— 案头 AI 整理面板集成（spec §2.4/§1.5）：
-// 确认门全链（未确认拒绝→确认执行）、sidecar 三件套、路径换址、工作区级历史落盘
+// 确认门全链（未确认拒绝→否定短语不开门→确认执行）、sidecar 三件套、路径换址、工作区级历史落盘
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -86,6 +86,23 @@ test('未确认时写工具被拒：方案后发非确认消息，文件不动',
   expect(await fs.exists('/ws/周会纪要.md')).toBe(false)
 }, 20_000)
 
+test('否定短语不开门：方案后发『不行』，写工具仍被拒文件不动', async () => {
+  render(<DeskAiPanel onTreeChanged={async () => {}} writeClipboard={writeClipboard} />)
+  await userEvent.click(screen.getByTestId('desk-ai-toggle'))
+  const input = screen.getByTestId('ai-input')
+  await userEvent.type(input, '帮我整理')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  expect(await screen.findByText(/方案：把「会议纪要」改名为/)).toBeInTheDocument()
+  // 「不行」含单字确认词「行」——否定词判定先于确认词，门不开；重装恒发 tool_calls
+  // 工厂逼模型反复尝试执行，每轮均被拒（回合由 12 轮上限终止，见工厂注释）
+  installAlwaysToolTransport()
+  await userEvent.type(input, '不行')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await waitFor(() => { expect(useDeskChatStore.getState().phase).toBe('idle') })
+  expect(await fs.exists('/ws/会议纪要.md')).toBe(true)
+  expect(await fs.exists('/ws/周会纪要.md')).toBe(false)
+}, 20_000)
+
 test('确认后执行：rename_file 落地三件套 + 路径换址 + .zen.desk-chat.json 落盘', async () => {
   render(<DeskAiPanel onTreeChanged={async () => {}} writeClipboard={writeClipboard} />)
   await userEvent.click(screen.getByTestId('desk-ai-toggle'))
@@ -123,9 +140,10 @@ test('回合结束确认重置：执行成功后再发非确认消息，写工�
   await userEvent.click(screen.getByTestId('ai-send'))
   await waitFor(() => { expect(useDeskChatStore.getState().phase).toBe('idle') })
   expect(await fs.exists('/ws/周会纪要.md')).toBe(true)
-  // 新一轮：非确认消息 + transport 又给 tool_calls（重装工厂恒发 tool_calls——
-  // 被门禁连续拒绝直至 3 败护栏终止，验证门禁在回合结束后已重置）
-  installToolRound3()
+  // 新一轮：非确认消息 + transport 又给 tool_calls（重装工厂恒发 tool_calls——每轮被
+  // 门禁拒绝；单轮单工具 failStreak 到不了 3，回合实际由 12 轮上限 roundLimit 终止，
+  // 验证门禁在回合结束后已重置）
+  installAlwaysToolTransport()
   await userEvent.type(input, '把它再改回会议纪要')
   await userEvent.click(screen.getByTestId('ai-send'))
   await waitFor(() => { expect(useDeskChatStore.getState().phase).toBe('idle') })
@@ -133,8 +151,10 @@ test('回合结束确认重置：执行成功后再发非确认消息，写工�
   expect(await fs.exists('/ws/会议纪要.md')).toBe(false)
 }, 20_000)
 
-/** 第三用例的专属 transport：round3 也发 tool_calls（rename 回旧名）——验证门禁重置 */
-function installToolRound3(): void {
+/** 恒发 tool_calls 的 transport（rename 回旧名）：验证门禁重置/否定短语不开门——写工具
+ *  被拒后模型每轮再试；单轮单工具 failStreak 到不了 3（护栏是「一轮内连败」口径），
+ *  回合实际由 12 轮上限 roundLimit 终止 */
+function installAlwaysToolTransport(): void {
   ;(window as never as { __AI_TRANSPORT_FACTORY__: unknown }).__AI_TRANSPORT_FACTORY__ = () => ({
     start: (_p: unknown, onDelta: (d: string) => void) => {
       onDelta(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c9","function":{"name":"rename_file","arguments":"${esc(JSON.stringify({ relDir: '', name: '周会纪要', newName: '会议纪要' }))}"}}]}}]}`)

@@ -18,9 +18,13 @@ import type { WriteClipboard } from '../services/clipboard'
 const CONFIRM_WORDS = ['确认', 'ok', 'okay', '好的', '好', '可以', '同意', '执行', '行', '嗯', 'yes', '没问题', '开始']
 const CONFIRM_MAX_LEN = 12
 
+/** 否定词（2026-09-25 裁定）：先于确认词判定——「不行」「不可以」含单字确认词会误开门 */
+const REJECT_WORDS = ['不行', '不可以', '不好', '不用', '先不', '暂不', '别', '算了', '取消', '再想想', '等等', '等一下']
+
 function isConfirmation(text: string): boolean {
   const t = text.trim().toLowerCase()
   if (t.length > CONFIRM_MAX_LEN || t === '') return false
+  if (REJECT_WORDS.some((w) => t.includes(w))) return false
   return CONFIRM_WORDS.some((w) => t.includes(w))
 }
 
