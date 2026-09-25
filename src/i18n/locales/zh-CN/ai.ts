@@ -14,6 +14,8 @@ export default {
     contextChip: '上下文：{{text}}',
     // 输入区（2026-09 长内容输入）：快捷键常显提示 + 拖高手柄无障碍名/悬停提示
     inputHint: 'Enter 发送，Shift + Enter 换行',
+    // 回合进度（2026-09 轮次上限优雅收尾配套）：进行中耗时+轮次，结束即消失
+    turnProgress: '{{elapsed}} · 第 {{round}} 轮',
     resizeInput: '调整输入框高度',
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
@@ -35,7 +37,10 @@ export default {
   },
   turn: {
     badge: 'AI 处理中…',
-    roundLimit: 'AI 工具调用超过 12 轮上限，已终止本回合（已做的修改保留，可撤销）',
+    // 轮次上限优雅收尾：注入 user 角色提示让模型总结进度（末次请求不带工具）
+    wrapupPrompt: '[系统提示] 工具调用轮次已达上限，请不要再调用工具，直接总结已完成的工作与剩余步骤。',
+    // 收尾请求自身网络失败时的降级文案（中性 notice，非错误卡——修改已保留可继续）
+    wrapupFailed: '已达工具轮次上限（20），已完成的修改保留；发送「继续」可接着完成',
     toolFailStreak: 'AI 连续 3 次工具执行失败，已终止本回合',
     transportUnavailable: '当前环境不支持 AI 网络调用（需在桌面应用内使用）',
     engineNotReady: '画布引擎未就绪：导图仍在加载，请稍候重试',

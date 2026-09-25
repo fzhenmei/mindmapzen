@@ -65,6 +65,16 @@ test('setStopRequest：全局停止句柄可调可摘，reset 清空防陈旧悬
   expect(useChatStore.getState().stopRequest).toBeNull()
 })
 
+test('回合进度（执行耗时+轮次显示）：turnStartedAt/toolRound 写入，reset 清空', () => {
+  useChatStore.getState().setTurnStartedAt(1234)
+  useChatStore.getState().setToolRound(3)
+  expect(useChatStore.getState().turnStartedAt).toBe(1234)
+  expect(useChatStore.getState().toolRound).toBe(3)
+  useChatStore.getState().reset()
+  expect(useChatStore.getState().turnStartedAt).toBeNull()
+  expect(useChatStore.getState().toolRound).toBe(0)
+})
+
 test('reset 清空', () => {
   useChatStore.getState().pushUser('x')
   useChatStore.getState().reset()

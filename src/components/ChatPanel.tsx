@@ -135,6 +135,9 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
     while (base.endsWith('/')) base = base.slice(0, -1)
     const url = `${base}/chat/completions`
     beginAiTurn()
+    // 回合进度显示（耗时+轮次）零点：与锁同点起表，finally 同批清零
+    chat.setTurnStartedAt(Date.now())
+    chat.setToolRound(0)
     const stop = createTurnStop()
     // transport 每回合新实例（Task 8 契约：实例不可跨回合复用/并发）
     const transport = getTransport()
@@ -170,6 +173,8 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
             finalize: () => useChatStore.getState().finalizeStream(),
             card: (c) => useChatStore.getState().pushCard(c),
             error: (msg) => useChatStore.getState().pushError(msg),
+            notice: (msg) => useChatStore.getState().pushNotice(msg), // 收尾降级等中性信息卡
+            round: (n) => useChatStore.getState().setToolRound(n), // 回合进度：当前工具轮次
           },
         },
         stop,
@@ -182,6 +187,7 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
     } finally {
       useChatStore.getState().finalizeStream() // 停止/异常路径也定稿半截消息
       useChatStore.getState().setPhase('idle')
+      useChatStore.getState().setTurnStartedAt(null) // 进度秒表随回合收尾归零
       endAiTurn()
       useChatStore.getState().setStopRequest(null) // 回合收尾即摘除全局停止句柄
     }
@@ -261,9 +267,12 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
             </button>
           )}
         </form>
-        <p data-testid="ai-input-hint" className="select-none px-3 pb-1.5 text-right text-[10px] text-muted-foreground">
-          {t('ai.panel.inputHint')}
-        </p>
+        {/* 提示行（2026-09 回合进度）：左=回合进行中的耗时+轮次（结束即消失），右=快捷键常显。
+            左侧空占位保右对齐；tabular-nums 等宽数字防秒表跳动移位 */}
+        <div className="flex items-center justify-between gap-2 px-3 pb-1.5 text-[10px] text-muted-foreground">
+          {phase !== 'idle' ? <TurnProgress /> : <span aria-hidden="true" />}
+          <p data-testid="ai-input-hint" className="select-none text-right">{t('ai.panel.inputHint')}</p>
+        </div>
       </div>
     </aside>
   )
@@ -274,6 +283,37 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
  *  时 abort 传染不触发，主动掐流不等 Rust 空闲超时 120s） */
 function handleStop(): void {
   useChatStore.getState().stopRequest?.()
+}
+
+/** 回合进度（2026-09 轮次上限优雅收尾配套）：进行中显示「耗时 · 第 N 轮」——人工防御
+ *  的判断依据（觉得太久随时点停止钮）。秒表 1s 节流刷新、m:ss 等宽数字防跳动移位；
+ *  startedAt 随回合起止写入/清空，phase=idle 时本组件不渲染、interval 随卸载清理 */
+function TurnProgress() {
+  const { t } = useTranslation()
+  const startedAt = useChatStore((s) => s.turnStartedAt)
+  const round = useChatStore((s) => s.toolRound)
+  const [elapsed, setElapsed] = useState('0:00')
+  useEffect(() => {
+    if (startedAt === null) return
+    const fmt = (t0: number): string => {
+      const sec = Math.max(0, Math.floor((Date.now() - t0) / 1000))
+      return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+    }
+    setElapsed(fmt(startedAt)) // 挂载即显起点读数，不等首个整秒
+    const id = window.setInterval(() => {
+      try {
+        setElapsed(fmt(startedAt))
+      } catch (e) {
+        console.warn('AI 回合进度秒表刷新失败', e) // 定时回调无抛错面，仍守自兜惯例（chatStore.notifyBlocked 同判）
+      }
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [startedAt])
+  return (
+    <span data-testid="ai-turn-progress" className="select-none tabular-nums">
+      {t('ai.panel.turnProgress', { elapsed, round })}
+    </span>
+  )
 }
 
 function MessageRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard }>) {

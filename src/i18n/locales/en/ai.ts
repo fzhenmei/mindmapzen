@@ -14,6 +14,8 @@ export default {
     contextChip: 'Context: {{text}}',
     // Input area (2026-09 long-content input): always-on shortcut hint + resize handle a11y name/tooltip
     inputHint: 'Enter to send, Shift + Enter for newline',
+    // Turn progress (2026-09, pairs with graceful wrap-up): elapsed + round while a turn is running, gone when idle
+    turnProgress: '{{elapsed}} · Round {{round}}',
     resizeInput: 'Resize input box',
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
@@ -35,7 +37,10 @@ export default {
   },
   turn: {
     badge: 'AI working…',
-    roundLimit: 'AI exceeded the 12-round tool-call limit; turn stopped (applied edits kept, undoable)',
+    // Graceful wrap-up at the round limit: injected as a user-role prompt so the model summarizes (final request carries no tools)
+    wrapupPrompt: '[System] The tool-call round limit has been reached. Do not call any more tools; summarize the completed work and remaining steps directly.',
+    // Fallback when the wrap-up request itself fails (neutral notice, not an error card — edits kept, can resume)
+    wrapupFailed: 'Tool-call round limit (20) reached; applied edits are kept — send "continue" to resume',
     toolFailStreak: 'AI tools failed 3 times in a row; turn stopped',
     transportUnavailable: 'AI network calls are unavailable in this environment (desktop app only)',
     engineNotReady: 'Canvas engine not ready: the map is still loading, try again shortly',

@@ -28,6 +28,10 @@ interface ChatState {
   blockedPulse: boolean
   /** 当前选中节点（上下文 chip + 用户指代；EditorView onActiveChange 时写入） */
   contextNode: { uid: string; text: string } | null
+  /** 回合起点时间戳（回合进度显示的秒表零点；null = 无在途回合） */
+  turnStartedAt: number | null
+  /** 当前工具轮次（1 基，agentLoop 每轮 streaming 开始时写；0 = 未开始） */
+  toolRound: number
   /** 全局停止句柄（终审 I3）：回合中 ai-close 卸载面板再重开，新组件实例的 ref 归零，
    *  停止句柄若只存组件内则 no-op（孤儿回合失控）——挂 store 才能跨实例停掉进行中回合 */
   stopRequest: (() => void) | null
@@ -44,6 +48,8 @@ interface ChatState {
    *  只取 user/assistant，历史过滤器天然排除），仅 UI 留存 */
   pushNotice: (text: string) => void
   setPhase: (p: ChatPhase) => void
+  setTurnStartedAt: (t: number | null) => void
+  setToolRound: (n: number) => void
   setStopRequest: (fn: (() => void) | null) => void
   notifyBlocked: () => void
   setContextNode: (n: { uid: string; text: string } | null) => void
@@ -55,6 +61,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   phase: 'idle',
   blockedPulse: false,
   contextNode: null,
+  turnStartedAt: null,
+  toolRound: 0,
   stopRequest: null,
   pushUser: (text) =>
     set((s) => ({
@@ -108,6 +116,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
   pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
   setPhase: (p) => set({ phase: p }),
+  setTurnStartedAt: (t) => set({ turnStartedAt: t }),
+  setToolRound: (n) => set({ toolRound: n }),
   setStopRequest: (fn) => set({ stopRequest: fn }),
   notifyBlocked: () => {
     set({ blockedPulse: true })
@@ -121,6 +131,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
   setContextNode: (n) => set({ contextNode: n }),
-  // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂
-  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, stopRequest: null }),
+  // 切图本就回合禁用（reset 时无在途回合），stopRequest 一并清空防陈旧句柄悬挂；
+  // 回合进度字段同批清零（无在途回合即无进度可显）
+  reset: () => set({ messages: [], phase: 'idle', blockedPulse: false, contextNode: null, turnStartedAt: null, toolRound: 0, stopRequest: null }),
 }))

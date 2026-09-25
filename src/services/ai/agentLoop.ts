@@ -1,6 +1,7 @@
 // src/services/ai/agentLoop.ts —— AI 回合状态机（spec §4）：streaming ↔ executing 循环，
-// 护栏（12 轮 / 连续 3 败）、停止语义（streaming 就地 abort 传输；executing 当前工具做完即停，
-// 已应用编辑保留不回滚）。纯函数：状态经 deps.on 回调外写，engine 经 executeTool 注入。
+// 护栏（20 轮上限→优雅收尾总结 / 连续 3 败终止）、停止语义（streaming 就地 abort 传输；
+// executing 当前工具做完即停，已应用编辑保留不回滚）。纯函数：状态经 deps.on 回调外写，
+// engine 经 executeTool 注入。
 import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
 import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
@@ -8,8 +9,9 @@ import { AI_TOOL_SCHEMAS } from './tools'
 import { AI_CANVAS_TOOL_SCHEMAS } from './toolsCanvas'
 import type { ToolCallResult } from './tools'
 
-/** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱） */
-const MAX_TOOL_ROUNDS = 12
+/** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱）；到达后不再硬停报错，
+ *  而是注入收尾提示发一次无工具请求，让模型总结进度（2026-09 优雅收尾改造） */
+const MAX_TOOL_ROUNDS = 20
 /** 连续工具失败终止阈值 */
 const MAX_FAIL_STREAK = 3
 
@@ -41,6 +43,10 @@ export interface AgentTurnDeps {
     finalize(): void
     card(c: ToolCardData): void
     error(text: string): void
+    /** 中性信息卡（收尾降级等非故障语义），UI 走 notice 不走 error */
+    notice(text: string): void
+    /** 当前工具轮次（1 基，每轮 streaming 开始时发）——回合进度显示的数据源 */
+    round(n: number): void
   }
 }
 
@@ -157,6 +163,48 @@ async function executeRoundTools(
   return true
 }
 
+/** 发起一次流式请求并统一处理停止传染 / error 归因 / 定稿三态（工具轮与收尾总结共用）。
+ *  phase('streaming') 在此发（收尾总结同样走流式 UI 分支）；error 归因经参数注入——
+ *  工具轮走错误卡，收尾走中性 notice 降级。返回 null = 回合已终止（用户停止静默或
+ *  错误/降级已外报），调用方直接返回 */
+async function streamOnce(
+  deps: AgentTurnDeps,
+  stop: TurnStop,
+  init: TurnInit,
+  history: Array<Record<string, unknown>>,
+  tools: unknown[] | undefined,
+  onStreamError: (errorMessage: string | undefined) => void,
+): Promise<{ text: string; toolCalls: AssistantToolCall[] } | null> {
+  deps.on.phase('streaming')
+  const stream = createStreamCollector(stop, deps.transport, deps.on.delta)
+  const outcome = await deps.transport.start(
+    {
+      url: init.url,
+      apiKey: init.apiKey,
+      body: {
+        model: init.model,
+        messages: deps.buildMessages(history),
+        // 收尾请求不带 tools：模型只能纯文本总结（条件展开，undefined 不落序列化层）
+        ...(tools !== undefined ? { tools } : {}),
+        stream: true,
+      },
+    },
+    stream.handle,
+  )
+  // 用户停止须在 error 归因之前（终审 I2）：模型停摆（无后续 delta）时 abort 传染不
+  // 触发，停止后到达的任何 outcome（含 Rust 空闲超时 120s 的 error）一律按已停止静默
+  // 处理——旧序 error 分支先行会误报错误卡且锁悬挂到超时才释放；同步代码段内 stop
+  // 不与 outcome 处理交错，先查 stop 无吞真错风险。已流出文本保留（chatStore 兜底
+  // finalize 由编排层 finally 做）
+  if (stop.stopped) return null
+  if (outcome.endedWith === 'error') {
+    onStreamError(outcome.errorMessage)
+    return null
+  }
+  deps.on.finalize()
+  return { text: stream.text(), toolCalls: assembleAssistantToolCalls(stream.acc) }
+}
+
 export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: TurnInit): Promise<void> {
   const history: Array<Record<string, unknown>> = [...init.history]
   const userContent = init.selection
@@ -167,41 +215,30 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (stop.stopped) return // 停止传染：上一轮工具执行尾部置位时，不再发起新请求
-    deps.on.phase('streaming')
-    const stream = createStreamCollector(stop, deps.transport, deps.on.delta)
-    const outcome = await deps.transport.start(
-      {
-        url: init.url,
-        apiKey: init.apiKey,
-        body: {
-          model: init.model,
-          messages: deps.buildMessages(history),
-          tools: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
-          stream: true,
-        },
-      },
-      stream.handle,
+    deps.on.round(round + 1) // 回合进度显示（1 基）：执行耗时+轮次，人工防御的判断依据
+    const r = await streamOnce(
+      deps,
+      stop,
+      init,
+      history,
+      [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
+      (msg) => deps.on.error(transportErrorMessage(msg)),
     )
-    // 用户停止须在 error 归因之前（终审 I2）：模型停摆（无后续 delta）时 abort 传染不
-    // 触发，停止后到达的任何 outcome（含 Rust 空闲超时 120s 的 error）一律按已停止静默
-    // 处理——旧序 error 分支先行会误报错误卡且锁悬挂到超时才释放；同步代码段内 stop
-    // 不与 outcome 处理交错，先查 stop 无吞真错风险。已流出文本保留（chatStore 兜底
-    // finalize 由编排层 finally 做）
-    if (stop.stopped) return
-    if (outcome.endedWith === 'error') {
-      deps.on.error(transportErrorMessage(outcome.errorMessage))
-      return
-    }
-    deps.on.finalize()
-
-    const toolCalls = assembleAssistantToolCalls(stream.acc)
-    if (toolCalls.length === 0) {
-      history.push({ role: 'assistant', content: stream.text() || '（空回复）' })
+    if (r === null) return
+    if (r.toolCalls.length === 0) {
+      history.push({ role: 'assistant', content: r.text || '（空回复）' })
       deps.on.phase('idle')
       return
     }
-    history.push({ role: 'assistant', content: stream.text() || null, tool_calls: toolCalls })
-    if (!(await executeRoundTools(deps, stop, history, toolCalls, backupDone))) return
+    history.push({ role: 'assistant', content: r.text || null, tool_calls: r.toolCalls })
+    if (!(await executeRoundTools(deps, stop, history, r.toolCalls, backupDone))) return
   }
-  deps.on.error(i18n.t('ai.turn.roundLimit'))
+  // 轮次上限优雅收尾（2026-09）：不再硬停报错——注入收尾提示（user 角色紧跟 tool
+  // 消息合法；不进 store，下回合组装历史天然不回传零残留），末次请求不带 tools，
+  // 模型只能纯文本总结进度。收尾请求自身网络失败降级中性 notice（修改已保留可继续）
+  history.push({ role: 'user', content: i18n.t('ai.turn.wrapupPrompt') })
+  const wrapup = await streamOnce(deps, stop, init, history, undefined, () =>
+    deps.on.notice(i18n.t('ai.turn.wrapupFailed')),
+  )
+  if (wrapup) deps.on.phase('idle')
 }
