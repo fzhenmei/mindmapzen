@@ -205,6 +205,10 @@ interface AppState {
   relocateFavorite: (from: string, to: string) => Promise<void>
   /** 目录整子树移动的前缀重写：fromDir/toDir = 目录绝对路径，子内收藏随迁 */
   relocateFavoritesUnder: (fromDir: string, toDir: string) => Promise<void>
+  /** AI 文件整理换址（2026-09 案头 AI）：单文件路径全家桶换址——收藏/最近打开/导图
+   *  胶囊/会话栈/lastOpened/currentMdPath 一并跟随，cfg.json 落盘。手动改名流不走
+   *  此动作（存量语义不变，失联项有宽容剔除兜底——spec §1.3 scope 裁定） */
+  relocateMapPath: (from: string, to: string) => Promise<void>
   /** 列表排序偏好（2026-09）：即时生效 + load-merge-save 持久化 */
   setLibrarySort: (s: LibrarySort) => Promise<void>
   /** 分区宽度提交（2026-09 拖拽）：null = 恢复默认宽（双击手柄路径） */
@@ -493,6 +497,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { adapter, configPath } = get()
     const cfg = await loadConfig(adapter, configPath)
     await saveConfig(adapter, configPath, { ...cfg, favorites })
+  },
+
+  relocateMapPath: async (from, to) => {
+    const sub = (arr: string[]) => arr.map((p) => (p === from ? to : p))
+    // AppState 无 lastOpened 字段（盘面 cfg 概念，内存对应 currentMdPath）：内存换址
+    // 只动 currentMdPath，lastOpened 在下方落盘段随 cfg 换址
+    set((s) => ({
+      favorites: sub(s.favorites),
+      recentOpened: sub(s.recentOpened),
+      mapTabs: sub(s.mapTabs),
+      sessionRecent: sub(s.sessionRecent),
+      currentMdPath: s.currentMdPath === from ? to : s.currentMdPath,
+    }))
+    const { adapter, configPath } = get()
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, {
+      ...cfg,
+      favorites: sub(cfg.favorites),
+      recentOpened: sub(cfg.recentOpened),
+      lastOpened: cfg.lastOpened === from ? to : cfg.lastOpened,
+    })
   },
 
   relocateFavoritesUnder: async (fromDir, toDir) => {

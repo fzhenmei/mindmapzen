@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
+import { loadConfig } from '../services/config'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { DEFAULT_COPY_SETTINGS } from '../types/files'
 
@@ -810,5 +811,39 @@ describe('点子篮子 M2：快速捕获 store 态', () => {
     useAppStore.getState().setQuickCaptureShortcutError(null)
     useAppStore.getState().requestExit()
     expect(useAppStore.getState().exitRequested).toBe(true)
+  })
+})
+
+// 案头 AI 文件整理（2026-09，Task 7）：AI 改名/移动后单文件路径全家桶换址——
+// 收藏/最近打开/导图胶囊/会话栈/lastOpened/currentMdPath 一并跟随 + cfg.json 落盘
+describe('relocateMapPath（AI 整理后的全家桶路径换址）', () => {
+  test('relocateMapPath 全家桶换址：收藏/最近打开/胶囊/会话栈/lastOpened/currentMdPath + 落盘', async () => {
+    const fs = new MemoryFsAdapter()
+    const oldPath = '/ws/旧名.md'
+    const newPath = '/ws/分类/新名.md'
+    // 落盘走既有 load-merge-save（自盘上 cfg 合并写回，非内存态直序列化）：先预置盘面
+    await fs.writeTextFileAtomic('/ws/cfg.json', JSON.stringify({ favorites: [oldPath, '/ws/别的.md'], recentOpened: [oldPath], lastOpened: oldPath }))
+    useAppStore.setState({
+      adapter: fs,
+      configPath: '/ws/cfg.json',
+      workspaceDir: '/ws',
+      favorites: [oldPath, '/ws/别的.md'],
+      recentOpened: [oldPath],
+      mapTabs: [oldPath],
+      sessionRecent: [oldPath],
+      lastOpened: oldPath,
+      currentMdPath: oldPath,
+    } as never)
+    await useAppStore.getState().relocateMapPath(oldPath, newPath)
+    const s = useAppStore.getState()
+    expect(s.favorites).toEqual([newPath, '/ws/别的.md'])
+    expect(s.recentOpened).toEqual([newPath])
+    expect(s.mapTabs).toEqual([newPath])
+    expect(s.sessionRecent).toEqual([newPath])
+    expect(s.currentMdPath).toBe(newPath)
+    // 落盘核对（loadConfig 读回）：lastOpened 仅存在于盘面 cfg（AppState 无此字段），一并换址
+    const disk = await loadConfig(fs, '/ws/cfg.json')
+    expect(disk.favorites).toEqual([newPath, '/ws/别的.md'])
+    expect(disk.lastOpened).toBe(newPath)
   })
 })
