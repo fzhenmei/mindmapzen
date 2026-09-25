@@ -17,6 +17,15 @@ const inEditable = (e: KeyboardEvent): boolean => {
   return t instanceof Element && t.closest('input, textarea, [contenteditable="true"]') !== null
 }
 
+/** 文本选区守卫（2026-09 AI 面板选段复制）：存在非折叠 DOM 文本选区（如鼠标在 AI 消息里
+ *  选的片段，此时焦点在 body 不在输入域）时放行原生 Ctrl+C 复制选区，不截获成整图 md。
+ *  折叠/空选区（含纯图片选区 toString 为空）不算——选中后点画布，引擎 mousedown 不
+ *  preventDefault（mousedownEventPreventDefault 默认 false），浏览器自然清选区，无残留误伤 */
+const hasTextSelection = (): boolean => {
+  const sel = window.getSelection()
+  return sel !== null && !sel.isCollapsed && sel.toString().length > 0
+}
+
 /** 三态直达键位表（2026-09 画布三态）：Ctrl+1 导图 / Ctrl+2 Markdown / Ctrl+3 看板 */
 const DIRECT_VIEW: Record<string, ViewMode | undefined> = { '1': 'mindmap', '2': 'markdown', '3': 'kanban' }
 
@@ -49,8 +58,9 @@ export function useEditorHotkeys({ doCopy, explicitSave, toggleBodyDialog, anyDi
     const ctrlCommand = (e: KeyboardEvent): boolean => {
       const k = e.key.toLowerCase()
       // 裸 Ctrl/Cmd+C 复制 Markdown（对调：md 复制高频占裸键，原引擎 Control+c 节点复制在
-      // Control+Shift+c）。输入域守卫：焦点在输入域时放行原生复制选中文本，不截获成整图 md
-      if (k === 'c' && !e.shiftKey && !inEditable(e)) {
+      // Control+Shift+c）。输入域守卫：焦点在输入域时放行原生复制选中文本，不截获成整图 md；
+      // 文本选区守卫：非输入域但有文本选区（AI 消息选段等）同样放行原生复制
+      if (k === 'c' && !e.shiftKey && !inEditable(e) && !hasTextSelection()) {
         doCopy()
         return true
       }

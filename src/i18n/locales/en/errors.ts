@@ -32,6 +32,10 @@ const errors: Dict['errors'] = {
   mdNoRoot: 'Root heading not found (missing top-level heading H1)',
   mdNodeNewline: 'Node text contains line breaks; multiline text is not supported yet: {{text}}…',
   mdBodyInListLayer: 'Deep list-layer nodes do not support body text yet: {{text}}…',
+  // 2026-09-24 save-failure recovery loop: fix hint and action button on the error toast
+  fixLocateHint: 'Locate the problem node and fix it; autosave will retry. You cannot leave the canvas until it saves successfully',
+  locateBtn: 'Locate',
+  dismiss: 'Dismiss',
   xmindBadZip: 'Not a valid .xmind file (cannot decompress)',
   xmindMissingContent: 'Not a valid .xmind file (missing content.json/content.xml)',
   xmindNoRootTopic: 'content.json is missing rootTopic',

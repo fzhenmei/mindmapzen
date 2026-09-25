@@ -3,12 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 import { useAppStore, type ViewMode } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
+import { useChatHistory } from '../hooks/useChatHistory'
 import { useSubtreeCopy } from '../hooks/useSubtreeCopy'
 import { buildImageMetaFromSrcs, writeImageAsset } from '../services/imageAssets'
 import type { BodyImageUploadResult } from '../components/VditorEditor'
 import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
-import type { AiToolEnv } from '../services/ai/tools'
+import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/tools'
+import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
+import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
+import { withAiCall } from '../services/ai/lock'
+import { i18n } from '../i18n'
 import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
 import { centerRoot, fitView } from '../editor/viewOps'
@@ -56,7 +61,7 @@ import IgnoredBlocksBanner from '../components/IgnoredBlocksBanner'
 import SaveStamp, { type StampKind } from '../components/SaveStamp'
 import CopyStamp from '../components/CopyStamp'
 import WarnStamp from '../components/WarnStamp'
-import ZenBar from '../components/ZenBar'
+import ZenBar, { copyScopeOf } from '../components/ZenBar'
 import ChatPanel, { AI_PANEL_DEFAULT_PX } from '../components/ChatPanel'
 import AiTurnBadge from '../components/AiTurnBadge'
 interface Props {
@@ -70,7 +75,7 @@ interface Props {
   exportPorts: ExportPorts
   /** 关闭守卫注册端口：生产为 Tauri onCloseRequested，测试注入捕获桩 */
   registerCloseGuard: RegisterCloseGuard
-  /** 退出应用端口：生产为 getCurrentWindow().destroy()，测试记录调用 */
+  /** 退出应用端口：生产为 closeOrHideMainWindow（appClose 裁决），测试记录调用 */
   exitApp: () => void
   /** 选图端口（M19 插图）：生产为 Tauri 对话框 + readFile 字节；E2E harness 桩 */
   pickImageFile: () => Promise<{ name: string; bytes: Uint8Array } | null>
@@ -97,6 +102,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   const mmRef = useRef<MindMapHandle | null>(null)
   const dirtyRef = useRef(false)
   const layoutRef = useRef<LayoutKind>('mindmap') // 保存时写入 sidecar.layout 的真实值
+  // 保存管线最近一次报错串（2026-09-24 修正闭环）：onSaved 比对清除——只清保存失败
+  // 自己报的错，不误清期间落进来的其他来源错误（导入失败等）
+  const saveFailedMsgRef = useRef<string | null>(null)
   // 布局双状态（spec §3.7）：initialLayout=挂载期布局（只来自 sidecar）；layout=当前激活——切换走 setLayout 即时重排不重挂载
   const [layout, setLayout] = useState<LayoutKind>('mindmap')
   const [initialLayout, setInitialLayout] = useState<LayoutKind>('mindmap')
@@ -147,11 +155,20 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
     dirtyRef,
     registry,
     onDirtyChange: (isDirty) => (isDirty ? markDirty() : clearDirty()),
-    onError: setError,
-    // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）+ 统计行记保存时刻
+    onError: (msg, locateUid) => {
+      saveFailedMsgRef.current = msg
+      setError(msg, locateUid)
+    },
+    // 落盘后按注册表重建双链（M5d：显示文本已剥离，注册表是连线数据源）+ 统计行记保存时刻；
+    // 修正闭环（2026-09-24）：保存成功清掉保存管线此前报的错（串匹配，不误清其他来源），浮层退场
     onSaved: () => {
       rebuildFromRegistry()
       stats.markSaved()
+      const store = useAppStore.getState()
+      if (saveFailedMsgRef.current !== null && store.error === saveFailedMsgRef.current) {
+        saveFailedMsgRef.current = null
+        store.setError(null)
+      }
     },
     // 外部变更裁决（多实例/外部编辑器改盘防护）：保存链挂起等本视图的冲突对话框三态
     onExternalConflict: conflict.ask,
@@ -254,6 +271,18 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   // locateNode（看板回导图同源：切态+展开收起祖先+居中），激活高亮在 hook 内经
   // SET_NODE_ACTIVE 落（AI 回合白名单，只读观光语义）
   const nodeSearch = useNodeSearch({ mmRef, locate: locateNode })
+
+  // 保存失败定位消费（2026-09-24 修正闭环）：浮层「定位」钮递增 locatePulse → 此处消费即清
+  // （同 pendingLocate 模式，重开编辑器不重放残留请求）→ 复用 locateNode（切导图态+展开
+  // 收起祖先+居中高亮）。uid 失联（节点已删/跨图残留）时 findNodeByUid miss，定位链安全 no-op
+  const locatePulse = useAppStore((s) => s.locatePulse)
+  useEffect(() => {
+    if (locatePulse === 0) return
+    useAppStore.setState({ locatePulse: 0 })
+    const loc = useAppStore.getState().errorLocate
+    if (loc !== null) locateNode(loc.uid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- locateNode 每渲染重建（非 memo），入依赖则场场空跑；effect 只须由 locatePulse 驱动
+  }, [locatePulse])
 
   // 状态选择器（2026-09 看板 Task 8；2026-09 画布三态 M1 拆 useStatusPick——行为零变化，
   // 语义注释见该 hook：execOnRenderNode 渲染节点寻址 / getData 快照读现值 / 命令落地后
@@ -361,11 +390,12 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   }
 
   // 关闭守卫（M5a 拆分）：拦截注册/三态选择/防误触；保存分支走上面 explicitSave 组合，对话框渲染留本视图。
-  // AI 回合关窗锁（Task 12，spec §6）：回合期间 preventClose + 状态签脉冲，不走三态框
+  // AI 回合关窗锁（Task 12，spec §6）：回合期间 preventClose + 状态签脉冲，不走三态框。
+  // 干净关闭恒接管走 exitApp（appClose 裁决：托盘开 → hide；关 → 销毁捕获窗+主窗——
+  // 不放行自然关闭，隐藏捕获窗驻留进程成僵尸，2026-09-24 报障）
   const guard = useCloseGuard({
     registerCloseGuard,
     exitApp,
-    hijackCleanClose: () => useAppStore.getState().quickCaptureTray, // 关窗隐藏跟托盘走（2026-09 拆分）
     dirtyRef,
     explicitSave,
     clearDirty,
@@ -477,6 +507,9 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
       console.warn('AI 面板画布补偿 resize 失败（窗口尺寸异常，暂跳过）', e) // 显式出口
     }
   }, [aiOpen, aiChatWidth])
+
+  // AI 对话历史接线（2026-09 持久化）：读流水挂待载入（banner 提醒）+ 回合落盘/重读端口
+  const { persistChatTurn, reloadChatHistory } = useChatHistory(adapter, mdPath)
 
   /** 布局切换（spec §3.7 + 审查裁定）：引擎 setLayout 即时重排，不置脏、不触发内容保存。
    *  但布局偏好须即时落 sidecar——否则 writeOnce 的 !dirty 早退使偏好永不落盘（元数据即时落盘不违背「不置脏不自动保存」） */
@@ -632,10 +665,26 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
           onCommit 不清暂存：异步落盘窗口期清了会闪回（2026-09 闪回修复，同输入框拖高） */}
       {aiOpen && (
         <div className="absolute top-0 right-[5px] bottom-[5px] z-20 flex" style={{ width: aiPanelPx }}>
+          {/* deps 原值组装（2026-09 案头文件域参数化）：编辑器域=单例 chatStore + i18n 文案 +
+              导图快照 prompt + 结构域/画布域工具链与清单——与参数化前硬编码路径逐值等价 */}
           <ChatPanel
-            mmRef={mmRef}
+            deps={{
+              store: useChatStore,
+              texts: {
+                title: t('ai.panel.title'),
+                placeholder: t('ai.panel.placeholder'),
+                emptyTitle: t('ai.panel.emptyTitle'),
+                emptyBody: t('ai.panel.emptyBody'),
+              },
+              buildPrompt: () => buildSystemPrompt(mmRef.current?.renderer?.renderTree ?? null),
+              buildSelectionLine: () =>
+                selectionLine(useChatStore.getState().contextNode ?? aiSelectionNode),
+              preSendGuard: () => (mmRef.current ? null : i18n.t('ai.turn.engineNotReady')),
+              executeTool: (name, args) =>
+                Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined)),
+              toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS],
+            }}
             selection={aiSelectionNode}
-            aiEnv={aiEnv}
             width={aiPanelPx}
             writeClipboard={writeClipboard}
             onResize={setAiDragPx}
@@ -647,6 +696,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
               void useAppStore.getState().setAiChatWidth(null)
             }}
             onClose={() => setAiOpen(false)}
+            persistTurn={persistChatTurn}
+            reloadHistory={reloadChatHistory}
           />
         </div>
       )}
@@ -706,7 +757,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
         copySettings={copySettings}
         onToggleCopySetting={(key) => void useAppStore.getState().setSetting(key, !copySettings[key])}
         onCopyPathClick={copyPath}
-        scope={selection.activeUid ? 'branch' : selection.activeCount > 1 ? 'multi' : 'full'}
+        scope={copyScopeOf(selection.activeUid, selection.activeCount)}
         onSaveClick={() => void explicitSave()}
         onBodyClick={() => toggleBodyOrWarn(null)}
         bodyActive={bodyDialog.open}

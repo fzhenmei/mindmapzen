@@ -24,11 +24,14 @@ test('blockClose=true：preventClose 且回调，不弹三态', () => {
   expect(onBlocked).toHaveBeenCalledOnce()
 })
 
-test('blockClose=false：干净图放行（原语义）', () => {
+test('blockClose=false：干净图走接管关闭（恒 preventClose + exitApp，不放行自然关闭）', () => {
   const onBlocked = vi.fn()
+  const exitApp = vi.fn()
   const preventClose = vi.fn()
-  renderHook(() => useCloseGuard({ ...baseOpts, blockClose: () => false, onBlocked }))
+  renderHook(() => useCloseGuard({ ...baseOpts, blockClose: () => false, onBlocked, exitApp }))
   const guard = (globalThis as { __capturedGuard?: (e: { preventClose(): void }) => void }).__capturedGuard!
   act(() => guard({ preventClose }))
-  expect(preventClose).not.toHaveBeenCalled()
+  expect(preventClose).toHaveBeenCalledOnce()
+  expect(exitApp).toHaveBeenCalledOnce()
+  expect(onBlocked).not.toHaveBeenCalled()
 })

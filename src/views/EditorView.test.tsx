@@ -6,7 +6,8 @@ import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
-import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
+import type { ToolCallResult } from '../services/ai/tools'
+import type { ChatPanelDeps } from '../components/ChatPanel'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CopySettings } from '../types/files'
@@ -180,6 +181,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     ;(globalThis as unknown as Record<string, unknown>).__emitNodeCopy = () => onNodeCopy?.()
     // 挂载期 layout prop（引擎构造参数，Task 3）：记录供「打开恢复布局」用例断言
     ;(globalThis as unknown as Record<string, unknown>).__lastLayoutProp = layout
+    // 连线注册表（2026-09 参数化）：aiEnv 闭在 ChatPanel deps.executeTool 内不可及——
+    // 假画布收到的 registry prop 与 aiEnv.registry 是同一实例（useLinkPurify 稳定引用），同法捕获
+    ;(globalThis as unknown as Record<string, unknown>).__lastCanvasRegistry = registry
     return <div data-testid="fake-canvas" />
       },
   }
@@ -196,15 +200,16 @@ vi.mock('vditor', () => {
   return { default: Object.assign(Ctor, { preview: vi.fn().mockResolvedValue(undefined), __inst: inst }) }
 })
 
-// aiEnv 捕获（AI 全面修改 Task 8）：包装式 mock——透传渲染零行为差异（文件内其余 AI
-// 面板用例照常走真实 ChatPanel），仅把最近一次挂载收到的 aiEnv prop 暴露到全局
-// __lastAiEnv（经公开 props 通道捕获，不依赖 EditorView 内部句柄——任务书 spy 注入基准）；
+// deps 捕获（2026-09 案头文件域参数化）：包装式 mock——透传渲染零行为差异（文件内其余 AI
+// 面板用例照常走真实 ChatPanel），仅把最近一次挂载收到的 deps prop 暴露到全局
+// __lastChatDeps（经公开 props 通道捕获，不依赖 EditorView 内部句柄——任务书 spy 注入基准；
+// aiEnv 闭在 executeTool 内不可及，连线注册表经假画布 registry prop 同法捕获）；
 // vi.mock 工厂被提升，真实模块经 importOriginal 动态引入（同 MindMapCanvas 工厂注释）
 vi.mock('../components/ChatPanel', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/ChatPanel')>()
   const Real = actual.default
   const Wrapped = (props: ComponentProps<typeof Real>) => {
-    ;(globalThis as unknown as Record<string, unknown>).__lastAiEnv = props.aiEnv
+    ;(globalThis as unknown as Record<string, unknown>).__lastChatDeps = props.deps
     return Real(props)
   }
   return { ...actual, default: Wrapped }
@@ -271,6 +276,32 @@ test('打开文档渲染画布并显示名称', async () => {
           />,
   )
   expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
+})
+
+// AI 对话历史接线（2026-09 持久化）：打开带流水 sidecar 的导图 → 异读挂 chatStore 待载入
+test('打开带历史流水的导图：chatStore.pendingHistory 挂上待 banner 提醒', async () => {
+  useChatStore.getState().reset()
+  await fs.writeTextFileAtomic(
+    '/ws/a.zen.chat.json',
+    JSON.stringify({ version: 1, messages: [{ role: 'user', text: '旧问' }, { role: 'assistant', text: '旧答' }] }),
+  )
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await waitFor(() => expect(useChatStore.getState().pendingHistory).toEqual([
+    { role: 'user', text: '旧问' },
+    { role: 'assistant', text: '旧答' },
+  ]))
 })
 
 test('解析失败显示错误面板与原文', async () => {
@@ -505,6 +536,114 @@ test('保存失败时提示错误且脏标记保留（数据不静默丢失）',
   expect(useAppStore.getState().error).toContain('磁盘已满')
   expect(useAppStore.getState().dirty).toBe(true)
   expect(screen.getByTestId('dirty-badge')).toBeInTheDocument()
+})
+
+test('保存失败结构断言携带问题节点 uid；修正后保存成功清错误与定位（修正闭环 2026-09-24）', async () => {
+  // 毒节点：child 文本含 \r\n（Word 粘贴漏网形态）——serialize 断言抛错须带 uid 走定位链
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [{ data: { text: '因为没有想到，肯定就做不到。\r\n现在', expand: true, uid: 'poison-uid' }, children: [] }],
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  expect(useAppStore.getState().error).toContain('换行')
+  expect(useAppStore.getState().errorLocate).toEqual({ uid: 'poison-uid' })
+  // 用户修正（毒节点文本去换行）→ 保存成功 → 错误与定位随清（浮层退场，闭环完成）
+  fakeTree = {
+    data: { text: '根', expand: true, uid: 'root-uid' },
+    children: [{ data: { text: '因为没有想到，肯定就做不到。 现在', expand: true, uid: 'poison-uid' }, children: [] }],
+  }
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toBeNull())
+  expect(useAppStore.getState().errorLocate).toBeNull()
+  expect(useAppStore.getState().dirty).toBe(false)
+})
+
+test('保存成功只清保存管线报的错，不误清其他来源错误', async () => {
+  // 磁盘故障一轮（throw 一次后恢复）
+  const original = fs.writeTextFileAtomic.bind(fs)
+  let thrown = false
+  fs.writeTextFileAtomic = async (p: string, contents: string) => {
+    if (!thrown) {
+      thrown = true
+      throw new Error('磁盘已满（模拟）')
+    }
+    return original(p, contents)
+  }
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().error).toContain('保存失败'))
+  // 保存失败期间落了别的错误（如导入失败）——保存恢复成功后不得替它退场
+  useAppStore.getState().setError('导入失败：坏文件')
+  ;(globalThis as unknown as Record<string, () => void>).__emitChange!()
+  fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+  await waitFor(() => expect(useAppStore.getState().dirty).toBe(false))
+  expect(useAppStore.getState().error).toBe('导入失败：坏文件')
+})
+
+test('浮层定位钮脉冲消费：locatePulse → locateNode 居中问题节点；消费即清不重放', async () => {
+  render(
+    <EditorView
+      mdPath="/ws/a.md"
+      openInEditor={openInEditor}
+      writeClipboard={vi.fn(async () => {})}
+      exportPorts={stubExportPorts}
+      registerCloseGuard={noopRegister}
+      pickImageFile={stubPickImage}
+      readClipboardImage={stubReadClipboardImage}
+      writeHtmlClipboard={stubWriteHtml}
+      exitApp={noopExitApp}
+          />,
+  )
+  await screen.findByTestId('fake-canvas')
+  ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
+  // 保存失败带问题节点 uid（child-uid 桩可寻址）；错误落下不自动跳转（nonce 语义已拆走）
+  useAppStore.getState().setError('保存失败：节点文本包含换行', 'child-uid')
+  const handle = fakeHandle
+  expect(handle.renderer?.moveNodeToCenter).not.toHaveBeenCalled()
+  // 点击「定位」→ 脉冲 → locateNode（切导图态+展开祖先+居中）→ moveNodeToCenter 问题节点
+  act(() => {
+    useAppStore.getState().requestErrorLocate()
+  })
+  expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledWith(fakeChildNode)
+  expect(useAppStore.getState().locatePulse).toBe(0) // 消费即清（挂载重开不重放残留请求）
+  // 重复点击同 uid 再脉冲再居中（nonce 递增语义由 locatePulse 承担）
+  act(() => {
+    useAppStore.getState().requestErrorLocate()
+  })
+  expect(handle.renderer?.moveNodeToCenter).toHaveBeenCalledTimes(2)
 })
 
 test('返回时保存失败 → 留在编辑器且横幅提示', async () => {
@@ -1396,7 +1535,7 @@ test('关闭守卫：保存失败 → 收起对话框留在应用（不静默退
   await waitFor(() => expect(screen.queryByTestId('closeguard-save')).not.toBeInTheDocument())
 })
 
-test('关闭守卫：干净状态（未修改）不拦截、无对话框', async () => {
+test('关闭守卫：干净状态（未修改）拦截但不弹框，走 exitApp（appClose 裁决）', async () => {
   const guard = makeGuardStub()
   const exitApp = vi.fn()
   render(
@@ -1414,9 +1553,10 @@ test('关闭守卫：干净状态（未修改）不拦截、无对话框', async
   )
   await screen.findByTestId('fake-canvas')
   ;(globalThis as unknown as Record<string, () => void>).__emitReady!() // 不触发 change：未修改
-  expect(guard.fireClose()).toBe(false)
+  // 恒拦截走 exitApp（不放行自然关闭——隐藏捕获窗驻留进程成僵尸，2026-09-24 报障）
+  expect(guard.fireClose()).toBe(true)
   expect(screen.queryByTestId('closeguard-dialog')).not.toBeInTheDocument()
-  expect(exitApp).not.toHaveBeenCalled()
+  expect(exitApp).toHaveBeenCalledOnce()
 })
 
 test('关闭守卫：对话框内连点保存不提前退出（落盘完成才退出且只退一次）', async () => {
@@ -3134,25 +3274,26 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
   })
 
-  // ── aiEnv 注入（AI 全面修改 Task 8，spec §3）：连线/布局工具经 ChatPanel 通道生效 ──
-  // 基准写法（任务书）：不依赖 EditorView 内部句柄——aiEnv 经 ChatPanel 公开 props 通道
-  // 捕获（文件头包装式 mock 的 __lastAiEnv），再以 executeAiTool 驱动全链（与 handleSend
-  // 内 executeTool 同一执行器，只省去 agent loop 的网络轮次）
+  // ── aiEnv 注入（AI 全面修改 Task 8，spec §3；2026-09 参数化）：连线/布局工具经 ChatPanel 通道生效 ──
+  // 基准写法（任务书）：不依赖 EditorView 内部句柄——deps 经 ChatPanel 公开 props 通道捕获
+  // （文件头包装式 mock 的 __lastChatDeps），再以 deps.executeTool 驱动 EditorView 组装的
+  // 真实执行链（mmRef + withAiCall + aiEnv 闭包，与 handleSend 内同一执行器，只省去
+  // agent loop 的网络轮次）；连线注册表经假画布 __lastCanvasRegistry 断言（同一实例）
   test('aiEnv 注入：连线/布局工具经 ChatPanel 通道生效', async () => {
     useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
     renderEditor()
     expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
-    const handle = fakeHandle // ready 时刻实例即 mmRef 所持（aiEnv.setLayout 经 mmRef 落引擎）
+    const handle = fakeHandle // ready 时刻实例即 mmRef 所持（executeTool 内 executeAiTool 经 mmRef 落引擎）
     act(() => {
       ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     })
     fireEvent.click(screen.getByTestId('ai-toggle'))
-    const env = (globalThis as unknown as Record<string, unknown>).__lastAiEnv as AiToolEnv | undefined
-    expect(env).toBeTruthy() // 通道已挂（registry 就绪即构造，非 null）
-    // 布局：set_layout 经 executeAiTool 全链——引擎重排 + React 布局态 + sidecar 即时落盘
-    let layoutRes: ReturnType<typeof executeAiTool> | undefined
-    act(() => {
-      layoutRes = executeAiTool(handle, 'set_layout', { kind: 'timeline' }, (fn) => fn(), env)
+    const deps = (globalThis as unknown as Record<string, unknown>).__lastChatDeps as ChatPanelDeps | undefined
+    expect(deps).toBeTruthy() // 通道已挂（deps.executeTool 闭包持真实 aiEnv，registry 就绪即构造）
+    // 布局：set_layout 经 deps.executeTool 全链——引擎重排 + React 布局态 + sidecar 即时落盘
+    let layoutRes: ToolCallResult | undefined
+    await act(async () => {
+      layoutRes = await deps!.executeTool('set_layout', { kind: 'timeline' })
     })
     expect(layoutRes?.ok).toBe(true)
     expect(handle.setLayout).toHaveBeenCalledWith(layoutToEngine('timeline')) // 引擎层（timeline 同名直映）
@@ -3168,13 +3309,14 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     const origGet = fakeChildNode.getData
     fakeChildNode.getData = (k: string) => (k === 'text' ? ('新分支' as string) : origGet(k))
     try {
-      let linkRes: ReturnType<typeof executeAiTool> | undefined
-      act(() => {
-        linkRes = executeAiTool(handle, 'add_link', { fromUid: 'root-uid', toUid: 'child-uid' }, (fn) => fn(), env)
+      let linkRes: ToolCallResult | undefined
+      await act(async () => {
+        linkRes = await deps!.executeTool('add_link', { fromUid: 'root-uid', toUid: 'child-uid' })
       })
       expect(linkRes?.ok).toBe(true)
-      expect(env!.registry.byUid.size).toBeGreaterThan(0) // 连线注册表有条目
-      expect(env!.registry.byUid.get('root-uid')).toContain('新分支')
+      const reg = (globalThis as unknown as Record<string, unknown>).__lastCanvasRegistry as LinkRegistry
+      expect(reg.byUid.size).toBeGreaterThan(0) // 连线注册表有条目（与 aiEnv.registry 同一实例）
+      expect(reg.byUid.get('root-uid')).toContain('新分支')
       expect(useAppStore.getState().dirty).toBe(true) // 置脏回调触发（保存链接管）
     } finally {
       fakeChildNode.getData = origGet

@@ -51,6 +51,39 @@ describe('serialize', () => {
     expect(() => serialize(n('根', [n('子', [n('a\rb')])]))).toThrow('节点文本包含换行')
   })
 
+  test('结构断言错误携带节点 uid（engineTreeToZen 方向有值时；保存失败定位链 2026-09-24）', () => {
+    // 换行断言：子节点带 uid → 抛错挂 nodeUid（浮层「定位」钮数据源）
+    let err: unknown
+    try {
+      serialize({ text: '根', children: [{ text: 'a\nb', uid: 'u1', children: [] }] })
+    } catch (e) {
+      err = e
+    }
+    expect(err).toBeInstanceOf(Error)
+    expect((err as { nodeUid?: string }).nodeUid).toBe('u1')
+    // 深层正文断言同挂；uid 缺失（parse 方向）不挂字段
+    const deep: ZenNode = { text: '根', uid: 'u0', children: [] }
+    let cur = deep
+    for (let i = 1; i <= 7; i++) {
+      cur.children = [{ text: `L${i}`, uid: `u${i}`, children: [] }]
+      cur = cur.children[0]!
+    }
+    cur.text = 'deep'
+    cur.body = '深层正文'
+    try {
+      serialize(deep)
+    } catch (e) {
+      err = e
+    }
+    expect((err as { nodeUid?: string }).nodeUid).toBe('u7')
+    try {
+      serialize(n('根', [n('a\nb')]))
+    } catch (e) {
+      err = e
+    }
+    expect((err as { nodeUid?: string }).nodeUid).toBeUndefined()
+  })
+
   test('不含换行的正常树仍可序列化', () => {
     const tree = n('根', [n('A', [n('A1')])])
     expect(serialize(tree)).toBe('# 根\n\n## A\n\n### A1\n')

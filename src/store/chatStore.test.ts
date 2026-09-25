@@ -1,6 +1,6 @@
 // src/store/chatStore.test.ts —— 对话状态机（Task 9）
 import { beforeEach, expect, test, vi } from 'vitest'
-import { useChatStore } from './chatStore'
+import { createChatStore, useChatStore } from './chatStore'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -80,4 +80,103 @@ test('reset 清空', () => {
   useChatStore.getState().reset()
   expect(useChatStore.getState().messages).toEqual([])
   expect(useChatStore.getState().phase).toBe('idle')
+})
+
+// ═══ 操作卡滚动窗口（2026-09 有界队列）：回合中恒显最新 5 条，更早的折进摘要——
+// 窗口由渲染层推导（AssistantRow），pushCard 纯追加，store 只持 toggleCards 翻转位 ═══
+
+test('pushCard 纯追加：不写任何折叠/窗口键（滚动窗口由渲染层推导）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  const last = useChatStore.getState().messages.at(-1)!
+  expect(last.cards).toHaveLength(8)
+  expect(last.cardsCollapsed).toBeUndefined() // undefined=从未折叠既有契约保持
+  expect(last.cardsWindowed).toBeUndefined()
+})
+
+test('toggleCards 三态分派：>5 条窗口态 ↔ 全展开互切；≤5 条现行全折', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  const id = useChatStore.getState().messages.at(-1)!.id
+  s.toggleCards(id) // 窗口态 → 全展开
+  expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(false)
+  s.toggleCards(id) // 全展开 → 折回窗口
+  expect(useChatStore.getState().messages.at(-1)!.cardsWindowed).toBe(true)
+  // ≤5 条无窗口：现行行为——展开态点摘要全折
+  s.pushUser('少')
+  for (let i = 0; i < 2; i++) useChatStore.getState().pushCard({ kind: 'add', ok: true, text: `x${i}` })
+  useChatStore.getState().toggleCards(useChatStore.getState().messages.at(-1)!.id)
+  expect(useChatStore.getState().messages.at(-1)!.cardsCollapsed).toBe(true)
+})
+
+test('toggleCards 三态分派：全折态点摘要 → 全展开（collapsed=false 且 windowed=false）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('问')
+  for (let i = 0; i < 8; i++) s.pushCard({ kind: 'add', ok: true, text: `op${i}` })
+  s.collapseLastCards() // 回合收尾全折
+  useChatStore.getState().toggleCards(useChatStore.getState().messages.at(-1)!.id)
+  const m = useChatStore.getState().messages.at(-1)!
+  expect(m.cardsCollapsed).toBe(false)
+  expect(m.cardsWindowed).toBe(false) // 展开意图=全部，不是回窗口
+})
+
+// ═══ 待载入对话历史（2026-09 持久化）：打开导图读到非空流水挂此，载入/重新开始/
+// 首条消息发送任一即清——发送即隐式「重新开始」（新会话不回传旧上下文） ═══
+
+test('loadPendingHistory：灌入重排 id、assistant 定稿态、卡片收起；清待载入', () => {
+  const s = useChatStore.getState()
+  s.pushUser('本会话已有') // id m1/m2——载入须从其后排起，不与既有 id 撞车
+  s.setPendingHistory([
+    { role: 'user', text: '旧问' },
+    { role: 'assistant', text: '旧答', cards: [{ kind: 'add', ok: true, text: '新节点' }] },
+  ])
+  s.loadPendingHistory()
+  const msgs = useChatStore.getState().messages
+  expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+  // 重排 id：与既有 id 不撞车且互不相同（seq 模块级跨用例递增，断言相对性）
+  const ids = msgs.map((m) => m.id)
+  expect(new Set(ids).size).toBe(4)
+  expect(ids.slice(2)).not.toContain(ids[0])
+  expect(msgs[3]).toMatchObject({ text: '旧答', rendered: true, cardsCollapsed: true })
+  expect(msgs[2]).toMatchObject({ text: '旧问' }) // user 无 rendered 键
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+})
+
+test('clearSession：清空当前会话消息，不动待载入（重开钮串联 reload 接棒 banner 回归）', () => {
+  const s = useChatStore.getState()
+  s.pushUser('x')
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  s.clearSession()
+  expect(useChatStore.getState().messages).toEqual([]) // 只管消息区
+  expect(useChatStore.getState().pendingHistory).toEqual([{ role: 'user', text: '旧' }]) // pending 归 reload 管
+})
+
+test('pushUser 清 pendingHistory（发送即隐式重新开始）；reset 一并清', () => {
+  const s = useChatStore.getState()
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  s.pushUser('新话题')
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+  s.setPendingHistory([{ role: 'user', text: '旧' }])
+  useChatStore.getState().reset()
+  expect(useChatStore.getState().pendingHistory).toBeNull()
+})
+
+test('loadPendingHistory 空态安全：无待载入时 no-op', () => {
+  useChatStore.getState().loadPendingHistory()
+  expect(useChatStore.getState().messages).toEqual([])
+})
+
+test('工厂双实例隔离（案头 AI 面板）：消息/相位互不影响', () => {
+  const desk = createChatStore()
+  useChatStore.getState().pushUser('编辑器消息')
+  desk.getState().pushUser('案头消息')
+  // 各自 pushUser 产生 [user, assistant 占位] 两条，互不渗漏
+  expect(useChatStore.getState().messages.map((m) => m.text)).toEqual(['编辑器消息', ''])
+  expect(desk.getState().messages.map((m) => m.text)).toEqual(['案头消息', ''])
+  desk.getState().setPhase('streaming')
+  expect(useChatStore.getState().phase).toBe('idle')
+  desk.getState().reset()
+  expect(useChatStore.getState().messages.length).toBe(2)
 })

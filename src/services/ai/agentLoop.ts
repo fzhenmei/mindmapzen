@@ -5,8 +5,6 @@
 import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
 import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
-import { AI_TOOL_SCHEMAS } from './tools'
-import { AI_CANVAS_TOOL_SCHEMAS } from './toolsCanvas'
 import type { ToolCallResult } from './tools'
 
 /** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱）；到达后不再硬停报错，
@@ -37,6 +35,9 @@ export interface AgentTurnDeps {
   buildMessages(messages: unknown[]): unknown[]
   executeTool: (name: string, args: unknown) => Promise<ToolCallResult>
   backupBeforeFirstEdit: () => Promise<void>
+  /** 工具清单（2026-09 案头文件域）：组装方注入——编辑器传结构域+画布域，案头传文件域。
+   *  本模块不再硬编码 AI_TOOL_SCHEMAS/AI_CANVAS_TOOL_SCHEMAS（清单是编排层职责） */
+  toolSchemas: unknown[]
   on: {
     phase(p: ChatPhase): void
     delta(text: string): void
@@ -75,10 +76,14 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
   add_link: 'link',
   remove_link: 'unlink',
   set_layout: 'layout',
+  rename_file: 'file',
+  move_file: 'file',
+  create_directory: 'file',
 }
 
-/** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义 */
-const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink'])
+/** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义;
+ *  file(改名/移动/建目录)是落盘变更,与内容编辑同级安全网(spec §1.4) */
+const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink', 'file'])
 
 /** OpenAI assistant tool_call 消息形态（assembleAssistantToolCalls 的产物） */
 type AssistantToolCall = ReturnType<typeof assembleAssistantToolCalls>[number]
@@ -148,12 +153,17 @@ async function executeRoundTools(
   let failStreak = 0
   for (const call of toolCalls) {
     if (stop.stopped) return false // executing 中停止：当前工具未启动即让位（已应用编辑保留）
-    const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
     const kind = CARD_KIND_BY_TOOL[call.function.name]
+    // 文件域（rename/move/createDir）的落盘发生在 executeTool 内部——备份必须先于执行，
+    // 否则安全网提交已含本回合第一个文件操作（终审 I-3）；引擎域时序不动：编辑在工具
+    // 成功后才应用，维持「首个编辑工具成功后落备份」语义（失败工具无落盘）
+    if (kind === 'file') await backupOnceBeforeFirstEdit(deps, kind, backupDone)
+    const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
     if (kind) deps.on.card({ kind, ok: r.ok, text: r.detail })
     history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: r.ok, detail: r.detail, uid: r.uid }) })
     if (r.ok) {
       failStreak = 0
+      // file 域已在执行前备份（backupDone 置位后此处 no-op）；引擎域保持成功后备份
       await backupOnceBeforeFirstEdit(deps, kind, backupDone)
     } else if (++failStreak >= MAX_FAIL_STREAK) {
       deps.on.error(i18n.t('ai.turn.toolFailStreak'))
@@ -184,7 +194,8 @@ async function streamOnce(
       body: {
         model: init.model,
         messages: deps.buildMessages(history),
-        // 收尾请求不带 tools：模型只能纯文本总结（条件展开，undefined 不落序列化层）
+        // 工具轮清单是编排层职责：deps 注入（编辑器/案头各带自己的域）；收尾请求不带
+        // tools——模型只能纯文本总结（条件展开，undefined 不落序列化层）
         ...(tools !== undefined ? { tools } : {}),
         stream: true,
       },
@@ -216,13 +227,8 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (stop.stopped) return // 停止传染：上一轮工具执行尾部置位时，不再发起新请求
     deps.on.round(round + 1) // 回合进度显示（1 基）：执行耗时+轮次，人工防御的判断依据
-    const r = await streamOnce(
-      deps,
-      stop,
-      init,
-      history,
-      [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
-      (msg) => deps.on.error(transportErrorMessage(msg)),
+    const r = await streamOnce(deps, stop, init, history, deps.toolSchemas, (msg) =>
+      deps.on.error(transportErrorMessage(msg)),
     )
     if (r === null) return
     if (r.toolCalls.length === 0) {

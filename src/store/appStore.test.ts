@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 import { useAppStore } from './appStore'
+import { loadConfig } from '../services/config'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 import { DEFAULT_COPY_SETTINGS } from '../types/files'
 
@@ -18,6 +19,34 @@ describe('appStore', () => {
     await useAppStore.getState().setWorkspace('/ws')
     expect(useAppStore.getState().workspaceDir).toBe('/ws')
     expect(useAppStore.getState().maps.map((m) => m.name)).toEqual(['已有'])
+  })
+
+  // 2026-09-24 保存失败修正闭环：error 单一事实源不变，errorLocate 携带问题节点 uid
+  //（浮层「定位」钮显示依据）；点击走 locatePulse 脉冲（EditorView 消费即清，挂载不重放）
+  describe('error + errorLocate + locatePulse（错误浮层/定位链）', () => {
+    test('setError 带 uid 落 errorLocate；无 uid / 清空不落', () => {
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u1')
+      expect(useAppStore.getState().error).toBe('保存失败：节点文本包含换行')
+      expect(useAppStore.getState().errorLocate).toEqual({ uid: 'u1' })
+      useAppStore.getState().setError('导入失败：xxx')
+      expect(useAppStore.getState().errorLocate).toBeNull()
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u2')
+      useAppStore.getState().setError(null)
+      expect(useAppStore.getState().error).toBeNull()
+      expect(useAppStore.getState().errorLocate).toBeNull()
+    })
+
+    test('requestErrorLocate 递增 locatePulse（重复点击定位钮重复脉冲）', () => {
+      useAppStore.getState().setError('保存失败：节点文本包含换行', 'u1')
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(1)
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(2)
+      // 无定位信息时 no-op（定位钮本就不显示，防御）
+      useAppStore.getState().setError(null)
+      useAppStore.getState().requestErrorLocate()
+      expect(useAppStore.getState().locatePulse).toBe(2)
+    })
   })
 
   // v0.7.0 验收：设置页「退出工作区（回到开屏）」的 store 面——清内存态 + load-merge-save 持久化 null
@@ -782,5 +811,39 @@ describe('点子篮子 M2：快速捕获 store 态', () => {
     useAppStore.getState().setQuickCaptureShortcutError(null)
     useAppStore.getState().requestExit()
     expect(useAppStore.getState().exitRequested).toBe(true)
+  })
+})
+
+// 案头 AI 文件整理（2026-09，Task 7）：AI 改名/移动后单文件路径全家桶换址——
+// 收藏/最近打开/导图胶囊/会话栈/lastOpened/currentMdPath 一并跟随 + cfg.json 落盘
+describe('relocateMapPath（AI 整理后的全家桶路径换址）', () => {
+  test('relocateMapPath 全家桶换址：收藏/最近打开/胶囊/会话栈/lastOpened/currentMdPath + 落盘', async () => {
+    const fs = new MemoryFsAdapter()
+    const oldPath = '/ws/旧名.md'
+    const newPath = '/ws/分类/新名.md'
+    // 落盘走既有 load-merge-save（自盘上 cfg 合并写回，非内存态直序列化）：先预置盘面
+    await fs.writeTextFileAtomic('/ws/cfg.json', JSON.stringify({ favorites: [oldPath, '/ws/别的.md'], recentOpened: [oldPath], lastOpened: oldPath }))
+    useAppStore.setState({
+      adapter: fs,
+      configPath: '/ws/cfg.json',
+      workspaceDir: '/ws',
+      favorites: [oldPath, '/ws/别的.md'],
+      recentOpened: [oldPath],
+      mapTabs: [oldPath],
+      sessionRecent: [oldPath],
+      lastOpened: oldPath,
+      currentMdPath: oldPath,
+    } as never)
+    await useAppStore.getState().relocateMapPath(oldPath, newPath)
+    const s = useAppStore.getState()
+    expect(s.favorites).toEqual([newPath, '/ws/别的.md'])
+    expect(s.recentOpened).toEqual([newPath])
+    expect(s.mapTabs).toEqual([newPath])
+    expect(s.sessionRecent).toEqual([newPath])
+    expect(s.currentMdPath).toBe(newPath)
+    // 落盘核对（loadConfig 读回）：lastOpened 仅存在于盘面 cfg（AppState 无此字段），一并换址
+    const disk = await loadConfig(fs, '/ws/cfg.json')
+    expect(disk.favorites).toEqual([newPath, '/ws/别的.md'])
+    expect(disk.lastOpened).toBe(newPath)
   })
 })

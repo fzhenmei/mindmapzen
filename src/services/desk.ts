@@ -148,6 +148,12 @@ export async function moveMap(
   if (await fs.exists(oldSidecar)) {
     await fs.rename(oldSidecar, joinPath(toDir, finalName + '.zen.json'))
   }
+  // AI 对话历史 sidecar 一并搬移（2026-09-25 修复，与 renameMap/deleteMap 三件套口径一致：
+  // 原实现漏搬导致移动后对话历史孤儿化——案头 AI 整理大量走移动，前置堵漏）
+  const oldChat = joinPath(fromDir, name + '.zen.chat.json')
+  if (await fs.exists(oldChat)) {
+    await fs.rename(oldChat, joinPath(toDir, finalName + '.zen.chat.json'))
+  }
   return { name: finalName, mdPath: newMdPath, relDir: toRelNorm, ...(await statTail(fs, newMdPath)) }
 }
 

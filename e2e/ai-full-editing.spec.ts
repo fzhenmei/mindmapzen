@@ -122,6 +122,11 @@ test('AI 多工具回合：标签/正文/连线/布局全部落地', async ({ pa
   // assistant]，实际 testid 为 ai-card-2-0..3）——按 ai.spec.ts 先例不钉消息下标（notice
   // 插入曾使下标漂移），testid 前缀 + 词典文案过滤；✓ 是成功卡专属图标（失败卡为 ✕ +
   // 「（失败）」后缀），共 4 张 = 无失败卡、无多余工具轮
+  // 2026-09 操作卡收起：回合收尾明细自动折叠成摘要行——四卡同挂首轮 assistant（见文件
+  // 头回合拓扑），一条摘要行点开再验明细
+  const toggles = page.getByTestId(/^ai-cards-toggle-/)
+  await expect(toggles).toContainText('4 项操作')
+  await toggles.click()
   await expect(page.getByTestId(/^ai-card-/)).toHaveCount(4)
   for (const label of ['设置标签', '改写正文', '添加连线', '切换布局']) {
     await expect(page.getByTestId(/^ai-card-/).filter({ hasText: label })).toContainText('✓')

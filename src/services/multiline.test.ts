@@ -42,9 +42,19 @@ describe('sanitizeExecArgs（提交口换行归一化，2026-09-07 Word 粘贴�
     expect(payload.text).toBe('a\rb')
   })
 
+  test('INSERT_CHILD_NODE：载荷 text 换行归一为空格（画布态粘贴毒节点治本，2026-09-24）', () => {
+    // Word 粘贴实案：画布态 Ctrl+V 整段多行文本 → canvasPaste 整段塞单节点 text，
+    // 换行不剥即成毒节点（serialize 断言炸、保存失败）
+    const [, , payload] = sanitizeExecArgs('INSERT_CHILD_NODE', [false, [], { text: '因为没有想到，肯定就做不到。\r\n现在' }]) as [unknown, unknown, { text: string }]
+    expect(payload.text).toBe('因为没有想到，肯定就做不到。 现在')
+  })
+
+  test('INSERT_CHILD_NODE：无换行载荷原样（不误伤拆行粘贴等干净路径）', () => {
+    expect(sanitizeExecArgs('INSERT_CHILD_NODE', [false, [], { text: 'x' }])).toEqual([false, [], { text: 'x' }])
+  })
+
   test('其余命令与非字符串载荷原样返回（不误伤）', () => {
     expect(sanitizeExecArgs('SET_NODE_EXPAND', [node, false])).toEqual([node, false])
-    expect(sanitizeExecArgs('INSERT_CHILD_NODE', [false, [], { text: 'x' }])).toEqual([false, [], { text: 'x' }])
     expect(sanitizeExecArgs('SET_NODE_TEXT', [node])).toEqual([node])
   })
 })

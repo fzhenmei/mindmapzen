@@ -58,6 +58,21 @@ describe('workspace', () => {
     expect(await fs.exists('/ws/b.zen.json')).toBe(true)
   })
 
+  // AI 对话历史 sidecar（2026-09 持久化）：与 .zen.json 同步搬移/删除，否则改名后历史孤儿化
+  test('renameMap/deleteMap 同步搬移/删除 .zen.chat.json', async () => {
+    await createMap(fs, '/ws', 'a')
+    await fs.writeTextFileAtomic('/ws/a.zen.chat.json', '{"version":1,"messages":[]}')
+    await renameMap(fs, '/ws', '', 'a', 'b')
+    expect(await fs.exists('/ws/a.zen.chat.json')).toBe(false)
+    expect(await fs.exists('/ws/b.zen.chat.json')).toBe(true)
+    // 无历史文件的导图改名照常（chat sidecar 缺失不报错）
+    await createMap(fs, '/ws', 'c')
+    await renameMap(fs, '/ws', '', 'c', 'd')
+    expect(await fs.exists('/ws/d.md')).toBe(true)
+    await deleteMap(fs, '/ws', '', 'b')
+    expect(await fs.exists('/ws/b.zen.chat.json')).toBe(false)
+  })
+
   test('renameMap 撞名时抛中文错误且不覆盖既有导图', async () => {
     await createMap(fs, '/ws', 'a')
     await createMap(fs, '/ws', 'b')
