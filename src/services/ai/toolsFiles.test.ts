@@ -165,6 +165,20 @@ describe('路径围栏（终审 I-1）', () => {
     expect(await fs.exists('/ws/会议纪要.md')).toBe(true)
     expect(relocations).toEqual([]) // onFileRelocated 未被触发
   })
+
+  test('name 参数围栏：含斜杠/..穿越段拒绝（读面 outline 无需确认即拒）', async () => {
+    const r = await executeFileTool('get_file_outline', { relDir: '', name: '../escape' }, env())
+    expect(r.ok).toBe(false)
+    expect(r.detail).toContain('非法')
+    confirmed = true
+    const rr = await executeFileTool('rename_file', { relDir: '', name: 'a/../../b', newName: 'x' }, env())
+    expect(rr.ok).toBe(false)
+    expect(rr.detail).toContain('非法')
+    const w = await executeFileTool('move_file', { relDir: '', name: 'a/../../b', toRelDir: '' }, env())
+    expect(w.ok).toBe(false)
+    expect(await fs.exists('/ws/会议纪要.md')).toBe(true)
+    expect(relocations).toEqual([]) // onFileRelocated 未被触发
+  })
 })
 
 describe('IO 异常转译（M-1）：list/outline 失败不抛异常', () => {

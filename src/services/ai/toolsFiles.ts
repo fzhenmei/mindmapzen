@@ -15,6 +15,9 @@ export const NOT_CONFIRMED_DETAIL =
 /** 路径围栏拒绝文案（终审 I-1）：relDir/toRelDir 越界或含非法段 */
 const INVALID_RELDIR_DETAIL = '目录路径非法（不能包含 .. 或非法字符），请使用工作区内相对目录'
 
+/** name 参数围栏拒绝文案（终审 I-1 收尾）：导图名含 / \ 等字符可拼出越界路径 */
+const INVALID_NAME_DETAIL = '文件名非法（不能包含 \\ / : * ? " < > | 等字符），请使用工作区内的导图名'
+
 export interface FileToolEnv {
   adapter: FsAdapter
   wsDir: string
@@ -147,13 +150,14 @@ async function handleOutline(env: FileToolEnv, args: Args): Promise<ToolCallResu
   const relDir = validateRelDir(str(args, 'relDir'))
   if (relDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   const name = str(args, 'name')
-  const mdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
-  if (!(await env.adapter.exists(mdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  if (name === '' || INVALID.test(name)) return { ok: false, detail: INVALID_NAME_DETAIL }
   let md: string
   try {
+    const mdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
+    if (!(await env.adapter.exists(mdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
     md = await env.adapter.readTextFile(mdPath)
   } catch (e) {
-    // IO 异常转译（M-1）：exists 通过后读取仍可能失败（被占用/权限等），不抛给回合层
+    // IO 异常转译（M-1）：exists 探测/读取失败（被占用/权限等）都不抛给回合层
     console.warn('get_file_outline 读取文件失败', e)
     return { ok: false, detail: `读取文件失败：[${relDir === '' ? '' : relDir + '/'}${name}]` }
   }
@@ -189,8 +193,15 @@ async function handleRename(env: FileToolEnv, args: Args): Promise<ToolCallResul
   const newName = str(args, 'newName')
   if (name === '' || newName === '') return { ok: false, detail: 'name/newName 不能为空' }
   if (INVALID.test(newName)) return { ok: false, detail: '新名称包含非法字符（禁用 \\ / : * ? " < > |）' }
+  if (INVALID.test(name)) return { ok: false, detail: INVALID_NAME_DETAIL }
   const oldMdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
-  if (!(await env.adapter.exists(oldMdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  try {
+    if (!(await env.adapter.exists(oldMdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  } catch (e) {
+    // IO 异常转译（M-1 同口径）：探测失败（被占用/权限等）不抛给回合层
+    console.warn('rename_file 探测原文件失败', e)
+    return { ok: false, detail: `检查文件失败：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  }
   const r = await callService(() => renameMap(env.adapter, env.wsDir, relDir, name, newName), `已改名「${name}」→「${newName}」`)
   if (!r.ok) return r
   await env.onFileRelocated(oldMdPath, joinPath(resolveDir(env.wsDir, relDir), newName + '.md'))
@@ -203,8 +214,15 @@ async function handleMove(env: FileToolEnv, args: Args): Promise<ToolCallResult>
   if (relDir === null || toRelDir === null) return { ok: false, detail: INVALID_RELDIR_DETAIL }
   const name = str(args, 'name')
   if (name === '') return { ok: false, detail: 'name 不能为空' }
+  if (INVALID.test(name)) return { ok: false, detail: INVALID_NAME_DETAIL }
   const oldMdPath = joinPath(resolveDir(env.wsDir, relDir), name + '.md')
-  if (!(await env.adapter.exists(oldMdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  try {
+    if (!(await env.adapter.exists(oldMdPath))) return { ok: false, detail: `文件不存在：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  } catch (e) {
+    // IO 异常转译（M-1 同口径）：探测失败（被占用/权限等）不抛给回合层
+    console.warn('move_file 探测原文件失败', e)
+    return { ok: false, detail: `检查文件失败：[${relDir === '' ? '' : relDir + '/'}${name}]` }
+  }
   let info: Awaited<ReturnType<typeof moveMap>>
   try {
     info = await moveMap(env.adapter, env.wsDir, name, relDir, toRelDir)
