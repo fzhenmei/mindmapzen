@@ -45,6 +45,7 @@ export default {
     layout: 'Switched layout {{text}}',
     link: 'Added link',
     unlink: 'Removed link',
+    file: '{{text}}',
     failed: ' (failed)',
   },
   turn: {

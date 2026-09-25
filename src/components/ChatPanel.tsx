@@ -14,7 +14,8 @@ import { useChatStore, type ChatMessage, CARDS_WINDOW } from '../store/chatStore
 import { windowedHistory } from '../services/chatHistory'
 import { beginAiTurn, endAiTurn, withAiCall } from '../services/ai/lock'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
-import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
+import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/tools'
+import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
 import { getTransport } from '../services/ai/client'
 import { createTurnStop, runUserTurn } from '../services/ai/agentLoop'
 import type { MindMapHandle } from '../types/engine'
@@ -165,6 +166,9 @@ export default function ChatPanel({ mmRef, selection, aiEnv, width, writeClipboa
           backupBeforeFirstEdit: async () => {
             await useAppStore.getState().backupNow()
           },
+          // 工具清单组装上移编排层（2026-09 案头文件域）：编辑器域=结构域+画布域，
+          // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
+          toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS],
           on: {
             phase: (p) => {
               const chat = useChatStore.getState()
@@ -474,7 +478,7 @@ function AssistantRow({ msg, idx, writeClipboard }: Readonly<{ msg: ChatMessage;
 const CARD_LABEL_KEYS = {
   add: 'ai.card.add', update: 'ai.card.update', remove: 'ai.card.remove', move: 'ai.card.move',
   body: 'ai.card.body', icon: 'ai.card.icon', tag: 'ai.card.tag', expand: 'ai.card.expand',
-  layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink',
+  layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink', file: 'ai.card.file',
 } as const
 
 function cardText(c: { kind: string; ok: boolean; text: string }): string {

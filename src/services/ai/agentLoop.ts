@@ -4,8 +4,6 @@
 import { i18n } from '../../i18n'
 import type { ChatPhase, ToolCardData } from '../../store/chatStore'
 import { assembleAssistantToolCalls, mergeToolCallChunks, parseDeltaChunk, type AiTransport, type ToolCallAcc } from './client'
-import { AI_TOOL_SCHEMAS } from './tools'
-import { AI_CANVAS_TOOL_SCHEMAS } from './toolsCanvas'
 import type { ToolCallResult } from './tools'
 
 /** 单回合工具循环上限（spec §4 护栏：防死循环防烧钱） */
@@ -35,6 +33,9 @@ export interface AgentTurnDeps {
   buildMessages(messages: unknown[]): unknown[]
   executeTool: (name: string, args: unknown) => Promise<ToolCallResult>
   backupBeforeFirstEdit: () => Promise<void>
+  /** 工具清单（2026-09 案头文件域）：组装方注入——编辑器传结构域+画布域，案头传文件域。
+   *  本模块不再硬编码 AI_TOOL_SCHEMAS/AI_CANVAS_TOOL_SCHEMAS（清单是编排层职责） */
+  toolSchemas: unknown[]
   on: {
     phase(p: ChatPhase): void
     delta(text: string): void
@@ -69,10 +70,14 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
   add_link: 'link',
   remove_link: 'unlink',
   set_layout: 'layout',
+  rename_file: 'file',
+  move_file: 'file',
+  create_directory: 'file',
 }
 
-/** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义 */
-const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink'])
+/** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义;
+ *  file(改名/移动/建目录)是落盘变更,与内容编辑同级安全网(spec §1.4) */
+const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink', 'file'])
 
 /** OpenAI assistant tool_call 消息形态（assembleAssistantToolCalls 的产物） */
 type AssistantToolCall = ReturnType<typeof assembleAssistantToolCalls>[number]
@@ -176,7 +181,7 @@ export async function runUserTurn(deps: AgentTurnDeps, stop: TurnStop, init: Tur
         body: {
           model: init.model,
           messages: deps.buildMessages(history),
-          tools: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS], // as const 深只读，浅拷贝落可变 unknown[]（Task 7 契约）
+          tools: deps.toolSchemas, // 清单是编排层职责：deps 注入（编辑器/案头各带自己的域）
           stream: true,
         },
       },

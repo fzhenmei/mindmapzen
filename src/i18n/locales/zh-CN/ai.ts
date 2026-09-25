@@ -44,6 +44,7 @@ export default {
     layout: '切换布局 {{text}}',
     link: '添加连线',
     unlink: '删除连线',
+    file: '{{text}}',
     failed: '（失败）',
   },
   turn: {

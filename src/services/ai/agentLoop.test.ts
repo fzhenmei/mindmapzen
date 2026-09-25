@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest'
 import { createTurnStop, runUserTurn } from './agentLoop'
 import type { AiTransport, ChatRequestPayload, StreamOutcome } from './client'
 import type { ToolCallResult } from './tools'
+import type { ToolCardData } from '../../store/chatStore'
 
 /** 脚本化 transport：按脚本逐轮吐 chunk 序列；abort() 令挂起的流以 'aborted' 主动收尾
  *  （对齐 Task 8 真实 transport 契约：inFlightFinish 模式，settle 单次守卫） */
@@ -61,6 +62,7 @@ function makeDeps(transport: AiTransport, overrides: Partial<AgentTurnDepsLike> 
     buildMessages: (h: unknown[]) => h,
     executeTool,
     backupBeforeFirstEdit: backup,
+    toolSchemas: [] as unknown[], // 单测默认空清单：body.tools 透传非本文件既有断言目标
     on,
     ...overrides,
   }
@@ -209,4 +211,33 @@ test('排序工具(up_node)是内容编辑:触发备份', async () => {
   await runUserTurn(deps, createTurnStop(), INIT)
   expect(on.card).toHaveBeenCalledOnce()
   expect(backup).toHaveBeenCalledOnce()
+})
+
+test('toolSchemas 经 deps 注入透传进请求 body.tools（案头文件域只带自己的清单）', async () => {
+  const bodies: ChatRequestPayload[] = []
+  const t: AiTransport = {
+    start(payload, onDelta) {
+      bodies.push(payload)
+      onDelta('{"choices":[{"delta":{"content":"好"}}]}')
+      return Promise.resolve({ endedWith: 'done' })
+    },
+    abort: () => {},
+  }
+  const { deps } = makeDeps(t, {
+    toolSchemas: [{ type: 'function', function: { name: 'rename_file', parameters: {} } }],
+  })
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(bodies.length).toBeGreaterThan(0)
+  const tools = bodies[0]!.body.tools as Array<{ function: { name: string } }>
+  expect(tools.map((x) => x.function.name)).toEqual(['rename_file'])
+})
+
+test('rename_file 成功卡片 kind=file 且触发回合前备份（EDIT_KINDS 含 file）', async () => {
+  const okRenameFile = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c9","function":{"name":"rename_file","arguments":"{\\"name\\":\\"a\\",\\"newName\\":\\"b\\"}"}}]}}]}'
+  const t = scriptedTransport([[okRenameFile, finishToolCalls], [textHi, finishStop]])
+  const { deps, on, backup } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  const cards = on.card.mock.calls.map((c) => c[0] as ToolCardData)
+  expect(cards.some((c) => c.kind === 'file' && c.ok)).toBe(true)
+  expect(backup).toHaveBeenCalledTimes(1)
 })
