@@ -6,7 +6,8 @@ import EditorView from './EditorView'
 import { useAppStore } from '../store/appStore'
 import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
-import { executeAiTool, type AiToolEnv } from '../services/ai/tools'
+import type { ToolCallResult } from '../services/ai/tools'
+import type { ChatPanelDeps } from '../components/ChatPanel'
 import { layoutToEngine } from '../editor/layoutMap'
 import type { EngineNode, MindMapHandle } from '../types/engine'
 import type { CopySettings } from '../types/files'
@@ -180,6 +181,9 @@ vi.mock('../editor/MindMapCanvas', async () => {
     ;(globalThis as unknown as Record<string, unknown>).__emitNodeCopy = () => onNodeCopy?.()
     // 挂载期 layout prop（引擎构造参数，Task 3）：记录供「打开恢复布局」用例断言
     ;(globalThis as unknown as Record<string, unknown>).__lastLayoutProp = layout
+    // 连线注册表（2026-09 参数化）：aiEnv 闭在 ChatPanel deps.executeTool 内不可及——
+    // 假画布收到的 registry prop 与 aiEnv.registry 是同一实例（useLinkPurify 稳定引用），同法捕获
+    ;(globalThis as unknown as Record<string, unknown>).__lastCanvasRegistry = registry
     return <div data-testid="fake-canvas" />
       },
   }
@@ -196,15 +200,16 @@ vi.mock('vditor', () => {
   return { default: Object.assign(Ctor, { preview: vi.fn().mockResolvedValue(undefined), __inst: inst }) }
 })
 
-// aiEnv 捕获（AI 全面修改 Task 8）：包装式 mock——透传渲染零行为差异（文件内其余 AI
-// 面板用例照常走真实 ChatPanel），仅把最近一次挂载收到的 aiEnv prop 暴露到全局
-// __lastAiEnv（经公开 props 通道捕获，不依赖 EditorView 内部句柄——任务书 spy 注入基准）；
+// deps 捕获（2026-09 案头文件域参数化）：包装式 mock——透传渲染零行为差异（文件内其余 AI
+// 面板用例照常走真实 ChatPanel），仅把最近一次挂载收到的 deps prop 暴露到全局
+// __lastChatDeps（经公开 props 通道捕获，不依赖 EditorView 内部句柄——任务书 spy 注入基准；
+// aiEnv 闭在 executeTool 内不可及，连线注册表经假画布 registry prop 同法捕获）；
 // vi.mock 工厂被提升，真实模块经 importOriginal 动态引入（同 MindMapCanvas 工厂注释）
 vi.mock('../components/ChatPanel', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/ChatPanel')>()
   const Real = actual.default
   const Wrapped = (props: ComponentProps<typeof Real>) => {
-    ;(globalThis as unknown as Record<string, unknown>).__lastAiEnv = props.aiEnv
+    ;(globalThis as unknown as Record<string, unknown>).__lastChatDeps = props.deps
     return Real(props)
   }
   return { ...actual, default: Wrapped }
@@ -3269,25 +3274,26 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     expect(resize).not.toHaveBeenCalled() // 门禁跳过，不触引擎"先污染后抛错"链路
   })
 
-  // ── aiEnv 注入（AI 全面修改 Task 8，spec §3）：连线/布局工具经 ChatPanel 通道生效 ──
-  // 基准写法（任务书）：不依赖 EditorView 内部句柄——aiEnv 经 ChatPanel 公开 props 通道
-  // 捕获（文件头包装式 mock 的 __lastAiEnv），再以 executeAiTool 驱动全链（与 handleSend
-  // 内 executeTool 同一执行器，只省去 agent loop 的网络轮次）
+  // ── aiEnv 注入（AI 全面修改 Task 8，spec §3；2026-09 参数化）：连线/布局工具经 ChatPanel 通道生效 ──
+  // 基准写法（任务书）：不依赖 EditorView 内部句柄——deps 经 ChatPanel 公开 props 通道捕获
+  // （文件头包装式 mock 的 __lastChatDeps），再以 deps.executeTool 驱动 EditorView 组装的
+  // 真实执行链（mmRef + withAiCall + aiEnv 闭包，与 handleSend 内同一执行器，只省去
+  // agent loop 的网络轮次）；连线注册表经假画布 __lastCanvasRegistry 断言（同一实例）
   test('aiEnv 注入：连线/布局工具经 ChatPanel 通道生效', async () => {
     useAppStore.setState({ aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' } } as never)
     renderEditor()
     expect(await screen.findByTestId('fake-canvas')).toBeInTheDocument()
-    const handle = fakeHandle // ready 时刻实例即 mmRef 所持（aiEnv.setLayout 经 mmRef 落引擎）
+    const handle = fakeHandle // ready 时刻实例即 mmRef 所持（executeTool 内 executeAiTool 经 mmRef 落引擎）
     act(() => {
       ;(globalThis as unknown as Record<string, () => void>).__emitReady!()
     })
     fireEvent.click(screen.getByTestId('ai-toggle'))
-    const env = (globalThis as unknown as Record<string, unknown>).__lastAiEnv as AiToolEnv | undefined
-    expect(env).toBeTruthy() // 通道已挂（registry 就绪即构造，非 null）
-    // 布局：set_layout 经 executeAiTool 全链——引擎重排 + React 布局态 + sidecar 即时落盘
-    let layoutRes: ReturnType<typeof executeAiTool> | undefined
-    act(() => {
-      layoutRes = executeAiTool(handle, 'set_layout', { kind: 'timeline' }, (fn) => fn(), env)
+    const deps = (globalThis as unknown as Record<string, unknown>).__lastChatDeps as ChatPanelDeps | undefined
+    expect(deps).toBeTruthy() // 通道已挂（deps.executeTool 闭包持真实 aiEnv，registry 就绪即构造）
+    // 布局：set_layout 经 deps.executeTool 全链——引擎重排 + React 布局态 + sidecar 即时落盘
+    let layoutRes: ToolCallResult | undefined
+    await act(async () => {
+      layoutRes = await deps!.executeTool('set_layout', { kind: 'timeline' })
     })
     expect(layoutRes?.ok).toBe(true)
     expect(handle.setLayout).toHaveBeenCalledWith(layoutToEngine('timeline')) // 引擎层（timeline 同名直映）
@@ -3303,13 +3309,14 @@ describe('AI 对话面板挂载（2026-09 AI Agent v1）', () => {
     const origGet = fakeChildNode.getData
     fakeChildNode.getData = (k: string) => (k === 'text' ? ('新分支' as string) : origGet(k))
     try {
-      let linkRes: ReturnType<typeof executeAiTool> | undefined
-      act(() => {
-        linkRes = executeAiTool(handle, 'add_link', { fromUid: 'root-uid', toUid: 'child-uid' }, (fn) => fn(), env)
+      let linkRes: ToolCallResult | undefined
+      await act(async () => {
+        linkRes = await deps!.executeTool('add_link', { fromUid: 'root-uid', toUid: 'child-uid' })
       })
       expect(linkRes?.ok).toBe(true)
-      expect(env!.registry.byUid.size).toBeGreaterThan(0) // 连线注册表有条目
-      expect(env!.registry.byUid.get('root-uid')).toContain('新分支')
+      const reg = (globalThis as unknown as Record<string, unknown>).__lastCanvasRegistry as LinkRegistry
+      expect(reg.byUid.size).toBeGreaterThan(0) // 连线注册表有条目（与 aiEnv.registry 同一实例）
+      expect(reg.byUid.get('root-uid')).toContain('新分支')
       expect(useAppStore.getState().dirty).toBe(true) // 置脏回调触发（保存链接管）
     } finally {
       fakeChildNode.getData = origGet
