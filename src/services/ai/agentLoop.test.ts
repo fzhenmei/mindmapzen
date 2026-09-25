@@ -6,13 +6,16 @@ import type { ToolCallResult } from './tools'
 
 /** 脚本化 transport：按脚本逐轮吐 chunk 序列；abort() 令挂起的流以 'aborted' 主动收尾
  *  （对齐 Task 8 真实 transport 契约：inFlightFinish 模式，settle 单次守卫） */
-function scriptedTransport(scripts: Array<Array<string>>, abortAfterMs = 0): AiTransport & { calls: number } {
+function scriptedTransport(scripts: Array<Array<string>>, abortAfterMs = 0): AiTransport & { calls: number; payloads: ChatRequestPayload[] } {
   let round = 0
   let pendingAbort: (() => void) | null = null
+  const payloads: ChatRequestPayload[] = []
   return {
     calls: 0,
-    start(_payload: ChatRequestPayload, onDelta: (d: string) => void): Promise<StreamOutcome> {
+    payloads,
+    start(payload: ChatRequestPayload, onDelta: (d: string) => void): Promise<StreamOutcome> {
       this.calls++
+      payloads.push(payload)
       const chunks = scripts[Math.min(round, scripts.length - 1)]!
       round++
       return new Promise((resolve) => {
@@ -39,7 +42,7 @@ function scriptedTransport(scripts: Array<Array<string>>, abortAfterMs = 0): AiT
     abort() {
       pendingAbort?.()
     },
-  } as AiTransport & { calls: number }
+  } as AiTransport & { calls: number; payloads: ChatRequestPayload[] }
 }
 
 const okAdd = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"add_node","arguments":"{\\"parentUid\\":\\"a\\",\\"text\\":\\"x\\"}"}}]}}]}'
@@ -53,7 +56,7 @@ const okTags = '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c2","functi
 type AgentTurnDepsLike = Parameters<typeof runUserTurn>[0]
 
 function makeDeps(transport: AiTransport, overrides: Partial<AgentTurnDepsLike> = {}) {
-  const on = { phase: vi.fn(), delta: vi.fn(), finalize: vi.fn(), card: vi.fn(), error: vi.fn() }
+  const on = { phase: vi.fn(), delta: vi.fn(), finalize: vi.fn(), card: vi.fn(), error: vi.fn(), notice: vi.fn(), round: vi.fn() }
   const executeTool = vi.fn(async (): Promise<ToolCallResult> => ({ ok: true, detail: 'ok' }))
   const backup = vi.fn(async () => {})
   const deps = {
@@ -68,6 +71,28 @@ function makeDeps(transport: AiTransport, overrides: Partial<AgentTurnDepsLike> 
 }
 
 const INIT = { url: 'https://x/v1/chat/completions', apiKey: 'k', model: 'm', history: [], userText: '加个节点', selection: null }
+
+/** 优雅收尾测试台：前 20 次吐工具调用 chunk（永不收敛），第 21 次（收尾总结）行为注入——
+ *  scriptedTransport 脚本按序号取，无法表达"20 轮全工具+末次收尾" */
+function wrapupTransport(wrapupChunk: string, wrapupOutcome: StreamOutcome): AiTransport & { calls: number; payloads: ChatRequestPayload[] } {
+  const payloads: ChatRequestPayload[] = []
+  const t = {
+    calls: 0,
+    payloads,
+    start(payload: ChatRequestPayload, onDelta: (d: string) => void): Promise<StreamOutcome> {
+      t.calls++
+      payloads.push(payload)
+      if (t.calls <= 20) {
+        onDelta(okAdd)
+        return Promise.resolve({ endedWith: 'done' as const })
+      }
+      if (wrapupChunk) onDelta(wrapupChunk)
+      return Promise.resolve(wrapupOutcome)
+    },
+    abort: () => {},
+  }
+  return t
+}
 
 test('纯文本回合：delta→finalize→idle，不执行工具', async () => {
   const t = scriptedTransport([[textHi, finishStop]])
@@ -90,12 +115,35 @@ test('工具回合：执行→卡片→备份一次→第二轮收尾', async ()
   expect(t.calls).toBe(2)
 })
 
-test('12 轮护栏：工具回合不收敛即终止并报错', async () => {
-  const t = scriptedTransport([[okAdd, finishToolCalls]])
+test('轮次上限优雅收尾：20 轮不收敛→注入收尾提示，末次无工具请求，正常流式收尾', async () => {
+  const t = wrapupTransport(textHi, { endedWith: 'done' })
   const { deps, on } = makeDeps(t)
   await runUserTurn(deps, createTurnStop(), INIT)
-  expect(t.calls).toBe(12)
-  expect(on.error).toHaveBeenCalledOnce()
+  expect(t.calls).toBe(21) // 20 轮工具 + 1 次收尾总结
+  const wrapup = t.payloads[20]!
+  expect(wrapup.body.tools).toBeUndefined() // 收尾不带工具：模型只能纯文本总结
+  const msgs = wrapup.body.messages as Array<{ role: string; content: string }>
+  const last = msgs[msgs.length - 1]!
+  expect(last).toMatchObject({ role: 'user', content: expect.stringContaining('轮次已达上限') })
+  expect(on.error).not.toHaveBeenCalled() // 优雅收尾 ≠ 错误
+  expect(on.delta).toHaveBeenCalledWith('已添加') // 收尾总结走正常流式
+  expect(on.phase).toHaveBeenLastCalledWith('idle')
+})
+
+test('轮次进度：on.round 每轮 1 基递增（收尾总结不计轮）', async () => {
+  const t = wrapupTransport(textHi, { endedWith: 'done' })
+  const { deps, on } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(on.round.mock.calls.map((c) => c[0])).toEqual(Array.from({ length: 20 }, (_, i) => i + 1))
+})
+
+test('收尾请求失败：降级中性 notice（修改已保留可继续），不发错误卡', async () => {
+  const t = wrapupTransport('', { endedWith: 'error', errorMessage: 'HTTP 500' })
+  const { deps, on } = makeDeps(t)
+  await runUserTurn(deps, createTurnStop(), INIT)
+  expect(on.notice).toHaveBeenCalledOnce()
+  expect(on.notice.mock.calls[0]![0]).toContain('轮次上限')
+  expect(on.error).not.toHaveBeenCalled() // 收尾失败是降级场景，不是故障语义
 })
 
 test('连续 3 次工具失败终止', async () => {

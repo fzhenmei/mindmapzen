@@ -204,6 +204,22 @@ test('终审 M3：工具轮第二轮 streaming 退回纯文本+光标分支，�
   expect(screen.queryByTestId('ai-msg-streaming')).not.toBeInTheDocument()
 })
 
+// ═══ 回合进度显示（2026-09 轮次上限优雅收尾配套）：进行中显示耗时+轮次，结束消失 ═══
+
+test('回合进度：进行中显示耗时+轮次，回合结束消失', async () => {
+  stallTransport() // 挂起的流让回合停在 streaming（副作用：注入 fake transport 工厂）
+  mount()
+  await userEvent.type(screen.getByTestId('ai-input'), '干活')
+  await userEvent.click(screen.getByTestId('ai-send'))
+  await screen.findByTestId('ai-stop') // phase=streaming：回合进行中
+  const prog = screen.getByTestId('ai-turn-progress')
+  expect(prog).toHaveTextContent('0:00') // 秒表从回合起点计时
+  expect(prog).toHaveTextContent('第 1 轮') // 当前工具轮次（1 基）
+  await userEvent.click(screen.getByTestId('ai-stop'))
+  await waitFor(() => expect(useChatStore.getState().phase).toBe('idle'))
+  expect(screen.queryByTestId('ai-turn-progress')).not.toBeInTheDocument() // 结束即消失不留痕
+})
+
 // ═══ 快捷键（2026-09 AI 对话输入优化）：Enter 发送 / Shift+Enter 换行 / IME 合成安全 ═══
 
 test('快捷键：Enter 直接发送——消息入流、输入清空', async () => {
