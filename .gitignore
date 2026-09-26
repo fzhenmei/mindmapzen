@@ -45,3 +45,5 @@ id_rsa*
 id_ed25519
 credentials.json
 service-account*.json
+mobile/node_modules/
+mobile/dist/
