@@ -186,7 +186,8 @@ describe('stripExternalLinks:非 mp.weixin.qq.com 链接剥成链接色纯文字
 describe('buildWechatHtml:渲染容器 → 可粘贴 HTML 串', () => {
   test('取 .vditor-reset 内容为体,标题锚点 id 剥除,外层 section 承担基础排版', () => {
     const rendered = document.createElement('div')
-    rendered.innerHTML = '<div class="vditor-reset"><h1 id="zen-h-0">题</h1><p>文</p></div>'
+    // h2 开头躲开文档标题剥除(首元素 H1 被剥,见下):h1 居后保留,id 剥除断言原样
+    rendered.innerHTML = '<div class="vditor-reset"><h2 id="zen-h-0">节</h2><h1 id="zen-h-1">题</h1><p>文</p></div>'
     const html = buildWechatHtml(rendered)
     const sink = document.createElement('div')
     sink.innerHTML = html
@@ -220,6 +221,25 @@ describe('buildWechatHtml:渲染容器 → 可粘贴 HTML 串', () => {
     // vditor 挂在 code 上的 max-height 等内联残留一并清除(pre 承担全部样式)
     expect(sink.querySelector('pre code')!.getAttribute('style')).toBe('')
     expect(sink.querySelector('code')!.textContent).toBe('const a = 1')
+  })
+
+  test('文档标题剥除(2026-09-26):产物首个元素为 H1 时移除,其余内容原样', () => {
+    const rendered = document.createElement('div')
+    rendered.innerHTML = '<div class="vditor-reset"><h1 id="zen-h-0">根题</h1><h2>节</h2><p>文</p></div>'
+    const sink = document.createElement('div')
+    sink.innerHTML = buildWechatHtml(rendered)
+    // 公众号标题框独立,粘贴体带文题只会变成正文首行还得手删
+    expect(sink.querySelector('h1')).toBeNull()
+    expect(sink.querySelector('h2')!.textContent).toBe('节')
+    expect(sink.querySelector('p')!.textContent).toBe('文')
+  })
+
+  test('首个元素非 H1(正文/H2 开头)不剥:中途 H1 是章节标题,不误伤', () => {
+    const rendered = document.createElement('div')
+    rendered.innerHTML = '<div class="vditor-reset"><p>开头</p><h1>章题</h1></div>'
+    const sink = document.createElement('div')
+    sink.innerHTML = buildWechatHtml(rendered)
+    expect(sink.querySelector('h1')!.textContent).toBe('章题')
   })
 })
 
@@ -354,6 +374,19 @@ describe('copyWechatHtmlFromMd:直喂 md 文本(2026-09 画布 Markdown 视图�
     expect(written).toHaveLength(1)
     expect(written[0]!).toContain('<section')
     expect(written[0]!).toContain('font-size: 15px')
+  })
+
+  test('全链剥文档标题:渲染产物首元素 H1 不进剪贴板(导图序列化根节点恒为首 H1)', async () => {
+    const fs = new MemoryFsAdapter()
+    vi.mocked(renderVditorPreview).mockImplementationOnce(async (el: HTMLElement) => {
+      el.innerHTML = '<div class="vditor-reset"><h1>根题</h1><p>正文</p></div>'
+    })
+    const written: string[] = []
+    await copyWechatHtmlFromMd(fs, null, '# 根题\n\n正文', async (html) => {
+      written.push(html)
+    })
+    expect(written[0]).not.toContain('<h1')
+    expect(written[0]).toContain('正文')
   })
 
   test('copyAsWechatHtml 读盘后委托本入口:同内容两路渲染入参一致(案头/画布产物同链)', async () => {

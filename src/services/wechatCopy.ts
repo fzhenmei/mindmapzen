@@ -73,6 +73,14 @@ export const TAG_STYLE: Record<string, string> = { // pdfExport 直出打印 CSS
   HR: 'border:none;border-top:1px solid #e5e5e5;margin:24px 0',
 }
 
+/** 剥文档标题(2026-09-26):公众号编辑器标题是独立输入框,粘贴体里的文题只会
+ *  变成正文首行还得手删。仅剥产物首个元素且为 H1——导图序列化根节点恒为首 H1、
+ *  手写 md 文题同惯例;正文中间的 H1 是章节标题,不误伤 */
+export function stripDocTitle(body: HTMLElement): void {
+  const first = body.firstElementChild
+  if (first?.tagName === 'H1') first.remove()
+}
+
 /** 产物超链接白名单清洗:公众号保存校验只放行 mp.weixin.qq.com 域名互链,其余
  *  `<a>` 一律剥成带链接色的纯文字 span(2026-09-12 真机:外链保存被拒"请勿插入
  *  非 mp.weixin.qq.com 域名的链接")。覆盖全部来源:md 显式链接、lute GFM
@@ -111,9 +119,10 @@ export function applyWechatStyles(root: ParentNode): void {
   }
 }
 
-/** 发布正文体 → 可粘贴 HTML 串:外链剥文字 + 刷内联样式,包一层 section 承担
- *  基础排版(公众号粘贴惯例:单 section 根) */
+/** 发布正文体 → 可粘贴 HTML 串:剥文档标题 + 外链剥文字 + 刷内联样式,包一层
+ *  section 承担基础排版(公众号粘贴惯例:单 section 根) */
 export function wrapPublishHtml(body: HTMLElement): string {
+  stripDocTitle(body)
   stripExternalLinks(body)
   applyWechatStyles(body)
   const section = document.createElement('section')
