@@ -1,6 +1,7 @@
 mod ai_stream;
 mod sse;
 mod export_pdf;
+mod mobile_sync;
 
 use ai_stream::{ai_chat_abort, ai_chat_start};
 use export_pdf::export_pdf_via_edge;
