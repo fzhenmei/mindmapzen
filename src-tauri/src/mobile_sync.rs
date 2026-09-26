@@ -166,6 +166,91 @@ pub fn handle_api(
     json_resp(404, r#"{"error":"not found"}"#.into())
 }
 
+// ---- 静态资源(Task 3)----
+
+#[derive(Debug)]
+pub enum StaticResolution {
+    /// 命中文件:(绝对路径, mime)
+    File(PathBuf, &'static str),
+    /// 未命中但路径合法 → SPA fallback 到 index.html
+    Fallback,
+    /// 路径非法(穿越/绝对盘符)
+    Forbidden,
+}
+
+fn mime_of(p: &Path) -> &'static str {
+    match p.extension().and_then(|e| e.to_str()).unwrap_or("") {
+        "html" => "text/html; charset=utf-8",
+        "js" => "text/javascript",
+        "css" => "text/css",
+        "json" => "application/json",
+        "png" => "image/png",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "webmanifest" => "application/manifest+json",
+        "woff2" => "font/woff2",
+        _ => "application/octet-stream",
+    }
+}
+
+/// URL 路径 → mobile-dist 内文件。安全:百分号解码后规范化,结果必须仍在 root 内;
+/// `..` 逃逸/盘符/UNC 一律 Forbidden(spec §8)
+pub fn resolve_static(root: &Path, url_path: &str) -> StaticResolution {
+    let decoded = percent_decode(url_path);
+    let decoded = decoded.trim_start_matches('/');
+    if decoded.contains("..") || decoded.contains(':') || decoded.contains('\\') {
+        return StaticResolution::Forbidden;
+    }
+    let mut full = root.to_path_buf();
+    for seg in decoded.split('/') {
+        match seg {
+            "" | "." => {}
+            s => full.push(s),
+        }
+    }
+    if full.is_dir() {
+        full.push("index.html");
+    }
+    if full.is_file() {
+        let mime = mime_of(&full);
+        return StaticResolution::File(full, mime);
+    }
+    // 目录/未命中 → index.html(SPA 路由 + PWA 安装页都是单入口)
+    let idx = root.join("index.html");
+    if idx.is_file() {
+        StaticResolution::Fallback
+    } else {
+        // dev 模式 resource_dir 无 mobile-dist(dev 走 vite 5174):404 语义
+        StaticResolution::Forbidden
+    }
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let hex = |b: u8| -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            b'A'..=b'F' => Some(b - b'A' + 10),
+            _ => None,
+        }
+    };
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push(h * 16 + l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +362,58 @@ mod tests {
         let mut a = Vec::new();
         assert_eq!(handle_api("OPTIONS", "/api/ideas", None, "", &cfg, &mut dedup, &mut a).status, 204);
         assert_eq!(handle_api("GET", "/api/nope", None, "", &cfg, &mut dedup, &mut a).status, 404);
+    }
+
+    // ---- 静态资源(Task 3)----
+
+    #[test]
+    fn 静态解析与mime() {
+        let d = tmp_dir();
+        fs::write(d.join("index.html"), "<html></html>").unwrap();
+        fs::create_dir_all(d.join("assets")).unwrap();
+        fs::write(d.join("assets/app.js"), "console.log(1)").unwrap();
+        match resolve_static(&d, "/") {
+            StaticResolution::File(p, _) => assert_eq!(p, d.join("index.html")),
+            other => panic!("期望 File,得到 {other:?}"),
+        }
+        match resolve_static(&d, "/assets/app.js") {
+            StaticResolution::File(_, mime) => assert_eq!(mime, "text/javascript"),
+            other => panic!("期望 File,得到 {other:?}"),
+        }
+        // SPA fallback:未知路径回 index.html(spec §5.3)
+        assert!(matches!(resolve_static(&d, "/some/route"), StaticResolution::Fallback));
+    }
+
+    #[test]
+    fn 静态路径穿越拒绝() {
+        let d = tmp_dir();
+        fs::write(d.join("index.html"), "x").unwrap();
+        let secret = std::env::temp_dir().join(format!("mz-secret-{}", Uuid::new_v4()));
+        fs::create_dir_all(&secret).unwrap();
+        fs::write(secret.join("secret.txt"), "s").unwrap();
+        // mobile-dist 在 d,试图用 .. 逃到 secret
+        let rel = pathdiff_reldesc(&d, &secret.join("secret.txt"));
+        assert!(matches!(resolve_static(&d, &rel), StaticResolution::Forbidden));
+        assert!(matches!(resolve_static(&d, "/..%2f..%2fetc"), StaticResolution::Forbidden));
+        fs::remove_dir_all(&secret).ok();
+    }
+
+    /// 计算 root 相对 target 的 "../xxx" 形式(测试辅助:穿越用例需要相对路径)。
+    /// 以公共祖先为基准:root 剩余深度 = 上跳层数,target 剩余部分 = 尾段
+    fn pathdiff_reldesc(root: &Path, target: &Path) -> String {
+        let r: Vec<_> = root.components().collect();
+        let t: Vec<_> = target.components().collect();
+        let mut common = 0;
+        while common < r.len() && common < t.len() && r[common] == t[common] {
+            common += 1;
+        }
+        let mut s = String::new();
+        for _ in 0..(r.len() - common) {
+            s.push_str("../");
+        }
+        let tail: Vec<String> =
+            t[common..].iter().map(|c| c.as_os_str().to_string_lossy().replace('\\', "/")).collect();
+        s.push_str(&tail.join("/"));
+        format!("/{s}")
     }
 }
