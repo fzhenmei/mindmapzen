@@ -334,7 +334,12 @@ fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncCon
         }
         let path_only = url.split('?').next().unwrap_or("").to_string();
 
-        let (status, ctype, resp_body) = if path_only.starts_with("/api/") {
+        // 响应体必须走字节通道(Vec<u8>):mobile-dist 含 PNG/woff2 等二进制资产,
+        // 经 String::from_utf8_lossy 会把非法 UTF-8 字节替换成 U+FFFD(PNG 魔数
+        // 0x89 首当其冲),图标必坏;文本/API 分支 into_bytes/to_vec 殊途同归。
+        // from_data 不带默认 Content-Type(from_string 才有 text/plain 默认头),
+        // 下方 add_header(Content-Type) 循环是唯一来源,无重复头
+        let (status, ctype, resp_body): (u16, String, Vec<u8>) = if path_only.starts_with("/api/") {
             let mut accepted = Vec::new();
             let mut guard = dedup.lock().unwrap_or_else(|p| p.into_inner());
             let r = handle_api(&method, &path_only, auth.as_deref(), &body, &cfg, &mut guard, &mut accepted);
@@ -343,27 +348,27 @@ fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncCon
                     eprintln!("mobile-ideas 事件派发失败: {e}");
                 }
             }
-            (r.status, "application/json".to_string(), r.body)
+            (r.status, "application/json".to_string(), r.body.into_bytes())
         } else if method == "GET" || method == "HEAD" {
             match resolve_static(&root, &path_only) {
                 StaticResolution::File(p, mime) => match fs::read(&p) {
-                    Ok(bytes) => (200, mime.to_string(), String::from_utf8_lossy(&bytes).into_owned()),
+                    Ok(bytes) => (200, mime.to_string(), bytes),
                     Err(e) => {
                         eprintln!("静态文件读取失败 {}: {e}", p.display());
-                        (404, "text/plain".into(), "not found".into())
+                        (404, "text/plain".into(), b"not found".to_vec())
                     }
                 },
                 StaticResolution::Fallback => match fs::read(root.join("index.html")) {
-                    Ok(bytes) => (200, "text/html; charset=utf-8".into(), String::from_utf8_lossy(&bytes).into_owned()),
-                    Err(_) => (404, "text/plain".into(), "mobile-dist missing".into()),
+                    Ok(bytes) => (200, "text/html; charset=utf-8".into(), bytes),
+                    Err(_) => (404, "text/plain".into(), b"mobile-dist missing".to_vec()),
                 },
-                StaticResolution::Forbidden => (403, "text/plain".into(), "forbidden".into()),
+                StaticResolution::Forbidden => (403, "text/plain".into(), b"forbidden".to_vec()),
             }
         } else {
-            (405, "text/plain".into(), "method not allowed".into())
+            (405, "text/plain".into(), b"method not allowed".to_vec())
         };
 
-        let mut resp = tiny_http::Response::from_string(resp_body).with_status_code(status);
+        let mut resp = tiny_http::Response::from_data(resp_body).with_status_code(status);
         for (k, v) in [
             ("Content-Type", ctype.as_str()),
             ("Access-Control-Allow-Origin", "*"),

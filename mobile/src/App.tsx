@@ -22,7 +22,7 @@ export default function App() {
   const depsRef = useRef<SyncDeps>({
     ...httpSyncDeps(),
     onState: (s, e) => setSyncRef.current(s, e),
-    onRemoved: () => void refresh(),
+    onRemoved: () => void refresh().catch((e) => console.error('列表刷新失败', e)),
   })
 
   async function db(): Promise<MobileDb> {
@@ -42,10 +42,10 @@ export default function App() {
     autoPairFromUrl() // 扫码进入:URL hash 令牌 → localStorage(内部清 hash)
     // 存储回收防护(spec §12):一行成本,申请持久化降低 Android 清理 IndexedDB 概率
     void navigator.storage?.persist?.().catch((e) => console.error('persist 申请失败', e))
-    void refresh()
-    void triggerSync()
+    void refresh().catch((e) => console.error('列表刷新失败', e))
+    void triggerSync().catch((e) => console.error('同步链路异常', e))
     const onVis = () => {
-      if (document.visibilityState === 'visible') void triggerSync()
+      if (document.visibilityState === 'visible') void triggerSync().catch((e) => console.error('同步链路异常', e))
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
@@ -61,7 +61,8 @@ export default function App() {
       setDraft('')
       useMobileStore.getState().showToast(tr('captured'))
       await refresh()
-      void triggerSync() // 顺手试推(spec §4.3)
+      // 顺手试推(spec §4.3);runSync 内部已 catch,这层兜 openDb 等链路 rejection
+      void triggerSync().catch((e) => console.error('同步链路异常', e))
     } catch (e) {
       console.error('点子落盘失败', e)
       useMobileStore.getState().showToast(tr('saveFailed')) // 不清空输入(§7 出口)
@@ -82,7 +83,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="bar" data-testid="sync-bar" onClick={() => void triggerSync()}>
+      <header className="bar" data-testid="sync-bar" onClick={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}>
         {stateText}
       </header>
       <textarea
@@ -105,7 +106,12 @@ export default function App() {
               <button
                 className="del"
                 onClick={() => {
-                  void deleteIdea(dbRef.current!, i.id).then(refresh)
+                  void deleteIdea(dbRef.current!, i.id)
+                    .then(refresh)
+                    .catch((e) => {
+                      console.error('删除/清空失败', e)
+                      useMobileStore.getState().showToast(tr('deleteFailed'))
+                    })
                 }}
               >
                 {tr('delete')}
@@ -118,7 +124,17 @@ export default function App() {
         {tr('settings')}
       </button>
       {showSettings && (
-        <SettingsPanel onSaved={() => void triggerSync()} onClear={() => void clearSynced(dbRef.current!).then(refresh)} />
+        <SettingsPanel
+          onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
+          onClear={() => {
+            void clearSynced(dbRef.current!)
+              .then(refresh)
+              .catch((e) => {
+                console.error('删除/清空失败', e)
+                useMobileStore.getState().showToast(tr('deleteFailed'))
+              })
+          }}
+        />
       )}
       <Toast />
     </div>

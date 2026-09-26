@@ -37,11 +37,12 @@ export default defineConfig({
     // 不监视 Rust 构建目录：cargo 编译时会锁定其中的 .exe，vite 监视会 EBUSY 崩溃
     watch: { ignored: ['**/src-tauri/**'] },
   },
-  // Vitest（e2e/ 下的 Playwright spec 不归 Vitest 管，交给 npm run e2e）
+  // Vitest（e2e/ 的 Playwright spec 交给 npm run e2e；mobile/ 子包有自己的 vitest
+  //   与依赖(idb/fake-indexeddb)——不排除则 fresh clone 只装根依赖时根套件解析报错）
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    exclude: [...configDefaults.exclude, 'e2e/**'],
+    exclude: [...configDefaults.exclude, 'e2e/**', 'mobile/**'],
   },
 })

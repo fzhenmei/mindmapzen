@@ -5,6 +5,7 @@ type Key =
   | 'capture'
   | 'captured'
   | 'saveFailed'
+  | 'deleteFailed'
   | 'delete'
   | 'pendingBanner'
   | 'stateIdle'
@@ -26,6 +27,7 @@ const zh: Record<Key, string> = {
   capture: '记下',
   captured: '已记录',
   saveFailed: '保存失败,内容已保留',
+  deleteFailed: '删除失败',
   delete: '删除',
   pendingBanner: '{n} 条待同步 · ',
   stateIdle: '没有待同步的点子',
@@ -48,6 +50,7 @@ const en: Record<Key, string> = {
   capture: 'Save',
   captured: 'Saved',
   saveFailed: 'Save failed, content kept',
+  deleteFailed: 'Delete failed',
   delete: 'Delete',
   pendingBanner: '{n} pending · ',
   stateIdle: 'Nothing to sync',

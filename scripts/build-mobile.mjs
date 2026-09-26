@@ -12,8 +12,11 @@ const mobileDir = join(process.cwd(), 'mobile')
 if (!existsSync(join(mobileDir, 'node_modules'))) {
   console.log('[build-mobile] mobile/node_modules 缺失,先安装依赖')
   const inst = spawnSync('npm', ['install'], { cwd: mobileDir, stdio: 'inherit', shell: true })
+  // spawn 整体失败(如 npm 不在 PATH)时 status 为 null,不打印则只剩无痕退出
+  if (inst.error) console.error('[build-mobile] install spawn 失败', inst.error)
   if (inst.status !== 0) process.exit(inst.status ?? 1)
 }
 
 const r = spawnSync('npm', ['run', 'build'], { cwd: mobileDir, stdio: 'inherit', shell: true })
+if (r.error) console.error('[build-mobile] build spawn 失败', r.error)
 process.exit(r.status ?? 1)
