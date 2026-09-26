@@ -23,6 +23,7 @@ import QuickCapture from './components/QuickCapture'
 import AppDialogs from './components/AppDialogs'
 import TourOverlay from './components/tour/TourOverlay'
 import { useQuickCaptureRuntime } from './hooks/useQuickCaptureRuntime'
+import { useMobileIdeasRuntime } from './hooks/useMobileIdeasRuntime'
 
 // E2E（?e2e=1）以 web 模式运行：无 Tauri 环境，harness 已注入内存 FS 并预设 /ws 工作区
 const E2E = new URLSearchParams(window.location.search).has('e2e')
@@ -350,6 +351,9 @@ export default function App() {
 
   // 快速捕获运行时（M2 spec §5）：快捷键/托盘/案头关窗/跨窗同步接线（hook 内端口注入）
   useQuickCaptureRuntime()
+
+  // 手机点子捕获运行时（2026-09-26 spec §5.4）：Rust mobile-ideas 事件 → captureIdea 入篮
+  useMobileIdeasRuntime()
 
   // 快速捕获（2026-09 点子篮子 M1）：应用内 Ctrl+Alt+I 唤起浮层（M2 启用全局快捷键后
   // 由设置开关禁用此监听——单一捕获入口，见 spec §4.1；2026-09 拆分后只看快捷键开关）
