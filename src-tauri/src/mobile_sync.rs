@@ -79,6 +79,93 @@ impl DedupSet {
     }
 }
 
+// ---- API 纯函数(Task 2)----
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeaIn {
+    pub id: String,
+    pub text: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub captured_at: u64,
+}
+
+#[derive(Serialize)]
+struct IdeaResult {
+    id: String,
+    ok: bool,
+}
+
+pub struct ApiResponse {
+    pub status: u16,
+    pub body: String,
+}
+
+fn json_resp(status: u16, body: String) -> ApiResponse {
+    ApiResponse { status, body }
+}
+
+#[derive(Deserialize)]
+struct IdeasPayload {
+    ideas: Vec<IdeaIn>,
+}
+
+/// API 路由纯函数(与传输层解耦,单测直喂字符串):
+/// - GET /api/health:免认证探测(spec §5.3)
+/// - POST /api/ideas:Bearer 令牌 → 解析 → 上限防呆 → 去重 → 新受理项追加进 accepted
+/// - OPTIONS *:CORS preflight(dev 模式手机直连 vite 5174,跨源POST必预检;
+///   令牌即唯一凭证且无 cookie,Allow-Origin:* 无风险——spec §5.6 简化落地)
+/// - 其余 404
+pub fn handle_api(
+    method: &str,
+    path: &str,
+    auth: Option<&str>,
+    body: &str,
+    cfg: &MobileSyncConfig,
+    dedup: &mut DedupSet,
+    accepted: &mut Vec<IdeaIn>,
+) -> ApiResponse {
+    if method == "OPTIONS" {
+        return json_resp(204, String::new());
+    }
+    if path == "/api/health" && method == "GET" {
+        let v = serde_json::json!({ "app": "mind-map-zen", "version": env!("CARGO_PKG_VERSION") });
+        return json_resp(200, v.to_string());
+    }
+    if path == "/api/ideas" && method == "POST" {
+        let ok = auth.map(|a| a == format!("Bearer {}", cfg.token)).unwrap_or(false);
+        if !ok {
+            return json_resp(401, r#"{"error":"unauthorized"}"#.into());
+        }
+        let payload: IdeasPayload = match serde_json::from_str(body) {
+            Ok(p) => p,
+            Err(_) => return json_resp(400, r#"{"error":"bad json"}"#.into()),
+        };
+        if payload.ideas.is_empty() || payload.ideas.len() > 100 {
+            return json_resp(400, r#"{"error":"batch size 1..=100"}"#.into());
+        }
+        for it in &payload.ideas {
+            if it.text.is_empty() || it.text.chars().count() > 2000 || it.body.chars().count() > 20000 {
+                return json_resp(400, r#"{"error":"idea too long or empty"}"#.into());
+            }
+        }
+        let mut results = Vec::new();
+        for it in payload.ideas {
+            let fresh = dedup.insert(&it.id);
+            // 去重命中也算 ok:手机端据此删本地,幂等不卡同步(spec §5.3)
+            results.push(IdeaResult { id: it.id.clone(), ok: true });
+            if fresh {
+                accepted.push(it);
+            }
+        }
+        let body = serde_json::json!({ "results": results }).to_string();
+        return json_resp(200, body);
+    }
+    json_resp(404, r#"{"error":"not found"}"#.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +215,67 @@ mod tests {
         assert!(s.insert("e")); // 触发清最旧一半(a、b 出局)
         assert!(s.insert("a")); // a 已被清理,重新受理
         assert!(!s.insert("e"));
+    }
+
+    // ---- API 纯函数(Task 2)----
+
+    #[test]
+    fn health_免认证() {
+        let cfg = MobileSyncConfig { enabled: true, port: 1, token: "t".into() };
+        let mut dedup = DedupSet::new(10);
+        let mut accepted = Vec::new();
+        let r = handle_api("GET", "/api/health", None, "", &cfg, &mut dedup, &mut accepted);
+        assert_eq!(r.status, 200);
+        assert!(r.body.contains("mind-map-zen"));
+    }
+
+    #[test]
+    fn ideas_令牌错误401() {
+        let cfg = MobileSyncConfig { enabled: true, port: 1, token: "t".into() };
+        let mut dedup = DedupSet::new(10);
+        let mut accepted = Vec::new();
+        let r = handle_api("POST", "/api/ideas", Some("Bearer wrong"), "{}", &cfg, &mut dedup, &mut accepted);
+        assert_eq!(r.status, 401);
+        assert!(accepted.is_empty());
+    }
+
+    #[test]
+    fn ideas_正常受理与去重() {
+        let cfg = MobileSyncConfig { enabled: true, port: 1, token: "t".into() };
+        let mut dedup = DedupSet::new(10);
+        let mut accepted = Vec::new();
+        let body = r#"{"ideas":[{"id":"u1","text":"点子甲","body":"补充","capturedAt":1}]}"#;
+        let r = handle_api("POST", "/api/ideas", Some("Bearer t"), body, &cfg, &mut dedup, &mut accepted);
+        assert_eq!(r.status, 200);
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(accepted[0].text, "点子甲");
+        // 同 id 重推:受理列表不再新增,但响应仍 ok(幂等语义,spec §5.3)
+        let mut accepted2 = Vec::new();
+        let r2 = handle_api("POST", "/api/ideas", Some("Bearer t"), body, &cfg, &mut dedup, &mut accepted2);
+        assert_eq!(r2.status, 200);
+        assert!(accepted2.is_empty());
+    }
+
+    #[test]
+    fn ideas_超限与坏json400() {
+        let cfg = MobileSyncConfig { enabled: true, port: 1, token: "t".into() };
+        let mut dedup = DedupSet::new(10);
+        let mut a = Vec::new();
+        assert_eq!(handle_api("POST", "/api/ideas", Some("Bearer t"), "not json", &cfg, &mut dedup, &mut a).status, 400);
+        let long = "x".repeat(2001);
+        let body = format!(r#"{{"ideas":[{{"id":"u1","text":"{long}"}}]}}"#);
+        assert_eq!(handle_api("POST", "/api/ideas", Some("Bearer t"), &body, &cfg, &mut dedup, &mut a).status, 400);
+        let many: Vec<String> = (0..101).map(|i| format!(r#"{{"id":"u{i}","text":"t"}}"#)).collect();
+        let body2 = format!(r#"{{"ideas":[{}]}}"#, many.join(","));
+        assert_eq!(handle_api("POST", "/api/ideas", Some("Bearer t"), &body2, &cfg, &mut dedup, &mut a).status, 400);
+    }
+
+    #[test]
+    fn preflight_204与未知404() {
+        let cfg = MobileSyncConfig { enabled: true, port: 1, token: "t".into() };
+        let mut dedup = DedupSet::new(10);
+        let mut a = Vec::new();
+        assert_eq!(handle_api("OPTIONS", "/api/ideas", None, "", &cfg, &mut dedup, &mut a).status, 204);
+        assert_eq!(handle_api("GET", "/api/nope", None, "", &cfg, &mut dedup, &mut a).status, 404);
     }
 }
