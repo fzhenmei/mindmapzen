@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import MobileSyncSection from './MobileSyncSection'
 import type { BackupOutcome } from '../services/gitBackup'
 
 interface SettingsDialogProps {
@@ -199,6 +200,9 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
             </label>
             <p className="text-xs text-muted-foreground">{t('basket.quickCapture.hint')}</p>
           </div>
+          {/* 手机同步（2026-09-26 mobile-capture spec §5.1）：自含分区——内部自取
+              get_mobile_sync_info,开关/二维码/IP 选择全在组件内 */}
+          <MobileSyncSection />
           {/* AI 对话（2026-09 AI Agent v1，spec §1 BYOK）：三项全填并保存后，编辑视图出现 AI 面板入口 */}
           <div className="flex flex-col gap-2" data-testid="settings-ai-section">
             <h3 className="text-sm font-medium">{t('ai.settings.title')}</h3>
