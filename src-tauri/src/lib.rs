@@ -345,8 +345,15 @@ pub fn run() {
                 let _ = win.show();
                 let _ = win.set_focus();
             }
+            // 手机同步服务自启恢复（2026-09-26 Task 4）：enabled 持久化在配置文件，
+            // 重启后据此自动起服务；失败仅 eprintln 留痕不阻断启动（UI 有开关可重试）
+            {
+                let holder = app.state::<mobile_sync::ServiceHolder>();
+                mobile_sync::restore_on_startup(app.handle(), &holder);
+            }
             Ok(())
         })
+        .manage(mobile_sync::ServiceHolder::default())
         .invoke_handler(tauri::generate_handler![
             trash_delete,
             git_exec,
@@ -356,7 +363,9 @@ pub fn run() {
             force_foreground_window,
             ai_chat_start,
             ai_chat_abort,
-            export_pdf_via_edge
+            export_pdf_via_edge,
+            mobile_sync::get_mobile_sync_info,
+            mobile_sync::set_mobile_sync_config
         ])
         // 主窗销毁 = 应用退出（2026-09-24 关窗僵尸进程报障，纵深防御）：捕获小窗懒创建+
         // 隐藏复用，若主窗经任何未经前端 appClose 裁决的路径销毁（含小窗创建在途的竞态

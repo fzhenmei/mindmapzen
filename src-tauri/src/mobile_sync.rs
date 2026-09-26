@@ -81,7 +81,7 @@ impl DedupSet {
 
 // ---- API 纯函数(Task 2)----
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeaIn {
     pub id: String,
@@ -251,6 +251,191 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+// ---- 服务线程与 tauri 命令(Task 4)----
+
+use local_ip_address::list_afinet_netifas;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MobileSyncInfo {
+    pub enabled: bool,
+    pub port: u16,
+    pub token: String,
+    pub ips: Vec<String>,
+    pub current: String,
+}
+
+struct ServiceState {
+    server: Arc<tiny_http::Server>,
+    thread: std::thread::JoinHandle<()>,
+    /// 停止标志:unblock 后 incoming_requests 迭代结束,线程据此退出
+    stopped: Arc<AtomicBool>,
+}
+
+/// 服务态容器:tauri 状态管理(lib.rs setup 里 app.manage 注入),不用 static
+/// (Rust 1.77 无 LazyLock,static + Lazy 需加 once_cell 依赖,无谓)。
+/// 字段私有:外部(lib.rs)只经 Default/stop/restore 交互,不触碰内部态
+#[derive(Default)]
+pub struct ServiceHolder(Mutex<Option<ServiceState>>);
+
+impl ServiceHolder {
+    fn stop(&self) {
+        let mut guard = self.0.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(st) = guard.take() {
+            st.stopped.store(true, Ordering::SeqCst);
+            st.server.unblock();
+            let _ = st.thread.join();
+        }
+    }
+}
+
+pub fn data_dir(app: &AppHandle) -> PathBuf {
+    // app_data_dir 由 tauri 标识符派生;失败回退当前目录(仅单测环境可能发生)
+    app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+pub fn info_snapshot(cfg: &MobileSyncConfig) -> MobileSyncInfo {
+    let mut ips: Vec<String> = list_afinet_netifas()
+        .map(|v| {
+            v.into_iter()
+                .filter_map(|(_, ip)| match ip {
+                    std::net::IpAddr::V4(v4) if !v4.is_loopback() => Some(v4.to_string()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let current = local_ip_address::local_ip().map(|p| p.to_string()).unwrap_or_default();
+    if !current.is_empty() && !ips.contains(&current) {
+        ips.insert(0, current.clone());
+    }
+    MobileSyncInfo { enabled: cfg.enabled, port: cfg.port, token: cfg.token.clone(), ips, current }
+}
+
+/// 服务循环:阻塞收请求逐个处理(API 优先,其余走静态);IO 异常 eprintln 留痕不崩服务
+fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncConfig, dedup: Arc<Mutex<DedupSet>>, root: PathBuf) {
+    for mut request in server.incoming_requests() {
+        let method = request.method().as_str().to_string();
+        let url = request.url().to_string();
+        // HeaderField::equiv:tiny_http 官方判字段 API(大小写不敏感),比常量构造
+        // 比较更直接(计划防御性写法的简化落地)
+        let auth = request
+            .headers()
+            .iter()
+            .find(|h| h.field.equiv("Authorization"))
+            .map(|h| h.value.as_str().to_string());
+        let mut body = String::new();
+        // dyn Read 的主 trait 方法无需 use 导入即可调用(rustc 实证:导入反而 unused)
+        if let Err(e) = request.as_reader().read_to_string(&mut body) {
+            eprintln!("请求体读取失败: {e}"); // 空体继续走 400 分支,连接不断
+        }
+        let path_only = url.split('?').next().unwrap_or("").to_string();
+
+        let (status, ctype, resp_body) = if path_only.starts_with("/api/") {
+            let mut accepted = Vec::new();
+            let mut guard = dedup.lock().unwrap_or_else(|p| p.into_inner());
+            let r = handle_api(&method, &path_only, auth.as_deref(), &body, &cfg, &mut guard, &mut accepted);
+            if !accepted.is_empty() {
+                if let Err(e) = app.emit_to("main", MOBILE_IDEAS_EVENT, &accepted) {
+                    eprintln!("mobile-ideas 事件派发失败: {e}");
+                }
+            }
+            (r.status, "application/json".to_string(), r.body)
+        } else if method == "GET" || method == "HEAD" {
+            match resolve_static(&root, &path_only) {
+                StaticResolution::File(p, mime) => match fs::read(&p) {
+                    Ok(bytes) => (200, mime.to_string(), String::from_utf8_lossy(&bytes).into_owned()),
+                    Err(e) => {
+                        eprintln!("静态文件读取失败 {}: {e}", p.display());
+                        (404, "text/plain".into(), "not found".into())
+                    }
+                },
+                StaticResolution::Fallback => match fs::read(root.join("index.html")) {
+                    Ok(bytes) => (200, "text/html; charset=utf-8".into(), String::from_utf8_lossy(&bytes).into_owned()),
+                    Err(_) => (404, "text/plain".into(), "mobile-dist missing".into()),
+                },
+                StaticResolution::Forbidden => (403, "text/plain".into(), "forbidden".into()),
+            }
+        } else {
+            (405, "text/plain".into(), "method not allowed".into())
+        };
+
+        let mut resp = tiny_http::Response::from_string(resp_body).with_status_code(status);
+        for (k, v) in [
+            ("Content-Type", ctype.as_str()),
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Authorization, Content-Type"),
+        ] {
+            match tiny_http::Header::from_bytes(k.as_bytes(), v.as_bytes()) {
+                Ok(h) => resp.add_header(h),
+                // from_bytes 的 Err 是 unit(仅 ASCII 校验失败一种可能),无可格式化内容
+                Err(_) => eprintln!("响应头构造失败 {k}"),
+            }
+        }
+        let _ = request.respond(resp); // 单连接响应失败只影响该请求,循环继续收下一个
+    }
+}
+
+/// 启动(或重启)服务。端口被占等失败显式上抛(调用方 UI 出口)
+pub fn start_service(app: &AppHandle, holder: &ServiceHolder, cfg: MobileSyncConfig) -> Result<MobileSyncInfo, String> {
+    holder.stop();
+    let server = tiny_http::Server::http(("0.0.0.0", cfg.port)).map_err(|e| format!("端口 {} 监听失败: {e}", cfg.port))?;
+    let server = Arc::new(server);
+    let root = app.path().resource_dir().map_err(|e| format!("resource 目录不可得: {e}"))?.join("mobile-dist");
+    let dedup = Arc::new(Mutex::new(DedupSet::new(1000)));
+    let stopped = Arc::new(AtomicBool::new(false));
+    let thread = {
+        let app = app.clone();
+        let server = Arc::clone(&server);
+        let cfg = cfg.clone();
+        let dedup = Arc::clone(&dedup);
+        let stopped = Arc::clone(&stopped);
+        std::thread::spawn(move || {
+            serve_loop(app, server, cfg, dedup, root);
+            stopped.store(true, Ordering::SeqCst);
+        })
+    };
+    *holder.0.lock().unwrap_or_else(|p| p.into_inner()) = Some(ServiceState { server, thread, stopped });
+    Ok(info_snapshot(&cfg))
+}
+
+#[tauri::command]
+pub fn get_mobile_sync_info(app: AppHandle) -> Result<MobileSyncInfo, String> {
+    let cfg = load_config(&data_dir(&app));
+    Ok(info_snapshot(&cfg))
+}
+
+#[tauri::command]
+pub fn set_mobile_sync_config(app: AppHandle, holder: State<'_, ServiceHolder>, enabled: bool, port: u16) -> Result<MobileSyncInfo, String> {
+    let dir = data_dir(&app);
+    let mut cfg = load_config(&dir);
+    cfg.enabled = enabled;
+    cfg.port = port;
+    if enabled {
+        let info = start_service(&app, &holder, cfg.clone())?;
+        save_config(&dir, &cfg)?;
+        Ok(info)
+    } else {
+        holder.stop();
+        save_config(&dir, &cfg)?;
+        Ok(info_snapshot(&cfg))
+    }
+}
+
+/// App setup 时恢复(enabled 配置持久化后重启自动起服务;lib.rs setup 调用)
+pub fn restore_on_startup(app: &AppHandle, holder: &ServiceHolder) {
+    let cfg = load_config(&data_dir(app));
+    if cfg.enabled {
+        if let Err(e) = start_service(app, holder, cfg) {
+            eprintln!("手机同步服务自启失败: {e}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,5 +600,26 @@ mod tests {
             t[common..].iter().map(|c| c.as_os_str().to_string_lossy().replace('\\', "/")).collect();
         s.push_str(&tail.join("/"));
         format!("/{s}")
+    }
+
+    // ---- 服务冒烟(Task 4)----
+    // start/stop 与 HTTP 往返需 AppHandle,不可在单测模拟,真机验收清单覆盖:
+    // npm run dev:app → 开关服务 → curl http://127.0.0.1:39871/api/health
+
+    #[test]
+    fn info快照含当前ip不含回环() {
+        let cfg = MobileSyncConfig { enabled: false, port: DEFAULT_PORT, token: "t".into() };
+        let info = info_snapshot(&cfg);
+        assert!(!info.ips.iter().any(|ip| ip.starts_with("127.")));
+        assert_eq!(info.token, "t");
+    }
+
+    #[test]
+    fn 根目录无index时未命中路径回forbidden() {
+        // Task 3 review 顺手项:dev 模式 resource_dir 无 mobile-dist,空目录必须
+        // 走 Forbidden(403)而非 Fallback——serve_loop 据此回 403 而非读不存在的 index
+        let d = tmp_dir();
+        assert!(matches!(resolve_static(&d, "/x"), StaticResolution::Forbidden));
+        fs::remove_dir_all(&d).ok();
     }
 }
