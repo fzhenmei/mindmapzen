@@ -35,9 +35,12 @@ export async function handleMobileIdeas(ideas: MobileIdeaIn[]): Promise<number> 
 /** App 级挂载一次(App.tsx);e2e web 模式无 Tauri 事件,expose 桩供 harness 触发 */
 export function useMobileIdeasRuntime(): void {
   useEffect(() => {
-    const e2e = new URLSearchParams(window.location.search).has('e2e')
+    let disposed = false
     let un: (() => void) | undefined
     void (async () => {
+      // StrictMode dev 下挂载→清理→重挂载同步完成,两个异步 IIFE 可能都还悬在动态
+      // import 上:listen 返回后若清理时机已过,即刻注销自己,不留双监听(点子重复入篮)
+      const e2e = new URLSearchParams(window.location.search).has('e2e')
       if (e2e) {
         const w = window as unknown as {
           __zenE2e?: { mockMobileIdeas?: (ideas: MobileIdeaIn[]) => void }
@@ -48,11 +51,19 @@ export function useMobileIdeasRuntime(): void {
       }
       try {
         const { listen } = await import('@tauri-apps/api/event')
-        un = await listen<MobileIdeaIn[]>(MOBILE_IDEAS_EVENT, (ev) => void handleMobileIdeas(ev.payload))
+        const off = await listen<MobileIdeaIn[]>(MOBILE_IDEAS_EVENT, (ev) => void handleMobileIdeas(ev.payload))
+        if (disposed) {
+          off() // 清理时机已过:监听器即刻注销,不留双监听
+        } else {
+          un = off
+        }
       } catch (e) {
         console.error('mobile-ideas 事件监听失败', e)
       }
     })()
-    return () => un?.()
+    return () => {
+      disposed = true
+      un?.()
+    }
   }, [])
 }
