@@ -1,0 +1,17 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, 'Microsoft YaHei', sans-serif; background: #faf9f7; color: #2c2a26; }
+.app { max-width: 480px; margin: 0 auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 100dvh; }
+.bar { font-size: 13px; color: #6b6560; padding: 6px 10px; background: #f0ede9; border-radius: 8px; }
+textarea { width: 100%; font-size: 16px; padding: 12px; border: 1px solid #d8d3cc; border-radius: 10px; resize: vertical; }
+button { font-size: 15px; padding: 10px 16px; border: none; border-radius: 10px; background: #b3403a; color: #fff; }
+button.ghost { background: transparent; color: #6b6560; align-self: flex-start; }
+ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+li { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #ece8e2; border-radius: 8px; padding: 8px 10px; }
+li.synced { opacity: 0.55; }
+li .text { font-size: 14px; overflow-wrap: anywhere; }
+.del { background: transparent; color: #b3403a; padding: 4px 8px; font-size: 13px; }
+.hint { font-size: 12px; color: #8a847e; }
+.panel { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #ece8e2; border-radius: 10px; padding: 12px; }
+.panel label { font-size: 12px; color: #6b6560; display: flex; flex-direction: column; gap: 4px; }
+.panel input { font-size: 14px; padding: 8px; border: 1px solid #d8d3cc; border-radius: 8px; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2c2a26; color: #fff; font-size: 13px; padding: 8px 16px; border-radius: 999px; }

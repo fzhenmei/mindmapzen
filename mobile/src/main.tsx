@@ -1,2 +1,3 @@
 import { createRoot } from 'react-dom/client'
-createRoot(document.getElementById('root')!).render(<div>mobile</div>)
+import App from './App'
+createRoot(document.getElementById('root')!).render(<App />)
