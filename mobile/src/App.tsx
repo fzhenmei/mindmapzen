@@ -49,6 +49,7 @@ export default function App() {
     }
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载一次:visibility 监听注册;refresh/triggerSync 闭包只碰稳定量(refs/useState setter),Task 8 review 已核
   }, [])
 
   async function onCapture() {
