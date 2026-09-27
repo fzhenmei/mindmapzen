@@ -70,11 +70,12 @@ test('Markdown 态「复制为公众号格式」：视图内按钮出内联样�
   const html = await page.evaluate(
     () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
   )
-  // 全量文档进产物：section 根承担正文排版，标题在真渲染产物上获得内联样式
-  expect(html).toContain('三态回归')
+  // 正文进产物:section 根承担正文排版;根标题(H1)不复制——2026-09-27 用户裁定
+  // (公众号粘贴场景根标题冗余,产物无 h1/无 20px 字号)
+  expect(html).not.toContain('三态回归')
   expect(html).toContain('章节甲')
   expect(html).toContain('font-size: 15px')
-  expect(html).toContain('font-size: 20px')
+  expect(html).not.toContain('font-size: 20px')
   // 成功轻提示：ToastHost（z-50）浮于 z-[9] 视图之上，可读可断言
   await expect(page.getByTestId('toast')).toContainText('已复制为公众号格式')
   expect(pageErrors).toEqual([])

@@ -145,9 +145,10 @@ test('案头：树右键「复制为公众号格式」出内联样式 HTML（mer
   const html = await page.evaluate(
     () => (window as unknown as { __zenE2e: { lastCopiedHtml: string | null } }).__zenE2e.lastCopiedHtml,
   )
-  // section 根承担正文排版，标题/段落在真渲染产物上获得内联样式
+  // section 根承担正文排版;根标题(H1)不复制——2026-09-27 用户裁定(与 tri-state 用例同口径)
   expect(html).toContain('font-size: 15px')
-  expect(html).toContain('font-size: 20px')
+  expect(html).not.toContain('根图')
+  expect(html).not.toContain('font-size: 20px')
   // mermaid 块经自有管线成图（真 mermaid.min.js + canvas 光栅化），pre 换 PNG dataURL img
   expect(html).toContain('<img')
   expect(html).toContain('data:image/png')
