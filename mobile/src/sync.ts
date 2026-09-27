@@ -1,4 +1,4 @@
-import { listAll, removeSynced, type MobileIdea } from './db'
+import { listUnsynced, markSynced, type MobileIdea } from './db'
 
 // 同步状态机(spec §4.3):open/前台/新记录/手动触发时调用;失败不自动退避(等下次触发)
 export type SyncState = 'idle' | 'pending' | 'syncing' | 'synced' | 'error'
@@ -16,12 +16,12 @@ export interface SyncDeps {
   /** POST /api/ideas(Bearer);返回逐条 'ok' | 'fail';401 抛 Unauthorized */
   push(base: string, token: string, ideas: MobileIdea[]): Promise<Map<string, 'ok' | 'fail'>>
   onState(state: SyncState, error?: string): void
-  /** 已从库中删除的条目 id(2026-09-27 语义:推送成功即删,不保留) */
-  onRemoved(ids: string[]): void
+  /** 已标记 synced 的条目 id(保留展示,展示端自动淘汰旧条目) */
+  onSynced(ids: string[]): void
 }
 
-export async function runSync(deps: SyncDeps, db: Parameters<typeof listAll>[0]): Promise<void> {
-  const unsynced = await listAll(db)
+export async function runSync(deps: SyncDeps, db: Parameters<typeof listUnsynced>[0]): Promise<void> {
+  const unsynced = await listUnsynced(db)
   if (unsynced.length === 0) {
     deps.onState('idle')
     return
@@ -45,8 +45,8 @@ export async function runSync(deps: SyncDeps, db: Parameters<typeof listAll>[0])
   }
   const okIds = [...results].filter(([, v]) => v === 'ok').map(([id]) => id)
   if (okIds.length > 0) {
-    await removeSynced(db, okIds)
-    deps.onRemoved(okIds)
+    await markSynced(db, okIds)
+    deps.onSynced(okIds)
   }
   if (okIds.length === unsynced.length) {
     deps.onState('synced')

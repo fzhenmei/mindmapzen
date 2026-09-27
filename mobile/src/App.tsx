@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { deleteIdea, listRecent, openDb, putIdea, type MobileIdea } from './db'
+import { KEEP_SYNCED, deleteIdea, listAll, openDb, putIdea, type MobileIdea } from './db'
 import { httpSyncDeps, runSync, type SyncDeps } from './sync'
 import { autoPairFromUrl, useMobileStore } from './store'
 import { scanAndPair } from './scan'
@@ -33,7 +33,7 @@ export default function App() {
   const depsRef = useRef<SyncDeps>({
     ...httpSyncDeps(),
     onState: (s, e) => setSyncRef.current(s, e),
-    onRemoved: () => void refresh().catch((e) => console.error('列表刷新失败', e)),
+    onSynced: () => void refresh().catch((e) => console.error('列表刷新失败', e)),
   })
 
   async function db(): Promise<MobileDb> {
@@ -41,7 +41,11 @@ export default function App() {
   }
 
   async function refresh() {
-    setIdeas(await listRecent(await db(), 50))
+    // 待同步全量显示(队列语义);已同步只展示最近 KEEP_SYNCED 条(反馈感 + 不堆积)
+    const all = await listAll(await db())
+    const pendingIdeas = all.filter((i) => !i.synced)
+    const syncedTop = all.filter((i) => i.synced).sort((a, b) => b.capturedAt - a.capturedAt).slice(0, KEEP_SYNCED)
+    setIdeas([...pendingIdeas, ...syncedTop].sort((a, b) => b.capturedAt - a.capturedAt))
   }
 
   async function triggerSync() {
@@ -84,7 +88,7 @@ export default function App() {
     if (text === '') return
     const [first, ...rest] = text.split('\n')
     try {
-      await putIdea(await db(), { id: uuidv4(), text: first, body: rest.join('\n'), capturedAt: Date.now() })
+      await putIdea(await db(), { id: uuidv4(), text: first, body: rest.join('\n'), capturedAt: Date.now(), synced: false })
       setDraft('')
       useMobileStore.getState().showToast(tr('captured'))
       await refresh()
@@ -96,7 +100,7 @@ export default function App() {
     }
   }
 
-  const pending = ideas.length // 列表即待同步队列(成功即删,2026-09-27)
+  const pending = ideas.filter((i) => !i.synced).length
   const stateText =
     syncState === 'error' && syncError === 'unauthorized'
       ? tr('stateUnauthorized')
@@ -132,21 +136,23 @@ export default function App() {
       <main className="list">
         <ul>
           {ideas.map((i) => (
-            <li key={i.id} data-testid={`idea-${i.id}`}>
+            <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
               <span className="text">{i.text}</span>
-              <button
-                className="del"
-                onClick={() => {
-                  void deleteIdea(dbRef.current!, i.id)
-                    .then(refresh)
-                    .catch((e) => {
-                      console.error('删除失败', e)
-                      useMobileStore.getState().showToast(tr('deleteFailed'))
-                    })
-                }}
-              >
-                {tr('delete')}
-              </button>
+              {!i.synced && (
+                <button
+                  className="del"
+                  onClick={() => {
+                    void deleteIdea(dbRef.current!, i.id)
+                      .then(refresh)
+                      .catch((e) => {
+                        console.error('删除失败', e)
+                        useMobileStore.getState().showToast(tr('deleteFailed'))
+                      })
+                  }}
+                >
+                  {tr('delete')}
+                </button>
+              )}
             </li>
           ))}
         </ul>

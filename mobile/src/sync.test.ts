@@ -1,17 +1,17 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { listAll, openDb, putIdea, type MobileIdea } from './db'
+import { openDb, putIdea, type MobileIdea } from './db'
 import { runSync, Unauthorized, type SyncDeps, type SyncEvent } from './sync'
 
-const idea = (id: string, text: string): MobileIdea => ({ id, text, body: '', capturedAt: 1 })
+const idea = (id: string, text: string): MobileIdea => ({ id, text, body: '', capturedAt: 1, synced: false })
 
 let events: SyncEvent[]
 const mkDeps = (over: Partial<SyncDeps>): SyncDeps => ({
   health: async () => true,
   push: async () => new Map(),
   onState: (s, e) => events.push({ state: s, error: e ?? null }),
-  onRemoved: () => {},
+  onSynced: () => {},
   ...over,
 })
 
@@ -33,16 +33,15 @@ it('health 不通停 pending', async () => {
   expect(events).toEqual([{ state: 'pending', error: null }])
 })
 
-it('推送成功删本地条目', async () => {
+it('推送成功标记同步但保留展示', async () => {
   const db = await openDb()
   await putIdea(db, idea('u1', 'a'))
   await putIdea(db, idea('u2', 'b'))
   const push = vi.fn(async (_b: string, _t: string, ideas: MobileIdea[]) => new Map<string, 'ok' | 'fail'>(ideas.map((i) => [i.id, 'ok' as const])))
-  const removed: string[][] = []
-  await runSync(mkDeps({ push, onRemoved: (ids) => removed.push(ids) }), db)
+  const marked: string[][] = []
+  await runSync(mkDeps({ push, onSynced: (ids) => marked.push(ids) }), db)
   expect(push).toHaveBeenCalledTimes(1)
-  expect(removed).toEqual([['u1', 'u2']])
-  expect(await listAll(db)).toEqual([]) // 库中即待同步:成功即删,不保留
+  expect(marked).toEqual([['u1', 'u2']])
   expect(events.at(-1)).toEqual({ state: 'synced', error: null })
 })
 
@@ -56,7 +55,6 @@ it('部分失败保留失败条目并报 error', async () => {
     }),
     db,
   )
-  expect((await listAll(db)).map((i) => i.id)).toEqual(['u2']) // 失败条目留库待重推
   expect(events.at(-1)).toEqual({ state: 'error', error: 'partial' })
 })
 
