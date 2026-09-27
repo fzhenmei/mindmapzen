@@ -1,9 +1,11 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, 'Microsoft YaHei', sans-serif; background: #faf9f7; color: #2c2a26; }
-/* 整屏三段式(2026-09-27 手机习惯):状态条顶 / 列表中部滚动 / 输入区贴底拇指区 */
-.app { max-width: 480px; margin: 0 auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; height: 100dvh; overflow: hidden; }
+/* 安全区避让(2026-09-27 沉浸式系统栏):max 双变量——env() 在 WebView≥140(沉浸分支)有真值;
+   Capacitor SystemBars 注入的 --safe-area-inset-* 两分支都有(<140 分支原生已垫 padding 故为 0)。
+   浏览器里两者皆 0 无影响 */
+.app { max-width: 480px; margin: 0 auto; padding: calc(12px + max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px))) 12px 12px; display: flex; flex-direction: column; gap: 10px; height: 100dvh; overflow: hidden; }
 .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-.input-area { display: flex; flex-direction: column; gap: 8px; padding-bottom: env(safe-area-inset-bottom); }
+.input-area { display: flex; flex-direction: column; gap: 8px; padding-bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px)); }
 /* 状态条:flex 布局,文字占满 + 右侧配对齿轮入口(2026-09-27 用户裁定) */
 .bar { font-size: 13px; color: #6b6560; padding: 6px 10px; background: #f0ede9; border-radius: 8px; display: flex; align-items: center; gap: 8px; }
 .bar .state { flex: 1; min-width: 0; }
@@ -29,4 +31,4 @@ li .text { font-size: 14px; overflow-wrap: anywhere; }
 .primary-wide { width: 100%; font-size: 16px; }
 .dialog .row { display: flex; gap: 8px; }
 .dialog .row .ghost { flex: 1; text-align: center; padding: 6px 8px; font-size: 13px; }
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2c2a26; color: #fff; font-size: 13px; padding: 8px 16px; border-radius: 999px; }
+.toast { position: fixed; bottom: calc(24px + max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px))); left: 50%; transform: translateX(-50%); background: #2c2a26; color: #fff; font-size: 13px; padding: 8px 16px; border-radius: 999px; }

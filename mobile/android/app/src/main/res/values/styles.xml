@@ -9,10 +9,20 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!-- 沉浸式系统栏(2026-09-27 修复深色模式黑带):App UI 恒浅色(#faf9f7 硬编码无深色适配),
+         主题由 DayNight 固定为 Light,否则深色系统下 windowBackground 变黑与界面割裂。
+         窗口背景/系统栏色与界面同色 + 深色图标;Android 15+ 忽略 *BarColor 由 SystemBars 插件接管,
+         windowBackground 兜底 WebView<140 时的 decorView padding 分支(SystemBars.setStyle 会刷成此色) -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/appBackground</item>
+        <item name="android:statusBarColor">@color/appBackground</item>
+        <item name="android:navigationBarColor">@color/appBackground</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <!-- API 27+ 属性,Android 8.0(minSdk 26)设备安全忽略 -->
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
 

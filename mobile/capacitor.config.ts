@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   plugins: {
     CapacitorHttp: { enabled: true },
+    // 沉浸式系统栏(2026-09-27):App 界面恒浅色,状态栏/手势栏固定深色图标;
+    // 不配则跟随系统深浅色,深色系统下白图标浮在 #faf9f7 上看不清
+    SystemBars: { style: 'LIGHT' },
   },
 }
 
