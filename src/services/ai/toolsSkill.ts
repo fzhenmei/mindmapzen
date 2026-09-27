@@ -16,8 +16,11 @@ export const SKILL_TOOL_NAMES = new Set(['skill_read_doc', 'skill_invoke'])
 /** 回包截断上限(64KiB,spec §6)防炸上下文;截断时注明 */
 const RESP_MAX_CHARS = 64 * 1024
 
-/** 工具 schema(启用清单动态生成;doc 不用 enum——各 skill 文档集不同,description 引导) */
+/** 工具 schema(启用清单动态生成;doc 不用 enum——各 skill 文档集不同,description 引导)。
+ *  零启用 = 不注册(终审 I-1):空 enum 是模型永远不可用的工具,部分严格 OpenAI 兼容
+ *  端点对空 enum 数组直接 400 */
 export function skillToolSchemas(enabled: readonly SkillManifest[]): unknown[] {
+  if (enabled.length === 0) return []
   const ids = enabled.map((m) => m.id)
   return [
     {

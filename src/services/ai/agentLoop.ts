@@ -87,6 +87,17 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
  *  file(改名/移动/建目录)是落盘变更,与内容编辑同级安全网(spec §1.4) */
 const EDIT_KINDS = new Set<ToolCardData['kind']>(['add', 'update', 'remove', 'move', 'body', 'icon', 'tag', 'link', 'unlink', 'file'])
 
+/** skill 域工具卡文本截断上限(终审 I-2):skill detail 是文档原文(最大 ~20KB)或 64KiB
+ *  网关回包,卡片 UI 按一行摘要设计,不截断回合进行中被多屏高的卡淹没 */
+const SKILL_CARD_TEXT_MAX = 160
+
+/** 卡片文本:skill 域超限截断加省略号。卡片 text 不回传 LLM(AI 上下文走 tool result
+ *  消息),截断无功能影响,还缩小 sidecar 落盘 */
+function cardText(kind: ToolCardData['kind'], detail: string): string {
+  if (kind !== 'skill' || detail.length <= SKILL_CARD_TEXT_MAX) return detail
+  return `${detail.slice(0, SKILL_CARD_TEXT_MAX)}…`
+}
+
 /** OpenAI assistant tool_call 消息形态（assembleAssistantToolCalls 的产物） */
 type AssistantToolCall = ReturnType<typeof assembleAssistantToolCalls>[number]
 
@@ -161,7 +172,7 @@ async function executeRoundTools(
     // 成功后才应用，维持「首个编辑工具成功后落备份」语义（失败工具无落盘）
     if (kind === 'file') await backupOnceBeforeFirstEdit(deps, kind, backupDone)
     const r = await deps.executeTool(call.function.name, parseToolArgs(call.function.arguments))
-    if (kind) deps.on.card({ kind, ok: r.ok, text: r.detail })
+    if (kind) deps.on.card({ kind, ok: r.ok, text: cardText(kind, r.detail) })
     history.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: r.ok, detail: r.detail, uid: r.uid }) })
     if (r.ok) {
       failStreak = 0

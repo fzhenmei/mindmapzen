@@ -25,6 +25,9 @@ describe('skillToolSchemas', () => {
     const invoke = schemas.find((s) => s.function.name === 'skill_invoke')!
     expect(invoke.function.parameters.properties.skill.enum).toEqual(['weread'])
   })
+  it('零启用:不注册任何 skill 工具(终审 I-1:空 enum 暴露不可用工具,严格端点 400 风险)', () => {
+    expect(skillToolSchemas([])).toEqual([])
+  })
 })
 
 describe('executeSkillTool', () => {
