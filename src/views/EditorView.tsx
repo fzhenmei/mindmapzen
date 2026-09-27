@@ -11,10 +11,9 @@ import { applyMultilinePaste } from '../services/multiline'
 import { toNativePath } from '../services/nativePath'
 import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/tools'
 import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
-import { executeSkillTool, getSkillGateway, SKILL_TOOL_NAMES, skillToolSchemas } from '../services/ai/toolsSkill'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
 import { withAiCall } from '../services/ai/lock'
-import { enabledSkillEntries, getEnabledSkills } from '../skills'
+import { enabledSkillsNow, executeSkillRoute, skillToolSchemasOf } from './editorSkillWire'
 import { i18n } from '../i18n'
 import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
@@ -679,33 +678,14 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
                 emptyTitle: t('ai.panel.emptyTitle'),
                 emptyBody: t('ai.panel.emptyBody'),
               },
-              buildPrompt: () =>
-                buildSystemPrompt(
-                  mmRef.current?.renderer?.renderTree ?? null,
-                  getEnabledSkills(useAppStore.getState().skillsConfig),
-                ),
+              buildPrompt: () => buildSystemPrompt(mmRef.current?.renderer?.renderTree ?? null, enabledSkillsNow()),
               buildSelectionLine: () =>
                 selectionLine(useChatStore.getState().contextNode ?? aiSelectionNode),
               preSendGuard: () => (mmRef.current ? null : i18n.t('ai.turn.engineNotReady')),
-              // buildPrompt/executeTool 内取 getState() 而非闭包外订阅值:回合进行中凭据变更
-              // 即时生效,避免陈旧引用;toolSchemas 用渲染期订阅值即可(spec §4.5:未配 key 的
-              // skill 连工具都不注册)
-              executeTool: (name, args) => {
-                if (SKILL_TOOL_NAMES.has(name)) {
-                  return executeSkillTool(
-                    name,
-                    args,
-                    getSkillGateway(),
-                    enabledSkillEntries(useAppStore.getState().skillsConfig),
-                  )
-                }
-                return Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined))
-              },
-              toolSchemas: [
-                ...AI_TOOL_SCHEMAS,
-                ...AI_CANVAS_TOOL_SCHEMAS,
-                ...skillToolSchemas(getEnabledSkills(skillsConfig)),
-              ],
+              executeTool: (name, args) =>
+                executeSkillRoute(name, args) ??
+                Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined)),
+              toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS, ...skillToolSchemasOf(skillsConfig)],
             }}
             selection={aiSelectionNode}
             width={aiPanelPx}
