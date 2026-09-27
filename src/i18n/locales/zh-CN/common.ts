@@ -9,6 +9,8 @@ export default {
   save: '保存',
   // Task 16 兜底:App 启动屏/分区拖拽手柄悬停提示(全应用壳层,无特性域归属)
   booting: '正在启动…',
+  // 全局外链接管守卫(externalLinkGuard):opener 外开失败的反馈,全应用壳层
+  openLinkFailed: '打开链接失败，请重试',
   resizeTitle: '拖拽调整宽度，双击恢复默认',
   // 旧配置迁移留档标记(migration.ts 写入 appData 的内容型文本,跟随界面语言)
   migrationMarker: '迁移自: {{from}}\n时间: {{time}}',

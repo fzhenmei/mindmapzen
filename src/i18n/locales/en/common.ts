@@ -10,6 +10,7 @@ const common: Dict['common'] = {
   open: 'Open',
   save: 'Save',
   booting: 'Starting…',
+  openLinkFailed: 'Failed to open link, please retry',
   resizeTitle: 'Drag to resize; double-click to reset',
   migrationMarker: 'Migrated from: {{from}}\nDate: {{time}}',
 }

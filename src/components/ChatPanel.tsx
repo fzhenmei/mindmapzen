@@ -2,10 +2,9 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 // 参数化（2026-09 案头文件域）：引擎/会话耦合全部下沉 deps 注入（store/prompt/工具执行/
 // 守卫/确认回调/工具清单）——编辑器挂载处传原值，行为零变化；面板本体与宿主域解耦。
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SubmitEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle, RotateCcw } from 'lucide-react'
-import { openUrl } from '@tauri-apps/plugin-opener'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
@@ -129,24 +128,6 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
     const el = listRef.current
     if (el === null) return
     stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-  }
-
-  /** 链接管权（spec §5）：vditor 渲染的 <a> 不带 target，WebView2 内联导航会把整个应用
-   *  导航走；自定义协议（weread://）则点击无反应。一律 preventDefault 走 opener：http(s)
-   *  交系统浏览器，自定义协议走 OS ShellExecute。锚点/空 href 是文档内跳转，不外开 */
-  async function handleListLinkClick(e: ReactMouseEvent<HTMLDivElement>): Promise<void> {
-    const a = (e.target as HTMLElement).closest('a')
-    if (a === null) return
-    const href = a.getAttribute('href') ?? ''
-    if (href === '' || href.startsWith('#')) return
-    e.preventDefault()
-    try {
-      await openUrl(href)
-    } catch (err) {
-      // 点击回调异步异常会被静默吞（吞异常红线）：console + toast 双出口（同 CopyButton.handleCopy）
-      console.error('聊天链接打开失败', err)
-      showToast(i18n.t('ai.panel.openLinkFailed'))
-    }
   }
 
   /** Enter 发送 / Shift+Enter 换行（2026-09 输入优化）：无 Shift 的 Enter 拦下走发送，
@@ -320,7 +301,9 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
           </div>
         </div>
       )}
-      <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} onClick={(e) => void handleListLinkClick(e)} className="flex-1 overflow-y-auto p-3 text-sm">
+      {/* 链接接管(2026-09-27 收敛全局):消息内 <a> 点击不再局部拦截——main.tsx 的
+          guardExternalLinks 在 document 捕获层统一接管(覆盖悬停窗/案头预览等全渲染路径) */}
+      <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} className="flex-1 overflow-y-auto p-3 text-sm">
         {/* 内容 wrapper：ResizeObserver 的观察目标（容器自身 flex 定高，内容撑高要看它） */}
         <div ref={listInnerRef}>
           {messages.length === 0 ? (
