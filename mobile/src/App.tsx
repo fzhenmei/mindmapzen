@@ -3,7 +3,13 @@ import { v4 as uuidv4 } from 'uuid'
 import { clearSynced, deleteIdea, listRecent, openDb, putIdea, type MobileIdea } from './db'
 import { httpSyncDeps, runSync, type SyncDeps } from './sync'
 import { autoPairFromUrl, useMobileStore } from './store'
+import { scanAndPair } from './scan'
 import { tr } from './i18n'
+import {
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerAndroidScanningLibrary,
+  CapacitorBarcodeScannerTypeHint,
+} from '@capacitor/barcode-scanner'
 import './App.css'
 
 // openDb 返回 idb 的 IDBPDatabase,按 brief 尾注以推导别名引用(brief 代码中的 IDBDatabase 以此为准)
@@ -42,6 +48,22 @@ export default function App() {
   async function triggerSync() {
     await runSync(depsRef.current, await db())
     await refresh()
+  }
+
+  /** 扫码配对(spec 2026-09-27 §6):ZXING 引擎无 GMS 依赖;逻辑在 scan.ts(注入式可测) */
+  async function onScanPair(onPaired: () => void) {
+    await scanAndPair({
+      scan: async () => {
+        const r = await CapacitorBarcodeScanner.scanBarcode({
+          hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
+          android: { scanningLibrary: CapacitorBarcodeScannerAndroidScanningLibrary.ZXING },
+        })
+        return r.ScanResult
+      },
+      setPairing: (p) => useMobileStore.getState().setPairingManual(p),
+      onPaired,
+      toast: (k) => useMobileStore.getState().showToast(tr(k)),
+    })
   }
 
   useEffect(() => {
@@ -93,7 +115,18 @@ export default function App() {
         {stateText}
       </header>
       <main className="list">
-        {!paired && <p className="hint">{tr('installHint')}</p>}
+        {!paired && (
+          <div className="hint">
+            <p>{tr('installHint')}</p>
+            <button
+              className="ghost"
+              data-testid="btn-scan-pair"
+              onClick={() => void onScanPair(() => void triggerSync().catch((e) => console.error('同步链路异常', e)))}
+            >
+              {tr('scanPair')}
+            </button>
+          </div>
+        )}
         <ul>
           {ideas.map((i) => (
             <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
@@ -121,6 +154,7 @@ export default function App() {
         </button>
         {showSettings && (
           <SettingsPanel
+            scanPair={onScanPair}
             onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
             onClear={() => {
               void clearSynced(dbRef.current!)
@@ -167,7 +201,16 @@ function Toast() {
   )
 }
 
-function SettingsPanel({ onSaved, onClear }: { onSaved: () => void; onClear: () => void }) {
+function SettingsPanel({
+  scanPair,
+  onSaved,
+  onClear,
+}: {
+  /** 扫码配对(App 主入口复用同一实现;手动输入仍是兜底,spec §6.3) */
+  scanPair: (onPaired: () => void) => Promise<void>
+  onSaved: () => void
+  onClear: () => void
+}) {
   const { pairing, setPairingManual } = useMobileStore()
   const [url, setUrl] = useState(pairing.baseUrl)
   const [token, setToken] = useState(pairing.token)
@@ -189,6 +232,14 @@ function SettingsPanel({ onSaved, onClear }: { onSaved: () => void; onClear: () 
         }}
       >
         {tr('save')}
+      </button>
+      <button
+        data-testid="btn-scan-pair-settings"
+        onClick={() => {
+          void scanPair(onSaved)
+        }}
+      >
+        {tr('scanPair')}
       </button>
       <button data-testid="btn-clear-synced" onClick={onClear}>
         {tr('clearSynced')}
