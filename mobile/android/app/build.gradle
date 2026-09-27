@@ -16,10 +16,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // 自签 release(keystore.properties 与 *.keystore 不入仓;缺文件时跳过——
+    // 开源用户 clone 后仍可出未签名 release,自行配 key 即可,spec 2026-09-27 §7)
+    def ksProps = new Properties()
+    def ksFile = rootProject.file("keystore.properties")
+    if (ksFile.exists()) {
+        ksFile.withInputStream { ksProps.load(it) }
+        signingConfigs {
+            release {
+                storeFile rootProject.file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (ksFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
