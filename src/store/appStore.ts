@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiAdvice, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type ThemePref } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, type AiAdvice, type AiConfig, type CopySettingKey, type CopySettings, type FsAdapter, type GitConfig, type LanguagePref, type LayoutKind, type LibrarySort, type MapInfo, type PreviewOutlinePref, type SkillsConfig, type ThemePref } from '../types/files'
 import { loadConfig, saveConfig } from '../services/config'
 import { createMap, listMaps } from '../services/workspace'
 import { sweepTmpOrphans } from '../services/tmpSweep'
@@ -114,6 +114,8 @@ interface AppState {
   /** AI 对话配置（2026-09 AI Agent v1）：init 自配置，setAiConfig 合并持久化；
    *  三项全非空 = 已配置（AI 入口显隐依据，Task 11 消费） */
   aiConfig: AiConfig
+  /** skill 凭据槽(2026-09 skill 接入):init 自配置;setSkillApiKey 单键合并持久化 */
+  skillsConfig: SkillsConfig
   /** AI 面板像素宽（2026-09 AI Agent v1）：null = 默认 320；提交语义同 sidebarWidth */
   aiChatWidth: number | null
   /** AI 输入框像素高（2026-09 长内容输入）：null = 默认两行；提交语义同 aiChatWidth */
@@ -216,6 +218,8 @@ interface AppState {
   setOutlineWidth: (w: number | null) => Promise<void>
   /** AI 配置变更（2026-09 AI Agent v1）：部分字段合并，load-merge-save 持久化 */
   setAiConfig: (patch: Partial<AiConfig>) => Promise<void>
+  /** skill 凭据写入（2026-09 skill 接入）：单键合并，load-merge-save 持久化（纯存储，引导触发在 SettingsDialog 层） */
+  setSkillApiKey: (id: string, key: string) => Promise<void>
   /** AI 面板宽度提交（2026-09 拖拽）：null = 恢复默认宽 */
   setAiChatWidth: (w: number | null) => Promise<void>
   /** AI 输入框高度提交（2026-09 长内容输入）：null = 恢复默认两行 */
@@ -340,6 +344,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarWidth: null,
   outlineWidth: null,
   aiConfig: DEFAULT_AI_CONFIG,
+  skillsConfig: {},
   aiChatWidth: null,
   aiChatInputHeight: null,
   aiAdvice: null,
@@ -378,7 +383,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 语言与主题同期应用(未选工作区也生效):显式值直出,auto 按系统解析
     const languagePref = cfg.language ?? 'auto'
     const locale = resolveUiLang(languagePref, systemUiLanguage())
-    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, aiChatWidth: cfg.aiChatWidth, aiChatInputHeight: cfg.aiChatInputHeight, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone, quickCaptureShortcut: cfg.quickCapture.shortcut, quickCaptureTray: cfg.quickCapture.tray })
+    set({ preferredLayout: cfg.preferredLayout ?? 'mindmap', lastNewMapDir: cfg.lastNewMapDir, themePref, previewOutline: cfg.previewOutline, favorites: cfg.favorites, librarySort: cfg.librarySort, sidebarWidth: cfg.sidebarWidth, outlineWidth: cfg.outlineWidth, aiConfig: cfg.ai, skillsConfig: cfg.skills, aiChatWidth: cfg.aiChatWidth, aiChatInputHeight: cfg.aiChatInputHeight, aiAdvice: cfg.aiAdvice, resolvedTheme: resolved, languagePref, resolvedLanguage: locale, settings: cfg.settings, gitConfig: cfg.git, tourDone: cfg.tourDone, quickCaptureShortcut: cfg.quickCapture.shortcut, quickCaptureTray: cfg.quickCapture.tray })
     applyDocumentTheme(resolved)
     changeUiLanguage(locale)
     if (cfg.workspaceDir) {
@@ -567,6 +572,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const ai = { ...aiConfig, ...patch }
     await saveConfig(adapter, configPath, { ...cfg, ai })
     set({ aiConfig: ai })
+  },
+  setSkillApiKey: async (id, key) => {
+    const { adapter, configPath, skillsConfig } = get()
+    const next: SkillsConfig = { ...skillsConfig, [id]: { apiKey: key } }
+    set({ skillsConfig: next })
+    const cfg = await loadConfig(adapter, configPath)
+    await saveConfig(adapter, configPath, { ...cfg, skills: next })
   },
   /** AI 面板宽度提交：即时生效 + load-merge-save 持久化；null = 恢复默认宽 */
   setAiChatWidth: async (w) => {

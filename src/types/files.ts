@@ -165,10 +165,8 @@ export interface AppConfig {
   lastNewMapDir: string
   /** 点子篮子相对工作区路径（2026-09 点子篮子）：null = 未创建，首次使用时按语言默认名生成 */
   basketPath: string | null
-  /** skill 凭据槽(2026-09 skill 接入):id → apiKey;空 = 未启用。
-   *  可选是过渡态:类型与接线分两批落(Task 1 只落类型,loadConfig 接线归 Task 2),
-   *  Task 2 补 skills: parseSkillsCredentials(parsed.skills) 时同步收紧为必填 */
-  skills?: SkillsConfig
+  /** skill 凭据槽(2026-09 skill 接入):id → apiKey;空 = 未启用 */
+  skills: SkillsConfig
   /** 快速捕获（2026-09 点子篮子 M2）：enabled = 全局快捷键 + 托盘 + 关窗隐藏三绑定 */
   quickCapture: QuickCaptureConfig
 }
