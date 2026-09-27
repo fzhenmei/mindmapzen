@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
+import AppLogo from './AppLogo'
 
 // 开源仓库地址（git remote github，2026-09-15 全史重写后的公开仓库）
 const REPO_URL = 'https://github.com/fzhenmei/mindmapzen'
@@ -21,8 +22,11 @@ export default function AboutDialog({ onClose, onReplayTour }: Readonly<AboutDia
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent data-testid="about-dialog" aria-label={t('settings.about')}>
         <DialogTitle>{t('settings.about')}</DialogTitle>
-        <div className="flex flex-col items-center gap-2 py-4 text-sm">
+        {/* 纵轴居中构图（欢迎页 CardHeader 同构）：印标/名称/slogan/版本/开源地址 */}
+        <div className="flex flex-col items-center gap-1.5 py-4 text-sm">
+          <AppLogo size={48} className="mx-auto" />
           <span className="text-base font-medium">Mind Map Zen</span>
+          <span className="text-xs text-muted-foreground">{t('library.welcomeScreen.tagline')}</span>
           <span className="text-xs text-muted-foreground" data-testid="about-version">
             v{__APP_VERSION__} · {__GIT_COMMIT__}
           </span>

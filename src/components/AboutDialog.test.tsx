@@ -11,6 +11,9 @@ describe('AboutDialog', () => {
     render(<AboutDialog onClose={() => {}} onReplayTour={() => {}} />)
     expect(screen.getByTestId('about-dialog')).toBeInTheDocument()
     expect(screen.getByText('Mind Map Zen')).toBeInTheDocument()
+    // 印标（AppLogo，与窗口图标同源）与 slogan（欢迎页 tagline 同词条）
+    expect(screen.getByTestId('about-dialog').querySelector('svg')).not.toBeNull()
+    expect(screen.getByText('想法落成 .md')).toBeInTheDocument()
     const version = screen.getByTestId('about-version')
     expect(version).toHaveTextContent(`v${__APP_VERSION__}`)
     expect(version).toHaveTextContent(__GIT_COMMIT__)
