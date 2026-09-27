@@ -22,7 +22,8 @@ describe('MobileSyncSection', () => {
 
   it('渲染分区:开关/二维码/IP 下拉', async () => {
     render(<MobileSyncSection />)
-    expect(await screen.findByTestId('settings-mobile-sync-section')).toBeInTheDocument()
+    // 分区根 testid 已随标题行上移到设置窗手风琴 trigger,组件内锚点改开关
+    expect(await screen.findByTestId('mobile-sync-toggle')).toBeInTheDocument()
     // 二维码由 toString 异步生成后 setState,同样走 findBy 等待提交(分区出现 ≠ svg 已挂)
     expect((await screen.findByTestId('mobile-sync-qr')).querySelector('svg')).not.toBeNull()
     // 二维码内容含选中 IP + 端口 + 令牌

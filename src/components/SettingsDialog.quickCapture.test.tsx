@@ -14,7 +14,9 @@ test('快速捕获分区：快捷键/托盘两开关独立调 setQuickCaptureCon
     quickCaptureShortcutError: null,
   } as never)
   render(<SettingsDialog onClose={() => {}} />)
+  // 手风琴分区：先点 trigger 展开（收起时 Content 不挂载）
   expect(screen.getByTestId('settings-quickcapture-section')).toBeVisible()
+  fireEvent.click(screen.getByTestId('settings-quickcapture-section'))
   fireEvent.click(screen.getByTestId('quickcapture-shortcut'))
   expect(spy).toHaveBeenCalledWith({ shortcut: true })
   fireEvent.click(screen.getByTestId('quickcapture-tray'))

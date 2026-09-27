@@ -9,9 +9,10 @@ test('版本管理：启用即自动备份；配远程后提交并推送；立�
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
-  // 打开设置 → 启用（启用即触发一次 backupNow：rev-parse 探测 + status 检查）
+  // 打开设置 → 展开版本管理分区 → 启用（启用即触发一次 backupNow：rev-parse 探测 + status 检查）
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
+  await page.getByTestId('git-section').click()
   await page.getByTestId('git-enabled-toggle').check()
 
   // 回放：仓库已存在（rev-parse ok）+ 有一个变更 → 应走 add/commit
@@ -58,9 +59,10 @@ test('版本管理：启用即自动备份；配远程后提交并推送；立�
   expect(calls2).toContain('remote add zen-origin https://github.com/u/zen-ws.git')
   expect(calls2).toContain('push -u zen-origin HEAD')
 
-  // 关闭重开设置：配置持久化在内存（cfg.json 经 harness fs）
+  // 关闭重开设置：配置持久化在内存（cfg.json 经 harness fs）；手风琴重开默认收起，先展开
   await page.getByTestId('settings-close').click()
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('git-section').click()
   await expect(page.getByTestId('git-enabled-toggle')).toBeChecked()
 })
 
@@ -72,9 +74,10 @@ test('版本历史：列表渲染 + 确认恢复命令序列（checkout <hash> -
   await page.goto('/?e2e=1')
   await expect(page.getByTestId('btn-new')).toBeVisible()
 
-  // 启用版本管理（history 入口仅在启用后出现）
+  // 启用版本管理（history 入口仅在启用后出现）；git 为手风琴分区，先展开
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
+  await page.getByTestId('git-section').click()
   await page.getByTestId('git-enabled-toggle').check()
   // 等启用触发的 backupNow 完成（状态行出现摘要）——后台命令不与后续断言竞速
   await expect(page.getByTestId('git-status')).toContainText(/已提交|无变更|备份失败|尚无提交/, {
