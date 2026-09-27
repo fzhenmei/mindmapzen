@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'src-tauri/target'] },
+  // mobile/android 是 Capacitor 原生工程(Gradle 工具链,build/ 产物含生成 bundle),不归前端 lint
+  { ignores: ['dist', 'src-tauri/target', 'mobile/android'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
