@@ -26,13 +26,17 @@ export async function openDb(): Promise<IDBPDatabase> {
   })
 }
 
-/** 落盘后顺手淘汰超出上限的旧已同步(库增长只发生在此,不会忘) */
-export async function putIdea(db: IDBPDatabase, idea: MobileIdea): Promise<void> {
-  await db.put(STORE, idea)
+/** 淘汰超出上限的旧已同步(putIdea/markSynced 后调用,同步标记一多立即收敛) */
+async function pruneSynced(db: IDBPDatabase): Promise<void> {
   const all = (await db.getAll(STORE)) as MobileIdea[]
   const synced = all.filter((i) => i.synced).sort((a, b) => b.capturedAt - a.capturedAt)
   const drop = synced.slice(KEEP_SYNCED).map((i) => i.id)
   await Promise.all(drop.map((id) => db.delete(STORE, id)))
+}
+
+export async function putIdea(db: IDBPDatabase, idea: MobileIdea): Promise<void> {
+  await db.put(STORE, idea)
+  await pruneSynced(db)
 }
 
 export async function listAll(db: IDBPDatabase): Promise<MobileIdea[]> {
@@ -47,6 +51,7 @@ export async function markSynced(db: IDBPDatabase, ids: string[]): Promise<void>
   const tx = db.transaction(STORE, 'readwrite')
   await Promise.all(ids.map((id) => tx.store.get(id).then((r) => (r ? tx.store.put({ ...(r as MobileIdea), synced: true }) : undefined))))
   await tx.done
+  await pruneSynced(db)
 }
 
 export async function deleteIdea(db: IDBPDatabase, id: string): Promise<void> {

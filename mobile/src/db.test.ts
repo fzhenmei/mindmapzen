@@ -48,6 +48,16 @@ it('落盘自动淘汰旧已同步,只留最近 KEEP_SYNCED 条;待同步不受�
   expect(all.find((i) => i.id === 'p1')?.synced).toBe(false) // 待同步永不被淘汰
 })
 
+it('批量同步后立即收敛:markSynced 后库内已同步不超 KEEP_SYNCED', async () => {
+  const db = await openDb()
+  // 一次性攒 12 条待同步,整批推送成功后标记——淘汰应随之触发而非等下次记录
+  for (let i = 0; i < 12; i++) await putIdea(db, { ...idea(`u${i}`, `t${i}`), capturedAt: i })
+  await markSynced(db, Array.from({ length: 12 }, (_, i) => `u${i}`))
+  const all = await listAll(db)
+  expect(all.length).toBe(KEEP_SYNCED) // 待同步 0 条 + 已同步收敛到 KEEP_SYNCED
+  expect(all.every((i) => i.synced)).toBe(true)
+})
+
 it('recent 倒序且限量', async () => {
   const db = await openDb()
   for (let i = 0; i < 5; i++) await putIdea(db, { ...idea(`u${i}`, `t${i}`), capturedAt: i })

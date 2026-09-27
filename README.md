@@ -107,6 +107,8 @@ Capture ideas on your phone anywhere — even offline — and sync them into the
   gradlew.bat assembleDebug      # or assembleRelease (unsigned without keystore.properties)
   ```
   `mobile/android/local.properties` (sdk.dir) and signing files (`keystore.properties`, `*.keystore`) are local-only and never committed.
+  Regenerating launcher icons (`npx capacitor-assets generate --android`) needs sharp; if the libvips binary download times out, set the mirror first:
+  `npm_config_sharp_libvips_binary_host=https://npmmirror.com/mirrors/sharp-libvips`
 
 ## License
 
