@@ -79,6 +79,10 @@ export default {
   notice: {
     noBackup: 'Version control is off: AI edits have no automatic backup safety net; mistakes can be undone step by step with Ctrl+Z. Enable auto-commit in Library → Settings → Version control.',
   },
+  // Skill onboarding (2026, spec §4.7): notice pushed to the editor chat when a skill is first enabled
+  skill: {
+    connected: 'AI is connected to "{{name}}". Tap an example below to start:',
+  },
   settings: {
     title: 'AI',
     baseUrl: 'API URL (OpenAI-compatible)',
@@ -89,5 +93,9 @@ export default {
     modelHint: 'e.g. deepseek-chat, glm-4.6, kimi-k2-0905-preview',
     save: 'Save AI settings',
     saved: 'AI settings saved',
+    // Skills section (2026, spec §4.6): rendered from the registry
+    skillsTitle: 'Skills',
+    getKey: 'Get API Key',
+    skillsHint: 'Skill credentials stay on this device only; once configured, AI can use the skill.',
   },
 }

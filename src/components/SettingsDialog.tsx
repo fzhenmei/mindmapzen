@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
+import { useChatStore } from '../store/chatStore'
 import { i18n } from '../i18n'
+import { SKILLS } from '../skills'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -69,6 +71,11 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const [aiDraft, setAiDraft] = useState(aiConfig)
   const [aiSaved, setAiSaved] = useState(false)
   const [aiSaveError, setAiSaveError] = useState<string | null>(null)
+  // 技能凭据（2026-09 skill 接入，spec §4.6）：遍历 SKILLS 注册表；onBlur 即存（同 git 分区
+  // 先例）；保存前快照做「未启用→启用」转变检测，触发引导 notice（spec §4.7）
+  const skillsConfig = useAppStore((s) => s.skillsConfig)
+  const setSkillApiKey = useAppStore((s) => s.setSkillApiKey)
+  const [skillDrafts, setSkillDrafts] = useState<Record<string, string>>({})
   // 快速捕获（2026-09 点子篮子 M2；同年拆分）：快捷键/托盘双开关与快捷键注册失败说明
   const quickCaptureShortcut = useAppStore((s) => s.quickCaptureShortcut)
   const quickCaptureTray = useAppStore((s) => s.quickCaptureTray)
@@ -96,6 +103,27 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
     } catch (e) {
       // fs 端口可拒绝（工作区丢失/权限）——保存失败必须显式出口（吞异常禁令）
       console.error('AI 配置保存失败', e)
+      setAiSaveError(i18n.t('errors.saveFailed', { reason: String(e) }))
+    }
+  }
+
+  /** 单个技能凭据 onBlur 即存（2026-09 skill 接入，spec §4.6）：setSkillApiKey 纯存储
+   *  异常上抛——失败走 AI 节既有错误出口（同 handleAiSave 判例）。存前快照做「未启用→
+   *  启用」转变检测：首次配 key 推编辑器会话引导 notice（spec §4.7） */
+  async function handleSkillSave(id: string): Promise<void> {
+    // 提交值与显示同口径（草稿优先、回退已存）：未编辑直接失焦重存原值（幂等），不误清凭据
+    const key = (skillDrafts[id] ?? useAppStore.getState().skillsConfig[id]?.apiKey ?? '').trim()
+    const wasEnabled = (useAppStore.getState().skillsConfig[id]?.apiKey ?? '') !== ''
+    try {
+      await setSkillApiKey(id, key)
+      setSkillDrafts((d) => ({ ...d, [id]: key }))
+      if (!wasEnabled && key !== '') {
+        const m = SKILLS.find((s) => s.id === id)
+        // 引导推编辑器侧会话（spec §4.7）：不进历史不回传；面板未开时存 store，打开即见
+        if (m) useChatStore.getState().pushNotice(i18n.t('ai.skill.connected', { name: m.name }), [...m.examples.slice(0, 3)])
+      }
+    } catch (e) {
+      console.error('技能配置保存失败', e)
       setAiSaveError(i18n.t('errors.saveFailed', { reason: String(e) }))
     }
   }
@@ -275,6 +303,32 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
                         {aiSaveError}
                       </p>
                     )}
+                  </div>
+                  {/* 技能小节（2026-09 skill 接入，spec §4.6）：遍历注册表；配 key 即启用 */}
+                  <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
+                    <p className="text-xs font-medium">{t('ai.settings.skillsTitle')}</p>
+                    {SKILLS.map((m) => (
+                      <div key={m.id} className="flex flex-col gap-1">
+                        <Label htmlFor={`set-skill-${m.id}`}>{m.name}</Label>
+                        <p className="text-xs text-muted-foreground">{m.description}</p>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id={`set-skill-${m.id}`}
+                            data-testid={`set-skill-${m.id}`}
+                            type="password"
+                            value={skillDrafts[m.id] ?? skillsConfig[m.id]?.apiKey ?? ''}
+                            onChange={(e) => setSkillDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
+                            onBlur={() => void handleSkillSave(m.id)}
+                            className="text-xs"
+                          />
+                          {/* 外链走原生 target=_blank：WebView2 对 http 新窗口链接默认交系统浏览器（AboutDialog 先例） */}
+                          <a href={m.keyHelpUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-muted-foreground underline">
+                            {t('ai.settings.getKey')}
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">{t('ai.settings.skillsHint')}</p>
                   </div>
                 </div>
               </AccordionContent>

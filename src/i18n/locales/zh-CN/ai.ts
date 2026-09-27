@@ -79,6 +79,10 @@ export default {
     // v1.1 ②：git 备份未启用时首轮 AI 发送的安全网告知（会话级一次，聊天流信息卡）
     noBackup: '未开启版本管理：AI 编辑无自动备份安全网，误改可用 Ctrl+Z 逐命令撤销。可在 案头 → 设置 → 版本管理 开启自动提交。',
   },
+  // skill 引导（2026-09 skill 接入，spec §4.7）：首次配 key 启用时推编辑器会话的 notice 文案
+  skill: {
+    connected: 'AI 已接入「{{name}}」，试试点击下方示例开始：',
+  },
   settings: {
     title: 'AI',
     baseUrl: 'API 地址（OpenAI 兼容）',
@@ -89,5 +93,9 @@ export default {
     modelHint: '如 deepseek-chat、glm-4.6、kimi-k2-0905-preview',
     save: '保存 AI 配置',
     saved: 'AI 配置已保存',
+    // 技能小节（2026-09 skill 接入，spec §4.6）：遍历注册表渲染
+    skillsTitle: '技能',
+    getKey: '获取 API Key',
+    skillsHint: '技能凭据仅存本机，不上传；配置后 AI 可调用对应技能。',
   },
 }

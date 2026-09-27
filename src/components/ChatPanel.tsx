@@ -321,7 +321,7 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
             </div>
           ) : (
             messages.map((m, i) => (
-              <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} onToggleCards={(id) => deps.store.getState().toggleCards(id)} />
+              <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} onToggleCards={(id) => deps.store.getState().toggleCards(id)} onFillInput={setInput} />
             ))
           )}
         </div>
@@ -431,7 +431,7 @@ function TurnProgress({ store }: Readonly<{ store: ChatStore }>) {
   )
 }
 
-function MessageRow({ msg, idx, writeClipboard, onToggleCards }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void }>) {
+function MessageRow({ msg, idx, writeClipboard, onToggleCards, onFillInput }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void; onFillInput(text: string): void }>) {
   if (msg.role === 'user') {
     // 复制钮在气泡左侧（行右对齐，气泡右侧无空位）；items-start 顶部对齐气泡
     return (
@@ -445,8 +445,27 @@ function MessageRow({ msg, idx, writeClipboard, onToggleCards }: Readonly<{ msg:
     return <p className="mb-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs text-destructive" data-testid="ai-msg-error">{msg.text}</p>
   }
   if (msg.role === 'notice') {
-    // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清
-    return <p className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">{msg.text}</p>
+    // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清。
+    // actions 为 skill 引导模板句（2026-09 spec §4.7）：点击只填入输入框不发送（用户看过再改再发）
+    return (
+      <div className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">
+        <p>{msg.text}</p>
+        {(msg.actions ?? []).length > 0 && (
+          <div className="mt-1 flex flex-col items-start gap-0.5">
+            {(msg.actions ?? []).map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => onFillInput(a)}
+                className="rounded px-1 py-0.5 text-left text-primary underline-offset-2 hover:bg-accent hover:underline"
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
   }
   return <AssistantRow msg={msg} idx={idx} writeClipboard={writeClipboard} onToggleCards={onToggleCards} />
 }

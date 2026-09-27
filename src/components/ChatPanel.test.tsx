@@ -669,3 +669,21 @@ test('回合收尾把操作卡片随消息一并交持久化端口（在途挂�
   const persisted = persistTurn.mock.calls[0][0] as ChatMessage[]
   expect(persisted[2]!.cards).toEqual([{ kind: 'add', ok: true, text: '新想法' }])
 })
+
+// ═══ 引导消息（2026-09 skill 接入，spec §4.7）：首次启用 skill 推 notice + 模板句，
+// 点击模板句填入输入框（不发送——用户看过再改再发） ═══
+
+test('notice 引导消息：actions 点击填入输入框', async () => {
+  // 首次启用 skill 的引导样例（SettingsDialog handleSkillSave 推送形态）
+  useChatStore.getState().pushNotice('AI 已接入「微信读书」', ['看看我的书架', '我这个月读了多久书'])
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: '看看我的书架' }))
+  expect((screen.getByTestId('ai-input') as HTMLTextAreaElement).value).toBe('看看我的书架')
+})
+
+test('notice 引导消息：无 actions 的普通信息卡不渲染模板句按钮', () => {
+  useChatStore.getState().pushNotice('未开启版本管理')
+  mount()
+  expect(screen.getByTestId('ai-msg-notice')).toHaveTextContent('未开启版本管理')
+  expect(screen.getByTestId('ai-msg-notice').querySelector('button')).toBeNull()
+})
