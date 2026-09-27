@@ -41,11 +41,12 @@ describe('scanAndPair', () => {
     expect(d.spies.setPairing).toHaveBeenCalledWith({ baseUrl: 'http://192.168.1.99:39871', token: 'tok-2' })
   })
 
-  it('扫码被取消/权限拒绝:toast + 显式出口,不静默(Review Focus 5)', async () => {
+  it('扫码被取消/权限拒绝:toast 已取消(与扫错码文案区分)+ 显式出口,不静默(Review Focus 5)', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const d = makeDeps({ scan: vi.fn().mockRejectedValue(new Error('cancel')) })
     expect(await scanAndPair(d)).toBe(false)
-    expect(d.spies.toast).toHaveBeenCalledWith('scanFailed')
+    expect(d.spies.toast).toHaveBeenCalledWith('scanCancelled')
+    expect(d.spies.toast).not.toHaveBeenCalledWith('scanFailed')
     expect(errSpy).toHaveBeenCalled()
     errSpy.mockRestore()
   })
