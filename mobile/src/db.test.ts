@@ -42,7 +42,9 @@ it('落盘自动淘汰旧已同步,只留最近 KEEP_SYNCED 条;待同步不受�
   await putIdea(db, { ...idea('p1', 'pending'), capturedAt: 99 })
   const all = await listAll(db)
   const syncedIds = all.filter((i) => i.synced).map((i) => i.id)
-  expect(syncedIds.sort()).toEqual(['s10', 's11', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9']) // s2..s11 共 10 条
+  // 12 条已同步只留最近 KEEP_SYNCED 条(s2..s11),最旧两条(s0/s1)被淘汰
+  const expected = Array.from({ length: KEEP_SYNCED }, (_, k) => `s${12 - KEEP_SYNCED + k}`)
+  expect(syncedIds.sort()).toEqual(expected.sort())
   expect(all.find((i) => i.id === 'p1')?.synced).toBe(false) // 待同步永不被淘汰
 })
 
