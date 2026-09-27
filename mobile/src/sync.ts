@@ -63,20 +63,31 @@ export function setPairing(p: { baseUrl: string; token: string } | null): void {
   pairingOverride = p
 }
 
+/** 当前生效配对(override 优先,回落 localStorage);导出供测试断言 */
+export function currentPairing(): { baseUrl: string; token: string } {
+  return pairingOverride ?? readStored()
+}
+
 function pcBaseUrl(): string {
-  const p = pairingOverride ?? readStored()
-  return p.baseUrl
+  return currentPairing().baseUrl
 }
 
 function pcToken(): string {
-  const p = pairingOverride ?? readStored()
-  return p.token
+  return currentPairing().token
 }
 
-function readStored(): { baseUrl: string; token: string } {
+/** 唯一合法落盘格式是 zustand persist 的 {"state":{"pairing":{…}},"version":0};
+ * 兼容解析历史裸格式;导出供测试断言 */
+export function readStored(): { baseUrl: string; token: string } {
   try {
     const raw = localStorage.getItem('mz-pairing')
-    if (raw) return JSON.parse(raw) as { baseUrl: string; token: string }
+    if (raw) {
+      const v = JSON.parse(raw) as { state?: { pairing?: { baseUrl?: unknown; token?: unknown } }; baseUrl?: unknown; token?: unknown }
+      const p = v.state?.pairing ?? v
+      if (typeof p.token === 'string') {
+        return { baseUrl: typeof p.baseUrl === 'string' ? p.baseUrl : '', token: p.token }
+      }
+    }
   } catch (e) {
     console.error('配对信息读取失败', e)
   }

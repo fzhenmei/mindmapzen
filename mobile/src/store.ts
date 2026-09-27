@@ -23,7 +23,8 @@ export const useMobileStore = create<MobileState>()(
     (set) => ({
       pairing: { baseUrl: '', token: '' },
       setPairingManual: (p) => {
-        localStorage.setItem('mz-pairing', JSON.stringify(p))
+        // 持久化只走 persist(set 即落盘 {"state":{"pairing":…}}):手写裸格式
+        // setItem 与 persist 格式冲突,曾靠写入时序侥幸不被读回(2026-09-27 移除)
         setPairing(p)
         set({ pairing: p })
       },

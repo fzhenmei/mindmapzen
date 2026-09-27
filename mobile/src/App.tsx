@@ -9,7 +9,13 @@ import './App.css'
 // openDb 返回 idb 的 IDBPDatabase,按 brief 尾注以推导别名引用(brief 代码中的 IDBDatabase 以此为准)
 type MobileDb = Awaited<ReturnType<typeof openDb>>
 
-// 单屏(spec §4.2):状态条 + 输入区 + 倒序列表。打开/回前台/新记录触发同步
+/** 回车即发送(2026-09-27 手机操作习惯);isComposing 时是输入法候选确认,不发送 */
+export function enterSends(e: { key: string; isComposing?: boolean }): boolean {
+  return e.key === 'Enter' && e.isComposing !== true
+}
+
+// 单屏(spec §4.2):状态条 + 倒序列表(中部滚动) + 底部输入区(手机拇指区,2026-09-27)。
+// 打开/回前台/新记录触发同步
 export default function App() {
   const [ideas, setIdeas] = useState<MobileIdea[]>([])
   const [draft, setDraft] = useState('')
@@ -86,56 +92,66 @@ export default function App() {
       <header className="bar" data-testid="sync-bar" onClick={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}>
         {stateText}
       </header>
-      <textarea
-        data-testid="idea-input"
-        value={draft}
-        placeholder={tr('placeholder')}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={4}
-        autoFocus
-      />
-      <button data-testid="btn-capture" onClick={() => void onCapture()}>
-        {tr('capture')}
-      </button>
-      {!paired && <p className="hint">{tr('installHint')}</p>}
-      <ul>
-        {ideas.map((i) => (
-          <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
-            <span className="text">{i.text}</span>
-            {!i.synced && (
-              <button
-                className="del"
-                onClick={() => {
-                  void deleteIdea(dbRef.current!, i.id)
-                    .then(refresh)
-                    .catch((e) => {
-                      console.error('删除/清空失败', e)
-                      useMobileStore.getState().showToast(tr('deleteFailed'))
-                    })
-                }}
-              >
-                {tr('delete')}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <button className="ghost" data-testid="btn-settings" onClick={() => setShowSettings((v) => !v)}>
-        {tr('settings')}
-      </button>
-      {showSettings && (
-        <SettingsPanel
-          onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
-          onClear={() => {
-            void clearSynced(dbRef.current!)
-              .then(refresh)
-              .catch((e) => {
-                console.error('删除/清空失败', e)
-                useMobileStore.getState().showToast(tr('deleteFailed'))
-              })
+      <main className="list">
+        {!paired && <p className="hint">{tr('installHint')}</p>}
+        <ul>
+          {ideas.map((i) => (
+            <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
+              <span className="text">{i.text}</span>
+              {!i.synced && (
+                <button
+                  className="del"
+                  onClick={() => {
+                    void deleteIdea(dbRef.current!, i.id)
+                      .then(refresh)
+                      .catch((e) => {
+                        console.error('删除/清空失败', e)
+                        useMobileStore.getState().showToast(tr('deleteFailed'))
+                      })
+                  }}
+                >
+                  {tr('delete')}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <button className="ghost" data-testid="btn-settings" onClick={() => setShowSettings((v) => !v)}>
+          {tr('settings')}
+        </button>
+        {showSettings && (
+          <SettingsPanel
+            onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
+            onClear={() => {
+              void clearSynced(dbRef.current!)
+                .then(refresh)
+                .catch((e) => {
+                  console.error('删除/清空失败', e)
+                  useMobileStore.getState().showToast(tr('deleteFailed'))
+                })
+            }}
+          />
+        )}
+      </main>
+      <footer className="input-area">
+        <textarea
+          data-testid="idea-input"
+          value={draft}
+          placeholder={tr('placeholder')}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (enterSends({ key: e.key, isComposing: e.nativeEvent.isComposing })) {
+              e.preventDefault()
+              void onCapture()
+            }
           }}
+          rows={4}
+          autoFocus
         />
-      )}
+        <button data-testid="btn-capture" onClick={() => void onCapture()}>
+          {tr('capture')}
+        </button>
+      </footer>
       <Toast />
     </div>
   )
