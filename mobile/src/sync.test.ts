@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { openDb, putIdea, type MobileIdea } from './db'
+import { listAll, openDb, putIdea, type MobileIdea } from './db'
 import { runSync, Unauthorized, type SyncDeps, type SyncEvent } from './sync'
 
-const idea = (id: string, text: string): MobileIdea => ({ id, text, body: '', capturedAt: 1, synced: false })
+const idea = (id: string, text: string): MobileIdea => ({ id, text, body: '', capturedAt: 1 })
 
 let events: SyncEvent[]
 const mkDeps = (over: Partial<SyncDeps>): SyncDeps => ({
@@ -42,6 +42,7 @@ it('推送成功删本地条目', async () => {
   await runSync(mkDeps({ push, onRemoved: (ids) => removed.push(ids) }), db)
   expect(push).toHaveBeenCalledTimes(1)
   expect(removed).toEqual([['u1', 'u2']])
+  expect(await listAll(db)).toEqual([]) // 库中即待同步:成功即删,不保留
   expect(events.at(-1)).toEqual({ state: 'synced', error: null })
 })
 
@@ -55,6 +56,7 @@ it('部分失败保留失败条目并报 error', async () => {
     }),
     db,
   )
+  expect((await listAll(db)).map((i) => i.id)).toEqual(['u2']) // 失败条目留库待重推
   expect(events.at(-1)).toEqual({ state: 'error', error: 'partial' })
 })
 

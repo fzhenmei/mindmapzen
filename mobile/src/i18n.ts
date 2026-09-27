@@ -18,7 +18,7 @@ type Key =
   | 'pcUrl'
   | 'token'
   | 'save'
-  | 'clearSynced'
+  | 'emptyHint'
   | 'scanPair'
   | 'scanFailed'
   | 'orManualFill'
@@ -43,7 +43,7 @@ const zh: Record<Key, string> = {
   pcUrl: 'PC 地址(如 http://192.168.1.10:39871)',
   token: '令牌',
   save: '保存',
-  clearSynced: '清空已同步',
+  emptyHint: '灵光一现随手记,回家自动同步进 PC 点子篮子',
   scanPair: '扫码配对',
   scanFailed: '不是有效的配对二维码',
   orManualFill: '或手动填写',
@@ -69,7 +69,7 @@ const en: Record<Key, string> = {
   pcUrl: 'PC address (e.g. http://192.168.1.10:39871)',
   token: 'Token',
   save: 'Save',
-  clearSynced: 'Clear synced',
+  emptyHint: 'Capture a spark here — it syncs to your PC basket when you get home',
   scanPair: 'Scan to pair',
   scanFailed: 'Not a pairing QR code',
   orManualFill: 'Or enter manually',

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { clearSynced, deleteIdea, listRecent, openDb, putIdea, type MobileIdea } from './db'
+import { deleteIdea, listRecent, openDb, putIdea, type MobileIdea } from './db'
 import { httpSyncDeps, runSync, type SyncDeps } from './sync'
 import { autoPairFromUrl, useMobileStore } from './store'
 import { scanAndPair } from './scan'
@@ -84,7 +84,7 @@ export default function App() {
     if (text === '') return
     const [first, ...rest] = text.split('\n')
     try {
-      await putIdea(await db(), { id: uuidv4(), text: first, body: rest.join('\n'), capturedAt: Date.now(), synced: false })
+      await putIdea(await db(), { id: uuidv4(), text: first, body: rest.join('\n'), capturedAt: Date.now() })
       setDraft('')
       useMobileStore.getState().showToast(tr('captured'))
       await refresh()
@@ -96,7 +96,7 @@ export default function App() {
     }
   }
 
-  const pending = ideas.filter((i) => !i.synced).length
+  const pending = ideas.length // 列表即待同步队列(成功即删,2026-09-27)
   const stateText =
     syncState === 'error' && syncError === 'unauthorized'
       ? tr('stateUnauthorized')
@@ -132,38 +132,29 @@ export default function App() {
       <main className="list">
         <ul>
           {ideas.map((i) => (
-            <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
+            <li key={i.id} data-testid={`idea-${i.id}`}>
               <span className="text">{i.text}</span>
-              {!i.synced && (
-                <button
-                  className="del"
-                  onClick={() => {
-                    void deleteIdea(dbRef.current!, i.id)
-                      .then(refresh)
-                      .catch((e) => {
-                        console.error('删除/清空失败', e)
-                        useMobileStore.getState().showToast(tr('deleteFailed'))
-                      })
-                  }}
-                >
-                  {tr('delete')}
-                </button>
-              )}
+              <button
+                className="del"
+                onClick={() => {
+                  void deleteIdea(dbRef.current!, i.id)
+                    .then(refresh)
+                    .catch((e) => {
+                      console.error('删除失败', e)
+                      useMobileStore.getState().showToast(tr('deleteFailed'))
+                    })
+                }}
+              >
+                {tr('delete')}
+              </button>
             </li>
           ))}
         </ul>
+        {ideas.length === 0 && <p className="hint empty" data-testid="empty-hint">{tr('emptyHint')}</p>}
         {showSettings && (
           <PairDialog
             scanPair={onScanPair}
             onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
-            onClear={() => {
-              void clearSynced(dbRef.current!)
-                .then(refresh)
-                .catch((e) => {
-                  console.error('删除/清空失败', e)
-                  useMobileStore.getState().showToast(tr('deleteFailed'))
-                })
-            }}
             onClose={() => setShowSettings(false)}
           />
         )}
@@ -206,13 +197,11 @@ function Toast() {
 function PairDialog({
   scanPair,
   onSaved,
-  onClear,
   onClose,
 }: {
   /** 扫码配对(App 主入口复用同一实现;手动输入仍是兜底,spec §6.3) */
   scanPair: (onPaired: () => void) => Promise<void>
   onSaved: () => void
-  onClear: () => void
   onClose: () => void
 }) {
   const { pairing, setPairingManual } = useMobileStore()
@@ -250,9 +239,6 @@ function PairDialog({
           {tr('save')}
         </button>
         <div className="row">
-          <button className="ghost" data-testid="btn-clear-synced" onClick={onClear}>
-            {tr('clearSynced')}
-          </button>
           <button className="ghost" onClick={onClose}>
             {tr('close')}
           </button>
