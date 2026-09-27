@@ -1,13 +1,11 @@
 import { expect, test } from '@playwright/test'
 
 // e2e/ai-skill.spec.ts —— skill 全链（Task 9，spec §9：fake transport + fake 网关，真网络不进 e2e）：
-// 新建导图 → 编辑器内设置配 BYOK + 微信读书 key（onBlur 即存，首次配置推引导 notice）→
-// 开 AI 面板 → 点引导示例「看看我的书架」→ skill_invoke 走 fake 网关 → 工具卡渲染 → 文本定稿。
+// 新建导图 → 编辑器内设置配 BYOK + 微信读书 key（onBlur 即存）→
+// 开 AI 面板 → 空态 skill 引导（方案 D：随空态渲染派生）→ 点引导示例「看看我的书架」→
+// skill_invoke 走 fake 网关 → 工具卡渲染 → 文本定稿。
 // 断言面：网关收到的 body 含 skill_version（manifest 自动附带）；system prompt 含 SKILL.md 段
 // （引导句 skill_invoke + 原文「微信读书」，防未注入假绿）；URL 恒来自 manifest（安全口径）。
-// 配置须在编辑器内（而非案头）：EditorView 卸载 cleanup 会 reset chatStore，dev StrictMode
-// 首挂的模拟卸载（挂载→清理→重挂）会把案头配置时推的引导 notice 清掉（dev-only 伪影，
-// 生产无 StrictMode 双跑不受影响；引导 notice 语义本就是「本图面板打开即见」）
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -60,8 +58,7 @@ test('skill 全链：配 key→引导→invoke→工具卡→定稿', async ({ p
   await page.getByTestId('btn-confirm').click()
   await expect(page.getByText('skill 全链测试').first()).toBeVisible()
 
-  // 编辑器内配置 BYOK + 微信读书 key（设置 AI 分区；skill 输入 onBlur 即存——首次配置触发
-  // 「未启用→启用」转变，推本图会话引导 notice，面板未开时存 store、打开即见）
+  // 编辑器内配置 BYOK + 微信读书 key（设置 AI 分区；skill 输入 onBlur 即存）
   await page.getByTestId('btn-editor-settings').click()
   await page.getByTestId('settings-ai-section').click()
   await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
@@ -72,10 +69,10 @@ test('skill 全链：配 key→引导→invoke→工具卡→定稿', async ({ p
   await page.getByTestId('set-skill-weread').blur()
   await page.keyboard.press('Escape') // 关设置（ai.spec 同款）
 
-  // 开 AI 面板：配置时推的引导 notice 可见（文案 + manifest 模板句示例按钮）
+  // 开 AI 面板：空会话空态常驻 skill 引导（方案 D：随空态渲染派生,与配置时机/会话 reset 解耦）
   await page.getByTestId('ai-toggle').click()
   await expect(page.getByTestId('ai-panel')).toBeVisible()
-  await expect(page.getByTestId('ai-msg-notice').filter({ hasText: 'AI 已接入「微信读书」' })).toBeVisible()
+  await expect(page.getByTestId('ai-skill-intro').filter({ hasText: '微信读书' })).toBeVisible()
 
   // lute 预热（ai.spec 同款）：定稿文本走 MarkdownPreview，预装 lute 消除 vditor
   // addScript 双 script 竞态噪音（失败注入不掩盖 skill 链路本身的断言）
@@ -95,7 +92,7 @@ test('skill 全链：配 key→引导→invoke→工具卡→定稿', async ({ p
     })
   })
 
-  // 点引导示例填入输入框（notice actions 只填不发，用户看过再发）
+  // 点引导示例填入输入框（空态引导只填不发，用户看过再发）
   await page.getByRole('button', { name: '看看我的书架' }).click()
   await expect(page.getByTestId('ai-input')).toHaveValue('看看我的书架')
   await page.getByTestId('ai-send').click()

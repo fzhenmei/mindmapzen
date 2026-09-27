@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../store/appStore'
-import { useChatStore } from '../store/chatStore'
 import { i18n } from '../i18n'
 import { SKILLS } from '../skills'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog'
@@ -72,7 +71,7 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   const [aiSaved, setAiSaved] = useState(false)
   const [aiSaveError, setAiSaveError] = useState<string | null>(null)
   // 技能凭据（2026-09 skill 接入，spec §4.6）：遍历 SKILLS 注册表；onBlur 即存（同 git 分区
-  // 先例）；保存前快照做「未启用→启用」转变检测，触发引导 notice（spec §4.7）
+  // 先例）；启用后的引导由 AI 面板空态常驻渲染（方案 D），与保存时机解耦
   const skillsConfig = useAppStore((s) => s.skillsConfig)
   const setSkillApiKey = useAppStore((s) => s.setSkillApiKey)
   const [skillDrafts, setSkillDrafts] = useState<Record<string, string>>({})
@@ -108,20 +107,14 @@ export default function SettingsDialog({ onClose, onChangeWorkspace, onExitWorks
   }
 
   /** 单个技能凭据 onBlur 即存（2026-09 skill 接入，spec §4.6）：setSkillApiKey 纯存储
-   *  异常上抛——失败走 AI 节既有错误出口（同 handleAiSave 判例）。存前快照做「未启用→
-   *  启用」转变检测：首次配 key 推编辑器会话引导 notice（spec §4.7） */
+   *  异常上抛——失败走 AI 节既有错误出口（同 handleAiSave 判例）。引导不再在此推送：
+   *  方案 D 重新定性为 AI 面板空态常驻渲染（ChatPanel deps.skillIntro），与保存时机解耦 */
   async function handleSkillSave(id: string): Promise<void> {
     // 提交值与显示同口径（草稿优先、回退已存）：未编辑直接失焦重存原值（幂等），不误清凭据
     const key = (skillDrafts[id] ?? useAppStore.getState().skillsConfig[id]?.apiKey ?? '').trim()
-    const wasEnabled = (useAppStore.getState().skillsConfig[id]?.apiKey ?? '') !== ''
     try {
       await setSkillApiKey(id, key)
       setSkillDrafts((d) => ({ ...d, [id]: key }))
-      if (!wasEnabled && key !== '') {
-        const m = SKILLS.find((s) => s.id === id)
-        // 引导推编辑器侧会话（spec §4.7）：不进历史不回传；面板未开时存 store，打开即见
-        if (m) useChatStore.getState().pushNotice(i18n.t('ai.skill.connected', { name: m.name }), [...m.examples.slice(0, 3)])
-      }
     } catch (e) {
       console.error('技能配置保存失败', e)
       setAiSaveError(i18n.t('errors.saveFailed', { reason: String(e) }))

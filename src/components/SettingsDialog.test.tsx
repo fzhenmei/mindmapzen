@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SettingsDialog from './SettingsDialog'
 import { useAppStore } from '../store/appStore'
-import { useChatStore } from '../store/chatStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
 // 设置对话框（2026-09 手风琴批）：五分区收进单展开手风琴——默认全收起（Content 不挂载），
@@ -150,13 +149,12 @@ describe('SettingsDialog', () => {
     expect(screen.queryByText('AI 配置已保存')).not.toBeInTheDocument()
   })
 
-  // ═══ 技能小节（2026-09 skill 接入，spec §4.6/§4.7）：遍历 SKILLS 注册表渲染输入框；
-  // onBlur 即存（真实 setSkillApiKey 走 MemoryFsAdapter 持久化链）；「未启用→启用」转变
-  // 才推编辑器会话引导 notice（模板句来自 manifest examples） ═══
+  // ═══ 技能小节（2026-09 skill 接入，spec §4.6）：遍历 SKILLS 注册表渲染输入框；
+  // onBlur 即存（真实 setSkillApiKey 走 MemoryFsAdapter 持久化链）。启用后的引导为
+  // AI 面板空态常驻渲染（方案 D，ChatPanel 层覆盖），保存时不再推送 notice ═══
 
-  test('技能小节：配置 skill key 保存凭据并触发引导 notice', async () => {
+  test('技能小节：配置 skill key 保存凭据', async () => {
     useAppStore.setState({ skillsConfig: {} }) // 跨用例隔离（真实 setSkillApiKey 写内存态）
-    useChatStore.getState().reset()
     render(<SettingsDialog onClose={() => {}} />)
     fireEvent.click(screen.getByTestId('settings-ai-section'))
     // 注册表遍历渲染：weread 在列（名称/描述/获取 Key 链接同屏）
@@ -166,16 +164,11 @@ describe('SettingsDialog', () => {
     fireEvent.change(screen.getByTestId('set-skill-weread'), { target: { value: 'wrk-e2e' } })
     fireEvent.blur(screen.getByTestId('set-skill-weread')) // onBlur 即存
     await waitFor(() => expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-e2e' } }))
-    // 引导 notice 进编辑器会话：文案 + manifest 模板句（前 3 条）
-    const msgs = useChatStore.getState().messages
-    expect(msgs.some((m) => m.role === 'notice' && m.text.includes('AI 已接入「微信读书」'))).toBe(true)
-    expect(msgs.some((m) => m.role === 'notice' && m.actions?.includes('看看我的书架'))).toBe(true)
   })
 
-  test('技能小节：已启用态重复保存不重复触发引导', async () => {
-    // 预置已启用（直接走 store：引导是 SettingsDialog 层职责，预置本身不产生 notice）
+  test('技能小节：已启用态失焦幂等重存不清凭据', async () => {
+    // 预置已启用（直接走 store）
     await useAppStore.getState().setSkillApiKey('weread', 'wrk-a')
-    useChatStore.getState().reset()
     render(<SettingsDialog onClose={() => {}} />)
     fireEvent.click(screen.getByTestId('settings-ai-section'))
     // 打开即可见已配 key（草稿优先、回退已存值）
@@ -185,6 +178,5 @@ describe('SettingsDialog', () => {
     fireEvent.blur(screen.getByTestId('set-skill-weread'))
     await act(async () => {}) // 排空 setSkillApiKey 持久化微任务
     expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-a' } })
-    expect(useChatStore.getState().messages.filter((m) => m.role === 'notice')).toHaveLength(0) // 无引导
   })
 })

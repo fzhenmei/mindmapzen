@@ -13,7 +13,7 @@ import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/t
 import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
 import { withAiCall } from '../services/ai/lock'
-import { enabledSkillsNow, executeSkillRoute, skillToolSchemasOf } from './editorSkillWire'
+import { enabledSkillsNow, executeSkillRoute, skillIntroOf, skillToolSchemasOf } from './editorSkillWire'
 import { i18n } from '../i18n'
 import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
@@ -686,6 +686,8 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
                 executeSkillRoute(name, args) ??
                 Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined)),
               toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS, ...skillToolSchemasOf(skillsConfig)],
+              // 空态 skill 引导(方案 D):启用清单展示子集,空会话时常驻,有对话让位
+              skillIntro: skillIntroOf(skillsConfig),
             }}
             selection={aiSelectionNode}
             width={aiPanelPx}

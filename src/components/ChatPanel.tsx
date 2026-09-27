@@ -36,6 +36,12 @@ export interface ChatPanelTexts {
 
 /** 宿主注入面（Task 8 最终 Props 契约）：store/prompt/工具执行/守卫/确认回调——
  *  编辑器与案头各带自己的域，面板只消费不感知引擎 */
+/** 空态 skill 引导项（方案 D 重新定性）：manifest 的展示子集,宿主按启用清单注入 */
+export interface SkillIntroItem {
+  name: string
+  examples: readonly string[]
+}
+
 export interface ChatPanelDeps {
   store: ChatStore
   texts: ChatPanelTexts
@@ -49,6 +55,9 @@ export interface ChatPanelDeps {
   toolSchemas: unknown[]
   /** 发送前回调（案头：确认词检测置位确认门）；编辑器不传 */
   onUserMessage?(text: string): void
+  /** 空态 skill 引导（2026-09 方案 D）：空会话时常驻显示已启用 skill 示例,有对话即让位。
+   *  引导随空态渲染派生,不依赖一次性 notice（dev StrictMode 双挂载/切图 reset 均不丢） */
+  skillIntro?: readonly SkillIntroItem[]
 }
 
 interface Props {
@@ -318,10 +327,29 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
             <div className="mt-8 space-y-1 text-center text-muted-foreground">
               <p className="font-medium text-foreground">{deps.texts.emptyTitle}</p>
               <p className="text-xs">{deps.texts.emptyBody}</p>
+              {/* 空态 skill 引导（方案 D）：常驻于空会话,有对话自然让位；示例点击只填入输入框不发送 */}
+              {(deps.skillIntro ?? []).map((s) => (
+                <div key={s.name} data-testid="ai-skill-intro" className="mt-3 text-left">
+                  <p className="text-xs">{i18n.t('ai.panel.skillIntroTitle', { name: s.name })}</p>
+                  <div className="mt-1 flex flex-col items-start gap-0.5">
+                    {s.examples.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        data-testid="ai-skill-example"
+                        onClick={() => setInput(a)}
+                        className="rounded px-1 py-0.5 text-left text-xs text-primary underline-offset-2 hover:bg-accent hover:underline"
+                      >
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             messages.map((m, i) => (
-              <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} onToggleCards={(id) => deps.store.getState().toggleCards(id)} onFillInput={setInput} />
+              <MessageRow key={m.id} msg={m} idx={i} writeClipboard={writeClipboard} onToggleCards={(id) => deps.store.getState().toggleCards(id)} />
             ))
           )}
         </div>
@@ -431,7 +459,7 @@ function TurnProgress({ store }: Readonly<{ store: ChatStore }>) {
   )
 }
 
-function MessageRow({ msg, idx, writeClipboard, onToggleCards, onFillInput }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void; onFillInput(text: string): void }>) {
+function MessageRow({ msg, idx, writeClipboard, onToggleCards }: Readonly<{ msg: ChatMessage; idx: number; writeClipboard: WriteClipboard; onToggleCards(id: string): void }>) {
   if (msg.role === 'user') {
     // 复制钮在气泡左侧（行右对齐，气泡右侧无空位）；items-start 顶部对齐气泡
     return (
@@ -445,27 +473,8 @@ function MessageRow({ msg, idx, writeClipboard, onToggleCards, onFillInput }: Re
     return <p className="mb-2 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs text-destructive" data-testid="ai-msg-error">{msg.text}</p>
   }
   if (msg.role === 'notice') {
-    // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清。
-    // actions 为 skill 引导模板句（2026-09 spec §4.7）：点击只填入输入框不发送（用户看过再改再发）
-    return (
-      <div className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">
-        <p>{msg.text}</p>
-        {(msg.actions ?? []).length > 0 && (
-          <div className="mt-1 flex flex-col items-start gap-0.5">
-            {(msg.actions ?? []).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => onFillInput(a)}
-                className="rounded px-1 py-0.5 text-left text-primary underline-offset-2 hover:bg-accent hover:underline"
-              >
-                {a}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    )
+    // 中性信息卡（v1.1 ② 安全网告知）：muted 全不透明底——半透明底深浅主题混叠看不清
+    return <p className="mb-2 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="ai-msg-notice">{msg.text}</p>
   }
   return <AssistantRow msg={msg} idx={idx} writeClipboard={writeClipboard} onToggleCards={onToggleCards} />
 }

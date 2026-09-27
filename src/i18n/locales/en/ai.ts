@@ -30,6 +30,8 @@ export default {
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and bodies, set icons/tags, link and fold. The canvas is read-only while AI works; you can stop anytime.',
+    // Empty-state skill intro (option D): shown while the session is empty for enabled skills
+    skillIntroTitle: 'Connected to "{{name}}". Try:',
     // Chat history banner (2026-09 persistence): shown when the opened map has past turns and
     // they are not loaded yet — only "Load" is offered here ("Restart" is a session action that
     // lives in the header, meaningless without a conversation); token impact stated in the copy
@@ -78,10 +80,6 @@ export default {
   },
   notice: {
     noBackup: 'Version control is off: AI edits have no automatic backup safety net; mistakes can be undone step by step with Ctrl+Z. Enable auto-commit in Library → Settings → Version control.',
-  },
-  // Skill onboarding (2026, spec §4.7): notice pushed to the editor chat when a skill is first enabled
-  skill: {
-    connected: 'AI is connected to "{{name}}". Tap an example below to start:',
   },
   settings: {
     title: 'AI',

@@ -20,8 +20,6 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'error' | 'notice'
   text: string
-  /** 引导消息的可点击模板句(2026-09 skill 接入,spec §4.7):点击填入输入框;不落盘不回传 */
-  actions?: string[]
   cards?: ToolCardData[]
   rendered?: boolean
   /** 操作卡片收起态（2026-09）：undefined/false = 展开明细卡；回合收尾由 collapseLastCards
@@ -83,9 +81,8 @@ interface ChatState {
   toggleCards: (id: string) => void
   pushError: (text: string) => void
   /** 系统提示信息卡（v1.1 ②：无安全网告知等中性提示）——不进对话历史回传（AI 上下文
-   *  只取 user/assistant，历史过滤器天然排除），仅 UI 留存。actions 为引导消息的可点击
-   *  模板句（2026-09 skill 接入,spec §4.7）:点击填入输入框,与 text 同不落盘不回传 */
-  pushNotice: (text: string, actions?: string[]) => void
+   *  只取 user/assistant，历史过滤器天然排除），仅 UI 留存 */
+  pushNotice: (text: string) => void
   setPhase: (p: ChatPhase) => void
   setTurnStartedAt: (t: number | null) => void
   setToolRound: (n: number) => void
@@ -205,7 +202,7 @@ export function createChatStore() {
         }),
       })),
     pushError: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'error', text }] })),
-    pushNotice: (text, actions) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text, actions }] })),
+    pushNotice: (text) => set((s) => ({ messages: [...s.messages, { id: nextId(), role: 'notice', text }] })),
     setPhase: (p) => set({ phase: p }),
     setTurnStartedAt: (t) => set({ turnStartedAt: t }),
     setToolRound: (n) => set({ toolRound: n }),

@@ -30,6 +30,8 @@ export default {
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本与正文、设图标标签、连线和折叠；AI 处理期间画布只读，随时可停。',
+    // 空态 skill 引导（方案 D）：空会话时常驻显示已启用 skill 示例
+    skillIntroTitle: '已接入「{{name}}」，试试：',
     // 历史对话提醒（2026-09 持久化）：打开有历史流水的导图时置顶 banner——此时只提供载入
     // （「重新开始」是会话操作归 header，无对话时无意义）；Token 影响写进文案；落盘失败走 toast
     historyBanner: '此导图有 {{n}} 轮历史对话。载入后新对话将携带这些历史作为上下文，Token 消耗会相应增加；不载入则从新会话开始。',
@@ -78,10 +80,6 @@ export default {
   notice: {
     // v1.1 ②：git 备份未启用时首轮 AI 发送的安全网告知（会话级一次，聊天流信息卡）
     noBackup: '未开启版本管理：AI 编辑无自动备份安全网，误改可用 Ctrl+Z 逐命令撤销。可在 案头 → 设置 → 版本管理 开启自动提交。',
-  },
-  // skill 引导（2026-09 skill 接入，spec §4.7）：首次配 key 启用时推编辑器会话的 notice 文案
-  skill: {
-    connected: 'AI 已接入「{{name}}」，试试点击下方示例开始：',
   },
   settings: {
     title: 'AI',

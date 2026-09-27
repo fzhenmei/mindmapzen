@@ -6,6 +6,7 @@ import { enabledSkillEntries, getEnabledSkills } from '../skills'
 import type { SkillManifest } from '../skills/types'
 import { executeSkillTool, getSkillGateway, SKILL_TOOL_NAMES, skillToolSchemas } from '../services/ai/toolsSkill'
 import type { ToolCallResult } from '../services/ai/tools'
+import type { SkillIntroItem } from '../components/ChatPanel'
 import { useAppStore } from '../store/appStore'
 import type { SkillsConfig } from '../types/files'
 
@@ -17,6 +18,12 @@ export function enabledSkillsNow(): SkillManifest[] {
 /** skill 工具 schema(工具清单面):传渲染期订阅值,未配 key 不注册 */
 export function skillToolSchemasOf(config: SkillsConfig): unknown[] {
   return skillToolSchemas(getEnabledSkills(config))
+}
+
+/** 空态 skill 引导(方案 D):启用清单的展示子集,EditorView 注入 ChatPanel 空态常驻渲染——
+ *  引导随空态派生,不依赖一次性 notice(dev StrictMode 双挂载/切图 reset 均不丢) */
+export function skillIntroOf(config: SkillsConfig): SkillIntroItem[] {
+  return getEnabledSkills(config).map((m) => ({ name: m.name, examples: m.examples }))
 }
 
 /** 工具路由:命中 skill 域走 executeSkillTool(网关+凭据即时取),未命中返回 null 交回通用工具域 */
