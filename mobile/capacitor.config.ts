@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // CORS,sync.ts 零改动;webDir 即 vite build 产物
 const config: CapacitorConfig = {
   appId: 'com.mindmapzen.capture',
-  appName: 'MZ 捕获',
+  appName: 'Mind Map Zen 捕获',
   webDir: 'dist',
   plugins: {
     CapacitorHttp: { enabled: true },

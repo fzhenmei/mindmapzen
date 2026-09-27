@@ -40,6 +40,12 @@ android {
             }
         }
     }
+    // APK 文件名带产品身份与版本(app-release.apk 看不出是哪个程序,2026-09-27 用户裁定)
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "mind-map-zen-capture-${versionName}-${variant.buildType.name}.apk"
+        }
+    }
 }
 
 repositories {
