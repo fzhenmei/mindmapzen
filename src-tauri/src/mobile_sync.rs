@@ -193,6 +193,17 @@ fn mime_of(p: &Path) -> &'static str {
     }
 }
 
+/// manifest.webmanifest 的 start_url 动态注入 `#<token>`(2026-09-27 修复绑定丢失):
+/// 手机端 PWA(iOS 主屏图标)与扫码时的浏览器是两个隔离的存储上下文,localStorage
+/// 里的配对进不了 PWA;start_url 带上令牌后,每次打开主屏图标都经 hash 自动重新
+/// 配对,不再依赖存储记忆。token 为 uuid v4(hex+连字符),置于 path 后的 fragment
+/// 无需转义。坏 JSON 返回 None,调用方按原文件降级 serve。
+pub fn inject_token_into_manifest(content: &str, token: &str) -> Option<String> {
+    let mut v: serde_json::Value = serde_json::from_str(content).ok()?;
+    v["start_url"] = serde_json::Value::String(format!("/#{token}"));
+    serde_json::to_string(&v).ok()
+}
+
 /// URL 路径 → mobile-dist 内文件。安全:百分号解码后规范化,结果必须仍在 root 内;
 /// `..` 逃逸/盘符/UNC 一律 Forbidden(spec §8)
 pub fn resolve_static(root: &Path, url_path: &str) -> StaticResolution {
@@ -352,7 +363,20 @@ fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncCon
         } else if method == "GET" || method == "HEAD" {
             match resolve_static(&root, &path_only) {
                 StaticResolution::File(p, mime) => match fs::read(&p) {
-                    Ok(bytes) => (200, mime.to_string(), bytes),
+                    Ok(bytes) => {
+                        // manifest 是纯文本 JSON,from_utf8_lossy 无损;注入失败降级原文件
+                        if p.file_name().is_some_and(|n| n == "manifest.webmanifest") {
+                            let rewritten = String::from_utf8_lossy(&bytes);
+                            if let Some(s) = inject_token_into_manifest(&rewritten, &cfg.token) {
+                                (200, mime.to_string(), s.into_bytes())
+                            } else {
+                                eprintln!("manifest 令牌注入失败,按原文件响应");
+                                (200, mime.to_string(), bytes)
+                            }
+                        } else {
+                            (200, mime.to_string(), bytes)
+                        }
+                    }
                     Err(e) => {
                         eprintln!("静态文件读取失败 {}: {e}", p.display());
                         (404, "text/plain".into(), b"not found".to_vec())
@@ -617,6 +641,22 @@ mod tests {
         let info = info_snapshot(&cfg);
         assert!(!info.ips.iter().any(|ip| ip.starts_with("127.")));
         assert_eq!(info.token, "t");
+    }
+
+    #[test]
+    fn manifest注入令牌到start_url() {
+        let src = r#"{"name":"x","start_url":"/","scope":"/"}"#;
+        let out = inject_token_into_manifest(src, "tok-1").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["start_url"], "/#tok-1");
+        // 其余字段不动
+        assert_eq!(v["name"], "x");
+        assert_eq!(v["scope"], "/");
+    }
+
+    #[test]
+    fn manifest坏json返回none降级() {
+        assert!(inject_token_into_manifest("{not json", "t").is_none());
     }
 
     #[test]
