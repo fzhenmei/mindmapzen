@@ -7,7 +7,7 @@ const mobileSync: Dict['mobileSync'] = {
   toggle: 'Allow phones to sync ideas over the local network',
   port: 'Port',
   hint: 'Once on, a phone on the same network pairs by scanning the QR code; ideas land straight in the idea basket',
-  qrcodeHint: 'Scan to pair (open in the browser and "Add to Home Screen")',
+  qrcodeHint: 'Pair in the app: tap "Scan to pair" and scan this QR',
   ipSelect: 'This computer address',
   startFailed: 'Failed to start the service (port already in use?)',
   received: 'Received {{n}} ideas from phone',

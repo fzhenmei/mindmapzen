@@ -39,9 +39,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "../mobile/dist": "mobile-dist/"
-    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
