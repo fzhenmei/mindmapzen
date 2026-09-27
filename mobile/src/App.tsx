@@ -213,6 +213,11 @@ function PairDialog({
   const { pairing, setPairingManual } = useMobileStore()
   const [url, setUrl] = useState(pairing.baseUrl)
   const [token, setToken] = useState(pairing.token)
+  // 扫码成功 → store 配对更新 → 表单回填(2026-09-27 用户裁定:扫码后表单必须可见配对信息)
+  useEffect(() => {
+    setUrl(pairing.baseUrl)
+    setToken(pairing.token)
+  }, [pairing.baseUrl, pairing.token])
   return (
     <div className="overlay" data-testid="pair-dialog" onClick={onClose}>
       {/* stopPropagation:面板内点击不冒泡到遮罩的关闭行为 */}

@@ -20,12 +20,12 @@ function makeDeps(overrides: Partial<ScanDeps> = {}): ScanDeps & { spies: Record
 }
 
 describe('scanAndPair', () => {
-  it('合法二维码:存配对 + 触发同步', async () => {
+  it('合法二维码:存配对 + 触发同步 + 成功反馈(2026-09-27 用户裁定:扫码后必须有配对成功反馈)', async () => {
     const d = makeDeps({ scan: vi.fn().mockResolvedValue('http://192.168.1.10:39871/#tok-1') })
     expect(await scanAndPair(d)).toBe(true)
     expect(d.spies.setPairing).toHaveBeenCalledWith({ baseUrl: 'http://192.168.1.10:39871', token: 'tok-1' })
     expect(d.spies.onPaired).toHaveBeenCalled()
-    expect(d.spies.toast).not.toHaveBeenCalled()
+    expect(d.spies.toast).toHaveBeenCalledWith('paired')
   })
 
   it('非配对二维码:toast 且不动配对(Review Focus 1)', async () => {

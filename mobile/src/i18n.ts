@@ -21,6 +21,7 @@ type Key =
   | 'emptyHint'
   | 'scanPair'
   | 'scanFailed'
+  | 'paired'
   | 'orManualFill'
   | 'close'
 
@@ -46,6 +47,7 @@ const zh: Record<Key, string> = {
   emptyHint: '灵光一现随手记,回家自动同步进 PC 点子篮子',
   scanPair: '扫码配对',
   scanFailed: '不是有效的配对二维码',
+  paired: '配对成功',
   orManualFill: '或手动填写',
   close: '关闭',
 }
@@ -72,6 +74,7 @@ const en: Record<Key, string> = {
   emptyHint: 'Capture a spark here — it syncs to your PC basket when you get home',
   scanPair: 'Scan to pair',
   scanFailed: 'Not a pairing QR code',
+  paired: 'Paired',
   orManualFill: 'Or enter manually',
   close: 'Close',
 }
