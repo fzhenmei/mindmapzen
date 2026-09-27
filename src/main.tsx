@@ -4,6 +4,7 @@ import App from './App'
 import { initI18n } from './i18n'
 import { resolveUiLang, systemUiLanguage } from './i18n/resolve'
 import { disableBrowserContextMenu } from './services/contextMenuGuard'
+import { guardExternalLinks } from './services/externalLinkGuard'
 import { isE2eMode } from './services/e2eMode'
 import { enableSlimScrollbarHover } from './services/slimScrollbarHover'
 import { CAPTURE_WINDOW_LABEL, detectWindowLabel } from './captureWindow/detect'
@@ -15,6 +16,10 @@ import './App.css'
 
 // 想法4：全局禁用 WebView 原生右键菜单（输入区保留粘贴）——两窗共用，详见 services/contextMenuGuard.ts
 disableBrowserContextMenu()
+
+// 全局外链接管（2026-09-27 微信读书链接接管应用报障）：应用内永不加载外部内容——
+// <a> 点击一律 preventDefault 交系统浏览器/OS 协议，详见 services/externalLinkGuard.ts
+guardExternalLinks()
 
 // 窗口分派（2026-09 点子篮子 M2，spec §5.4）：同一 bundle，捕获小窗按 label 走最小引导；
 // 浏览器 / vitest / e2e web 模式无 label 恒走主应用

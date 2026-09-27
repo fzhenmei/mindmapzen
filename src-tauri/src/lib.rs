@@ -257,6 +257,24 @@ fn clamp_window_size(width: f64, height: f64, scale: f64) -> (f64, f64) {
     (width.max(min_w * scale), height.max(min_h * scale))
 }
 
+/// 外链导航白名单(2026-09-27 微信读书链接接管应用报障):应用内永不加载外部内容——
+/// vditor 渲染的 <a> 无 target,WebView2 内联导航会把整个前端换成外部网站,无边框窗的
+/// 关闭钮随前端消失(用户只能强杀)。前端 main.tsx 的 externalLinkGuard 拦点击是第一道,
+/// 此处 on_navigation 是宿主兜底:漏网导航(中键/新渲染路径/JS 跳转)一律拒绝。放行集:
+/// Windows 生产 http(s)://tauri.localhost、macOS/Linux 生产 tauri://localhost、
+/// dev 模式本机 dev server(localhost/127.0.0.1,is_dev 由 cfg!(dev) 注入)
+fn is_app_origin(url: &tauri::Url, is_dev: bool) -> bool {
+    match url.scheme() {
+        "tauri" => true,
+        "http" | "https" => match url.host_str() {
+            Some("tauri.localhost") => true,
+            Some("localhost") | Some("127.0.0.1") => is_dev,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -301,6 +319,41 @@ pub fn run() {
         // 图标查询窗口类/进程资源，显式 set_icon 钉住（icons/128x128.png 与应用图标同源）
         .setup(|app| {
             use tauri::Manager;
+            // 主窗代码构建（2026-09-27 外链导航白名单）：静态 tauri.conf.json 窗口挂不了
+            // on_navigation，移到此处创建——参数逐项对齐原静态配置（title/decorations/
+            // 800×600+min/center/visible:false/dragDropEnabled:false(disable_drag_drop_
+            // handler)；resizable/fullscreen 为默认值不设）。行为钩子（单实例聚焦
+            // get_webview_window("main")、window-state 恢复、防闪变 visible:false→统一
+            // show）全部按 label 继续生效
+            let opener_handle = app.handle().clone();
+            let _ = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Mind Map Zen")
+            .decorations(false)
+            .inner_size(800.0, 600.0)
+            .min_inner_size(800.0, 600.0)
+            .center()
+            .visible(false)
+            .disable_drag_drop_handler()
+            // 外链导航宿主兜底（is_app_origin 白名单注释）：前端 externalLinkGuard 拦不住的
+            // 导航（中键/未来新渲染路径/JS 跳转）在此拒绝——WebView 永不被外部网站接管。
+            // 拒绝时把点链接的意图交系统 opener 兜底外开（同步 ShellExecute，失败留痕）
+            .on_navigation(move |url| {
+                if is_app_origin(url, cfg!(dev)) {
+                    true
+                } else {
+                    if let Err(e) = tauri_plugin_opener::OpenerExt::opener(&opener_handle)
+                        .open_url(url.as_str(), None::<&str>)
+                    {
+                        eprintln!("外链兜底外开失败 {}: {}", url, e);
+                    }
+                    false
+                }
+            })
+            .build()?;
             if let Some(win) = app.get_webview_window("main") {
                 let img = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png"))?;
                 let _ = win.set_icon(img); // 失败不阻断启动（图标缺失仅视觉）
@@ -414,5 +467,46 @@ mod tests {
     #[test]
     fn 正常尺寸_原样通过() {
         assert_eq!(clamp_window_size(1800.0, 1350.0, 1.5), (1800.0, 1350.0));
+    }
+
+    // ═══ 外链导航白名单（2026-09-27 微信读书链接接管应用报障）：on_navigation 只放行
+    // 应用自身源,dev 标志参数化注入（cfg!(dev) 由 tauri-build 注入,cargo test 编译下
+    // 恒 false,测试须能两态覆盖） ═══
+
+    fn origin(url: &str) -> tauri::Url {
+        tauri::Url::parse(url).expect("测试 URL 必须合法")
+    }
+
+    #[test]
+    fn 导航白名单_应用源放行() {
+        // Windows 生产 WebView2 源是 http://tauri.localhost;macOS/Linux 是 tauri://localhost
+        assert!(is_app_origin(&origin("http://tauri.localhost/"), false));
+        assert!(is_app_origin(&origin("https://tauri.localhost/index.html"), false));
+        assert!(is_app_origin(&origin("tauri://localhost/index.html"), false));
+    }
+
+    #[test]
+    fn 导航白名单_dev模式放行本机dev服务器() {
+        assert!(is_app_origin(&origin("http://localhost:5173/"), true));
+        assert!(is_app_origin(&origin("http://127.0.0.1:5173/index.html"), true));
+    }
+
+    #[test]
+    fn 导航白名单_生产不放行dev源() {
+        assert!(!is_app_origin(&origin("http://localhost:5173/"), false));
+    }
+
+    #[test]
+    fn 导航白名单_外部http一律拒绝() {
+        assert!(!is_app_origin(&origin("https://weread.qq.com/web/bookDetail/abc"), false));
+        assert!(!is_app_origin(&origin("https://weread.qq.com/web/bookDetail/abc"), true));
+        assert!(!is_app_origin(&origin("http://evil.example/"), true));
+    }
+
+    #[test]
+    fn 导航白名单_自定义协议与file拒绝() {
+        // weread:// 在 WebView2 点击本就无反应;file:// 应用不用 file 源加载页面,同拒
+        assert!(!is_app_origin(&origin("weread://book/123"), false));
+        assert!(!is_app_origin(&origin("file:///C:/x.html"), false));
     }
 }

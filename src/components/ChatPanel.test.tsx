@@ -10,16 +10,12 @@ import type { WriteClipboard } from '../services/clipboard'
 
 // jsdom 不执行 vditor 注入的子资源脚本（渲染 promise 永不 resolve），真实渲染归 e2e；
 // 单测 mock MarkdownPreview 为透传 div——定稿消息走 md 渲染分支由 data-testid 断言。
-// 透传经 innerHTML（vditor 真实产物即 HTML）：链接接管用例可直接以 <a> HTML 布置消息
+// 透传经 innerHTML（vditor 真实产物即 HTML）
 vi.mock('./MarkdownPreview', () => ({
   default: ({ text }: { text: string }) => <div data-testid="md-preview" dangerouslySetInnerHTML={{ __html: text }} />,
 }))
-
-// 链接接管（Task 7，spec §5）：消息内 <a> 统一走 opener 外开——mock 插件 JS 侧（真机
-// 授权/外开行为归 e2e）。句柄经 vi.hoisted 过桥：vi.mock 工厂提升到模块求值前，闭包
-// 引用普通 const 会 ReferenceError
-const openUrlMock = vi.hoisted(() => vi.fn())
-vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: openUrlMock }))
+// 链接接管(2026-09-27 收敛全局):消息内 <a> 点击归 main.tsx 装配的 externalLinkGuard
+// 在 document 捕获层统一接管,行为断言迁移至 services/externalLinkGuard.test.ts
 
 // mount（2026-09 案头文件域参数化）：Props 契约的执行样例——默认 deps 即编辑器中性桩
 // （守卫放行 / 无选中 / executeTool 恒成功），用例经 overrides 换桩（如 preSendGuard 报错）
@@ -60,7 +56,6 @@ function mount(
 }
 
 beforeEach(() => {
-  openUrlMock.mockReset() // 链接接管用例：openUrl 调用记录/注入实现跨用例隔离
   useChatStore.getState().reset()
   useAppStore.setState({
     aiConfig: { baseUrl: 'https://a/v1', apiKey: 'k', model: 'm' },
@@ -379,37 +374,8 @@ test('按轮复制：user 输入也有独立复制钮，各自复制各自内容
   expect(write).toHaveBeenCalledWith('回答')
 })
 
-// ═══ 链接接管（spec §5）：消息内 <a> 一律 preventDefault 走 opener 外开——WebView2
-// 内联导航会把整个应用导航走，自定义协议（weread://）则点击无反应；锚点/空 href 放行 ═══
-
-test('链接接管：消息内链接点击 preventDefault 并走 openUrl（自定义协议同样外开）', () => {
-  seedFinalAssistant('<a href="weread://book/123">打开阅读</a>')
-  mount()
-  const link = screen.getByRole('link', { name: '打开阅读' })
-  // fireEvent 返回 false = default 已被拦（WebView2 内联导航阻断是本任务语义核心）
-  expect(fireEvent.click(link)).toBe(false)
-  expect(openUrlMock).toHaveBeenCalledWith('weread://book/123')
-})
-
-test('链接接管：锚点与空 href 链接不调 openUrl 不报错（文档内跳转放行）', async () => {
-  seedFinalAssistant('<a href="#sec">目录</a><a href="">空链</a>')
-  mount()
-  await userEvent.click(screen.getByRole('link', { name: '目录' }))
-  // 空 href 的 <a> 无 link role（dom-accessibility-api 不赋），按文本定位——点击冒泡
-  // 到容器走同一 closest('a') 委托路径
-  await userEvent.click(screen.getByText('空链'))
-  expect(openUrlMock).not.toHaveBeenCalled()
-})
-
-test('链接接管：openUrl 失败——toast 报错不静默（吞异常红线）', async () => {
-  openUrlMock.mockRejectedValueOnce(new Error('url not allowed'))
-  seedFinalAssistant('<a href="weread://book/1">打开</a>')
-  mount()
-  const toasts: (string | null)[] = []
-  subscribeToast((t) => toasts.push(t?.text ?? null))
-  await userEvent.click(screen.getByRole('link', { name: '打开' }))
-  await waitFor(() => expect(toasts).toContain('打开链接失败，请重试'))
-})
+// ═══ 链接接管（spec §5）用例已迁移：消息内 <a> 点击的接管断言归
+// services/externalLinkGuard.test.ts（2026-09-27 全局收敛） ═══
 
 // ═══ 操作卡片收起（2026-09）：回合收尾自动收起明细卡，摘要行点击可展开 ═══
 
