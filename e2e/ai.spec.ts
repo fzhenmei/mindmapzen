@@ -39,8 +39,9 @@ test('AI 对话：配置→开面板→AI 加节点→卡片→解锁', async ({
   test.setTimeout(60_000)
   await page.goto('/?e2e=1')
 
-  // 案头配置 BYOK（设置对话框是库视图入口，先进设置）
+  // 案头配置 BYOK（设置对话框是库视图入口，先进设置；AI 是手风琴分区，先展开）
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('settings-ai-section').click()
   await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
   await page.getByTestId('set-ai-key').fill('sk-e2e')
   await page.getByTestId('set-ai-model').fill('fake-model')
@@ -151,6 +152,7 @@ test('AI 输入：Enter 发送 / Shift+Enter 换行 / 拖高手柄', async ({ pa
   await page.goto('/?e2e=1')
 
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('settings-ai-section').click()
   await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
   await page.getByTestId('set-ai-key').fill('sk-e2e')
   await page.getByTestId('set-ai-model').fill('fake-model')

@@ -20,6 +20,7 @@ test('快速捕获开关：快捷键启用后应用内 Ctrl+Alt+I 让位，关�
   // 启用快捷键 → 让位（应用内监听摘除）；托盘开关独立存在且保持关（两开关互不影响）
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
+  await page.getByTestId('settings-quickcapture-section').click() // 手风琴分区展开
   const trayToggle = page.getByTestId('quickcapture-tray')
   await expect(trayToggle).not.toBeChecked()
   await trayToggle.check() // 先开托盘：不应影响快捷键让位语义
@@ -34,6 +35,7 @@ test('快速捕获开关：快捷键启用后应用内 Ctrl+Alt+I 让位，关�
   // 关闭快捷键 → 恢复：再开 settings 摘掉快捷键开关，应用内快捷键回来；托盘仍开
   await page.getByTestId('btn-settings').click()
   await expect(page.getByTestId('settings-dialog')).toBeVisible()
+  await page.getByTestId('settings-quickcapture-section').click() // 手风琴分区展开
   await page.getByTestId('quickcapture-shortcut').uncheck()
   await page.keyboard.press('Control+Alt+i')
   await expect(page.getByTestId('capture-input')).toBeVisible()

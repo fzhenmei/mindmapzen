@@ -51,8 +51,9 @@ test('引导：设置页重看再次出现', async ({ page }) => {
   await expect(page.getByTestId('tour-overlay')).toBeVisible()
   await page.keyboard.press('Escape') // 跳过，落 tourDone
   await expect(page.getByTestId('tour-overlay')).toBeHidden()
-  // 设置重看
+  // 设置重看（2026-09 手风琴批：重看入口移入关于对话框——设置 → 关于 → 重看）
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('about-open').click()
   await page.getByTestId('tour-replay').click()
   await expect(page.getByTestId('tour-overlay')).toBeVisible()
   await expect(page.getByTestId('tour-step-indicator')).toHaveText('1 / 10')

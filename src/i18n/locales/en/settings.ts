@@ -4,7 +4,8 @@ const settings: Dict['settings'] = {
   title: 'Settings',
   language: { label: 'Language', auto: 'Follow system', zh: '简体中文', en: 'English' },
   git: {
-    toggle: 'Version control (auto-commit to workspace git repo)',
+    section: 'Version control',
+    toggle: 'Auto-commit to workspace git repo',
     remotePlaceholder: 'Remote repository HTTPS URL (leave empty for local-only commits)',
     tokenPlaceholder: 'Access token (PAT, required for private repos)',
     noCommit: 'No commits yet',
@@ -64,11 +65,13 @@ const settings: Dict['settings'] = {
   },
   tourReplay: 'Guided tour',
   tourReplayBtn: 'Replay',
+  tourReplayFull: 'Replay guided tour',
   workspaceRow: 'Workspace: {{dir}}',
   workspaceUnset: 'Not set',
   changeWorkspace: 'Change workspace',
   exitWorkspace: 'Exit workspace (back to start screen)',
   exitBtn: 'Exit',
+  about: 'About',
   close: 'Close',
 }
 export default settings

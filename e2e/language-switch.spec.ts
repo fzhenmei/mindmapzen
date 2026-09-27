@@ -18,8 +18,9 @@ test('语言设置：切 English 即时生效，配置落盘并重启保持', as
   await expect(page.getByTestId('zen-bar')).toBeVisible()
   await expect(page.getByRole('button', { name: '返回案头' })).toBeVisible()
   await page.getByTestId('btn-back').click()
-  // 案头页首设置入口 → 显式 English
+  // 案头页首设置入口 → 显式 English（语言是手风琴分区，先展开）
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('lang-section').click()
   await page.getByTestId('lang-en').click()
   // 即时生效：html lang 与设置对话框标题（aria-label 随语言重渲染）
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')

@@ -4,8 +4,9 @@ import SettingsDialog from './SettingsDialog'
 import { useAppStore } from '../store/appStore'
 import { MemoryFsAdapter } from '../services/fs/MemoryFsAdapter'
 
-// 设置对话框：关闭回调、工作区行、关于区、功能引导。复制行为两开关已于 2026-09
-// 移入砚栏复制钮下拉（ZenBar.test 覆盖），此处守卫设置页不再渲染复制开关。
+// 设置对话框（2026-09 手风琴批）：五分区收进单展开手风琴——默认全收起（Content 不挂载），
+// 点分区 trigger 展开；底部固定区为工作区操作与「关于」行。分区 testid 挂 trigger。
+// 复制行为两开关已于 2026-09 移入砚栏复制钮下拉（ZenBar.test 覆盖），此处守卫设置页不再渲染。
 describe('SettingsDialog', () => {
   beforeEach(() => {
     useAppStore.getState().setAdapter(new MemoryFsAdapter())
@@ -20,6 +21,18 @@ describe('SettingsDialog', () => {
     expect(screen.queryByTestId('copy-links-toggle')).not.toBeInTheDocument()
   })
 
+  // 手风琴语义守卫：收起时 Content 不挂载（Radix 默认卸载），点 trigger 展开；单展开互斥
+  test('手风琴默认全收起，点分区标题展开且互斥', () => {
+    render(<SettingsDialog onClose={() => {}} />)
+    expect(screen.queryByTestId('git-enabled-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('set-ai-baseurl')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('git-section'))
+    expect(screen.getByTestId('git-enabled-toggle')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('settings-ai-section'))
+    expect(screen.getByTestId('set-ai-baseurl')).toBeInTheDocument()
+    expect(screen.queryByTestId('git-enabled-toggle')).not.toBeInTheDocument()
+  })
+
   test('关闭按钮触发 onClose', () => {
     const onClose = vi.fn()
     render(<SettingsDialog onClose={onClose} />)
@@ -27,7 +40,7 @@ describe('SettingsDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  // M5d 更换工作区行：注入回调才渲染；点击触发回调并显示当前工作区路径
+  // M5d 更换工作区行：注入回调才渲染；点击触发回调并显示当前工作区路径（底部固定区，无折叠）
   test('更换工作区行：默认隐藏，注入回调后显示路径并可点', () => {
     const onChangeWorkspace = vi.fn()
     const { rerender } = render(<SettingsDialog onClose={() => {}} />)
@@ -54,23 +67,29 @@ describe('SettingsDialog', () => {
     expect(onExitWorkspace).toHaveBeenCalledTimes(1)
   })
 
-  // 关于区（2026-09 版本信息批）：产品名 + 版本号（vite define 注入，源自 package.json）
-  // + commit 短哈希；commit 是构建环境值，只断言非空存在不断言具体哈希
-  test('关于区：显示产品名、版本号与 commit 短哈希', () => {
+  // 关于行（2026-09 手风琴批）：底部留版本短摘要，「关于」钮打开 AboutDialog（详情断言在
+  // AboutDialog.test；此处守卫设置窗装配链）
+  test('关于行：显示产品名与版本号，「关于」钮打开关于对话框', () => {
     render(<SettingsDialog onClose={() => {}} />)
     const about = screen.getByTestId('about-section')
     expect(about).toHaveTextContent('Mind Map Zen')
-    expect(about.textContent).toMatch(new RegExp(`v${__APP_VERSION__}`))
-    const hash = __GIT_COMMIT__
-    expect(hash.length).toBeGreaterThan(0)
-    expect(about).toHaveTextContent(hash)
+    expect(about).toHaveTextContent(`v${__APP_VERSION__}`)
+    expect(screen.queryByTestId('about-dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('about-open'))
+    expect(screen.getByTestId('about-dialog')).toBeInTheDocument()
+    // 关关于回设置：设置窗仍在
+    fireEvent.click(screen.getByTestId('about-close'))
+    expect(screen.queryByTestId('about-dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('settings-dialog')).toBeInTheDocument()
   })
 
-  // 漫游引导重看入口（spec §6）：点击即激活引导并关闭设置（引导遮罩需要完整视口）
-  test('重新观看功能引导：点击后激活引导并关闭设置', async () => {
+  // 漫游引导重看入口（spec §6）：经关于对话框触发——点击即激活引导并关闭整个设置栈
+  // （引导遮罩需要完整视口）
+  test('重新观看功能引导：关于框内点击后激活引导并关闭设置', async () => {
     useAppStore.setState({ tourActive: false })
     const onClose = vi.fn()
     render(<SettingsDialog onClose={onClose} />)
+    fireEvent.click(screen.getByTestId('about-open'))
     fireEvent.click(screen.getByTestId('tour-replay'))
     expect(useAppStore.getState().tourActive).toBe(true)
     expect(onClose).toHaveBeenCalled()
@@ -78,15 +97,17 @@ describe('SettingsDialog', () => {
 
   // i18n（Task 4）：语言三态选择器——切 English 即时生效（无需重启），html lang 同步。
   // userEvent 不可用（项目未装 @testing-library/user-event），沿用本文件 fireEvent 惯例；
-  // setLanguagePref 为异步（i18next changeLanguage + load-merge-save），act 排空微任务后再断言
-  test('语言选择器:切 English 即时生效(无需重启),标题与版本管理行变英文', async () => {
+  // setLanguagePref 为异步（i18next changeLanguage + load-merge-save），act 排空微任务后再断言。
+  // 断言 trigger 文案（收起态也可见，不依赖展开）
+  test('语言选择器:切 English 即时生效(无需重启),标题与 git 分区标题变英文', async () => {
     render(<SettingsDialog onClose={() => {}} />)
     // 默认中文
     expect(screen.getByText('设置')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('lang-section'))
     fireEvent.click(screen.getByTestId('lang-en'))
     await act(async () => {}) // 排空 i18next changeLanguage 与 load-merge-save 微任务后重渲完成
     expect(screen.getByText('Settings')).toBeInTheDocument()
-    expect(screen.getByText('Version control (auto-commit to workspace git repo)')).toBeInTheDocument()
+    expect(screen.getByTestId('git-section')).toHaveTextContent('Version control')
     // html lang 同步
     expect(document.documentElement.lang).toBe('en')
   })
@@ -98,6 +119,7 @@ describe('SettingsDialog', () => {
     const setAiConfig = vi.fn(async () => {})
     useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, setAiConfig } as never)
     render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.click(screen.getByTestId('settings-ai-section'))
     fireEvent.change(screen.getByTestId('set-ai-baseurl'), { target: { value: 'https://api.deepseek.com/v1' } })
     fireEvent.change(screen.getByTestId('set-ai-key'), { target: { value: 'sk-test' } })
     fireEvent.change(screen.getByTestId('set-ai-model'), { target: { value: 'deepseek-chat' } })
@@ -119,6 +141,7 @@ describe('SettingsDialog', () => {
     })
     useAppStore.setState({ aiConfig: { baseUrl: '', apiKey: '', model: '' }, setAiConfig } as never)
     render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.click(screen.getByTestId('settings-ai-section'))
     fireEvent.change(screen.getByTestId('set-ai-baseurl'), { target: { value: 'https://api.deepseek.com/v1' } })
     fireEvent.click(screen.getByTestId('set-ai-save'))
     await waitFor(() => expect(screen.getByTestId('set-ai-error')).toBeInTheDocument())

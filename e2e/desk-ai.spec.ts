@@ -37,8 +37,9 @@ test('案头 AI 整理：方案→确认→移动落地；未确认阶段文件�
   test.setTimeout(90_000)
   await page.goto('/?e2e=1')
 
-  // BYOK 配置（ai.spec.ts / ai-full-editing.spec.ts 同款：设置对话框，Escape 关闭）
+  // BYOK 配置（ai.spec.ts / ai-full-editing.spec.ts 同款：设置对话框 + 手风琴展开，Escape 关闭）
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('settings-ai-section').click()
   await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
   await page.getByTestId('set-ai-key').fill('sk-e2e')
   await page.getByTestId('set-ai-model').fill('fake-model')

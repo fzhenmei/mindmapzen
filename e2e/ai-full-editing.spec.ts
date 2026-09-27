@@ -59,8 +59,9 @@ test('AI 多工具回合：标签/正文/连线/布局全部落地', async ({ pa
   test.setTimeout(90_000)
   await page.goto('/?e2e=1')
 
-  // 案头配置 BYOK（设置对话框是库视图入口，先进设置；同 ai.spec.ts）
+  // 案头配置 BYOK（设置对话框是库视图入口，先进设置；同 ai.spec.ts，手风琴先展开）
   await page.getByTestId('btn-settings').click()
+  await page.getByTestId('settings-ai-section').click()
   await page.getByTestId('set-ai-baseurl').fill('https://fake.local/v1')
   await page.getByTestId('set-ai-key').fill('sk-e2e')
   await page.getByTestId('set-ai-model').fill('fake-model')

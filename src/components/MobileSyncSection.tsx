@@ -57,8 +57,7 @@ export default function MobileSyncSection() {
 
   if (err !== null && info === null) {
     return (
-      <div className="flex flex-col gap-2" data-testid="settings-mobile-sync-section">
-        <h3 className="text-sm font-medium">{t('mobileSync.title')}</h3>
+      <div className="flex flex-col gap-2">
         <p className="text-xs text-destructive">{err}</p>
       </div>
     )
@@ -66,8 +65,7 @@ export default function MobileSyncSection() {
   if (info === null) return null
   const pairingUrl = ip === '' ? '' : `http://${ip}:${info.port}/#${info.token}`
   return (
-    <div className="flex flex-col gap-2" data-testid="settings-mobile-sync-section">
-      <h3 className="text-sm font-medium">{t('mobileSync.title')}</h3>
+    <div className="flex flex-col gap-2">
       <label className={SETTING_ROW}>
         <input
           type="checkbox"

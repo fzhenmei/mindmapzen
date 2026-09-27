@@ -178,6 +178,18 @@
   --font-sans: 'Noto Sans SC Variable', sans-serif;
   --font-mono: 'JetBrains Mono Variable', monospace;
   --font-file: 'JetBrains Mono Variable', 'Noto Sans SC Variable', monospace;
+  /* 手风琴展开/收起（2026-09 设置窗手风琴批，shadcn v4 配方）：高度对 Radix 暴露的
+   * --radix-accordion-content-height 变量插值；tw-animate-css 无此对，自定义之 */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  @keyframes accordion-down {
+    from { height: 0; }
+    to { height: var(--radix-accordion-content-height); }
+  }
+  @keyframes accordion-up {
+    from { height: var(--radix-accordion-content-height); }
+    to { height: 0; }
+  }
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
