@@ -1,5 +1,6 @@
 mod ai_stream;
 mod sse;
+mod skill_gateway;
 mod export_pdf;
 mod mobile_sync;
 
@@ -363,6 +364,7 @@ pub fn run() {
             force_foreground_window,
             ai_chat_start,
             ai_chat_abort,
+            skill_gateway::skill_gateway_post,
             export_pdf_via_edge,
             mobile_sync::get_mobile_sync_info,
             mobile_sync::set_mobile_sync_config
