@@ -79,6 +79,8 @@ const CARD_KIND_BY_TOOL: Record<string, ToolCardData['kind']> = {
   rename_file: 'file',
   move_file: 'file',
   create_directory: 'file',
+  skill_read_doc: 'skill',
+  skill_invoke: 'skill',
 }
 
 /** 回合前 git 备份只保内容编辑(spec §1 裁定):视图操作(折叠/布局)不落盘,备份无意义;

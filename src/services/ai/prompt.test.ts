@@ -1,6 +1,7 @@
 // src/services/ai/prompt.test.ts —— uid 缩进树与 system prompt（Task 6，spec §3.1）
 import { describe, expect, test } from 'vitest'
 import { buildSystemPrompt, selectionLine, treeToUidOutline } from './prompt'
+import weread from '../../skills/weread/manifest'
 import type { EngineNode } from '../../types/engine'
 
 const tree: EngineNode = {
@@ -79,4 +80,16 @@ describe('快照轻量标记', () => {
     const lines = treeToUidOutline(markedNode({ tag: ['a', 3], icon: [null, 'zen_star'] }))
     expect(lines).toEqual(['- [n1] 节点 🏷a ☰star'])
   })
+})
+
+// skill 注入(spec §4.5):无 skills 时输出与基线完全一致;有 skills 追加引导语 + SKILL.md 原文
+test('buildSystemPrompt:无 skills 不含技能段', () => {
+  const p = buildSystemPrompt(null)
+  expect(p).not.toContain('skill_read_doc')
+})
+
+test('buildSystemPrompt:有 skills 追加指令与引导语', () => {
+  const p = buildSystemPrompt(null, [weread])
+  expect(p).toContain('skill_read_doc')
+  expect(p).toContain(weread.instructions.slice(0, 40))
 })

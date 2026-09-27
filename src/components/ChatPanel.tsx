@@ -542,6 +542,7 @@ const CARD_LABEL_KEYS = {
   add: 'ai.card.add', update: 'ai.card.update', remove: 'ai.card.remove', move: 'ai.card.move',
   body: 'ai.card.body', icon: 'ai.card.icon', tag: 'ai.card.tag', expand: 'ai.card.expand',
   layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink', file: 'ai.card.file',
+  skill: 'ai.card.skill',
 } as const
 
 function cardText(c: { kind: string; ok: boolean; text: string }): string {

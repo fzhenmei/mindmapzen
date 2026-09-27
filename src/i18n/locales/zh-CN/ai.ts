@@ -55,6 +55,7 @@ export default {
     link: '添加连线',
     unlink: '删除连线',
     file: '{{text}}',
+    skill: '技能 {{text}}',
     failed: '（失败）',
   },
   turn: {

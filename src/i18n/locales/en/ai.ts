@@ -56,6 +56,7 @@ export default {
     link: 'Added link',
     unlink: 'Removed link',
     file: '{{text}}',
+    skill: 'Skill {{text}}',
     failed: ' (failed)',
   },
   turn: {

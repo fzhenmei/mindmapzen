@@ -11,7 +11,7 @@ export type ChatPhase = 'idle' | 'streaming' | 'executing'
 export const CARDS_WINDOW = 5
 
 export interface ToolCardData {
-  kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink' | 'file'
+  kind: 'add' | 'update' | 'remove' | 'move' | 'body' | 'icon' | 'tag' | 'expand' | 'layout' | 'link' | 'unlink' | 'file' | 'skill'
   ok: boolean
   text: string
 }
