@@ -28,7 +28,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const syncState = useMobileStore((s) => s.syncState)
   const syncError = useMobileStore((s) => s.syncError)
-  const paired = useMobileStore((s) => s.pairing.token !== '')
   const dbRef = useRef<MobileDb | null>(null)
   const setSyncRef = useRef(useMobileStore.getState().setSync)
   const depsRef = useRef<SyncDeps>({
@@ -112,21 +111,25 @@ export default function App() {
   return (
     <div className="app">
       <header className="bar" data-testid="sync-bar" onClick={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}>
-        {stateText}
+        <span className="state">{stateText}</span>
+        {/* 配对入口(2026-09-27 用户裁定):右上角齿轮 → 对话框;stopPropagation 防触发状态条的重试同步 */}
+        <button
+          className="icon-btn"
+          data-testid="btn-settings"
+          aria-label={tr('settings')}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowSettings(true)
+          }}
+        >
+          {/* feather settings 图标(MIT),内联使用 */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
       </header>
       <main className="list">
-        {!paired && (
-          <div className="hint">
-            <p>{tr('installHint')}</p>
-            <button
-              className="ghost"
-              data-testid="btn-scan-pair"
-              onClick={() => void onScanPair(() => void triggerSync().catch((e) => console.error('同步链路异常', e)))}
-            >
-              {tr('scanPair')}
-            </button>
-          </div>
-        )}
         <ul>
           {ideas.map((i) => (
             <li key={i.id} className={i.synced ? 'synced' : ''} data-testid={`idea-${i.id}`}>
@@ -149,11 +152,8 @@ export default function App() {
             </li>
           ))}
         </ul>
-        <button className="ghost" data-testid="btn-settings" onClick={() => setShowSettings((v) => !v)}>
-          {tr('settings')}
-        </button>
         {showSettings && (
-          <SettingsPanel
+          <PairDialog
             scanPair={onScanPair}
             onSaved={() => void triggerSync().catch((e) => console.error('同步链路异常', e))}
             onClear={() => {
@@ -164,6 +164,7 @@ export default function App() {
                   useMobileStore.getState().showToast(tr('deleteFailed'))
                 })
             }}
+            onClose={() => setShowSettings(false)}
           />
         )}
       </main>
@@ -201,49 +202,62 @@ function Toast() {
   )
 }
 
-function SettingsPanel({
+/** 配对对话框(2026-09-27 用户裁定):扫码优先(主按钮),手动填写兜底;点遮罩关闭 */
+function PairDialog({
   scanPair,
   onSaved,
   onClear,
+  onClose,
 }: {
   /** 扫码配对(App 主入口复用同一实现;手动输入仍是兜底,spec §6.3) */
   scanPair: (onPaired: () => void) => Promise<void>
   onSaved: () => void
   onClear: () => void
+  onClose: () => void
 }) {
   const { pairing, setPairingManual } = useMobileStore()
   const [url, setUrl] = useState(pairing.baseUrl)
   const [token, setToken] = useState(pairing.token)
   return (
-    <div className="panel" data-testid="settings-panel">
-      <label>
-        {tr('pcUrl')}
-        <input data-testid="input-pc-url" value={url} onChange={(e) => setUrl(e.target.value)} />
-      </label>
-      <label>
-        {tr('token')}
-        <input data-testid="input-token" value={token} onChange={(e) => setToken(e.target.value)} />
-      </label>
-      <button
-        data-testid="btn-save-pairing"
-        onClick={() => {
-          setPairingManual({ baseUrl: url.replace(/\/+$/, ''), token })
-          onSaved()
-        }}
-      >
-        {tr('save')}
-      </button>
-      <button
-        data-testid="btn-scan-pair-settings"
-        onClick={() => {
-          void scanPair(onSaved)
-        }}
-      >
-        {tr('scanPair')}
-      </button>
-      <button data-testid="btn-clear-synced" onClick={onClear}>
-        {tr('clearSynced')}
-      </button>
+    <div className="overlay" data-testid="pair-dialog" onClick={onClose}>
+      {/* stopPropagation:面板内点击不冒泡到遮罩的关闭行为 */}
+      <div className="panel dialog" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="primary-wide"
+          data-testid="btn-scan-pair-settings"
+          onClick={() => {
+            void scanPair(onSaved)
+          }}
+        >
+          {tr('scanPair')}
+        </button>
+        <p className="divider">{tr('orManualFill')}</p>
+        <label>
+          {tr('pcUrl')}
+          <input data-testid="input-pc-url" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </label>
+        <label>
+          {tr('token')}
+          <input data-testid="input-token" value={token} onChange={(e) => setToken(e.target.value)} />
+        </label>
+        <button
+          data-testid="btn-save-pairing"
+          onClick={() => {
+            setPairingManual({ baseUrl: url.replace(/\/+$/, ''), token })
+            onSaved()
+          }}
+        >
+          {tr('save')}
+        </button>
+        <div className="row">
+          <button className="ghost" data-testid="btn-clear-synced" onClick={onClear}>
+            {tr('clearSynced')}
+          </button>
+          <button className="ghost" onClick={onClose}>
+            {tr('close')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
