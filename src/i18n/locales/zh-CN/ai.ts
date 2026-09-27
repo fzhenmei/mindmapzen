@@ -19,6 +19,8 @@ export default {
     copyMessage: '复制此轮回复',
     copyInput: '复制此条输入',
     copyFailed: '复制失败，请重试',
+    // 链接接管（spec §5）：消息内链接 opener 外开失败的 toast
+    openLinkFailed: '打开链接失败，请重试',
     contextChip: '上下文：{{text}}',
     // 输入区（2026-09 长内容输入）：快捷键常显提示 + 拖高手柄无障碍名/悬停提示
     inputHint: 'Enter 发送，Shift + Enter 换行',
@@ -28,6 +30,8 @@ export default {
     inputResizeTitle: '拖拽调整输入框高度，双击恢复默认',
     emptyTitle: '和 AI 一起写导图',
     emptyBody: '在下方输入想法，AI 可以增删节点、改写文本与正文、设图标标签、连线和折叠；AI 处理期间画布只读，随时可停。',
+    // 空态 skill 引导（方案 D）：空会话时常驻显示已启用 skill 示例
+    skillIntroTitle: '已接入「{{name}}」，试试：',
     // 历史对话提醒（2026-09 持久化）：打开有历史流水的导图时置顶 banner——此时只提供载入
     // （「重新开始」是会话操作归 header，无对话时无意义）；Token 影响写进文案；落盘失败走 toast
     historyBanner: '此导图有 {{n}} 轮历史对话。载入后新对话将携带这些历史作为上下文，Token 消耗会相应增加；不载入则从新会话开始。',
@@ -55,6 +59,7 @@ export default {
     link: '添加连线',
     unlink: '删除连线',
     file: '{{text}}',
+    skill: '技能 {{text}}',
     failed: '（失败）',
   },
   turn: {
@@ -86,5 +91,9 @@ export default {
     modelHint: '如 deepseek-chat、glm-4.6、kimi-k2-0905-preview',
     save: '保存 AI 配置',
     saved: 'AI 配置已保存',
+    // 技能小节（2026-09 skill 接入，spec §4.6）：遍历注册表渲染
+    skillsTitle: '技能',
+    getKey: '获取 API Key',
+    skillsHint: '技能凭据仅存本机，不上传；配置后 AI 可调用对应技能。',
   },
 }

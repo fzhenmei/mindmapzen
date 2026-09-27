@@ -2,9 +2,10 @@
 // 流式中纯文本+光标，定稿切 MarkdownPreview（复用既有管线零新依赖）。
 // 参数化（2026-09 案头文件域）：引擎/会话耦合全部下沉 deps 注入（store/prompt/工具执行/
 // 守卫/确认回调/工具清单）——编辑器挂载处传原值，行为零变化；面板本体与宿主域解耦。
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type SubmitEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Send, Square, Copy, Check, ChevronRight, LoaderCircle, RotateCcw } from 'lucide-react'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import MarkdownPreview from './MarkdownPreview'
 import SplitResizer from './SplitResizer'
 import { cn } from '../lib/utils'
@@ -35,6 +36,12 @@ export interface ChatPanelTexts {
 
 /** 宿主注入面（Task 8 最终 Props 契约）：store/prompt/工具执行/守卫/确认回调——
  *  编辑器与案头各带自己的域，面板只消费不感知引擎 */
+/** 空态 skill 引导项（方案 D 重新定性）：manifest 的展示子集,宿主按启用清单注入 */
+export interface SkillIntroItem {
+  name: string
+  examples: readonly string[]
+}
+
 export interface ChatPanelDeps {
   store: ChatStore
   texts: ChatPanelTexts
@@ -48,6 +55,9 @@ export interface ChatPanelDeps {
   toolSchemas: unknown[]
   /** 发送前回调（案头：确认词检测置位确认门）；编辑器不传 */
   onUserMessage?(text: string): void
+  /** 空态 skill 引导（2026-09 方案 D）：空会话时常驻显示已启用 skill 示例,有对话即让位。
+   *  引导随空态渲染派生,不依赖一次性 notice（dev StrictMode 双挂载/切图 reset 均不丢） */
+  skillIntro?: readonly SkillIntroItem[]
 }
 
 interface Props {
@@ -119,6 +129,24 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
     const el = listRef.current
     if (el === null) return
     stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
+  /** 链接管权（spec §5）：vditor 渲染的 <a> 不带 target，WebView2 内联导航会把整个应用
+   *  导航走；自定义协议（weread://）则点击无反应。一律 preventDefault 走 opener：http(s)
+   *  交系统浏览器，自定义协议走 OS ShellExecute。锚点/空 href 是文档内跳转，不外开 */
+  async function handleListLinkClick(e: ReactMouseEvent<HTMLDivElement>): Promise<void> {
+    const a = (e.target as HTMLElement).closest('a')
+    if (a === null) return
+    const href = a.getAttribute('href') ?? ''
+    if (href === '' || href.startsWith('#')) return
+    e.preventDefault()
+    try {
+      await openUrl(href)
+    } catch (err) {
+      // 点击回调异步异常会被静默吞（吞异常红线）：console + toast 双出口（同 CopyButton.handleCopy）
+      console.error('聊天链接打开失败', err)
+      showToast(i18n.t('ai.panel.openLinkFailed'))
+    }
   }
 
   /** Enter 发送 / Shift+Enter 换行（2026-09 输入优化）：无 Shift 的 Enter 拦下走发送，
@@ -292,13 +320,32 @@ export default function ChatPanel({ deps, selection, width, writeClipboard, onRe
           </div>
         </div>
       )}
-      <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} className="flex-1 overflow-y-auto p-3 text-sm">
+      <div ref={listRef} data-testid="ai-messages" onScroll={handleListScroll} onClick={(e) => void handleListLinkClick(e)} className="flex-1 overflow-y-auto p-3 text-sm">
         {/* 内容 wrapper：ResizeObserver 的观察目标（容器自身 flex 定高，内容撑高要看它） */}
         <div ref={listInnerRef}>
           {messages.length === 0 ? (
             <div className="mt-8 space-y-1 text-center text-muted-foreground">
               <p className="font-medium text-foreground">{deps.texts.emptyTitle}</p>
               <p className="text-xs">{deps.texts.emptyBody}</p>
+              {/* 空态 skill 引导（方案 D）：常驻于空会话,有对话自然让位；示例点击只填入输入框不发送 */}
+              {(deps.skillIntro ?? []).map((s) => (
+                <div key={s.name} data-testid="ai-skill-intro" className="mt-3 text-left">
+                  <p className="text-xs">{i18n.t('ai.panel.skillIntroTitle', { name: s.name })}</p>
+                  <div className="mt-1 flex flex-col items-start gap-0.5">
+                    {s.examples.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        data-testid="ai-skill-example"
+                        onClick={() => setInput(a)}
+                        className="rounded px-1 py-0.5 text-left text-xs text-primary underline-offset-2 hover:bg-accent hover:underline"
+                      >
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             messages.map((m, i) => (
@@ -542,6 +589,7 @@ const CARD_LABEL_KEYS = {
   add: 'ai.card.add', update: 'ai.card.update', remove: 'ai.card.remove', move: 'ai.card.move',
   body: 'ai.card.body', icon: 'ai.card.icon', tag: 'ai.card.tag', expand: 'ai.card.expand',
   layout: 'ai.card.layout', link: 'ai.card.link', unlink: 'ai.card.unlink', file: 'ai.card.file',
+  skill: 'ai.card.skill',
 } as const
 
 function cardText(c: { kind: string; ok: boolean; text: string }): string {

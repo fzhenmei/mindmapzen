@@ -1,6 +1,7 @@
 // src/services/ai/prompt.ts —— AI 视角的导图序列化（spec §3.1）：uid 缩进树代替 md 原文
 // （备注/图标标记是噪音），AI 编辑引用 uid 无重名歧义、token 便宜。
 import type { EngineNode } from '../../types/engine'
+import type { SkillManifest } from '../../skills/types'
 
 /** 节点文本压平（换行/连续空白 → 单空格）：树行是单行语义，原始换行会破坏缩进结构 */
 function flatText(node: EngineNode): string {
@@ -70,10 +71,10 @@ export function buildDeskSystemPrompt(): string {
   ].join('\n')
 }
 
-/** system prompt：角色 + 工具纪律 + 当前树快照 */
-export function buildSystemPrompt(tree: EngineNode | null): string {
+/** system prompt：角色 + 工具纪律 + 当前树快照；已启用 skill 时附加技能指令（spec §4.5） */
+export function buildSystemPrompt(tree: EngineNode | null, skills: readonly SkillManifest[] = []): string {
   const outline = tree ? treeToUidOutline(tree).join('\n') : '（空）'
-  return [
+  const base = [
     '你是思维导图编辑助手，与用户共同编写当前导图。',
     '当前导图（每行 "- [uid] 文本"，uid 是节点的稳定标识）：',
     outline,
@@ -84,5 +85,13 @@ export function buildSystemPrompt(tree: EngineNode | null): string {
     '3. 需要重新查看改后的全图时调 get_mindmap;改写正文前先 get_node_detail 读现有全文;',
     '4. 文本保持简洁(节点是关键词,不是段落);不改动与用户诉求无关的节点;',
     '5. 折叠与布局是视图操作(不落盘、可随时再切);内容修改(文本/正文/图标/标签/连线)会保存进文件。',
+  ].join('\n')
+  if (skills.length === 0) return base
+  // skill 段(spec §4.5):已启用 skill 的 SKILL.md 原文附加;外层只加一句引导语
+  return [
+    base,
+    '',
+    '以下外部技能已接入:用 skill_invoke 调用其接口(业务参数平铺在 params 顶层键值),调用任何接口前先 skill_read_doc 读对应能力文档:',
+    skills.map((m) => m.instructions).join('\n\n---\n\n'),
   ].join('\n')
 }

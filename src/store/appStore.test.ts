@@ -847,3 +847,15 @@ describe('relocateMapPath（AI 整理后的全家桶路径换址）', () => {
     expect(disk.lastOpened).toBe(newPath)
   })
 })
+
+describe('skillsConfig（skill 凭据槽，2026-09 skill 接入）', () => {
+  test('setSkillApiKey:更新 store + 落盘 cfg.json（单键合并不覆盖他人）', async () => {
+    useAppStore.setState({ configPath: '/cfg.json', skillsConfig: {} }) // 显式清内存态（beforeEach 不重置此字段）
+    await useAppStore.getState().setSkillApiKey('weread', 'wrk-9')
+    expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-9' } })
+    await useAppStore.getState().setSkillApiKey('translate', 'tr-1')
+    expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-9' }, translate: { apiKey: 'tr-1' } })
+    const raw = JSON.parse(await fs.readTextFile('/cfg.json')) as { skills: unknown }
+    expect(raw.skills).toEqual({ weread: { apiKey: 'wrk-9' }, translate: { apiKey: 'tr-1' } })
+  })
+})

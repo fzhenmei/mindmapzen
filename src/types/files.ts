@@ -165,6 +165,8 @@ export interface AppConfig {
   lastNewMapDir: string
   /** 点子篮子相对工作区路径（2026-09 点子篮子）：null = 未创建，首次使用时按语言默认名生成 */
   basketPath: string | null
+  /** skill 凭据槽(2026-09 skill 接入):id → apiKey;空 = 未启用 */
+  skills: SkillsConfig
   /** 快速捕获（2026-09 点子篮子 M2）：enabled = 全局快捷键 + 托盘 + 关窗隐藏三绑定 */
   quickCapture: QuickCaptureConfig
 }
@@ -227,6 +229,24 @@ export function parseAiConfig(v: unknown): AiConfig {
   }
 }
 
+/** skill 凭据槽(cfg.json skills.<id>):apiKey 非空 = 该 skill 启用 */
+export interface SkillCredentials {
+  apiKey: string
+}
+export type SkillsConfig = Record<string, SkillCredentials>
+
+/** 宽容解析 skill 凭据:非对象键值逐项过滤,坏值静默丢弃(旧配置无字段按空兼容) */
+export function parseSkillsCredentials(v: unknown): SkillsConfig {
+  if (typeof v !== 'object' || v === null) return {}
+  const out: SkillsConfig = {}
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (val !== null && typeof val === 'object' && typeof (val as Record<string, unknown>).apiKey === 'string') {
+      out[k] = { apiKey: (val as Record<string, unknown>).apiKey as string }
+    }
+  }
+  return out
+}
+
 /** 宽容解析引导完成标记：非 boolean 一律 false（旧配置无字段按未完成兼容） */
 export function parseTourDone(v: unknown): boolean {
   return typeof v === 'boolean' ? v : false
@@ -259,6 +279,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   aiAdvice: null,
   lastNewMapDir: '',
   basketPath: null,
+  skills: {},
   quickCapture: DEFAULT_QUICK_CAPTURE,
 }
 

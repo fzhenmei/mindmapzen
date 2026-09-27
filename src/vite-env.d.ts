@@ -9,6 +9,8 @@ declare global {
 
   interface Window {
     __AI_TRANSPORT_FACTORY__?: () => import('./services/ai/client').AiTransport
+    /** skill 网关注入点(e2e/单测塞 fake,生产 undefined 走 Tauri;见 services/ai/toolsSkill.ts) */
+    __SKILL_GATEWAY_FACTORY__?: () => import('./services/ai/toolsSkill').SkillEnv
   }
 }
 export {}

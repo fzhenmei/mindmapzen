@@ -13,6 +13,7 @@ import { executeAiTool, AI_TOOL_SCHEMAS, type AiToolEnv } from '../services/ai/t
 import { AI_CANVAS_TOOL_SCHEMAS } from '../services/ai/toolsCanvas'
 import { buildSystemPrompt, selectionLine } from '../services/ai/prompt'
 import { withAiCall } from '../services/ai/lock'
+import { enabledSkillsNow, executeSkillRoute, skillIntroOf, skillToolSchemasOf } from './editorSkillWire'
 import { i18n } from '../i18n'
 import type { WriteClipboard, WriteHtmlClipboard } from '../services/clipboard'
 import { layoutToEngine, type LayoutKind } from '../editor/layoutMap'
@@ -95,6 +96,7 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
   const copySettings = useAppStore((s) => s.settings)
   // AI 面板（2026-09 AI Agent v1）：配置订阅（入口显隐）+ 落盘宽（默认 null = 320）
   const aiConfig = useAppStore((s) => s.aiConfig)
+  const skillsConfig = useAppStore((s) => s.skillsConfig)
   const aiChatWidth = useAppStore((s) => s.aiChatWidth)
   const appDialog = useAppStore((s) => s.appDialog) // App 级设置/历史框（终审修复进 anyDialog 互斥总线，见下方聚合处）
   // AI 回合锁定（Task 12，spec §6）：回合期间（非 idle）切图拦截/状态签/编辑菜单禁用
@@ -676,13 +678,16 @@ export default function EditorView({ mdPath, openInEditor, writeClipboard, write
                 emptyTitle: t('ai.panel.emptyTitle'),
                 emptyBody: t('ai.panel.emptyBody'),
               },
-              buildPrompt: () => buildSystemPrompt(mmRef.current?.renderer?.renderTree ?? null),
+              buildPrompt: () => buildSystemPrompt(mmRef.current?.renderer?.renderTree ?? null, enabledSkillsNow()),
               buildSelectionLine: () =>
                 selectionLine(useChatStore.getState().contextNode ?? aiSelectionNode),
               preSendGuard: () => (mmRef.current ? null : i18n.t('ai.turn.engineNotReady')),
               executeTool: (name, args) =>
+                executeSkillRoute(name, args) ??
                 Promise.resolve(executeAiTool(mmRef.current, name, args, withAiCall, aiEnv ?? undefined)),
-              toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS],
+              toolSchemas: [...AI_TOOL_SCHEMAS, ...AI_CANVAS_TOOL_SCHEMAS, ...skillToolSchemasOf(skillsConfig)],
+              // 空态 skill 引导(方案 D):启用清单展示子集,空会话时常驻,有对话让位
+              skillIntro: skillIntroOf(skillsConfig),
             }}
             selection={aiSelectionNode}
             width={aiPanelPx}

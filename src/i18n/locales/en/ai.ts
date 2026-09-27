@@ -19,6 +19,8 @@ export default {
     copyMessage: 'Copy this reply',
     copyInput: 'Copy this message',
     copyFailed: 'Copy failed, please retry',
+    // Link takeover (spec §5): toast when opener fails to open a message link
+    openLinkFailed: 'Failed to open link, please retry',
     contextChip: 'Context: {{text}}',
     // Input area (2026-09 long-content input): always-on shortcut hint + resize handle a11y name/tooltip
     inputHint: 'Enter to send, Shift + Enter for newline',
@@ -28,6 +30,8 @@ export default {
     inputResizeTitle: 'Drag to resize the input box; double-click to reset',
     emptyTitle: 'Co-write mind maps with AI',
     emptyBody: 'Type below. AI can add/remove nodes, rewrite text and bodies, set icons/tags, link and fold. The canvas is read-only while AI works; you can stop anytime.',
+    // Empty-state skill intro (option D): shown while the session is empty for enabled skills
+    skillIntroTitle: 'Connected to "{{name}}". Try:',
     // Chat history banner (2026-09 persistence): shown when the opened map has past turns and
     // they are not loaded yet — only "Load" is offered here ("Restart" is a session action that
     // lives in the header, meaningless without a conversation); token impact stated in the copy
@@ -56,6 +60,7 @@ export default {
     link: 'Added link',
     unlink: 'Removed link',
     file: '{{text}}',
+    skill: 'Skill {{text}}',
     failed: ' (failed)',
   },
   turn: {
@@ -86,5 +91,9 @@ export default {
     modelHint: 'e.g. deepseek-chat, glm-4.6, kimi-k2-0905-preview',
     save: 'Save AI settings',
     saved: 'AI settings saved',
+    // Skills section (2026, spec §4.6): rendered from the registry
+    skillsTitle: 'Skills',
+    getKey: 'Get API Key',
+    skillsHint: 'Skill credentials stay on this device only; once configured, AI can use the skill.',
   },
 }

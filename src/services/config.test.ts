@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import { MemoryFsAdapter } from './fs/MemoryFsAdapter'
-import { DEFAULT_AI_CONFIG, DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, DEFAULT_QUICK_CAPTURE, parseQuickCapture, type AppConfig } from '../types/files'
+import { DEFAULT_AI_CONFIG, DEFAULT_CONFIG, DEFAULT_COPY_SETTINGS, DEFAULT_GIT_CONFIG, DEFAULT_QUICK_CAPTURE, parseQuickCapture, parseSkillsCredentials, type AppConfig } from '../types/files'
 import { loadConfig, saveConfig } from './config'
 
 /** 便捷构造完整配置对象（新字段补齐后各用例只写差异项） */
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({
   workspaceDir: '/ws', lastOpened: null, recentOpened: [], preferredLayout: null, theme: 'auto',
   previewOutline: 'auto', favorites: [], librarySort: 'modified', settings: DEFAULT_COPY_SETTINGS, git: DEFAULT_GIT_CONFIG, tourDone: false,
-  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiChatInputHeight: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, quickCapture: DEFAULT_QUICK_CAPTURE, ...over,
+  sidebarWidth: null, outlineWidth: null, ai: DEFAULT_AI_CONFIG, aiChatWidth: null, aiChatInputHeight: null, aiAdvice: null, language: 'auto', lastNewMapDir: '', basketPath: null, skills: {}, quickCapture: DEFAULT_QUICK_CAPTURE, ...over,
 })
 
 describe('配置读写', () => {
@@ -220,6 +220,22 @@ describe('language（2026-09 i18n 界面语言）', () => {
     expect((await loadConfig(fs, '/cfg.json')).language).toBe('en')
     await fs.writeTextFileAtomic('/cfg.json', '{"language":"xx"}')
     expect((await loadConfig(fs, '/cfg.json')).language).toBe('auto')
+  })
+})
+
+describe('skills（skill 凭据槽，2026-09 skill 接入）', () => {
+  test('loadConfig:skills 宽容解析(坏值丢弃、缺字段回空)', async () => {
+    const fs = new MemoryFsAdapter()
+    await fs.writeTextFileAtomic('/cfg.json', JSON.stringify({
+      workspaceDir: null,
+      skills: { weread: { apiKey: 'wrk-1' }, bad: 'x', other: { apiKey: 1 } },
+    }))
+    const loaded = await loadConfig(fs, '/cfg.json')
+    expect(loaded.skills).toEqual({ weread: { apiKey: 'wrk-1' } })
+  })
+  test('parseSkillsCredentials:非对象回空对象', () => {
+    expect(parseSkillsCredentials(null)).toEqual({})
+    expect(parseSkillsCredentials('x')).toEqual({})
   })
 })
 

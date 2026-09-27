@@ -291,3 +291,22 @@ test('rename_file 备份先于工具执行（终审 I-3：文件域落盘发生�
   // 调用序断言：备份必须早于工具执行——否则安全网已含本回合第一个文件操作（改前：备份在成功后）
   expect(backup.mock.invocationCallOrder[0]).toBeLessThan(executeTool.mock.invocationCallOrder[0]!)
 })
+
+test('skill 工具卡截断（终审 I-2）：detail 超 160 字符截断带省略号，非 skill 卡不受影响', async () => {
+  const two = [
+    '{"choices":[{"delta":{"tool_calls":[' +
+      '{"index":0,"id":"c0","function":{"name":"skill_read_doc","arguments":"{}"}},' +
+      '{"index":1,"id":"c1","function":{"name":"add_node","arguments":"{}"}}' +
+      ']}}]}',
+    finishToolCalls,
+  ]
+  const t = scriptedTransport([two, [textHi, finishStop]])
+  const long = '档'.repeat(300)
+  const executeTool = vi.fn(async (): Promise<ToolCallResult> => ({ ok: true, detail: long }))
+  const { deps, on } = makeDeps(t, { executeTool })
+  await runUserTurn(deps, createTurnStop(), INIT)
+  const cards = on.card.mock.calls.map((c) => c[0] as ToolCardData)
+  const skill = cards.find((c) => c.kind === 'skill')!
+  expect(skill.text).toBe(`${'档'.repeat(160)}…`) // 160 字符 + 省略号
+  expect(cards.find((c) => c.kind === 'add')!.text).toBe(long) // 非 skill 域摘要本就短，不做截断
+})

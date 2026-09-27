@@ -148,4 +148,35 @@ describe('SettingsDialog', () => {
     expect(screen.getByTestId('set-ai-error')).toHaveTextContent('workspace gone')
     expect(screen.queryByText('AI 配置已保存')).not.toBeInTheDocument()
   })
+
+  // ═══ 技能小节（2026-09 skill 接入，spec §4.6）：遍历 SKILLS 注册表渲染输入框；
+  // onBlur 即存（真实 setSkillApiKey 走 MemoryFsAdapter 持久化链）。启用后的引导为
+  // AI 面板空态常驻渲染（方案 D，ChatPanel 层覆盖），保存时不再推送 notice ═══
+
+  test('技能小节：配置 skill key 保存凭据', async () => {
+    useAppStore.setState({ skillsConfig: {} }) // 跨用例隔离（真实 setSkillApiKey 写内存态）
+    render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.click(screen.getByTestId('settings-ai-section'))
+    // 注册表遍历渲染：weread 在列（名称/描述/获取 Key 链接同屏）
+    expect(screen.getByLabelText('微信读书')).toBeInTheDocument()
+    expect(screen.getByText('搜索书籍、查看书架与笔记划线、浏览书评、阅读统计与推荐')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '获取 API Key' })).toHaveAttribute('href', 'https://weread.qq.com/r/weread-skills')
+    fireEvent.change(screen.getByTestId('set-skill-weread'), { target: { value: 'wrk-e2e' } })
+    fireEvent.blur(screen.getByTestId('set-skill-weread')) // onBlur 即存
+    await waitFor(() => expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-e2e' } }))
+  })
+
+  test('技能小节：已启用态失焦幂等重存不清凭据', async () => {
+    // 预置已启用（直接走 store）
+    await useAppStore.getState().setSkillApiKey('weread', 'wrk-a')
+    render(<SettingsDialog onClose={() => {}} />)
+    fireEvent.click(screen.getByTestId('settings-ai-section'))
+    // 打开即可见已配 key（草稿优先、回退已存值）
+    expect((screen.getByTestId('set-skill-weread') as HTMLInputElement).value).toBe('wrk-a')
+    // 未编辑直接失焦 = 重复保存同值（提交值与显示同口径回退已存，幂等不清凭据）
+    fireEvent.focus(screen.getByTestId('set-skill-weread'))
+    fireEvent.blur(screen.getByTestId('set-skill-weread'))
+    await act(async () => {}) // 排空 setSkillApiKey 持久化微任务
+    expect(useAppStore.getState().skillsConfig).toEqual({ weread: { apiKey: 'wrk-a' } })
+  })
 })
