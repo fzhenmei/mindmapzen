@@ -21,6 +21,7 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        assertEquals("com.getcapacitor.app", appContext.getPackageName());
+        // 上游 Capacitor 模板遗留 com.getcapacitor.app,对齐实际 applicationId(2026-09-27 终审 Minor #2)
+        assertEquals("com.mindmapzen.capture", appContext.getPackageName());
     }
 }
