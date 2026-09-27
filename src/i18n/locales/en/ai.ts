@@ -19,6 +19,8 @@ export default {
     copyMessage: 'Copy this reply',
     copyInput: 'Copy this message',
     copyFailed: 'Copy failed, please retry',
+    // Link takeover (spec §5): toast when opener fails to open a message link
+    openLinkFailed: 'Failed to open link, please retry',
     contextChip: 'Context: {{text}}',
     // Input area (2026-09 long-content input): always-on shortcut hint + resize handle a11y name/tooltip
     inputHint: 'Enter to send, Shift + Enter for newline',

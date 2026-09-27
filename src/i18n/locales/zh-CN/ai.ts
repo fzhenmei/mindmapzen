@@ -19,6 +19,8 @@ export default {
     copyMessage: '复制此轮回复',
     copyInput: '复制此条输入',
     copyFailed: '复制失败，请重试',
+    // 链接接管（spec §5）：消息内链接 opener 外开失败的 toast
+    openLinkFailed: '打开链接失败，请重试',
     contextChip: '上下文：{{text}}',
     // 输入区（2026-09 长内容输入）：快捷键常显提示 + 拖高手柄无障碍名/悬停提示
     inputHint: 'Enter 发送，Shift + Enter 换行',
