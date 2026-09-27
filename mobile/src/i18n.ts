@@ -14,12 +14,16 @@ type Key =
   | 'stateOffline'
   | 'stateError'
   | 'stateUnauthorized'
-  | 'installHint'
   | 'settings'
   | 'pcUrl'
   | 'token'
   | 'save'
-  | 'clearSynced'
+  | 'emptyHint'
+  | 'scanPair'
+  | 'scanFailed'
+  | 'paired'
+  | 'orManualFill'
+  | 'close'
 
 const zh: Record<Key, string> = {
   appTitle: '点子捕获',
@@ -36,12 +40,16 @@ const zh: Record<Key, string> = {
   stateOffline: 'PC 未连接',
   stateError: '同步失败,点此重试',
   stateUnauthorized: '令牌失效,请重新扫码',
-  installHint: '在浏览器菜单选「添加到主屏幕」,获得图标与离线能力',
   settings: '配对设置',
   pcUrl: 'PC 地址(如 http://192.168.1.10:39871)',
   token: '令牌',
   save: '保存',
-  clearSynced: '清空已同步',
+  emptyHint: '灵光一现随手记,回家自动同步进 PC 点子篮子',
+  scanPair: '扫码配对',
+  scanFailed: '不是有效的配对二维码',
+  paired: '配对成功',
+  orManualFill: '或手动填写',
+  close: '关闭',
 }
 
 const en: Record<Key, string> = {
@@ -59,12 +67,16 @@ const en: Record<Key, string> = {
   stateOffline: 'PC not reachable',
   stateError: 'Sync failed, tap to retry',
   stateUnauthorized: 'Token invalid, rescan QR',
-  installHint: 'Use browser menu "Add to Home screen" for icon & offline',
   settings: 'Pairing',
   pcUrl: 'PC address (e.g. http://192.168.1.10:39871)',
   token: 'Token',
   save: 'Save',
-  clearSynced: 'Clear synced',
+  emptyHint: 'Capture a spark here — it syncs to your PC basket when you get home',
+  scanPair: 'Scan to pair',
+  scanFailed: 'Not a pairing QR code',
+  paired: 'Paired',
+  orManualFill: 'Or enter manually',
+  close: 'Close',
 }
 
 const lang = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'

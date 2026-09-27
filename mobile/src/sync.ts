@@ -16,7 +16,8 @@ export interface SyncDeps {
   /** POST /api/ideas(Bearer);返回逐条 'ok' | 'fail';401 抛 Unauthorized */
   push(base: string, token: string, ideas: MobileIdea[]): Promise<Map<string, 'ok' | 'fail'>>
   onState(state: SyncState, error?: string): void
-  onRemoved(ids: string[]): void
+  /** 已标记 synced 的条目 id(保留展示,展示端自动淘汰旧条目) */
+  onSynced(ids: string[]): void
 }
 
 export async function runSync(deps: SyncDeps, db: Parameters<typeof listUnsynced>[0]): Promise<void> {
@@ -45,7 +46,7 @@ export async function runSync(deps: SyncDeps, db: Parameters<typeof listUnsynced
   const okIds = [...results].filter(([, v]) => v === 'ok').map(([id]) => id)
   if (okIds.length > 0) {
     await markSynced(db, okIds)
-    deps.onRemoved(okIds)
+    deps.onSynced(okIds)
   }
   if (okIds.length === unsynced.length) {
     deps.onState('synced')

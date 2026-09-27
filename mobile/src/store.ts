@@ -48,12 +48,24 @@ export const useMobileStore = create<MobileState>()(
   ),
 )
 
+/** 配对二维码 URL(http://ip:port/#token)→ {baseUrl, token};非法输入返回 null
+ * (App 扫码与浏览器 hash 自动配对共用;spec 2026-09-27 §6) */
+export function parsePairingUrl(url: string): { baseUrl: string; token: string } | null {
+  try {
+    const u = new URL(url)
+    const token = u.hash.replace(/^#/, '')
+    if (token === '' || !/^https?:$/.test(u.protocol)) return null
+    return { baseUrl: u.origin, token }
+  } catch {
+    return null
+  }
+}
+
 /** 扫码进入的 URL 形如 http://ip:port/#<token>:首次自动配对(spec §4.2) */
 export function autoPairFromUrl(): boolean {
-  const hash = window.location.hash.replace(/^#/, '')
-  if (hash === '') return false
-  const baseUrl = window.location.origin
-  useMobileStore.getState().setPairingManual({ baseUrl, token: hash })
+  const p = parsePairingUrl(window.location.href)
+  if (p === null) return false
+  useMobileStore.getState().setPairingManual(p)
   history.replaceState(null, '', '/')
   return true
 }

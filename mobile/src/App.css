@@ -4,7 +4,10 @@ body { margin: 0; font-family: system-ui, 'Microsoft YaHei', sans-serif; backgro
 .app { max-width: 480px; margin: 0 auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; height: 100dvh; overflow: hidden; }
 .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .input-area { display: flex; flex-direction: column; gap: 8px; padding-bottom: env(safe-area-inset-bottom); }
-.bar { font-size: 13px; color: #6b6560; padding: 6px 10px; background: #f0ede9; border-radius: 8px; }
+/* 状态条:flex 布局,文字占满 + 右侧配对齿轮入口(2026-09-27 用户裁定) */
+.bar { font-size: 13px; color: #6b6560; padding: 6px 10px; background: #f0ede9; border-radius: 8px; display: flex; align-items: center; gap: 8px; }
+.bar .state { flex: 1; min-width: 0; }
+.icon-btn { background: transparent; color: #6b6560; padding: 2px; border-radius: 6px; }
 textarea { width: 100%; font-size: 16px; padding: 12px; border: 1px solid #d8d3cc; border-radius: 10px; resize: vertical; }
 button { font-size: 15px; padding: 10px 16px; border: none; border-radius: 10px; background: #b3403a; color: #fff; }
 button.ghost { background: transparent; color: #6b6560; align-self: flex-start; }
@@ -12,9 +15,18 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 li { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #ece8e2; border-radius: 8px; padding: 8px 10px; }
 li.synced { opacity: 0.55; }
 li .text { font-size: 14px; overflow-wrap: anywhere; }
+/* 空态引导(2026-09-27):列表=待同步队列,空即"没有积压" */
+.hint.empty { text-align: center; padding: 24px 8px; margin: 0; }
 .del { background: transparent; color: #b3403a; padding: 4px 8px; font-size: 13px; }
 .hint { font-size: 12px; color: #8a847e; }
 .panel { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #ece8e2; border-radius: 10px; padding: 12px; }
 .panel label { font-size: 12px; color: #6b6560; display: flex; flex-direction: column; gap: 4px; }
 .panel input { font-size: 14px; padding: 8px; border: 1px solid #d8d3cc; border-radius: 8px; }
+/* 配对对话框:遮罩 + 居中面板;点遮罩关闭(App.tsx onClose) */
+.overlay { position: fixed; inset: 0; background: rgba(44, 42, 38, 0.45); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+.dialog { width: min(92vw, 360px); }
+.dialog .divider { text-align: center; margin: 2px 0; }
+.primary-wide { width: 100%; font-size: 16px; }
+.dialog .row { display: flex; gap: 8px; }
+.dialog .row .ghost { flex: 1; text-align: center; padding: 6px 8px; font-size: 13px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2c2a26; color: #fff; font-size: 13px; padding: 8px 16px; border-radius: 999px; }

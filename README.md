@@ -91,6 +91,23 @@ npm run build:release  # release packaging (msi/nsis installers — see below)
 
 **Single-instance lock & dev/release parallelism**: the app uses `tauri-plugin-single-instance` to prevent multiple instances — a second launch with the same identifier focuses the existing main window instead of starting a new process. The lock key comes from the `identifier` in `tauri.conf.json` (a named mutex on Windows, e.g. `com.mindmapzen.app-sim` for release); dev and release share one lock by default. For parallel debugging use `npm run dev:app`: it passes `--config src-tauri/tauri.dev.conf.json` (a JSON Merge Patch overriding the identifier to `com.mindmapzen.app.dev`; a config file instead of inline JSON avoids npm's cmd script-shell stripping quotes) to separate the lock — dev and release can then run in parallel, while same-type instances (dev↔dev, release↔release) remain mutually exclusive. Note: the WebView2 local data directory (localStorage etc.) follows the identifier, so the first `dev:app` run starts fresh — dev experiments never pollute real data. `npm run tauri dev` remains the legacy shared-lock entry, mutually exclusive with a running release; release builds are unaffected.
 
+## Mobile companion app (Android)
+
+Capture ideas on your phone anywhere — even offline — and sync them into the desktop idea basket automatically when you get home on the same Wi-Fi.
+
+- **App form**: Capacitor-wrapped web app, installed locally (opens with zero network dependency; the old browser-PWA channel has been retired)
+- **Pairing**: desktop Settings → Mobile sync → enable, then tap "Scan to pair" in the app and scan the QR code
+- **Build it yourself** (requires JDK 21 and Android SDK 36):
+  ```
+  cd mobile
+  npm install
+  npm run build
+  npx cap sync android
+  # then in mobile/android (point JAVA_HOME to a JDK 21):
+  gradlew.bat assembleDebug      # or assembleRelease (unsigned without keystore.properties)
+  ```
+  `mobile/android/local.properties` (sdk.dir) and signing files (`keystore.properties`, `*.keystore`) are local-only and never committed.
+
 ## License
 
 [MIT](LICENSE)

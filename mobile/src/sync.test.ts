@@ -11,7 +11,7 @@ const mkDeps = (over: Partial<SyncDeps>): SyncDeps => ({
   health: async () => true,
   push: async () => new Map(),
   onState: (s, e) => events.push({ state: s, error: e ?? null }),
-  onRemoved: () => {},
+  onSynced: () => {},
   ...over,
 })
 
@@ -33,15 +33,15 @@ it('health 不通停 pending', async () => {
   expect(events).toEqual([{ state: 'pending', error: null }])
 })
 
-it('推送成功删本地条目', async () => {
+it('推送成功标记同步但保留展示', async () => {
   const db = await openDb()
   await putIdea(db, idea('u1', 'a'))
   await putIdea(db, idea('u2', 'b'))
   const push = vi.fn(async (_b: string, _t: string, ideas: MobileIdea[]) => new Map<string, 'ok' | 'fail'>(ideas.map((i) => [i.id, 'ok' as const])))
-  const removed: string[][] = []
-  await runSync(mkDeps({ push, onRemoved: (ids) => removed.push(ids) }), db)
+  const marked: string[][] = []
+  await runSync(mkDeps({ push, onSynced: (ids) => marked.push(ids) }), db)
   expect(push).toHaveBeenCalledTimes(1)
-  expect(removed).toEqual([['u1', 'u2']])
+  expect(marked).toEqual([['u1', 'u2']])
   expect(events.at(-1)).toEqual({ state: 'synced', error: null })
 })
 

@@ -1,6 +1,6 @@
 // src-tauri/src/mobile_sync.rs —— 手机点子捕获(2026-09-26 spec):局域网同步服务。
-// 本文件分层:配置/去重(本任务)→ API 纯函数(Task 2)→ 静态资源(Task 3)→
-// 服务线程与 tauri 命令(Task 4)。纯函数与 IO 解耦,单测不起端口。
+// 本文件分层:配置/去重 → API 纯函数 → 服务线程与 tauri 命令。纯函数与 IO 解耦,单测不起端口。
+// 静态资源服务已随 PWA 退役移除(2026-09-27 Android App 化 spec §4),仅保留 API。
 use std::collections::{HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -166,102 +166,6 @@ pub fn handle_api(
     json_resp(404, r#"{"error":"not found"}"#.into())
 }
 
-// ---- 静态资源(Task 3)----
-
-#[derive(Debug)]
-pub enum StaticResolution {
-    /// 命中文件:(绝对路径, mime)
-    File(PathBuf, &'static str),
-    /// 未命中但路径合法 → SPA fallback 到 index.html
-    Fallback,
-    /// 路径非法(穿越/绝对盘符)
-    Forbidden,
-}
-
-fn mime_of(p: &Path) -> &'static str {
-    match p.extension().and_then(|e| e.to_str()).unwrap_or("") {
-        "html" => "text/html; charset=utf-8",
-        "js" => "text/javascript",
-        "css" => "text/css",
-        "json" => "application/json",
-        "png" => "image/png",
-        "svg" => "image/svg+xml",
-        "ico" => "image/x-icon",
-        "webmanifest" => "application/manifest+json",
-        "woff2" => "font/woff2",
-        _ => "application/octet-stream",
-    }
-}
-
-/// manifest.webmanifest 的 start_url 动态注入 `#<token>`(2026-09-27 修复绑定丢失):
-/// 手机端 PWA(iOS 主屏图标)与扫码时的浏览器是两个隔离的存储上下文,localStorage
-/// 里的配对进不了 PWA;start_url 带上令牌后,每次打开主屏图标都经 hash 自动重新
-/// 配对,不再依赖存储记忆。token 为 uuid v4(hex+连字符),置于 path 后的 fragment
-/// 无需转义。坏 JSON 返回 None,调用方按原文件降级 serve。
-pub fn inject_token_into_manifest(content: &str, token: &str) -> Option<String> {
-    let mut v: serde_json::Value = serde_json::from_str(content).ok()?;
-    v["start_url"] = serde_json::Value::String(format!("/#{token}"));
-    serde_json::to_string(&v).ok()
-}
-
-/// URL 路径 → mobile-dist 内文件。安全:百分号解码后规范化,结果必须仍在 root 内;
-/// `..` 逃逸/盘符/UNC 一律 Forbidden(spec §8)
-pub fn resolve_static(root: &Path, url_path: &str) -> StaticResolution {
-    let decoded = percent_decode(url_path);
-    let decoded = decoded.trim_start_matches('/');
-    if decoded.contains("..") || decoded.contains(':') || decoded.contains('\\') {
-        return StaticResolution::Forbidden;
-    }
-    let mut full = root.to_path_buf();
-    for seg in decoded.split('/') {
-        match seg {
-            "" | "." => {}
-            s => full.push(s),
-        }
-    }
-    if full.is_dir() {
-        full.push("index.html");
-    }
-    if full.is_file() {
-        let mime = mime_of(&full);
-        return StaticResolution::File(full, mime);
-    }
-    // 目录/未命中 → index.html(SPA 路由 + PWA 安装页都是单入口)
-    let idx = root.join("index.html");
-    if idx.is_file() {
-        StaticResolution::Fallback
-    } else {
-        // dev 模式 resource_dir 无 mobile-dist(dev 走 vite 5174):404 语义
-        StaticResolution::Forbidden
-    }
-}
-
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let hex = |b: u8| -> Option<u8> {
-        match b {
-            b'0'..=b'9' => Some(b - b'0'),
-            b'a'..=b'f' => Some(b - b'a' + 10),
-            b'A'..=b'F' => Some(b - b'A' + 10),
-            _ => None,
-        }
-    };
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
-                out.push(h * 16 + l);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
 // ---- 服务线程与 tauri 命令(Task 4)----
 
 use local_ip_address::list_afinet_netifas;
@@ -326,8 +230,8 @@ pub fn info_snapshot(cfg: &MobileSyncConfig) -> MobileSyncInfo {
     MobileSyncInfo { enabled: cfg.enabled, port: cfg.port, token: cfg.token.clone(), ips, current }
 }
 
-/// 服务循环:阻塞收请求逐个处理(API 优先,其余走静态);IO 异常 eprintln 留痕不崩服务
-fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncConfig, dedup: Arc<Mutex<DedupSet>>, root: PathBuf) {
+/// 服务循环:阻塞收请求逐个处理(API 之外一律 404,静态服务已随 PWA 退役);IO 异常 eprintln 留痕不崩服务
+fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncConfig, dedup: Arc<Mutex<DedupSet>>) {
     for mut request in server.incoming_requests() {
         let method = request.method().as_str().to_string();
         let url = request.url().to_string();
@@ -345,11 +249,9 @@ fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncCon
         }
         let path_only = url.split('?').next().unwrap_or("").to_string();
 
-        // 响应体必须走字节通道(Vec<u8>):mobile-dist 含 PNG/woff2 等二进制资产,
-        // 经 String::from_utf8_lossy 会把非法 UTF-8 字节替换成 U+FFFD(PNG 魔数
-        // 0x89 首当其冲),图标必坏;文本/API 分支 into_bytes/to_vec 殊途同归。
-        // from_data 不带默认 Content-Type(from_string 才有 text/plain 默认头),
-        // 下方 add_header(Content-Type) 循环是唯一来源,无重复头
+        // 响应体走字节通道(Vec<u8>)与 from_data(不带默认 Content-Type,
+        // 下方 add_header 循环是唯一来源,无重复头);JSON 分支 into_bytes 殊途同归
+        // (历史教训:字符串通道曾把二进制资产转 UTF-8 替换符,字节通道一并统一)
         let (status, ctype, resp_body): (u16, String, Vec<u8>) = if path_only.starts_with("/api/") {
             let mut accepted = Vec::new();
             let mut guard = dedup.lock().unwrap_or_else(|p| p.into_inner());
@@ -360,38 +262,10 @@ fn serve_loop(app: AppHandle, server: Arc<tiny_http::Server>, cfg: MobileSyncCon
                 }
             }
             (r.status, "application/json".to_string(), r.body.into_bytes())
-        } else if method == "GET" || method == "HEAD" {
-            match resolve_static(&root, &path_only) {
-                StaticResolution::File(p, mime) => match fs::read(&p) {
-                    Ok(bytes) => {
-                        // manifest 是纯文本 JSON,from_utf8_lossy 无损;注入失败降级原文件
-                        if p.file_name().is_some_and(|n| n == "manifest.webmanifest") {
-                            let rewritten = String::from_utf8_lossy(&bytes);
-                            if let Some(s) = inject_token_into_manifest(&rewritten, &cfg.token) {
-                                (200, mime.to_string(), s.into_bytes())
-                            } else {
-                                eprintln!("manifest 令牌注入失败,按原文件响应");
-                                (200, mime.to_string(), bytes)
-                            }
-                        } else {
-                            (200, mime.to_string(), bytes)
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("静态文件读取失败 {}: {e}", p.display());
-                        (404, "text/plain".into(), b"not found".to_vec())
-                    }
-                },
-                StaticResolution::Fallback => match fs::read(root.join("index.html")) {
-                    Ok(bytes) => (200, "text/html; charset=utf-8".into(), bytes),
-                    Err(_) => (404, "text/plain".into(), b"mobile-dist missing".to_vec()),
-                },
-                StaticResolution::Forbidden => (403, "text/plain".into(), b"forbidden".to_vec()),
-            }
         } else {
-            (405, "text/plain".into(), b"method not allowed".to_vec())
+            // PWA 退役(2026-09-27 spec §4):静态资源服务移除,API 之外的请求一律 404
+            (404, "application/json".to_string(), br#"{"error":"not found"}"#.to_vec())
         };
-
         let mut resp = tiny_http::Response::from_data(resp_body).with_status_code(status);
         for (k, v) in [
             ("Content-Type", ctype.as_str()),
@@ -414,7 +288,6 @@ pub fn start_service(app: &AppHandle, holder: &ServiceHolder, cfg: MobileSyncCon
     holder.stop();
     let server = tiny_http::Server::http(("0.0.0.0", cfg.port)).map_err(|e| format!("端口 {} 监听失败: {e}", cfg.port))?;
     let server = Arc::new(server);
-    let root = app.path().resource_dir().map_err(|e| format!("resource 目录不可得: {e}"))?.join("mobile-dist");
     let dedup = Arc::new(Mutex::new(DedupSet::new(1000)));
     let stopped = Arc::new(AtomicBool::new(false));
     let thread = {
@@ -424,7 +297,7 @@ pub fn start_service(app: &AppHandle, holder: &ServiceHolder, cfg: MobileSyncCon
         let dedup = Arc::clone(&dedup);
         let stopped = Arc::clone(&stopped);
         std::thread::spawn(move || {
-            serve_loop(app, server, cfg, dedup, root);
+            serve_loop(app, server, cfg, dedup);
             stopped.store(true, Ordering::SeqCst);
         })
     };
@@ -578,59 +451,6 @@ mod tests {
         assert_eq!(handle_api("GET", "/api/nope", None, "", &cfg, &mut dedup, &mut a).status, 404);
     }
 
-    // ---- 静态资源(Task 3)----
-
-    #[test]
-    fn 静态解析与mime() {
-        let d = tmp_dir();
-        fs::write(d.join("index.html"), "<html></html>").unwrap();
-        fs::create_dir_all(d.join("assets")).unwrap();
-        fs::write(d.join("assets/app.js"), "console.log(1)").unwrap();
-        match resolve_static(&d, "/") {
-            StaticResolution::File(p, _) => assert_eq!(p, d.join("index.html")),
-            other => panic!("期望 File,得到 {other:?}"),
-        }
-        match resolve_static(&d, "/assets/app.js") {
-            StaticResolution::File(_, mime) => assert_eq!(mime, "text/javascript"),
-            other => panic!("期望 File,得到 {other:?}"),
-        }
-        // SPA fallback:未知路径回 index.html(spec §5.3)
-        assert!(matches!(resolve_static(&d, "/some/route"), StaticResolution::Fallback));
-    }
-
-    #[test]
-    fn 静态路径穿越拒绝() {
-        let d = tmp_dir();
-        fs::write(d.join("index.html"), "x").unwrap();
-        let secret = std::env::temp_dir().join(format!("mz-secret-{}", Uuid::new_v4()));
-        fs::create_dir_all(&secret).unwrap();
-        fs::write(secret.join("secret.txt"), "s").unwrap();
-        // mobile-dist 在 d,试图用 .. 逃到 secret
-        let rel = pathdiff_reldesc(&d, &secret.join("secret.txt"));
-        assert!(matches!(resolve_static(&d, &rel), StaticResolution::Forbidden));
-        assert!(matches!(resolve_static(&d, "/..%2f..%2fetc"), StaticResolution::Forbidden));
-        fs::remove_dir_all(&secret).ok();
-    }
-
-    /// 计算 root 相对 target 的 "../xxx" 形式(测试辅助:穿越用例需要相对路径)。
-    /// 以公共祖先为基准:root 剩余深度 = 上跳层数,target 剩余部分 = 尾段
-    fn pathdiff_reldesc(root: &Path, target: &Path) -> String {
-        let r: Vec<_> = root.components().collect();
-        let t: Vec<_> = target.components().collect();
-        let mut common = 0;
-        while common < r.len() && common < t.len() && r[common] == t[common] {
-            common += 1;
-        }
-        let mut s = String::new();
-        for _ in 0..(r.len() - common) {
-            s.push_str("../");
-        }
-        let tail: Vec<String> =
-            t[common..].iter().map(|c| c.as_os_str().to_string_lossy().replace('\\', "/")).collect();
-        s.push_str(&tail.join("/"));
-        format!("/{s}")
-    }
-
     // ---- 服务冒烟(Task 4)----
     // start/stop 与 HTTP 往返需 AppHandle,不可在单测模拟,真机验收清单覆盖:
     // npm run dev:app → 开关服务 → curl http://127.0.0.1:39871/api/health
@@ -641,30 +461,5 @@ mod tests {
         let info = info_snapshot(&cfg);
         assert!(!info.ips.iter().any(|ip| ip.starts_with("127.")));
         assert_eq!(info.token, "t");
-    }
-
-    #[test]
-    fn manifest注入令牌到start_url() {
-        let src = r#"{"name":"x","start_url":"/","scope":"/"}"#;
-        let out = inject_token_into_manifest(src, "tok-1").unwrap();
-        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(v["start_url"], "/#tok-1");
-        // 其余字段不动
-        assert_eq!(v["name"], "x");
-        assert_eq!(v["scope"], "/");
-    }
-
-    #[test]
-    fn manifest坏json返回none降级() {
-        assert!(inject_token_into_manifest("{not json", "t").is_none());
-    }
-
-    #[test]
-    fn 根目录无index时未命中路径回forbidden() {
-        // Task 3 review 顺手项:dev 模式 resource_dir 无 mobile-dist,空目录必须
-        // 走 Forbidden(403)而非 Fallback——serve_loop 据此回 403 而非读不存在的 index
-        let d = tmp_dir();
-        assert!(matches!(resolve_static(&d, "/x"), StaticResolution::Forbidden));
-        fs::remove_dir_all(&d).ok();
     }
 }
